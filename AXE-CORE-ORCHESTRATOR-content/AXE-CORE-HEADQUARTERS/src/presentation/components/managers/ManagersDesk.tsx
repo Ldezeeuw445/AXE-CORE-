@@ -1,9 +1,10 @@
 /**
- * Managers tab — axe-core-v3 mockup (managers.html):
- * 3-column card grid of DAX managers with status + Open chat.
- * Chat embeds ManagerChat (layout=desk); Home morph chat unchanged.
+ * Managers tab — Grok-style chat room:
+ * left: manager list (avatar, name, status, unread)
+ * right: conversation thread + composer (ManagerChat, real jobs/server data)
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams, useNavigate } from 'react-router';
 import { agentById, type AxeAgent, type AxeAgentId } from '@/domain/agents/roster';
 import { grokManagers } from '@/domain/agents/grokManagers';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
@@ -17,6 +18,9 @@ import { followupIsAkkoord, followupIsAfwijzing } from '@/domain/goedkeuringFoll
 import { wachtOpOk } from '@/domain/agents/pendingApproval';
 import { pauseMission, resumeMission } from '@/infrastructure/gateways/axeCoreApiService';
 import { agentTierRegel } from '@/domain/agents/agentTiers';
+import { laadManagerChat } from '@/domain/agents/managerChatOpslag';
+import { amsterdamKlok } from '@/domain/tijd';
+import type { ServerAgent } from '@/domain/agents/serverStatus';
 
 const SUBTITELS: Partial<Record<AxeAgentId, string>> = {
   axe: 'Central orchestrator',
@@ -28,40 +32,98 @@ const SUBTITELS: Partial<Record<AxeAgentId, string>> = {
   axon: 'Memory twin · long-term',
 };
 
+const LAST_READ_KEY = 'axe_managers_last_read_v1';
+
+function leesLastRead(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(LAST_READ_KEY);
+    if (!raw) return {};
+    const p = JSON.parse(raw) as Record<string, number>;
+    return p && typeof p === 'object' ? p : {};
+  } catch {
+    return {};
+  }
+}
+
+function schrijfLastRead(id: string, at: number) {
+  try {
+    const cur = leesLastRead();
+    cur[id] = at;
+    localStorage.setItem(LAST_READ_KEY, JSON.stringify(cur));
+  } catch { /* ignore */ }
+}
+
 function deskLijst(): AxeAgent[] {
-  /* v3 mockup: six Grok managers (CORE Mgr first). AXE stays the orchestrator
-     behind Open chat routes — not a seventh card. */
   return grokManagers();
 }
 
 function statusVoor(
   agent: AxeAgent,
   busy: boolean,
-  srvStatus?: string,
-): { label: string; tone: 'live' | 'busy' | 'idle' } {
-  if (busy || srvStatus === 'WORKING') return { label: 'Live · working', tone: 'busy' };
-  if (srvStatus === 'WAITING') return { label: 'Needs you', tone: 'busy' };
+  srv?: ServerAgent,
+): { label: string; tone: 'live' | 'busy' | 'idle' | 'wait' } {
+  if (wachtOpOk(srv, false) || srv?.status === 'WAITING_APPROVAL') {
+    return { label: 'Needs you', tone: 'wait' };
+  }
+  if (busy || srv?.status === 'WORKING') return { label: 'Working', tone: 'busy' };
+  if (srv?.status === 'QUEUED' || srv?.status === 'WAITING_AGENT' || srv?.status === 'WAITING_TOOL') {
+    return { label: 'Queued', tone: 'busy' };
+  }
+  if (srv?.status === 'BLOCKED' || srv?.status === 'ERROR') {
+    return { label: 'Blocked', tone: 'wait' };
+  }
   if (agent.id === 'tradingos') return { label: 'Demo', tone: 'idle' };
-  if (agent.id === 'axon') return { label: 'Index OK', tone: 'live' };
-  if (agent.id === 'axemanager') return { label: 'Live · idle queue 0', tone: 'live' };
-  if (agent.id === 'northseamgr') return { label: 'Desk ready', tone: 'live' };
-  if (agent.id === 'projectsmgr') return { label: 'Ready', tone: 'live' };
-  if (agent.id === 'companionmgr') return { label: 'Standby', tone: 'idle' };
+  if (srv && srv.status !== 'SLEEPING') return { label: 'Live', tone: 'live' };
   return { label: 'Ready', tone: 'live' };
 }
 
-function initialen(agent: AxeAgent): string {
-  const kort = (agent.kort || agent.name || '?').trim();
-  const parts = kort.split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return kort.slice(0, 2).toUpperCase();
+function ongelezen(agentId: string, srv?: ServerAgent, busy = false): number {
+  const last = leesLastRead()[agentId] ?? 0;
+  let n = 0;
+  const approvals = srv?.pendingApprovals?.length ?? (srv?.pendingApproval ? 1 : 0);
+  if (approvals > 0) n += approvals;
+  if (wachtOpOk(srv, false)) n = Math.max(n, 1);
+  const chat = laadManagerChat(agentId);
+  for (const m of chat) {
+    if (m.role === 'assistant' && m.at > last) n += 1;
+  }
+  if (busy && n === 0) return 0;
+  return n;
+}
+
+function previewTekst(agentId: string, srv?: ServerAgent): string {
+  const chat = laadManagerChat(agentId);
+  const last = chat[chat.length - 1];
+  if (last?.text) return last.text.slice(0, 72);
+  if (srv?.task?.title) return srv.task.title;
+  if (srv?.reason) return srv.reason.slice(0, 72);
+  return SUBTITELS[agentId as AxeAgentId] || 'Open chat';
 }
 
 export function ManagersDesk() {
   const lijst = useMemo(() => deskLijst(), []);
-  const [gekozen, setGekozen] = useState<AxeAgentId | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openParam = searchParams.get('open') as AxeAgentId | null;
+  const [gekozen, setGekozen] = useState<AxeAgentId | null>(
+    () => (openParam && lijst.some((a) => a.id === openParam) ? openParam : (lijst[0]?.id ?? null)),
+  );
   const jobs = useAxeJobStore((s) => s.jobs);
   const server = useServerAgents();
+  const navigate = useNavigate();
+  const [, tick] = useState(0);
+
+  useEffect(() => {
+    if (openParam && lijst.some((a) => a.id === openParam) && openParam !== gekozen) {
+      setGekozen(openParam);
+    }
+  }, [openParam, lijst, gekozen]);
+
+  useEffect(() => {
+    if (!gekozen) return;
+    schrijfLastRead(gekozen, Date.now());
+    tick((n) => n + 1);
+  }, [gekozen]);
+
   const agent = gekozen ? agentById(gekozen) : null;
   const agentJobs = agent
     ? jobs.filter((j) => j.agent === agent.id)
@@ -78,50 +140,84 @@ export function ManagersDesk() {
     detail: a.detail,
   }));
 
+  const kies = (id: AxeAgentId) => {
+    setGekozen(id);
+    schrijfLastRead(id, Date.now());
+    const next = new URLSearchParams(searchParams);
+    next.set('open', id);
+    setSearchParams(next, { replace: true });
+  };
+
   return (
-    <div className="axe-managers-v3" data-axe-managers-desk="v3">
-      <div className="axe-managers-v3-grid" role="list" aria-label="Managers">
-        {lijst.map((a) => {
-          const srv = server.agents[a.id];
-          const busy = jobs.some((j) => j.agent === a.id && (j.state === 'running' || j.state === 'queued' || j.state === 'waiting'));
-          const status = statusVoor(a, busy, srv?.status);
-          const open = gekozen === a.id;
-          return (
-            <article
-              key={a.id}
-              className="axe-managers-v3-card"
-              role="listitem"
-              data-open={open ? 'ja' : undefined}
-              style={{ ['--mgr-accent' as string]: a.accent }}
-            >
-              <header className="axe-managers-v3-card-kop">
-                <span className="axe-managers-v3-av" aria-hidden style={{ background: a.accent }}>
-                  {initialen(a)}
-                </span>
-                <span className="axe-managers-v3-pill" data-tone={status.tone}>{status.label}</span>
-              </header>
-              <h3 className="axe-managers-v3-naam">{a.kort || a.name}</h3>
-              <p className="axe-managers-v3-sub">{SUBTITELS[a.id] || a.role}</p>
-              <div className="axe-managers-v3-acties">
+    <div className="axe-managers-room" data-axe-managers-desk="chat-room">
+      <div className="axe-managers-room-lijst" aria-label="Managers">
+        <header className="axe-managers-room-lijst-kop">
+          <div>
+            <p className="axe-managers-room-eyebrow">Managers</p>
+            <h2 className="axe-managers-room-titel">Chat</h2>
+          </div>
+          <button
+            type="button"
+            className="axe-managers-room-daxlink"
+            onClick={() => navigate('/dax')}
+            title="DAX bots overview"
+          >
+            DAX
+          </button>
+        </header>
+        <ul className="axe-managers-room-ul" role="list">
+          {lijst.map((a) => {
+            const srv = server.agents[a.id];
+            const busy = jobs.some((j) => j.agent === a.id && (j.state === 'running' || j.state === 'queued' || j.state === 'waiting'));
+            const status = statusVoor(a, busy, srv);
+            const unread = gekozen === a.id ? 0 : ongelezen(a.id, srv, busy);
+            const open = gekozen === a.id;
+            const chat = laadManagerChat(a.id);
+            const lastAt = chat[chat.length - 1]?.at;
+            return (
+              <li key={a.id}>
                 <button
                   type="button"
-                  className="axe-managers-v3-chatbtn"
-                  aria-pressed={open}
-                  onClick={() => setGekozen(open ? null : a.id)}
+                  className="axe-managers-room-rij"
+                  data-open={open ? 'ja' : undefined}
+                  data-tone={status.tone}
+                  aria-current={open ? 'true' : undefined}
+                  onClick={() => kies(a.id)}
+                  style={{ ['--mgr-accent' as string]: a.accent }}
                 >
-                  {open ? 'Close chat' : 'Open chat'}
+                  <span className="axe-managers-room-av">
+                    <ManagerAvatar agent={a} size={40} />
+                    <span className="axe-managers-room-stip" data-tone={status.tone} aria-hidden />
+                  </span>
+                  <span className="axe-managers-room-meta">
+                    <span className="axe-managers-room-rij-top">
+                      <span className="axe-managers-room-naam">{a.kort || a.name}</span>
+                      <span className="axe-managers-room-tijd">
+                        {lastAt ? amsterdamKlok(lastAt) : ''}
+                      </span>
+                    </span>
+                    <span className="axe-managers-room-rij-bot">
+                      <span className="axe-managers-room-preview">{previewTekst(a.id, srv)}</span>
+                      {unread > 0 && (
+                        <span className="axe-managers-room-unread" aria-label={`${unread} unread`}>
+                          {unread > 9 ? '9+' : unread}
+                        </span>
+                      )}
+                    </span>
+                    <span className="axe-managers-room-status" data-tone={status.tone}>
+                      {status.label}
+                      {srv?.current_action ? ` · ${srv.current_action.slice(0, 40)}` : ''}
+                    </span>
+                  </span>
                 </button>
-                <span className="axe-managers-v3-av-soft" aria-hidden>
-                  <ManagerAvatar agent={a} size={28} />
-                </span>
-              </div>
-            </article>
-          );
-        })}
+              </li>
+            );
+          })}
+        </ul>
       </div>
 
-      {agent && (
-        <div className="axe-managers-v3-chat" aria-label={`Chat with ${agent.name}`}>
+      <section className="axe-managers-room-draad" aria-label={agent ? `Chat with ${agent.name}` : 'Conversation'}>
+        {agent ? (
           <ManagerChat
             key={agent.id}
             layout="desk"
@@ -131,7 +227,6 @@ export function ManagersDesk() {
             server={server.agents[agent.id]}
             extraGoedkeuringen={extra}
             tierRegel={agentTierRegel(server.tiers, agent.id)}
-            onSluit={() => setGekozen(null)}
             onMissie={(id, actie) => {
               void (actie === 'pause' ? pauseMission(id) : resumeMission(id)).then(verversServerAgents);
             }}
@@ -144,7 +239,7 @@ export function ManagersDesk() {
                   akkoord,
                   agent: srv,
                   job,
-                  reden: akkoord ? 'Approved in Managers desk.' : 'Declined in Managers desk.',
+                  reden: akkoord ? 'Approved in Managers chat.' : 'Declined in Managers chat.',
                 }).then((ok) => {
                   if (ok && job) {
                     useAxeJobStore.getState().patch(job.id, { state: akkoord ? 'running' : 'failed' });
@@ -166,7 +261,7 @@ export function ManagersDesk() {
                   agent: agent.id,
                   skill: null,
                   confident: true,
-                  reason: 'managers:v3',
+                  reason: 'managers:chat-room',
                 },
               }]);
             }}
@@ -175,7 +270,7 @@ export function ManagersDesk() {
                 akkoord,
                 agent: server.agents[agent.id],
                 job,
-                reden: akkoord ? 'Approved in Managers desk.' : 'Declined in Managers desk.',
+                reden: akkoord ? 'Approved in Managers chat.' : 'Declined in Managers chat.',
               }).then((ok) => {
                 if (ok && job) {
                   useAxeJobStore.getState().patch(job.id, { state: akkoord ? 'running' : 'failed' });
@@ -184,8 +279,12 @@ export function ManagersDesk() {
               });
             }}
           />
-        </div>
-      )}
+        ) : (
+          <div className="axe-managers-room-leeg">
+            <p>Select a manager to open the chat.</p>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -25,6 +25,7 @@ import '@/domain/tools/registerSmartThingsCatalog';
 import Home from '@/presentation/pages/Home';
 import MemoryScenePreview from '@/presentation/pages/MemoryScenePreview';
 const Agents = lazy(() => import('@/presentation/pages/Agents'));
+const DaxOverzicht = lazy(() => import('@/presentation/pages/DaxOverzicht'));
 const BouwenHub = lazy(() => import('@/presentation/pages/hubs/BouwenHub'));
 const SysteemHub = lazy(() => import('@/presentation/pages/hubs/SysteemHub'));
 const TradingDemoHub = lazy(() => import('@/presentation/pages/hubs/TradingDemoHub'));
@@ -289,6 +290,7 @@ export default function App() {
             <Route path="trading-desk" element={<Trading />} />
             <Route path="trading-intel" element={<TradingIntel />} />
             <Route path="managers" element={<Agents managersOnly />} />
+            <Route path="dax" element={<DaxOverzicht />} />
             <Route path="agents" element={<Navigate to="/managers" replace />} />
             <Route path="bouwen" element={<BouwenHub />} />
             <Route path="systeem" element={<SysteemHub />} />

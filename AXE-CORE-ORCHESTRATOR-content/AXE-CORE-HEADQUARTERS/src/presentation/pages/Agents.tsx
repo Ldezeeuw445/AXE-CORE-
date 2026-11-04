@@ -506,18 +506,21 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
     {/* axe-tabruimte en geen eigen achtergrond: UI-MAATSTAF regel 1 en 2 --
         de pagina ligt op de plaat en deelt de breedte van het browservak. */}
     <motion.div
-      className="axe-tabruimte h-full overflow-y-auto pt-4 pb-6 sm:pt-5"
+      className={`axe-tabruimte h-full ${managersOnly && weergave === 'roster' ? 'overflow-hidden pt-2 pb-2 sm:pt-2' : 'overflow-y-auto pt-4 pb-6 sm:pt-5'}`}
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
     >
+      {/* Managers desk = full-bleed Grok-style chat; keep secondary views behind a slim strip. */}
+      {!(managersOnly && weergave === 'roster') && (
+        <>
       <PageHeader
         eyebrow={managersOnly ? 'DAX bots' : 'Workforce'}
         title={managersOnly ? 'Managers' : 'Agents'}
         description={loading
           ? 'Loading…'
           : managersOnly
-            ? '6 managers · status · open chat'
+            ? 'Chat room · real manager threads · DAX link'
             : 'AXE, the thirteen he delegates to, and the six Grok managers. Pick a view; click an agent for only his.'}
         actions={managersOnly ? (
           <span
@@ -549,10 +552,10 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
         </button>
         )}
       </div>
+        </>
+      )}
 
-      {/* Dezelfde tegels als de balk boven de plaat (PlaatViewSwitch): dat is de
-          vorm die deze app al heeft voor "kies er één uit een rij". */}
-      <div className="axe-viewctl axe-viewctl--inline mb-4" role="tablist" aria-label="Agents view">
+      <div className={`axe-viewctl axe-viewctl--inline ${managersOnly && weergave === 'roster' ? 'mb-2' : 'mb-4'}`} role="tablist" aria-label="Agents view">
         {zichtbareWeergaven.map((w) => (
           <button
             key={w.id}
@@ -562,7 +565,7 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
             data-aan={weergave === w.id ? 'ja' : undefined}
             onClick={() => setWeergave(w.id)}
           >
-            <span>{managersOnly && w.id === 'roster' ? 'Desk' : w.label}</span>
+            <span>{managersOnly && w.id === 'roster' ? 'Chat' : w.label}</span>
           </button>
         ))}
       </div>
@@ -585,30 +588,15 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
       >
       {!heeftRail && detail && <div className="mb-4">{detail}</div>}
       {weergave === 'roster' && managersOnly && (
-        <>
+        <div
+          className="axe-managers-room-wrap"
+          style={{
+            height: 'calc(100dvh - var(--axe-topbar-h, 56px) - var(--axe-bottomnav-h, 72px) - var(--axe-sab, 0px) - 52px)',
+            minHeight: 520,
+          }}
+        >
           <ManagersDesk />
-          <div className="mt-6">
-            <TierRooster
-              managersOnly
-              pulses={pulses}
-              plans={plans}
-              queues={queues}
-              counts={activity.counts}
-              episodes={episodesPerAgent}
-              now={now}
-              gekozen={gekozenAgent}
-              gekozenCrew={gekozenCrew}
-              onKies={kiesAgent}
-              onKiesCrew={kiesCrew}
-              goedkeuringen={goedkeuringen}
-              onBeslis={(rij, akkoord) => {
-                void beslisAgentOk({ akkoord, rij }).then(() => {
-                  setGoedkeuringen((nu) => nu.filter((r) => r.id !== rij.id));
-                });
-              }}
-            />
-          </div>
-        </>
+        </div>
       )}
       {weergave === 'roster' && !managersOnly && (
         <TierRooster
