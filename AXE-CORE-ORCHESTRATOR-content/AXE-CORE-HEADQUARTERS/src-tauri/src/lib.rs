@@ -305,6 +305,17 @@ fn toon_sneltoets_venster(app: &tauri::AppHandle) {
 /// anders valt de vervaging weg zodra het venster van uitstraling verandert.
 #[tauri::command]
 fn zet_plaat_materiaal(window: tauri::Window, licht: bool) -> Result<(), String> {
+    // Deel look met de standalone notch (`apps/axe-overlay`) via ~/.axe/look.
+    {
+        use std::fs;
+        use std::path::PathBuf;
+        let look = if licht { "glass" } else { "black" };
+        if let Some(home) = std::env::var_os("HOME") {
+            let dir = PathBuf::from(home).join(".axe");
+            let _ = fs::create_dir_all(&dir);
+            let _ = fs::write(dir.join("look"), look);
+        }
+    }
     #[cfg(target_os = "macos")]
     {
         use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};

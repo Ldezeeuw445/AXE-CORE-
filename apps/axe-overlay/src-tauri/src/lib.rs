@@ -1,10 +1,17 @@
 mod cmd_watch;
+mod look_watch;
 mod shell_watch;
 
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Size};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+use tauri::{AppHandle, Manager, Runtime};
+#[cfg(not(target_os = "macos"))]
+use tauri::{LogicalPosition, LogicalSize, Size};
 use tauri_plugin_autostart::MacosLauncher;
 
 #[derive(Serialize, Default)]
@@ -46,7 +53,6 @@ fn get_overlay_config(app: AppHandle) -> Result<OverlayConfigDto, String> {
             .and_then(|x| x.as_str())
             .map(|s| s.to_string());
     }
-    // Prefer ~/.axe/axe-api.key so the key is never baked into the bundle.
     if dto.api_key.is_none() {
         dto.api_key = home_api_key();
     }
@@ -70,63 +76,95 @@ fn get_launch_at_login(app: AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-fn resize_overlay(app: AppHandle, expanded: bool) -> Result<(), String> {
+/// Collapsed topbar hoogte (logical). Moet matchen met frontend TOPBAR_HEIGHT.
+const COLLAPSED_H: f64 = 44.0;
+
+fn overlay_metrics(app: &AppHandle) -> (f64, f64, f64, f64, f64) {
+    // Returns (screen_x, screen_w, screen_h, menu_gap_y, visible_top_y_topleft)
+    if let Ok(Some(m)) = app.primary_monitor() {
+        let scale = m.scale_factor();
+        let size = m.size();
+        let pos = m.position();
+        let screen_w = size.width as f64 / scale;
+        let screen_h = size.height as f64 / scale;
+        let screen_x = pos.x as f64 / scale;
+        // Prefer visible position under the menu bar (flush, no gap).
+        // Tauri Monitor has no visible_area; on macOS we refine via Cocoa.
+        (screen_x, screen_w, screen_h, 0.0, 0.0)
+    } else {
+        (0.0, 1920.0, 1080.0, 0.0, 0.0)
+    }
+}
+
+fn pin_overlay_frame(app: &AppHandle, expanded: bool) -> Result<(), String> {
     let win = app
         .get_webview_window("overlay")
         .ok_or_else(|| "overlay window missing".to_string())?;
-    let (screen_w, screen_h) = if let Ok(Some(m)) = app.primary_monitor() {
-        let scale = m.scale_factor();
-        (
-            m.size().width as f64 / scale,
-            m.size().height as f64 / scale,
-        )
-    } else {
-        (1920.0, 1080.0)
-    };
+
+    let (_sx, screen_w, screen_h, _, _) = overlay_metrics(app);
     let w = (screen_w * 0.34).max(720.0).round();
     let h = if expanded {
         (w * 0.7).max(screen_h * 0.42).max(720.0).round()
     } else {
-        80.0
+        COLLAPSED_H
     };
-    let x = if let Ok(Some(m)) = app.primary_monitor() {
-        let size = m.size();
-        let scale = m.scale_factor();
-        let screen_w = size.width as f64 / scale;
-        let screen_x = m.position().x as f64 / scale;
-        screen_x + ((screen_w - w) / 2.0).max(0.0)
-    } else {
-        0.0
-    };
+
     #[cfg(target_os = "macos")]
     {
-        use cocoa::base::{id, YES};
+        use cocoa::base::{id, nil, YES};
         use cocoa::foundation::{NSPoint, NSRect, NSSize};
-        use objc::{msg_send, sel, sel_impl};
+        use objc::{class, msg_send, sel, sel_impl};
+
         let ns_win = win.ns_window().map_err(|e| e.to_string())? as id;
         unsafe {
+            // Vast: niet versleepbaar. Status-window level zodat hij zichtbaar
+            // blijft bij fullscreen-achtige apps, onder/naast menu bar.
+            let _: () = msg_send![ns_win, setMovable: cocoa::base::NO];
+            let _: () = msg_send![ns_win, setLevel: 25_i64]; // NSStatusWindowLevel
+
             let screen: id = msg_send![ns_win, screen];
-            if !screen.is_null() {
-                let sf: NSRect = msg_send![screen, frame];
-                let cocoa_y = sf.origin.y + sf.size.height - h; // y=0 top
-                let frame = NSRect::new(NSPoint::new(x, cocoa_y), NSSize::new(w, h));
-                let _: () = msg_send![ns_win, setFrame: frame display: YES];
+            let screen = if screen.is_null() {
+                let screens: id = msg_send![class!(NSScreen), screens];
+                if screens == nil {
+                    nil
+                } else {
+                    let main: id = msg_send![class!(NSScreen), mainScreen];
+                    main
+                }
             } else {
-                win.set_size(Size::Logical(LogicalSize::new(w, h)))
-                    .map_err(|e| e.to_string())?;
-                let _ = win.set_position(LogicalPosition::new(x, 0.0));
+                screen
+            };
+            if screen.is_null() {
+                return Err("geen scherm voor overlay".into());
             }
+
+            let frame: NSRect = msg_send![screen, frame];
+            let visible: NSRect = msg_send![screen, visibleFrame];
+            // Flush tegen onderkant menu bar: top van venster = top van visibleFrame.
+            let top_y = visible.origin.y + visible.size.height;
+            let cocoa_y = top_y - h;
+            let x = frame.origin.x + ((frame.size.width - w) / 2.0).max(0.0);
+            let ns_frame = NSRect::new(NSPoint::new(x, cocoa_y), NSSize::new(w, h));
+            let _: () = msg_send![ns_win, setFrame: ns_frame display: YES];
         }
+        let _ = win.set_always_on_top(true);
+        return Ok(());
     }
+
     #[cfg(not(target_os = "macos"))]
     {
+        let x = ((_sx) + ((screen_w - w) / 2.0)).max(0.0);
         win.set_size(Size::Logical(LogicalSize::new(w, h)))
             .map_err(|e| e.to_string())?;
         let _ = win.set_position(LogicalPosition::new(x, 0.0));
+        let _ = win.set_always_on_top(true);
+        Ok(())
     }
-    let _ = win.set_always_on_top(true);
-    Ok(())
+}
+
+#[tauri::command]
+fn resize_overlay(app: AppHandle, expanded: bool) -> Result<(), String> {
+    pin_overlay_frame(&app, expanded)
 }
 
 #[tauri::command]
@@ -137,6 +175,46 @@ fn get_shell_state() -> shell_watch::ShellState {
 #[tauri::command]
 fn activate_axe_shell(route: Option<String>) -> Result<(), String> {
     shell_watch::activate_axe_shell(route)
+}
+
+#[tauri::command]
+fn get_axe_look() -> look_watch::LookState {
+    look_watch::read_look()
+}
+
+fn start_display_watcher<R: Runtime>(app: AppHandle<R>) {
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop_flag = stop.clone();
+    std::mem::forget(stop);
+
+    thread::spawn(move || {
+        let mut last_key: Option<String> = None;
+        while !stop_flag.load(Ordering::Relaxed) {
+            let key = if let Ok(Some(m)) = app.primary_monitor() {
+                format!(
+                    "{}x{}@{}+{},{}",
+                    m.size().width,
+                    m.size().height,
+                    m.scale_factor(),
+                    m.position().x,
+                    m.position().y
+                )
+            } else {
+                "none".into()
+            };
+            match &last_key {
+                None => last_key = Some(key),
+                Some(prev) if prev != &key => {
+                    last_key = Some(key);
+                    // Display/resolutie gewijzigd — herpositioneer (collapsed;
+                    // frontend roept resize_overlay opnieuw bij expand).
+                    let _ = pin_overlay_frame(&app, false);
+                }
+                Some(_) => {}
+            }
+            thread::sleep(Duration::from_millis(1500));
+        }
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -153,29 +231,33 @@ pub fn run() {
             get_launch_at_login,
             resize_overlay,
             get_shell_state,
-            activate_axe_shell
+            activate_axe_shell,
+            get_axe_look
         ])
         .setup(|app| {
             if let Some(win) = app.get_webview_window("overlay") {
                 let _ = win.set_always_on_top(true);
-                if let Ok(Some(m)) = app.primary_monitor() {
-                    let size = m.size();
-                    let scale = m.scale_factor();
-                    let screen_w = size.width as f64 / scale;
-                    let w = if let Ok(Some(m)) = app.primary_monitor() {
-                        let scale = m.scale_factor();
-                        let sw = m.size().width as f64 / scale;
-                        (sw * 0.34).max(720.0).round()
-                    } else { 720.0 };
-                    let x = ((screen_w - w) / 2.0).max(0.0);
-                    let _ = win.set_position(LogicalPosition::new(x, 0.0));
+                #[cfg(target_os = "macos")]
+                {
+                    use cocoa::base::id;
+                    use objc::{msg_send, sel, sel_impl};
+                    if let Ok(nsw) = win.ns_window() {
+                        let ns_win = nsw as id;
+                        unsafe {
+                            let _: () = msg_send![ns_win, setMovable: cocoa::base::NO];
+                            let _: () = msg_send![ns_win, setLevel: 25_i64];
+                        }
+                    }
                 }
             }
+            let _ = pin_overlay_frame(app.handle(), false);
             if let Ok(dir) = app.path().app_data_dir() {
                 let _ = fs::create_dir_all(&dir);
             }
             shell_watch::start_watcher(app.handle().clone());
             cmd_watch::start_watcher(app.handle().clone());
+            look_watch::start_watcher(app.handle().clone());
+            start_display_watcher(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())

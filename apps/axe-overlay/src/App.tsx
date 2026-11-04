@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { LogicalSize } from "@tauri-apps/api/dpi";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { AxeMascot, type MascotState } from "./components/AxeMascot";
@@ -17,23 +16,26 @@ import {
   type LiveTask,
 } from "./status";
 import { NOTCH_TABS, tabActie, tabBadge, type NotchTab } from "./tabs";
+import {
+  applyLook,
+  DEFAULT_LOOK,
+  resolveLook,
+  type Look,
+} from "./look";
+import {
+  TOPBAR_BUTTONS,
+  TOPBAR_HEIGHT,
+  topbarActie,
+  topbarBadge,
+  type TopbarId,
+} from "./topbar";
 import "./App.css";
 
-function notchMetrics(screenW = 1920, screenH = 1080) {
-  const w = Math.max(720, Math.round(screenW * 0.34));
-  const collapsedH = 80;
-  const expandedH = Math.max(Math.round(w * 0.7), Math.round(screenH * 0.42), 720);
-  return { collapsed: { w, h: collapsedH }, expanded: { w, h: expandedH } };
-}
-const _m = notchMetrics(
-  typeof window !== "undefined" ? window.screen.width : 1920,
-  typeof window !== "undefined" ? window.screen.height : 1080,
-);
-const COLLAPSED = _m.collapsed;
-const EXPANDED = _m.expanded;
-/** Match CSS emerge/retract durations */
+/** Match CSS emerge/retract durations; collapsed H = TOPBAR_HEIGHT (Rust COLLAPSED_H). */
 const EMERGE_MS = 520;
 const RETRACT_MS = 420;
+
+type LookStateDto = { look: string };
 
 type ShellStateDto = {
   running: boolean;
@@ -84,6 +86,7 @@ export default function App() {
   const [notchPhase, setNotchPhase] = useState<NotchPhase>("hidden");
   const [shellRunning, setShellRunning] = useState(false);
   const [activeTab, setActiveTab] = useState<NotchTab>("chat");
+  const [look, setLook] = useState<Look>(DEFAULT_LOOK);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const recRef = useRef<SpeechRec | null>(null);
@@ -104,9 +107,8 @@ export default function App() {
 
   const resize = useCallback(async (open: boolean) => {
     try {
-      const win = getCurrentWindow();
-      const s = open ? EXPANDED : COLLAPSED;
-      await win.setSize(new LogicalSize(s.w, s.h));
+      // Rust pin_overlay_frame: exact midden, flush onder menu bar, niet versleepbaar.
+      await invoke("resize_overlay", { expanded: open });
     } catch {
       /* browser preview */
     }
@@ -173,7 +175,7 @@ export default function App() {
         // Collapse chat first so retract looks clean
         setExpanded(false);
         try {
-          await win.setSize(new LogicalSize(COLLAPSED.w, COLLAPSED.h));
+          await invoke("resize_overlay", { expanded: false });
         } catch { /* preview */ }
         notchPhaseRef.current = "retracting";
         setNotchPhase("retracting");
@@ -212,6 +214,50 @@ export default function App() {
       cancelled = true;
       unlisten?.();
       if (animTimer.current) window.clearTimeout(animTimer.current);
+    };
+  }, []);
+
+  // HQ look sync via ~/.axe/look (Rust look_watch → axe-look)
+  useEffect(() => {
+    let un: (() => void) | undefined;
+    let cancelled = false;
+    const apply = (raw: unknown) => {
+      if (cancelled) return;
+      const next = resolveLook({
+        shared: typeof raw === "string" ? raw : (raw as LookStateDto | undefined)?.look,
+        local: (() => {
+          try {
+            return localStorage.getItem("axe_look");
+          } catch {
+            return undefined;
+          }
+        })(),
+      });
+      setLook(next);
+      applyLook(next);
+      try {
+        localStorage.setItem("axe_look", next);
+      } catch {
+        /* private */
+      }
+    };
+    applyLook(resolveLook({ local: (() => { try { return localStorage.getItem("axe_look"); } catch { return undefined; } })() }));
+    void (async () => {
+      try {
+        const initial = await invoke<LookStateDto>("get_axe_look");
+        if (!cancelled) apply(initial);
+      } catch {
+        if (!cancelled) apply(undefined);
+      }
+      try {
+        un = await listen<LookStateDto>("axe-look", (ev) => apply(ev.payload));
+      } catch {
+        /* non-tauri */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      un?.();
     };
   }, []);
 
@@ -370,7 +416,7 @@ export default function App() {
     }
   };
 
-  /** Collapsed pill: open shell. Expanded: toggle chat. Double-click always opens shell. */
+  /** Expanded header: toggle chat. Double-click always opens shell. */
   const onPillClick = () => {
     if (expanded) {
       void toggle();
@@ -378,6 +424,46 @@ export default function App() {
     }
     void openShell();
   };
+
+  const onTopbar = (id: TopbarId) => {
+    const a = topbarActie(id);
+    switch (a.soort) {
+      case "open-hq":
+        void openShell();
+        return;
+      case "new-chat":
+        setActiveTab("chat");
+        setMessages([]);
+        setInput("");
+        setExpanded(true);
+        void resize(true);
+        setTimeout(() => inputRef.current?.focus(), 80);
+        return;
+      case "ptt":
+        setActiveTab("chat");
+        if (!expanded) {
+          setExpanded(true);
+          void resize(true);
+        }
+        togglePtt();
+        return;
+      case "approvals":
+        setActiveTab("meldingen");
+        setExpanded(true);
+        void resize(true);
+        return;
+      case "agents":
+        setActiveTab("agents");
+        setExpanded(true);
+        void resize(true);
+        return;
+      case "settings":
+        void openShell("settings");
+        return;
+    }
+  };
+
+  const showTopbar = notchPhase !== "hidden" && !expanded;
 
   return (
     <div
@@ -387,31 +473,79 @@ export default function App() {
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      <button
-        type="button"
-        className="notch-pill"
-        onClick={onPillClick}
-        onDoubleClick={() => void openShell()}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          void toggle();
-        }}
-        aria-label={expanded ? "AXE inklappen" : shellRunning ? "Open AXE CORE shell" : "AXE CORE starten"}
-        title={expanded ? "Inklappen" : "Klik → shell · rechtsklik → chat"}
-      >
-        <AxeMascot state={mascotState} size={expanded ? 40 : 32} />
-        <span className="pill-meta">
-          <span className="pill-brand">AXE</span>
-          {(activity.computer > 0 || activity.browser > 0) && (
-            <span className="pill-live">
-              {activity.computer > 0 && <em className="tag-comp">💻{activity.computer}</em>}
-              {activity.browser > 0 && <em className="tag-br">🌐{activity.browser}</em>}
-            </span>
-          )}
-          {approvals.length > 0 && <span className="pill-appr">{approvals.length}</span>}
-        </span>
-        <span className={`pulse-ring ${mascotState}`} />
-      </button>
+      {showTopbar ? (
+        <div
+          className="topbar"
+          role="toolbar"
+          aria-label="AXE Core topbar"
+          data-look={look}
+          style={{ height: TOPBAR_HEIGHT }}
+        >
+          <button
+            type="button"
+            className="topbar-mascot"
+            onClick={() => void openShell()}
+            onDoubleClick={() => void openShell()}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              void toggle();
+            }}
+            aria-label={shellRunning ? "Open AXE CORE HQ" : "AXE CORE starten"}
+            title="Klik → HQ · rechtsklik → chat"
+          >
+            <AxeMascot state={mascotState} size={30} />
+            <span className={`pulse-ring ${mascotState}`} />
+          </button>
+          <div className="topbar-actions">
+            {TOPBAR_BUTTONS.map((b) => {
+              const n = topbarBadge(b.id, {
+                approvals: approvals.length,
+                tasks: tasks.length,
+              });
+              const pttOn = b.id === "ptt" && listening;
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  className={`topbar-btn ${pttOn ? "ptt-on" : ""}`}
+                  title={b.title}
+                  onClick={() => onTopbar(b.id)}
+                >
+                  <span className="tb-ic">{b.icon}</span>
+                  <span className="tb-lb">{b.label}</span>
+                  {n > 0 && <span className="tb-badge">{n}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="notch-pill"
+          onClick={onPillClick}
+          onDoubleClick={() => void openShell()}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            void toggle();
+          }}
+          aria-label={expanded ? "AXE inklappen" : shellRunning ? "Open AXE CORE shell" : "AXE CORE starten"}
+          title={expanded ? "Inklappen" : "Klik → shell · rechtsklik → chat"}
+        >
+          <AxeMascot state={mascotState} size={expanded ? 40 : 32} />
+          <span className="pill-meta">
+            <span className="pill-brand">AXE</span>
+            {(activity.computer > 0 || activity.browser > 0) && (
+              <span className="pill-live">
+                {activity.computer > 0 && <em className="tag-comp">💻{activity.computer}</em>}
+                {activity.browser > 0 && <em className="tag-br">🌐{activity.browser}</em>}
+              </span>
+            )}
+            {approvals.length > 0 && <span className="pill-appr">{approvals.length}</span>}
+          </span>
+          <span className={`pulse-ring ${mascotState}`} />
+        </button>
+      )}
 
       {expanded && (
         <section className="panel" role="dialog" aria-label="AXE Core notch">
