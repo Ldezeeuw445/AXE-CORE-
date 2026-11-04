@@ -560,6 +560,17 @@ def auto_besluit(rows: list, todo: list, tests: bool | None) -> tuple[str, str]:
     return "deploy", "box matches git, tests green"
 
 
+def rode_tests(staart: str, hoeveel: int = 3) -> list[str]:
+    """De FAILED/ERROR-regels uit de pytest-samenvatting, kort.
+
+    4 nov: "backend tests are red on this Mac" zonder naam hield fix 5121265e
+    een middag van de VPS, terwijl de suite elders groen was. Wie de melding
+    leest, moet zien welke test het is zonder in te loggen op die Mac.
+    """
+    regels = [r.strip() for r in (staart or "").splitlines() if r.strip().startswith(("FAILED ", "ERROR "))]
+    return [r[:160] for r in regels[:hoeveel]]
+
+
 TEST_VENV = os.path.expanduser(os.environ.get("AXE_TEST_VENV", "~/.axe/test-venv"))
 # Wat in een testomgeving niet hoeft en op een Mac soms niet bouwt (http-ece is
 # C); geen test importeert het.
@@ -764,6 +775,10 @@ def cmd_auto(_args) -> int:
         actie, reden = auto_besluit(rows, todo, tests)
         if tests is None and staart:
             reden = f"{reden}: {staart[:200]}"
+        elif tests is False and rode_tests(staart):
+            # Het begin van de reden blijft "backend tests are red": daarop
+            # herkent de volgende ronde dat deze commit niet opnieuw hoeft.
+            reden = f"{reden}: " + "; ".join(rode_tests(staart))
     uitkomst = {"commit": commit, "actie": actie, "reden": reden,
                 "bestanden": [naam_van(r[0]) for r in todo], "tests": staart[-600:]}
     if actie == "deploy":

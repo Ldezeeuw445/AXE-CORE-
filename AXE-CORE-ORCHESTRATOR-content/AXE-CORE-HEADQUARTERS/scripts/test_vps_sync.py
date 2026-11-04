@@ -173,6 +173,18 @@ def test_auto_besluit():
     assert vs.auto_besluit([AHEAD], [AHEAD], True)[0] == "deploy"
 
 
+def test_rode_tests_noemt_de_falende_tests():
+    staart = ("..F.\n=========================== short test summary info ============================\n"
+              "FAILED test_planner.py::test_ja_nodig_eenmaal - AssertionError: 2 != 1\n"
+              "ERROR test_nieuw.py - ModuleNotFoundError: No module named 'iets'\n"
+              "1 failed, 1 error, 700 passed in 30.1s\n")
+    assert vs.rode_tests(staart) == [
+        "FAILED test_planner.py::test_ja_nodig_eenmaal - AssertionError: 2 != 1",
+        "ERROR test_nieuw.py - ModuleNotFoundError: No module named 'iets'",
+    ]
+    assert vs.rode_tests("703 passed") == []
+
+
 @pytest.fixture
 def nep_box(tmp_path, monkeypatch):
     staat = {"ssh": [], "teruggezet": False, "health": "200", "tests": (True, "1 passed")}
@@ -214,6 +226,15 @@ def test_auto_rolt_niet_uit_bij_rode_tests_en_probeert_dezelfde_commit_niet_elke
     assert vs.cmd_auto(None) == 1
     assert lees_staat()["actie"] == "geweigerd"
     assert not any("mkdir" in c for c in nep_box["ssh"])
+    monkeypatch.setattr(vs, "survey", lambda: (_ for _ in ()).throw(AssertionError("niet opnieuw meten")))
+    assert vs.cmd_auto(None) == 0
+
+
+def test_rode_tests_staan_met_naam_in_de_reden_en_blokkeren_dezelfde_commit(nep_box, monkeypatch):
+    nep_box["tests"] = (False, "F\nFAILED test_planner.py::test_x - AssertionError\n1 failed, 702 passed\n")
+    assert vs.cmd_auto(None) == 1
+    reden = lees_staat()["reden"]
+    assert reden.startswith("backend tests are red") and "test_planner.py::test_x" in reden
     monkeypatch.setattr(vs, "survey", lambda: (_ for _ in ()).throw(AssertionError("niet opnieuw meten")))
     assert vs.cmd_auto(None) == 0
 
