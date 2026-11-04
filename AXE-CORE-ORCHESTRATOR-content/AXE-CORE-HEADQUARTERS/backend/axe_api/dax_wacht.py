@@ -413,6 +413,13 @@ def ronde(client_factory: Callable[[], Any], *, runtime_factory: Callable[[DaxCo
             except Exception as exc:  # noqa: BLE001
                 verslag["mission_error"] = str(exc)[:300]
         uit["bots"][agent] = verslag
+    # G1: ook de Mac-workers (Mac Mini/iMac) meten; stil > 3 min = melding.
+    try:
+        import worker_wacht
+        uit["workers"] = worker_wacht.ronde(db, nu)
+        uit["dax_notified"] = worker_wacht.dax_meldingen(db, uit["bots"], nu)
+    except Exception as exc:  # noqa: BLE001 — mag de DAX-ronde nooit breken
+        uit["workers"] = {"error": str(exc)[:300]}
     return uit
 
 

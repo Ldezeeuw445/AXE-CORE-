@@ -4915,11 +4915,21 @@ async def _planner_start():
 
 async def _mac_lus() -> None:
     await asyncio.sleep(30)
+    ronde_nr = 0
     while True:
         try:
             await _uitvoerder("mac").tick()
         except Exception as e:  # noqa: BLE001 — de lus mag nooit stoppen
             log.warning("[mac-uitvoerder] tick faalde: %s", str(e)[:300])
+        if ronde_nr % 5 == 0:
+            # De Mac bewaakt de VPS: draait de dax-wacht niet meer, dan een melding
+            # op Home en telefoon (worker_wacht.vps_ronde). Elke 5 min, mag nooit breken.
+            try:
+                import worker_wacht
+                await asyncio.to_thread(worker_wacht.vps_ronde, sb())
+            except Exception as e:  # noqa: BLE001
+                log.warning("[mac-uitvoerder] vps-wacht faalde: %s", str(e)[:300])
+        ronde_nr += 1
         await asyncio.sleep(60)
 
 
