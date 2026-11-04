@@ -54,10 +54,17 @@ create index if not exists core_trading_team_runs_account_idx
 
 alter table public.core_trading_team_runs enable row level security;
 
--- Same single-user open policy pattern as core_trading_trades.
+-- Alleen de eigenaar, net als core_trading_trades. Dit is wat in prod staat
+-- (luka_all_core_trading_team_runs, core_owner()); de eerdere open policy
+-- `using (true)` zonder rol gold ook voor anon en is nooit zo toegepast.
 drop policy if exists svc_core_trading_team_runs on public.core_trading_team_runs;
-create policy svc_core_trading_team_runs on public.core_trading_team_runs
-  for all using (true) with check (true);
+drop policy if exists luka_all_core_trading_team_runs on public.core_trading_team_runs;
+create policy luka_all_core_trading_team_runs on public.core_trading_team_runs
+  for all to authenticated using (core_owner()) with check (core_owner());
+
+revoke all on public.core_trading_team_runs from anon;
+grant select, insert, update, delete on table public.core_trading_team_runs to authenticated;
+grant all on table public.core_trading_team_runs to service_role;
 
 comment on table public.core_trading_team_runs is
   'AXE Trading Team TEST pipeline log (Scout→News/Sentiment/Charts→Risk→Decision). App-layer allowlist must keep this on the 500k MT5 demo only.';

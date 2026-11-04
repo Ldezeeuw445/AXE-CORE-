@@ -19,7 +19,7 @@ import { LookSection } from '@/presentation/components/settings/LookSection';
 import { MeldingenSection } from '@/presentation/components/settings/MeldingenSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import {
-  Kaart, KaartRaster, SectieBlok,
+  Kaart, KaartRaster, SectieBlok, TabRuimte,
 } from '@/presentation/components/layout/tabMaatstaf';
 import { PROVIDER_KEY_CATALOGUE } from '@/domain/providerCatalogue';
 import { ABONNEMENT_MOTOREN } from '@/domain/abonnementChat';
@@ -2093,6 +2093,9 @@ export default function SettingsPage() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
+      {/* Dezelfde buitenrand als elke andere tab (layoutregel 1): de v3-rail
+          en het paneel staan IN de plaat, niet van rand tot rand. */}
+      <TabRuimte vullen>
       <div className="axe-settings-v3-wrap">
         <nav className="axe-settings-v3-nav" aria-label="Settings sections">
           <div className="axe-settings-v3-nav-label">Settings</div>
@@ -2228,6 +2231,7 @@ export default function SettingsPage() {
 
         </div>
       </div>
+      </TabRuimte>
     </motion.div>
   );
 }

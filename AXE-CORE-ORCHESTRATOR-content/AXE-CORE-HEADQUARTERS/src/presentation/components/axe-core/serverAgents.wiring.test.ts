@@ -21,7 +21,8 @@ describe('Home toont de server-status', () => {
   it('het venster toont missie, computer en tijdlijn, en kan pauzeren/hervatten', () => {
     const t = bron('ManagerChat.tsx');
     expect(t).toContain('server.dax_computer');
-    expect(t).toContain('server.events.slice(0, 6)');
+    // Tijdlijn met een vaste kop (5de85460 maakte er 8 regels van).
+    expect(t).toMatch(/server\.events\.slice\(0, \d+\)/);
     expect(t).toContain("pauzeerbaar ? 'pause' : 'resume'");
     expect(bron('AgentVensters.tsx')).toMatch(/pauseMission\(id\) : resumeMission\(id\)/);
   });

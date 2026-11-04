@@ -559,9 +559,13 @@ export function evaluateGoldOrb(
     };
   }
 
+  // Alleen bars tot en met `now`: een bar die nog moet komen mag geen signaal
+  // of entry bepalen (geen lookahead als je met een eerdere `now` evalueert).
+  const nowMs = Date.parse(now);
+  const bekend = (i: number) => !(Date.parse(bars[i]!.time) > nowMs);
   const dayIdxs: number[] = [];
   for (let i = 0; i < bars.length; i++) {
-    if (nyParts(bars[i]!.time).dateKey === nowP.dateKey) dayIdxs.push(i);
+    if (bekend(i) && nyParts(bars[i]!.time).dateKey === nowP.dateKey) dayIdxs.push(i);
   }
   const orbIdxs = dayIdxs.filter(i => {
     const p = nyParts(bars[i]!.time);
@@ -617,7 +621,7 @@ export function evaluateGoldOrb(
   }
 
   // Entry = next bar open if present, else last close as proxy for live propose
-  const nextIdx = latest.idx + 1 < bars.length ? latest.idx + 1 : latest.idx;
+  const nextIdx = latest.idx + 1 < bars.length && bekend(latest.idx + 1) ? latest.idx + 1 : latest.idx;
   const entry = nextIdx === latest.idx ? bars[latest.idx]!.close : bars[nextIdx]!.open;
   const stopLoss = latest.side === 'buy' ? orbLow : orbHigh;
   const risk = Math.abs(entry - stopLoss);

@@ -140,10 +140,6 @@ export function getAllNavItems(): NavItem[] {
   return [...NAV_ITEMS, ...dyn.filter(i => i.path && !seen.has(i.path))];
 }
 
-export function findNavItemByPath(path: string): NavItem | undefined {
-  return getAllNavItems().find(i => i.path === path);
-}
-
 /* ── Runtime org-tree node -> in-app tab route ──────────────────────────────
    A small, explicit lookup for the handful of Runtime workspace nodes
    (systemRegistryService.OrganizationNode.id) that correspond to a real tab

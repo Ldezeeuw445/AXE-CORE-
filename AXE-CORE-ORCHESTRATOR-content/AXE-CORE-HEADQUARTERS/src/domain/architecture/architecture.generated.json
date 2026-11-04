@@ -366,7 +366,27 @@
       "kind": "migration"
     },
     {
+      "path": "supabase/migrations/20261028120000_core_anon_dicht.sql",
+      "kind": "migration"
+    },
+    {
       "path": "supabase/migrations/20261028120000_core_manager_messages.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20261028121000_coding_seats_identiteit.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20261028133000_core_usage_config.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20261028140000_bouwlus_negeert_gearchiveerde_retries.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20261029233000_core_trading_team.sql",
       "kind": "migration"
     },
     {
@@ -707,7 +727,7 @@
         "role": "Commodity desk manager",
         "tier": "tier1",
         "runtime": "subscription CLI · NorthSea MCP + crews",
-        "route": "maps-3d"
+        "route": "northsea"
       },
       "sources": [
         "src/domain/agents/roster.ts"
@@ -723,7 +743,7 @@
         "role": "Owns NorthSea Desk · first deal is the priority",
         "tier": "managers",
         "runtime": "subscription CLI · standing pulse",
-        "route": "maps-3d"
+        "route": "northsea"
       },
       "sources": [
         "src/domain/agents/roster.ts"
@@ -1121,6 +1141,21 @@
       "description": "CLI coding seat (cursor)",
       "details": {
         "engine": "cursor",
+        "family": "cursor",
+        "mode": "plan-in-chat"
+      },
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "coding-seat:cursor2",
+      "kind": "coding-seat",
+      "label": "cursor2",
+      "appId": "app:axe_code",
+      "description": "CLI coding seat (cursor)",
+      "details": {
+        "engine": "cursor2",
         "family": "cursor",
         "mode": "plan-in-chat"
       },
@@ -2371,7 +2406,12 @@
         "supabase/migrations/20261017150000_axe_beslist_zelf.sql",
         "supabase/migrations/20261017180000_core_schedules_allow_staande.sql",
         "supabase/migrations/20261021120000_memory_ruis_archiveren.sql",
-        "supabase/migrations/20261028120000_core_manager_messages.sql"
+        "supabase/migrations/20261028120000_core_anon_dicht.sql",
+        "supabase/migrations/20261028120000_core_manager_messages.sql",
+        "supabase/migrations/20261028121000_coding_seats_identiteit.sql",
+        "supabase/migrations/20261028133000_core_usage_config.sql",
+        "supabase/migrations/20261028140000_bouwlus_negeert_gearchiveerde_retries.sql",
+        "supabase/migrations/20261029233000_core_trading_team.sql"
       ]
     },
     {
@@ -3197,6 +3237,20 @@
       ]
     },
     {
+      "id": "table:pqnngpcgbdwxavbatbia:core_trading_team_runs",
+      "kind": "table",
+      "label": "core_trading_team_runs",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_trading_team_runs",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261029233000_core_trading_team.sql"
+      ]
+    },
+    {
       "id": "table:pqnngpcgbdwxavbatbia:core_trading_trades",
       "kind": "table",
       "label": "core_trading_trades",
@@ -3222,6 +3276,20 @@
       },
       "sources": [
         "supabase/migrations/20260727_axe_core_trust_levels.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_usage_config",
+      "kind": "table",
+      "label": "core_usage_config",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_usage_config",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261028133000_core_usage_config.sql"
       ]
     },
     {
@@ -4360,6 +4428,16 @@
       ]
     },
     {
+      "id": "has-seat:app:axe_code:coding-seat:cursor2",
+      "source": "app:axe_code",
+      "target": "coding-seat:cursor2",
+      "relation": "has-seat",
+      "label": "has-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
       "id": "has-surface:app:axe_companion:runtime:app:axe_companion:web",
       "source": "app:axe_companion",
       "target": "runtime:app:axe_companion:web",
@@ -5000,6 +5078,16 @@
       ]
     },
     {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_trading_team_runs",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_trading_team_runs",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261029233000_core_trading_team.sql"
+      ]
+    },
+    {
       "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_trading_trades",
       "source": "supabase:pqnngpcgbdwxavbatbia",
       "target": "table:pqnngpcgbdwxavbatbia:core_trading_trades",
@@ -5017,6 +5105,16 @@
       "label": "has-table",
       "sources": [
         "supabase/migrations/20260727_axe_core_trust_levels.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_usage_config",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_usage_config",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261028133000_core_usage_config.sql"
       ]
     },
     {
@@ -6089,7 +6187,12 @@
         "supabase/migrations/20261017150000_axe_beslist_zelf.sql",
         "supabase/migrations/20261017180000_core_schedules_allow_staande.sql",
         "supabase/migrations/20261021120000_memory_ruis_archiveren.sql",
-        "supabase/migrations/20261028120000_core_manager_messages.sql"
+        "supabase/migrations/20261028120000_core_anon_dicht.sql",
+        "supabase/migrations/20261028120000_core_manager_messages.sql",
+        "supabase/migrations/20261028121000_coding_seats_identiteit.sql",
+        "supabase/migrations/20261028133000_core_usage_config.sql",
+        "supabase/migrations/20261028140000_bouwlus_negeert_gearchiveerde_retries.sql",
+        "supabase/migrations/20261029233000_core_trading_team.sql"
       ]
     },
     {
@@ -6320,6 +6423,16 @@
       "id": "uses-seat:agent:developer:coding-seat:cursor",
       "source": "agent:developer",
       "target": "coding-seat:cursor",
+      "relation": "uses-seat",
+      "label": "uses-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "uses-seat:agent:developer:coding-seat:cursor2",
+      "source": "agent:developer",
+      "target": "coding-seat:cursor2",
       "relation": "uses-seat",
       "label": "uses-seat",
       "sources": [

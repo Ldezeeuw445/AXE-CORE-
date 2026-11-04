@@ -39,7 +39,7 @@ const ALLE: readonly PhonePin[] = [
   ...MORE_APPS,
 ];
 
-export function pinVoorPad(path: string): PhonePin | undefined {
+function pinVoorPad(path: string): PhonePin | undefined {
   return ALLE.find((p) => p.path === path);
 }
 
@@ -77,7 +77,7 @@ export function leesPhonePins(opslag: { getItem(k: string): string | null } | nu
   }
 }
 
-export function schrijfPhonePins(pins: PhonePin[], opslag?: { setItem(k: string, v: string): void }): PhonePin[] {
+function schrijfPhonePins(pins: PhonePin[], opslag?: { setItem(k: string, v: string): void }): PhonePin[] {
   const schoon = parsePhonePins(JSON.stringify(pins.filter((p) => p.path !== MORE_PIN.path)));
   try {
     const store = opslag ?? (typeof localStorage === 'undefined' ? null : localStorage);

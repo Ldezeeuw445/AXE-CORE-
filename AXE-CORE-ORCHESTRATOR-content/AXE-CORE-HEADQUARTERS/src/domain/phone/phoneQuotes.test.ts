@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { marktVoorSymbool, prijsTekst, quoteVanMarkt } from './phoneQuotes';
-import type { LockscreenMarket } from '@/infrastructure/gateways/axeCoreApiService';
+import type { LockscreenMarket } from '@/domain/lockMarkets';
 
 const goud: LockscreenMarket = {
   symbol: 'XAUUSD',

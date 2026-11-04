@@ -54,12 +54,25 @@ export interface RuleCheck extends Omit<GateCheck, 'id'> {
 }
 
 /** YYYY-MM-DD van een moment in een tijdzone. Onbekende zone = UTC. */
+/* Eén formatter per zone. De backtest roept dit per bar aan; een nieuwe
+   Intl.DateTimeFormat per aanroep was het grootste deel van de rekentijd
+   (walk-forward over 2000 bars: ruim 2 s, en in de volle suite over 5 s). */
+const DAG_FORMAT = new Map<string, Intl.DateTimeFormat | null>();
+
 export function tradingDayKey(ms: number, timeZone = 'UTC'): string {
-  try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(ms);
-  } catch {
-    return new Date(ms).toISOString().slice(0, 10);
+  let f = DAG_FORMAT.get(timeZone);
+  if (f === undefined) {
+    try {
+      f = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+    } catch {
+      f = null;
+    }
+    DAG_FORMAT.set(timeZone, f);
   }
+  try {
+    if (f) return f.format(ms);
+  } catch { /* zelfde terugval als hieronder */ }
+  return new Date(ms).toISOString().slice(0, 10);
 }
 
 /** Het UTC-moment waarop de handelsdag van `ms` in `timeZone` begon. */

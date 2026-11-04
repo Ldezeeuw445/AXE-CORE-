@@ -16,6 +16,7 @@
 import type { AbonnementVerbruik } from '@/domain/abonnementVerbruik';
 import type { UsageCreditsSnapshot } from '@/domain/usageCredits';
 import type { NorthseaOverzicht } from '@/domain/northsea/chase';
+import type { LockscreenMarket } from '@/domain/lockMarkets';
 import type { TabData, TabNaam } from '@/domain/northsea/tabs/typen';
 import type { KeystoreEntry, OpsCronJob, OpsCronRun } from '@/domain/controlPlane';
 import { axeCoreApiUrl, axeCoreApiExtraHeaders, axeApiAuthHeaders } from '@/infrastructure/config/apiUrl';
@@ -1417,16 +1418,7 @@ export function placesGeocode(q: string): Promise<Array<{ lat: string; lon: stri
 }
 
 /** Het slotscherm-overzicht van de VPS: koersen, machines, diensten en wat aandacht vraagt. Ook voor de stem. */
-export interface LockscreenMarket {
-  symbol: string;
-  label: string;
-  price: number | null;
-  spark?: number[];
-  chg?: Record<string, { abs: number; pct: number }>;
-  last_updated?: string | null;
-  stale?: boolean;
-  last_updated_label?: string | null;
-}
+export type { LockscreenMarket } from '@/domain/lockMarkets';
 export interface LockscreenSnapshot {
   markets: LockscreenMarket[];
   systems: { id: string; name: string; online: boolean; cpu: number | null; mem: number | null; disk: number | null }[];

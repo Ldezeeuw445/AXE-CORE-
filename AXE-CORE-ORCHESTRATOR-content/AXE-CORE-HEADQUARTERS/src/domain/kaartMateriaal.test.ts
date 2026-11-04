@@ -90,9 +90,10 @@ describe('Settings en MCP gebruiken de primitieven', () => {
     expect(primitieven).toMatch(/Profile/);
   });
 
-  it('Settings heeft TabRuimte, SchuifBalk en sectieblokken', () => {
+  it('Settings heeft TabRuimte, een sectierail en sectieblokken', () => {
     expect(settings).toMatch(/<TabRuimte/);
-    expect(settings).toMatch(/<SchuifBalk/);
+    // v3 (8de4bcd8) verving de SchuifBalk bewust door de linkerrail.
+    expect(settings).toMatch(/axe-settings-v3-nav/);
     expect(settings).toMatch(/<SectieBlok/);
     expect(settings).not.toMatch(/STAT_ROW/);
   });

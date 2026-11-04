@@ -2,7 +2,7 @@
  * Watchlist-prijzen: dezelfde snapshot als de Home/lockscreen Markets-kaart.
  * Synthetic ~100 voor goud is geen koers.
  */
-import type { LockscreenMarket } from '@/infrastructure/gateways/axeCoreApiService';
+import type { LockscreenMarket } from '@/domain/lockMarkets';
 
 export interface PhoneQuote {
   symbol: string;

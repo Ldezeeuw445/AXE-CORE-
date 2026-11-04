@@ -209,8 +209,9 @@ function NavTile({
   const activeWash = isActive
     ? {
         color: 'var(--accent-cyan)',
-        background: 'rgba(34,211,238,0.10)',
+        background: 'rgba(255,255,255,0.05)',
         boxShadow: 'inset 0 0 0 1px rgba(34,211,238,0.28)',
+        fontWeight: 600,
       }
     : {
         color: 'var(--text-muted)',

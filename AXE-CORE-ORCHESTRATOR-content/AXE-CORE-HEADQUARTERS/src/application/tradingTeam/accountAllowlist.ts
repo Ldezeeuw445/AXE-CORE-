@@ -42,7 +42,7 @@ export function matchesDemo500kLabel(label: string | null | undefined): boolean 
   return DEFAULT_DEMO_500K_LABEL_RE.test(label);
 }
 
-export function looksLikeMetaQuotesDemo(serverOrBlob: string | null | undefined): boolean {
+function looksLikeMetaQuotesDemo(serverOrBlob: string | null | undefined): boolean {
   if (!serverOrBlob) return false;
   return /metaquotes[-\s]?demo/i.test(serverOrBlob);
 }

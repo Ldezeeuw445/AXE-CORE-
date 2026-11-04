@@ -185,7 +185,7 @@ export function DealsTabel({ deals, tellers, nu, fout, openDeal }: {
                                 {ev.map((e) => (
                                   <span key={e.label} className="rounded px-1.5 py-0.5 text-[9.5px] font-medium"
                                     style={{
-                                      background: e.status === 'signed' ? 'rgba(52,211,153,.15)' : 'rgba(251,191,36,.12)',
+                                      background: 'rgba(255,255,255,0.04)',
                                       color: e.status === 'signed' ? '#34D399' : '#FBBF24',
                                       border: `1px solid ${e.status === 'signed' ? 'rgba(52,211,153,.35)' : 'rgba(251,191,36,.3)'}`,
                                     }}>

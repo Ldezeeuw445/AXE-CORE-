@@ -304,11 +304,13 @@ describe('wat Luka moet doen', () => {
 describe('Settings toont Accounts', () => {
   it('heeft één Subscriptions-sectie, geen tweede kaartgrid onder Providers', () => {
     const settings = readFileSync(new URL('../presentation/pages/SettingsPage.tsx', import.meta.url), 'utf8');
-    expect(settings).toMatch(/id: 'accounts'/);
-    expect(settings).toMatch(/label: 'Subscriptions'/);
-    expect(settings).toMatch(/CodingSeatsSection/);
-    expect(settings).toMatch(/label: 'Usage & Credits'/);
-    expect(settings).toMatch(/UsageCreditsSection/);
+    // Settings v3 (8de4bcd8): de rail heet Accounts en Usage; de kaart zelf
+    // heet nog steeds Subscriptions (CodingSeatsSection titel).
+    expect(settings).toMatch(/id: 'accounts', label: 'Accounts'/);
+    expect(settings).toMatch(/sectie === 'accounts' && \([\s\S]{0,120}<CodingSeatsSection \/>/);
+    expect(settings).toMatch(/id: 'usage', label: 'Usage'/);
+    expect(settings).toMatch(/sectie === 'usage' && <UsageCreditsSection \/>/);
+    expect(settings.match(/<CodingSeatsSection \/>/g)?.length).toBe(1);
     expect(settings).not.toMatch(/HomeView|NeuralBrain|MemoryTerrain/);
     const seats = readFileSync(new URL('../presentation/components/settings/CodingSeatsSection.tsx', import.meta.url), 'utf8');
     const motoren = readFileSync(new URL('../presentation/components/settings/AgentMotorenSection.tsx', import.meta.url), 'utf8');
@@ -321,6 +323,7 @@ describe('Settings toont Accounts', () => {
     expect(seats).toMatch(/bruikbaarOp/);
     expect(seats).toMatch(/watMoetLukaDoen/);
     expect(seats).toMatch(/verspildeStoelen/);
+    expect(seats).toMatch(/titel="Subscriptions"/);
     const kaart = readFileSync(new URL('../presentation/components/settings/StatusKaart.tsx', import.meta.url), 'utf8');
     expect(kaart).toMatch(/isEchteLimietMelding/);
   });

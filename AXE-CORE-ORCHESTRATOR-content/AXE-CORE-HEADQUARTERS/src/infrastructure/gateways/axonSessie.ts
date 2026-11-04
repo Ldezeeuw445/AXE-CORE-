@@ -116,7 +116,7 @@ export async function axonInloggen(email: string, password: string): Promise<{ s
   return axonAuth('token?grant_type=password', { email: email.trim(), password });
 }
 
-export async function axonVervers(sessie: AxonSessie): Promise<AxonSessie | null> {
+async function axonVervers(sessie: AxonSessie): Promise<AxonSessie | null> {
   const uit = await axonAuth('token?grant_type=refresh_token', { refresh_token: sessie.refresh_token });
   return uit.sessie;
 }

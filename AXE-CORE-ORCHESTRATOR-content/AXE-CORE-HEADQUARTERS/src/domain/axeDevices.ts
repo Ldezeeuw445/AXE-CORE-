@@ -50,7 +50,7 @@ const LOKAAL_SUFFIX = /\.(local|home|lan|internal|localdomain)$/;
 const GENERIEKE_NAAM = new Set(['mac', 'imac', 'macbook', 'macmini', 'desktop', 'laptop', 'samsung']);
 
 /** Hostnaam zonder mDNS-suffix, kleine letters. */
-export function normaliseerHost(s: string | null | undefined): string {
+function normaliseerHost(s: string | null | undefined): string {
   return (s ?? '').trim().toLowerCase()
     .replace(LOKAAL_SUFFIX, '')
     .replace(/^mac-/, '')
@@ -128,7 +128,7 @@ function generiekNaam(naam: string): boolean {
  * `mac-mini-van-luka-5` zijn dezelfde mini; een kale `Mac` is dat niet —
  * die wordt in samenvoegen pas aan een mini/iMac geplakt.
  */
-export function machineSleutel(d: AxeDevice): string {
+function machineSleutel(d: AxeDevice): string {
   for (const kandidaat of [d.device_id, d.device_name]) {
     const n = normaliseerHost(kandidaat);
     if (!n || generiekNaam(kandidaat) || isUuid(kandidaat) || n.length < 4) continue;

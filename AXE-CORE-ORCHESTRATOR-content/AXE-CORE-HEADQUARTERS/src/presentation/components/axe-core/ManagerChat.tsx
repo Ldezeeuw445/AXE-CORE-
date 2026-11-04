@@ -99,7 +99,7 @@ function TypingDots() {
   return (
     <div
       className="flex items-center gap-1 px-3 py-2 rounded-2xl w-fit"
-      style={{ background: 'rgba(34,211,238,.08)', border: '1px solid rgba(34,211,238,.18)' }}
+      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.10)' }}
       aria-label="Assistant is typing"
       data-axe-typing
     >
@@ -507,7 +507,7 @@ export function ManagerChat({
               onClick={stuur}
               disabled={!opvolging.trim() && attachments.length === 0}
               className="text-[11px] px-3 py-2 rounded-xl font-medium disabled:opacity-40"
-              style={{ background: 'rgba(34,211,238,.16)', color: 'var(--accent-cyan)' }}
+              style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--accent-cyan)', fontWeight: 600 }}
             >
               Send
             </button>

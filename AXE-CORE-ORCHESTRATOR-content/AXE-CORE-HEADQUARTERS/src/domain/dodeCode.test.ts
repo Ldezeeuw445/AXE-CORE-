@@ -35,6 +35,12 @@ const SRC_ROOT = path.join(REPO_ROOT, 'src');
 // [bestand relatief aan de repo-root, exportnaam] -- gevonden 9 sept 2026,
 // geen aanroeper buiten het eigen bestand. Detail per geval: SCHOONMAAK.md.
 const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
+  // 4 nov 2026: JS-helft van de Android-schil (selectTab, browseClose bestaan
+  // native). De A17-hamburgernav (a801d755) haalde de tabstrook weg; de
+  // bridge blijft zodat de schil niet om een ontbrekende functie vraagt.
+  ['src/infrastructure/gateways/androidPhoneBridge.ts', 'nativeTabsAvailable'],
+  ['src/infrastructure/gateways/androidPhoneBridge.ts', 'selectNativeTab'],
+  ['src/infrastructure/gateways/androidBrowseBridge.ts', 'nativeBrowseClose'],
   ['src/application/agents/agenticEditBridge.ts', 'runEditCodeTool'],
   ['src/application/agents/agenticEngine.ts', 'isAgenticModeEnabled'],
   ['src/application/agents/agenticEngine.ts', 'setAgenticMode'],

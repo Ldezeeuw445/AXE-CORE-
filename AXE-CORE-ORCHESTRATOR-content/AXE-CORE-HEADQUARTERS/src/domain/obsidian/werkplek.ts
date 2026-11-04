@@ -142,6 +142,13 @@ function bouwAliassen(): Alias[] {
 
 const ALIASSEN = bouwAliassen();
 
+/* Woordgrens-patronen één keer bouwen. Dit draait bij elke chatbeurt via
+   classifyAxeTier; per beurt ~honderd RegExps maken kostte ~0,08 ms per
+   aanroep en haalde de 5 ms-tabel in axeRoute.test.ts onderuit. */
+const ALIAS_PATRONEN: ReadonlyArray<{ a: Alias; re: RegExp }> = ALIASSEN
+  .filter((a) => a.alias.length >= 8 || a.alias.includes(' '))
+  .map((a) => ({ a, re: new RegExp(`\\b${a.alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i') }));
+
 const OPDRACHT_AAN =
   /(?:^|\b)(?:doe|maak|check|bekijk|kijk|werk|handle|do|work)\s+(?:dit|dat|het|this|that|it)?\s*(?:aan|op|voor|in|on|at|for|to)\s+(.+)$/i;
 
@@ -177,9 +184,8 @@ export function werkplekVanTekst(text: string): WerkplekKeuze {
   }
 
   const lower = raw.toLowerCase();
-  for (const a of ALIASSEN) {
-    if (a.alias.length < 8 && !a.alias.includes(' ')) continue;
-    if (new RegExp(`\\b${a.alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(lower)) {
+  for (const { a, re } of ALIAS_PATRONEN) {
+    if (re.test(lower)) {
       return {
         agent: a.agent,
         tab: a.tab,

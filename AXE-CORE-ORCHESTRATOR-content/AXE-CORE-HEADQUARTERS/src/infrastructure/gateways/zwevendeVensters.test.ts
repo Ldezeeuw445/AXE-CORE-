@@ -31,7 +31,8 @@ describe('AXE overlay float (louis_rlee notch)', () => {
     const o = ZWEVENDE_VENSTERS.axe;
     expect(o.label).toBe('axe-float-axe');
     expect(o.route).toBe('/float/axe');
-    expect(o.h).toBeLessThanOrEqual(64);
+    // 704d41dd: notch op grote schermen is 80px hoog (was 54); nog steeds een strook, geen venster.
+    expect(o.h).toBeLessThanOrEqual(80);
     expect(o.b).toBeGreaterThanOrEqual(400);
   });
 });

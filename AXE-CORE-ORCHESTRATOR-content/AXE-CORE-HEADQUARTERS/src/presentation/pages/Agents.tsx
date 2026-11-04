@@ -522,7 +522,7 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
         actions={managersOnly ? (
           <span
             className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium"
-            style={{ background: 'rgba(34,211,238,.1)', border: '1px solid rgba(34,211,238,.28)', color: 'var(--accent-cyan)' }}
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--accent-cyan)' }}
           >
             AXE orchestrates
           </span>
