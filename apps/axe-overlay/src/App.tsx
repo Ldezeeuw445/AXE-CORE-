@@ -162,6 +162,8 @@ export default function App() {
         try {
           await win.show();
           await win.setAlwaysOnTop(true);
+          // Re-pin after show — otherwise frame drifts off top-center.
+          await invoke("resize_overlay", { expanded: false });
         } catch { /* preview */ }
         notchPhaseRef.current = "emerging";
         setNotchPhase("emerging");
