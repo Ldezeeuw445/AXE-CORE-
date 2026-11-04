@@ -9619,3 +9619,26 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   .axe-appvijf > .axe-appkolom:nth-child(4):nth-last-child(2) { grid-column: 2 / span 2; }
   .axe-appvijf > .axe-appkolom:nth-child(5):last-child { grid-column: 4 / span 2; }
 }
+
+/* Grid-pass: hubs (Trading e.a.) liepen tegen de linkerrand. Zelfde
+   gecentreerde inhoudsbreedte als Taken/Calendar/Code. */
+.axe-hub-v3 {
+  width: 100%;
+  max-width: 1264px;
+  margin-inline: auto;
+  padding: 8px 0 12px;
+}
+
+/* Grid-pass Code: de rechterkolom liep onder zijn eigen vak door en de
+   "Code agent"-kop lag over de terminalkop heen. Kolom knipt nu en schuift. */
+.axe-code-v3 .axe-studio-agent.axe-code-v3-aside {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Grid-pass Settings: met een of twee seat-kaarten liet auto-fill rechts lege
+   kolommen staan. auto-fit verdeelt de echte kaarten over de volle breedte. */
+[data-axe-seats-raster].axe-agent-raster--ruim {
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+}

@@ -30,7 +30,7 @@ export function HubV3({ tab, title, sub, columns = 3, tiles, children }: Props) 
           {title} <span className="axe-hub-v3-sub">{sub}</span>
         </h1>
       </header>
-      <div className={`axe-hub-v3-grid ${cols}`.trim()}>
+      <div className={`axe-hub-v3-grid ${cols}`.trim()} data-axe-gelijk="hub">
         {tiles.map((t) => (
           <button
             key={t.id}
