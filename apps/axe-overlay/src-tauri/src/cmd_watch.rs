@@ -49,6 +49,15 @@ pub fn start_watcher<R: Runtime + 'static>(app: AppHandle<R>) {
                     *guard = cmd.to_string();
                 }
                 let _ = app.emit("overlay-cmd", cmd.to_string());
+                // Collapse must clear OVERLAY_EXPANDED immediately — otherwise the
+                // ~3s display-watcher re-pin keeps the expanded (big) frame.
+                if cmd == "collapse" {
+                    let app2 = app.clone();
+                    let _ = app.run_on_main_thread(move || {
+                        let _ = super::pin_overlay_frame(&app2, false);
+                    });
+                    continue;
+                }
                 // Ensure window is visible for interactive cmds
                 if matches!(
                     cmd,
@@ -72,10 +81,26 @@ pub fn start_watcher<R: Runtime + 'static>(app: AppHandle<R>) {
                         // can drift position after the main-thread hop).
                         let win2 = win.clone();
                         let app2 = app.clone();
+                        let expand_now = matches!(
+                            cmd,
+                            "expand"
+                                | "ptt-start"
+                                | "approvals"
+                                | "approve-top"
+                                | "ask-about-this"
+                                | "northsea-brief"
+                                | "daily-brief"
+                                | "focus-on"
+                                | "focus-off"
+                                | "manager-next"
+                                | "manager-prev"
+                                | "manager-open"
+                        ) || cmd.starts_with("ask:");
                         let _ = app.run_on_main_thread(move || {
                             let _ = win2.show();
                             let _ = win2.set_always_on_top(true);
-                            let _ = super::pin_overlay_frame(&app2, super::OVERLAY_EXPANDED.load(std::sync::atomic::Ordering::Relaxed));
+                            // Pin with the intended state for this cmd (not a stale flag).
+                            let _ = super::pin_overlay_frame(&app2, expand_now);
                         });
                     }
                 }

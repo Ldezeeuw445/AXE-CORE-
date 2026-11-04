@@ -274,6 +274,11 @@ export default function App() {
       un = await listen<string>("overlay-cmd", (ev) => {
         const cmd = (ev.payload || "").trim();
         if (!cmd) return;
+        if (cmd === "collapse") {
+          setExpanded(false);
+          void resize(false);
+          return;
+        }
         if (cmd === "expand" || cmd.startsWith("ask:")) {
           setExpanded(true);
           void resize(true);
