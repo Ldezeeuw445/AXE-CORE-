@@ -590,6 +590,7 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
       {weergave === 'roster' && managersOnly && (
         <div
           className="axe-managers-room-wrap"
+          data-axe-managers-plaat="ja"
           style={{
             height: 'calc(100dvh - var(--axe-topbar-h, 56px) - var(--axe-bottomnav-h, 72px) - var(--axe-sab, 0px) - 52px)',
             minHeight: 520,

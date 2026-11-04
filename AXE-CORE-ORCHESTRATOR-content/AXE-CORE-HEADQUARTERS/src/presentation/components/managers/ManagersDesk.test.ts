@@ -64,4 +64,28 @@ describe('ManagersDesk Grok Bot layout', () => {
       expect(a.kort || '').toMatch(/Manager|Projects|AXON|Trading OS|CORE/);
     }
   });
+
+  it('keeps Chat/Activity/Memory tabs only in Agents viewctl — not duplicated in sidebar', () => {
+    const src = readFileSync('src/presentation/components/managers/ManagersDesk.tsx', 'utf8');
+    expect(src).not.toContain('axe-managers-room-tabs');
+    expect(src).not.toContain("['activity', 'Activity & plans']");
+    expect(src).toContain('data-axe-boss-tile');
+    expect(src).toContain('axe-browser-vak');
+    expect(src).toContain('Boss · Orchestrator');
+    // Full Grok names without Twin / kort short labels in the row
+    expect(src).toContain('{a.name}');
+    expect(src).not.toContain('{a.kort || a.name}');
+  });
+
+  it('ManagerChat desk header is professional — no raw JSON or DAX slogan', () => {
+    const src = readFileSync('src/presentation/components/axe-core/ManagerChat.tsx', 'utf8');
+    expect(src).toContain('axe-manager-pro-kop');
+    expect(src).toContain('veiligeStripSamenvatting');
+    expect(src).toContain('menselijkeStatusChips');
+    expect(src).not.toContain('Routes to the right DAX');
+    expect(src).toContain('AXE_SKILLS');
+    expect(src).toContain('APPS');
+    expect(src).toContain('axe-manager-picker');
+  });
+
 });
