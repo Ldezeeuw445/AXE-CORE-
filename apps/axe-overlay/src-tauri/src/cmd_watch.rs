@@ -67,8 +67,13 @@ pub fn start_watcher<R: Runtime + 'static>(app: AppHandle<R>) {
                         | "manager-open"
                 ) {
                     if let Some(win) = app.get_webview_window("overlay") {
-                        let _ = win.show();
-                        let _ = win.set_always_on_top(true);
+                        // show / set_always_on_top touch AppKit window level —
+                        // must run on the main thread (watcher is a bg thread).
+                        let win2 = win.clone();
+                        let _ = app.run_on_main_thread(move || {
+                            let _ = win2.show();
+                            let _ = win2.set_always_on_top(true);
+                        });
                     }
                 }
             }

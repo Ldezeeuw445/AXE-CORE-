@@ -96,7 +96,30 @@ fn overlay_metrics<R: Runtime>(app: &AppHandle<R>) -> (f64, f64, f64, f64, f64) 
     }
 }
 
+/// AppKit window mutations (setLevel/setFrame) must run on the main thread.
+/// Display/cmd watchers call this from background threads — hop when needed.
 fn pin_overlay_frame<R: Runtime>(app: &AppHandle<R>, expanded: bool) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use objc::{class, msg_send, sel, sel_impl};
+        let on_main: bool = unsafe { msg_send![class!(NSThread), isMainThread] };
+        if !on_main {
+            let app2 = app.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            app
+                .run_on_main_thread(move || {
+                    let _ = tx.send(pin_overlay_frame_inner(&app2, expanded));
+                })
+                .map_err(|e| e.to_string())?;
+            return rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap_or_else(|_| Err("pin_overlay_frame: main-thread timeout".into()));
+        }
+    }
+    pin_overlay_frame_inner(app, expanded)
+}
+
+fn pin_overlay_frame_inner<R: Runtime>(app: &AppHandle<R>, expanded: bool) -> Result<(), String> {
     let win = app
         .get_webview_window("overlay")
         .ok_or_else(|| "overlay window missing".to_string())?;
@@ -206,8 +229,8 @@ fn start_display_watcher<R: Runtime>(app: AppHandle<R>) {
                 None => last_key = Some(key),
                 Some(prev) if prev != &key => {
                     last_key = Some(key);
-                    // Display/resolutie gewijzigd — herpositioneer (collapsed;
-                    // frontend roept resize_overlay opnieuw bij expand).
+                    // Display/resolutie gewijzigd — herpositioneer op main thread
+                    // (AppKit setLevel/setFrame crashen anders met SIGTRAP).
                     let _ = pin_overlay_frame(&app, false);
                 }
                 Some(_) => {}
