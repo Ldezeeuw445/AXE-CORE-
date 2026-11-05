@@ -13,12 +13,11 @@ import {
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { beslisApproval } from '@/application/approvals/beslisAgentOk';
 import './AxeOverlayNotch.css';
+import { groepeerSleep, sorteerSleep, type GesleeptItem, type SleepInvoer } from '@/domain/overlay/gesleepteItems';
 
 type Tab = 'chat' | 'approvals' | 'settings';
 
 type Msg = { role: 'user' | 'assistant' | 'system'; content: string; at: number };
-
-type FileChip = { name: string; size: number; kind: string };
 
 const MANAGERS = [
   { id: 'axe', label: 'AXE' },
@@ -30,13 +29,6 @@ const MANAGERS = [
   { id: 'northsea', label: 'NorthSea' },
 ] as const;
 
-function fileKind(name: string): string {
-  const ext = name.split('.').pop()?.toLowerCase() || '';
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return 'image';
-  if (['pdf', 'doc', 'docx', 'txt', 'md'].includes(ext)) return 'doc';
-  if (['csv', 'xlsx', 'xls'].includes(ext)) return 'sheet';
-  return 'file';
-}
 
 function isDangerousApproval(a: DurableTaskApproval): boolean {
   const blob = `${a.kind || ''} ${a.title || ''} ${a.detail || ''} ${a.wat || ''}`.toLowerCase();
@@ -124,7 +116,7 @@ export function AxeOverlayNotch({
   const [messages, setMessages] = useState<Msg[]>([]);
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
-  const [files, setFiles] = useState<FileChip[]>([]);
+  const [files, setFiles] = useState<GesleeptItem[]>([]);
   const [dragging, setDragging] = useState(false);
   const [approvals, setApprovals] = useState<DurableTaskApproval[]>([]);
   const [activity, setActivity] = useState<string[]>([]);
@@ -292,7 +284,7 @@ export function AxeOverlayNotch({
     const fileBlock =
       files.length === 0
         ? ''
-        : `\n\n[Bestanden]\n${files.map((f) => `- ${f.name} (${f.kind}, ${f.size} B)`).join('\n')}`;
+        : `\n\n[Meegestuurd]\n${files.map((f) => `- ${f.label} (${f.soort}${f.grootte != null ? `, ${f.grootte} B` : ''})`).join('\n')}`;
     const payload = (text || 'Bestanden ontvangen — wat moet ik ermee?') + fileBlock;
     setTekst('');
     setFiles([]);
@@ -348,15 +340,26 @@ export function AxeOverlayNotch({
     setListening(true);
   };
 
-  const onDropFiles = (list: FileList | File[]) => {
-    const next: FileChip[] = Array.from(list).slice(0, 8).map((f) => ({
-      name: f.name,
-      size: f.size,
-      kind: fileKind(f.name),
-    }));
-    setFiles((p) => [...p, ...next].slice(0, 12));
+  /**
+   * Alles wat erin valt, gesorteerd in bakjes.
+   *
+   * Hiervoor nam de notch alleen `dataTransfer.files`: een gesleepte link of
+   * een stuk tekst lichtte de rand op en verdween daarna. En alles wat wél
+   * binnenkwam belandde op één hoop, waarin je weer moest zoeken.
+   *
+   * Het sorteren zelf staat in `domain/overlay/gesleepteItems` — zonder DOM,
+   * zodat elk geval te toetsen is zonder browser.
+   */
+  const neemSleepAan = (invoer: SleepInvoer) => {
+    const items = sorteerSleep(invoer);
+    if (items.length === 0) return;
+    setFiles((p) => [...p, ...items].slice(0, 12));
     set(true);
     setTab('chat');
+  };
+
+  const onDropFiles = (list: FileList | File[]) => {
+    neemSleepAan({ bestanden: Array.from(list).map((f) => ({ name: f.name, size: f.size })) });
   };
 
   const icons = (
@@ -460,7 +463,14 @@ export function AxeOverlayNotch({
         e.preventDefault();
         dragDepth.current = 0;
         setDragging(false);
-        if (e.dataTransfer.files?.length) onDropFiles(e.dataTransfer.files);
+        // Bestanden, links én tekst. Eén sleep levert vaak twee vormen van
+        // hetzelfde op (een uri-list plus dezelfde URL als platte tekst);
+        // sorteerSleep ontdubbelt dat, dus ze mogen hier alle drie mee.
+        neemSleepAan({
+          bestanden: Array.from(e.dataTransfer.files ?? []).map((f) => ({ name: f.name, size: f.size })),
+          uriList: e.dataTransfer.getData('text/uri-list') || null,
+          tekst: e.dataTransfer.getData('text/plain') || null,
+        });
       }}
     >
       <div className="axe-ov__stars" aria-hidden="true" />
@@ -523,17 +533,34 @@ export function AxeOverlayNotch({
                 )}
               </div>
 
-              {files.length > 0 && (
-                <ul className="axe-ov__files">
-                  {files.map((f, i) => (
-                    <li key={`${f.name}-${i}`}>
-                      <span className="axe-ov__pdf">{f.kind}</span>
-                      <span>{f.name}</span>
-                      <button type="button" aria-label="Verwijder" onClick={() => setFiles((p) => p.filter((_, j) => j !== i))}>×</button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              {/* Per bakje, niet op één hoop. Een kopje verschijnt alleen als
+                  er iets in zit; "Downloads" boven niets is ruis. */}
+              {files.length > 0 && groepeerSleep(files).map((groep) => (
+                <div className="axe-ov__groep" key={groep.groep}>
+                  <div className="axe-ov__groep-kop">
+                    <span>{groep.label}</span>
+                    <span className="axe-ov__groep-telling">{groep.items.length}</span>
+                  </div>
+                  <ul className="axe-ov__files">
+                    {groep.items.map((f) => (
+                      <li key={`${f.groep}-${f.label}-${f.waarde ?? ''}`}>
+                        <span className="axe-ov__pdf">{f.soort}</span>
+                        <span>{f.label}</span>
+                        <span className="axe-ov__bestemming" title={f.bestemming === 'axon' ? 'Gaat naar het geheugen' : 'Gaat mee in het gesprek'}>
+                          {f.bestemming === 'axon' ? 'AXON' : 'chat'}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="Verwijder"
+                          onClick={() => setFiles((p) => p.filter((x) => x !== f))}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
 
               <form
                 className="axe-ov__input"

@@ -104,7 +104,7 @@ niet in blijven staan.
 cd AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
 npx tsc --noEmit          # 3 fouten — voeg er geen toe. LET OP: niet hetzelfde
                           # als `npm run typecheck`, zie hieronder
-npx vitest run            # 3161 tests; 2 staan al rood, voeg er geen bij
+npx vitest run            # 3175 tests; 2 staan al rood, voeg er geen bij
 npx eslint src            # 444 fouten, 34 waarschuwingen — voeg er geen toe
 python3 scripts/vps_sync.py check   # box en repo eens
 ```

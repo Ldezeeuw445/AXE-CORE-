@@ -165,6 +165,25 @@ html[data-axe-notch] {
 .axe-ov__dots span:nth-child(2) { animation-delay: .2s; }
 .axe-ov__dots span:nth-child(3) { animation-delay: .4s; }
 @keyframes axe-ov-pulse { 0%,100%{opacity:.3} 50%{opacity:1} }
+/* Bakjes: screenshots, foto's, documenten, downloads, links, notities.
+   Een kopje per bakje, zodat je niet in één hoop zoekt. */
+.axe-ov__groep { display: flex; flex-direction: column; gap: 6px; }
+.axe-ov__groep + .axe-ov__groep { margin-top: 10px; }
+.axe-ov__groep-kop {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: rgba(255,255,255,.42);
+}
+.axe-ov__groep-telling {
+  min-width: 16px; padding: 0 5px; border-radius: 999px; text-align: center;
+  background: rgba(255,255,255,.07); color: rgba(255,255,255,.55); font-weight: 600;
+}
+/* Waar het heen gaat, in letters en niet in een vlak — UI-MAATSTAF. */
+.axe-ov__bestemming {
+  font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: rgba(130, 220, 255, .75);
+}
+
 .axe-ov__files { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .axe-ov__files li {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 10px;
