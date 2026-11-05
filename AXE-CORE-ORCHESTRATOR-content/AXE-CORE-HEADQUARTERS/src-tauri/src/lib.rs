@@ -222,29 +222,57 @@ fn dock_notch_frame_inner(app: &tauri::AppHandle, x: f64, y: f64, w: f64, h: f64
         unsafe {
             // NSStatusWindowLevel (25): allowed over the menu bar / notch strip.
             let _: () = msg_send![ns_win, setLevel: 25_i64];
-            // Prefer primary display (CGMainDisplay / origin near 0), not ns_win.screen
-            // (follows the window) or NSScreen.main (follows key window → secondary).
+            // Het scherm waar de aanroeper om vraagt, en anders het primaire.
+            //
+            // Hier stond alleen die tweede helft: altijd het primaire scherm,
+            // en dan de x van de aanroeper DAARIN vastgeklemd. De JS-kant
+            // rekent inmiddels met currentMonitor, dus die x hoort bij het
+            // scherm waar Luka zit -- en werd hier stil teruggezet naar de
+            // rechterrand van het eerste scherm. Een altijd-aanwezige balk
+            // die altijd op je andere monitor staat, is altijd afwezig.
+            //
+            // De x is de probe en niet de y: Cocoa rekent y van onderaf en de
+            // aanroeper van bovenaf, dus alleen x betekent in beide hetzelfde.
+            let probe_x = x + w / 2.0;
             let mut screen: id = msg_send![class!(NSScreen), mainScreen];
             let screens: id = msg_send![class!(NSScreen), screens];
             if screens != nil {
                 let count: usize = msg_send![screens, count];
-                let mut best: id = screen;
-                let mut best_score = f64::MAX;
+                let mut gekozen: id = nil;
                 for i in 0..count {
                     let s: id = msg_send![screens, objectAtIndex: i];
                     if s.is_null() || s == nil {
                         continue;
                     }
                     let sf: NSRect = msg_send![s, frame];
-                    // Primary is usually the screen with origin closest to (0,0) and largest area.
-                    let score = sf.origin.x.abs() + sf.origin.y.abs() - (sf.size.width * sf.size.height) * 1e-9;
-                    if score < best_score {
-                        best_score = score;
-                        best = s;
+                    if probe_x >= sf.origin.x && probe_x < sf.origin.x + sf.size.width {
+                        gekozen = s;
+                        break;
                     }
                 }
-                if !best.is_null() && best != nil {
-                    screen = best;
+                if gekozen == nil {
+                    // Geen scherm bevat die x (scherm losgekoppeld of de JS
+                    // kant kon de monitor niet bepalen): dan het primaire --
+                    // origin dichtst bij (0,0) en het grootste vlak.
+                    let mut best: id = screen;
+                    let mut best_score = f64::MAX;
+                    for i in 0..count {
+                        let s: id = msg_send![screens, objectAtIndex: i];
+                        if s.is_null() || s == nil {
+                            continue;
+                        }
+                        let sf: NSRect = msg_send![s, frame];
+                        let score = sf.origin.x.abs() + sf.origin.y.abs()
+                            - (sf.size.width * sf.size.height) * 1e-9;
+                        if score < best_score {
+                            best_score = score;
+                            best = s;
+                        }
+                    }
+                    gekozen = best;
+                }
+                if !gekozen.is_null() && gekozen != nil {
+                    screen = gekozen;
                 }
             }
             if screen.is_null() || screen == nil {
