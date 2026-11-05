@@ -157,11 +157,14 @@ fi
 # for the same reason: on a dedicated box there is nothing to free the RAM for,
 # and a cold load costs seconds every time.
 # On ROL=alles, keep it at 1 and 5m — there everything else wants RAM too.
-if [ "$ROL" = "ollama" ]; then
-  MAX_LOADED=2; KEEP_ALIVE=10m
-else
-  MAX_LOADED=1; KEEP_ALIVE=5m
-fi
+#
+# 4 nov 2026: "nothing else on it" klopt niet meer. Sinds 7 okt draaien de vijf
+# DAX-containers (samen tot 13 GB limiet) op dezelfde modelbox. Met twee modellen
+# resident had de box om 17:50 nog 1,7 GB vrij; daarna liep `docker inspect` via
+# ssh://strato-dax 30 s op een time-out en faalde elke DAX-taak tot de containers
+# om ~07:20 opnieuw opkwamen (toen 7,1 GB vrij). Dus ook hier 1 model en 5m,
+# zolang DAX hier staat. AXE_OLLAMA_MAX_LOADED zet het bewust anders.
+MAX_LOADED="${AXE_OLLAMA_MAX_LOADED:-1}"; KEEP_ALIVE="${AXE_OLLAMA_KEEP_ALIVE:-5m}"
 echo "→ Configuring Ollama (CORS, ${MAX_LOADED} model(s) resident, keep-alive ${KEEP_ALIVE})..."
 mkdir -p /etc/systemd/system/ollama.service.d
 # Alleen op loopback. Hier stond 0.0.0.0:11434, en omdat nginx op dezelfde box
