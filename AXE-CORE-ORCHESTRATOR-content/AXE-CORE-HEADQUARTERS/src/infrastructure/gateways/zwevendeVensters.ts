@@ -76,7 +76,12 @@ export async function openZwevend(type: ZwevendType): Promise<void> {
   if (type === 'axe') {
     try {
       const { primaryMonitor, currentMonitor } = await import('@tauri-apps/api/window');
-      const mon = (await primaryMonitor()) || (await currentMonitor());
+      // Het scherm waar je zit, niet het scherm dat toevallig "primair" heet.
+      // Andersom stond de notch op de ene monitor terwijl Luka op de andere
+      // werkte, en dan is een altijd-aanwezige balk juist altijd afwezig.
+      // primaryMonitor blijft de terugval voor als het actieve scherm niet
+      // te bepalen is.
+      const mon = (await currentMonitor()) || (await primaryMonitor());
       if (mon) {
         const scale = mon.scaleFactor || 1;
         const screenW = mon.size.width / scale;

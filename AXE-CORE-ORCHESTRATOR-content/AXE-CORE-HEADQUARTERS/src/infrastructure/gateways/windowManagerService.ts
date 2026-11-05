@@ -153,7 +153,12 @@ export async function openPersonalComputerUse(): Promise<void> {
       alwaysOnTop: true,
       resizable: true,
       center: true,
-      shadow: true,
+      /* Een doorzichtig venster met afgeronde hoeken in CSS krijgt van het
+         OS alsnog een rechthoekige schaduw. Die tekent een donkere omtrek
+         rondom het paneel, los van de inhoud — precies wat Luka op 5 nov op
+         Computer Use zag. Dezelfde bug stond eerder in de notch; zie de
+         notitie bij `shadow` in zwevendeVensters.ts. */
+      shadow: false,
     });
     await new Promise<void>((resolve, reject) => {
       win.once('tauri://created', () => resolve());
