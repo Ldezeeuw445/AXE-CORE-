@@ -14,6 +14,7 @@ import {
 import { beslisApproval } from '@/application/approvals/beslisAgentOk';
 import './AxeOverlayNotch.css';
 import { groepeerSleep, sorteerSleep, type GesleeptItem, type SleepInvoer } from '@/domain/overlay/gesleepteItems';
+import { beoordeelNotch } from '@/domain/overlay/notchLeven';
 
 type Tab = 'chat' | 'approvals' | 'settings';
 
@@ -86,18 +87,29 @@ async function sendChat(text: string, history: Msg[], managerLabel: string): Pro
   return data.text || data.choices?.[0]?.message?.content || '(geen antwoord)';
 }
 
-async function fetchActivity(): Promise<string[]> {
+/**
+ * Lopende taken, mét of de VPS überhaupt antwoordde.
+ *
+ * Hier stond `catch { return [] }`. Een lege lijst en een onbereikbare server
+ * zien er dan identiek uit, en de notch toont in beide gevallen "niets te
+ * doen". Dat is de ene fout die een altijd-aanwezige balk niet mag maken: je
+ * vertrouwt dan op iets dat al een uur dood kan zijn. Daarom twee velden.
+ */
+async function fetchActivity(): Promise<{ ok: boolean; regels: string[] }> {
   try {
     const url = `${VPS_API_ORIGIN}/tasks?limit=12`;
     const r = await fetch(url, { headers: { ...vpsAuthHeaders(url) } });
-    if (!r.ok) return [];
+    if (!r.ok) return { ok: false, regels: [] };
     const data = (await r.json()) as { tasks?: Array<{ title?: string; status?: string; capability?: string }> };
-    return (data.tasks || [])
-      .filter((t) => /running|queued|active|in_progress|waiting/i.test(String(t.status || '')))
-      .slice(0, 4)
-      .map((t) => `${t.title || t.capability || 'task'} · ${t.status}`);
+    return {
+      ok: true,
+      regels: (data.tasks || [])
+        .filter((t) => /running|queued|active|in_progress|waiting/i.test(String(t.status || '')))
+        .slice(0, 4)
+        .map((t) => `${t.title || t.capability || 'task'} · ${t.status}`),
+    };
   } catch {
-    return [];
+    return { ok: false, regels: [] };
   }
 }
 
@@ -120,6 +132,9 @@ export function AxeOverlayNotch({
   const [dragging, setDragging] = useState(false);
   const [approvals, setApprovals] = useState<DurableTaskApproval[]>([]);
   const [activity, setActivity] = useState<string[]>([]);
+  // Begint op true: anders roept de notch "geen verbinding" in de seconde
+  // vóór de eerste ronde, en dat is een vals alarm bij elke start.
+  const [bereikbaar, setBereikbaar] = useState(true);
   const [managerIdx, setManagerIdx] = useState(0);
   const [statusNote, setStatusNote] = useState('');
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
@@ -130,6 +145,23 @@ export function AxeOverlayNotch({
   const recRef = useRef<{ stop: () => void } | null>(null);
 
   const manager = MANAGERS[managerIdx] || MANAGERS[0];
+
+  /**
+   * Eén toestand voor de hele strook — ingeklapt én open.
+   *
+   * Ingeklapt was de notch tot nu toe stom: de bol stond stil en wat hier
+   * binnenkwam werd alleen in `axe-ov__body` getekend, en die bestaat niet als
+   * hij dicht is. Je kon dus niet zien of AXE meeluisterde, bezig was, op je
+   * wachtte of al een uur niets meer hoorde. De volgorde bij meerdere
+   * signalen staat in `domain/overlay/notchLeven`, met de redenen erbij.
+   */
+  const leven = beoordeelNotch({
+    luistert: listening,
+    denkt: busy,
+    bereikbaar,
+    approvals: approvals.length,
+    taken: activity.length,
+  });
 
   const set = useCallback(
     (v: boolean | ((prev: boolean) => boolean)) => {
@@ -161,14 +193,24 @@ export function AxeOverlayNotch({
   useEffect(() => {
     let cancelled = false;
     const tick = async () => {
+      // Beide rondes apart, zodat één storing de andere niet meesleept — en
+      // zodat `bereikbaar` echt betekent "we hebben net iets gehoord".
+      let approvalsOk = true;
+      let takenOk = true;
       try {
-        const [a, act] = await Promise.all([listPendingApprovals(12), fetchActivity()]);
-        if (cancelled) return;
-        setApprovals(a.filter((x) => x.status === 'pending'));
-        setActivity(act);
+        const a = await listPendingApprovals(12);
+        if (!cancelled) setApprovals(a.filter((x) => x.status === 'pending'));
       } catch {
-        /* keep last */
+        approvalsOk = false;
       }
+      try {
+        const act = await fetchActivity();
+        takenOk = act.ok;
+        if (act.ok && !cancelled) setActivity(act.regels);
+      } catch {
+        takenOk = false;
+      }
+      if (!cancelled) setBereikbaar(approvalsOk && takenOk);
     };
     void tick();
     const id = window.setInterval(tick, 5000);
@@ -476,13 +518,35 @@ export function AxeOverlayNotch({
       <div className="axe-ov__stars" aria-hidden="true" />
       <div className="axe-ov__top" data-tauri-drag-region>
         <div className="axe-ov__icons">{icons}</div>
-        <button
-          type="button"
-          className="axe-ov__blob"
-          aria-label={open ? 'Collapse AXE' : 'Expand AXE chat'}
-          onClick={() => set((v) => !v)}
-          title={`${manager.label} — klik om te ${open ? 'inklappen' : 'openen'}`}
-        />
+        {/* De bol ademt, en zodra er iets is staat het woord ernaast. De kleur
+            zit in dat woord; de bol krijgt alleen een ring (wet 10). */}
+        <div className="axe-ov__hart">
+          <span className="axe-ov__bol" data-toestand={leven.toestand}>
+            <span className="axe-ov__ring" aria-hidden="true" />
+            <button
+              type="button"
+              className="axe-ov__blob"
+              aria-label={`${open ? 'Collapse' : 'Expand'} AXE — ${leven.uitleg}`}
+              onClick={() => set((v) => !v)}
+              title={`${manager.label} — ${leven.uitleg}`}
+            />
+          </span>
+          {leven.woord !== '' && (
+            <button
+              type="button"
+              className={`axe-ov__leven axe-ov__leven--${leven.toestand}`}
+              title={leven.uitleg}
+              onClick={() => {
+                set(true);
+                // Het woord is ook de kortste weg naar waar het over gaat.
+                setTab(leven.toestand === 'wacht' ? 'approvals' : 'chat');
+              }}
+            >
+              {leven.telling !== null && <b>{leven.telling}</b>}
+              {leven.woord}
+            </button>
+          )}
+        </div>
         <div className="axe-ov__icons">{iconsRight}</div>
       </div>
 

@@ -11,6 +11,7 @@
  * volgende openen teruggezet -- ook op het tweede scherm.
  */
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+import { NOTCH_HOOGTE, NOTCH_MIN_BREEDTE, notchMaten } from '@/domain/overlay/notchMaten';
 
 export type ZwevendType = 'notes' | 'phone' | 'axe';
 
@@ -21,11 +22,20 @@ export const ZWEVENDE_VENSTERS: Record<ZwevendType, Ontwerp> = {
   phone: { label: 'axe-float-phone', route: '/float/phone', titel: 'AXE Phone', b: 420, h: 860, minB: 300, minH: 560 },
   /* Luka okt 2026: always-on AXE notch — lightweight, buiten de shell-flow; aparte
      apps/axe-overlay voor login-launch. Start collapsed (notch), expand in-UI. */
-  // h en minH moeten minstens --axe-notch-h uit AxeOverlayNotch.css zijn (80px).
-  // Stonden op 44 en 40: het venster was bijna half zo hoog als wat erin moet,
-  // dus de icoontjes werden tegen de onderrand geknipt. Dat ziet eruit als een
-  // ontwerpkeuze en is het niet. `notchHoogteKlopt.test.ts` houdt de twee gelijk.
-  axe: { label: 'axe-float-axe', route: '/float/axe', titel: 'AXE', b: 1306, h: 80, minB: 720, minH: 80 },
+  // Hoogte en breedte komen uit domain/overlay/notchMaten — hetzelfde getal
+  // dat de CSS en FloatAxe gebruiken. Stond hier eerst los op 44 en 40: het
+  // venster was bijna half zo hoog als wat erin moet, dus de icoontjes werden
+  // tegen de onderrand geknipt. Dat ziet eruit als een ontwerpkeuze en is het
+  // niet. `notchHoogteKlopt.test.ts` houdt alle plekken gelijk.
+  axe: {
+    label: 'axe-float-axe',
+    route: '/float/axe',
+    titel: 'AXE',
+    b: notchMaten(1920, 1080).b,
+    h: NOTCH_HOOGTE,
+    minB: NOTCH_MIN_BREEDTE,
+    minH: NOTCH_HOOGTE,
+  },
 };
 
 export interface Frame { x: number; y: number; b: number; h: number }
@@ -85,10 +95,12 @@ export async function openZwevend(type: ZwevendType): Promise<void> {
       if (mon) {
         const scale = mon.scaleFactor || 1;
         const screenW = mon.size.width / scale;
+        const screenH = mon.size.height / scale;
         const screenX = mon.position.x / scale;
         const screenY = mon.position.y / scale;
-        axeW = Math.max(720, Math.round(screenW * 0.34));
-        axeH = 80;
+        const maten = notchMaten(screenW, screenH);
+        axeW = maten.b;
+        axeH = maten.inklapH;
         plek = { x: screenX + (screenW - axeW) / 2, y: screenY };
       }
     } catch { /* fall through */ }
