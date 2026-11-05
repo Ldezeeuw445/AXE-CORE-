@@ -469,6 +469,19 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
 
   if (phone) return <PhoneAgents />;
 
+  const weergaveKnoppen = zichtbareWeergaven.map((w) => (
+    <button
+      key={w.id}
+      role="tab"
+      aria-selected={weergave === w.id}
+      className="axe-viewknop"
+      data-aan={weergave === w.id ? 'ja' : undefined}
+      onClick={() => setWeergave(w.id)}
+    >
+      <span>{managersOnly && w.id === 'roster' ? 'Chat' : w.label}</span>
+    </button>
+  ));
+
   return (
     <>
     <TabRail kant="links">
@@ -555,20 +568,15 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
         </>
       )}
 
-      <div className={`axe-viewctl axe-viewctl--inline ${managersOnly && weergave === 'roster' ? 'mb-2 shrink-0' : 'mb-4'}`} role="tablist" aria-label="Agents view">
-        {zichtbareWeergaven.map((w) => (
-          <button
-            key={w.id}
-            role="tab"
-            aria-selected={weergave === w.id}
-            className="axe-viewknop"
-            data-aan={weergave === w.id ? 'ja' : undefined}
-            onClick={() => setWeergave(w.id)}
-          >
-            <span>{managersOnly && w.id === 'roster' ? 'Chat' : w.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* In de managers-tab staan deze knoppen in de kop van ManagersDesk,
+          naast de zoekbalk en links van DAX. Daarbuiten blijft het een eigen
+          rij. Eén definitie, twee plekken — de staat en de tab-rollen staan
+          niet twee keer. */}
+      {!(managersOnly && weergave === 'roster') && (
+        <div className="axe-viewctl axe-viewctl--inline mb-4" role="tablist" aria-label="Agents view">
+          {weergaveKnoppen}
+        </div>
+      )}
 
       {/* Ruimte maken voor de lade in plaats van eronder doorlopen.
           Gemeten op 1512px: de lade staat op 1153..1451 terwijl de tabruimte
@@ -593,7 +601,7 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
           className="axe-managers-room-wrap flex-1 min-h-0 h-full"
           data-axe-managers-plaat="ja"
         >
-          <ManagersDesk />
+          <ManagersDesk weergaveKnoppen={weergaveKnoppen} />
         </div>
       )}
       {weergave === 'roster' && !managersOnly && (

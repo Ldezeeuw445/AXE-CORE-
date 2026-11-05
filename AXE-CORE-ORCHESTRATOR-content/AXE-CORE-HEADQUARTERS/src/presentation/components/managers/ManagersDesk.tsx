@@ -9,7 +9,7 @@
  * Projects Manager can dispatch to managers under it the same way.
  * Managers create durable coding tasks (branch/PR only — never auto-merge/deploy).
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
 import { Search } from 'lucide-react';
 import { agentById, type AxeAgent, type AxeAgentId } from '@/domain/agents/roster';
@@ -146,7 +146,20 @@ function startManagerJob(agentId: AxeAgentId, tekst: string, opts?: { device?: s
   }]);
 }
 
-export function ManagersDesk() {
+/**
+ * `weergaveKnoppen` zijn de Chat/Activity/Memory-knoppen van Agents.tsx.
+ *
+ * Die stonden in een eigen zwarte balk bóven dit paneel, los van alles
+ * waar ze bij horen. Ze horen in deze kop, naast de zoekbalk en links van
+ * DAX — één rij in plaats van een balk die nergens aan vastzit.
+ *
+ * Als node doorgegeven en niet nagebouwd: de staat en de toetsenbordrollen
+ * blijven op één plek staan, en twee kopieën van dezelfde knoppenrij lopen
+ * gegarandeerd uit elkaar.
+ */
+type Props = { weergaveKnoppen?: ReactNode };
+
+export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
   const boss = useMemo(() => bossAgent(), []);
   const projects = useMemo(() => projectsOrchAgent(), []);
   const onderProjects = useMemo(() => managersOnderProjects(), []);
@@ -354,6 +367,11 @@ export function ManagersDesk() {
               />
             </label>
           </div>
+          {weergaveKnoppen && (
+            <div className="axe-managers-room-weergave" role="tablist" aria-label="Agents view">
+              {weergaveKnoppen}
+            </div>
+          )}
           <button
             type="button"
             className="axe-managers-room-daxlink"
