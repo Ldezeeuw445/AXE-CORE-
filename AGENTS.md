@@ -102,18 +102,47 @@ niet in blijven staan.
 
 ```bash
 cd AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
-npx tsc --noEmit          # typecheck
-npx vitest run            # 2203 tests; 19 stonden al rood, voeg er geen bij
-npx eslint src            # 457 fouten, 34 waarschuwingen — voeg er geen toe
+npx tsc --noEmit          # 3 fouten — voeg er geen toe. LET OP: niet hetzelfde
+                          # als `npm run typecheck`, zie hieronder
+npx vitest run            # 3161 tests; 3 staan al rood, voeg er geen bij
+npx eslint src            # 444 fouten, 34 waarschuwingen — voeg er geen toe
 python3 scripts/vps_sync.py check   # box en repo eens
 ```
 
-**Deze getallen zijn een meetlat, geen wens** (gemeten 30 sep 2026). Ze stonden
-lang op 733 en 427 terwijl het er 2203 en 457 waren, en dan is "is het nog
-groen?" niet meer te beantwoorden: je ziet rood en weet niet of jij dat deed.
+**Deze getallen zijn een meetlat, geen wens** (gemeten 5 nov 2026 op
+`d9a01f5`). Ze stonden lang op 733 en 427 terwijl het er 2203 en 457 waren, en
+dan is "is het nog groen?" niet meer te beantwoorden: je ziet rood en weet niet
+of jij dat deed. Diezelfde val sloeg daarna opnieuw toe — zie de volgende alinea.
 
-De negentien rode tests staan al rood op `orchestrator` (stem, OpenAI-realtime,
-een paar wiring-tests). Vergelijk daarom lijsten en geen aantallen:
+### De twee typechecks zijn het oneens, en dat is geen detail
+
+`npx tsc --noEmit` geeft **3** fouten. `npm run typecheck` geeft er **18**,
+want dat script draait twee configuraties achter elkaar:
+`tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.json --noEmit`.
+
+Wie dit bestand volgt ziet dus 3 en denkt dat het klopt; wie het npm-script
+draait ziet 18 en denkt dat hij iets gebroken heeft. Beide zijn waar en geen
+van beide is het hele verhaal. De vijftien extra zitten vrijwel allemaal in
+testbestanden (`stuurAxeJobs.test.ts`, `goldOrb1amNy.test.ts`,
+`agentsTab.test.ts`, `deviceNotifyToken.test.ts`, `agentMemoryHek.test.ts`,
+`chatSlots.test.ts`) plus `goldOrb1amNy.ts` en `unistrokeRecognizer.ts`.
+
+Tot iemand die achttien opruimt: **noem altijd welk commando je draaide.**
+"Typecheck groen" zonder het commando erbij zegt niets.
+
+### De drie rode tests, bij naam
+
+Vergelijk lijsten en geen aantallen. Deze drie staan al rood op `orchestrator`
+(gemeten 5 nov). Het zijn alle drie **ratels tegen verval**, geen bugs:
+
+| Bestand | Wat hij zegt |
+|---|---|
+| `src/design/colourRule.test.ts` | 129 schendingen waar er 128 mochten |
+| `src/domain/dodeCode.test.ts` | nieuwe export zonder aanroeper gevonden |
+| `src/domain/architecture/generateArchitectureManifest.test.ts` | snapshot loopt achter op een migratie van 4 nov |
+
+De negentien van 30 september zijn er dus drie geworden — er is flink
+opgeruimd. Hoe je vergelijkt: 
 
 ```bash
 npx vitest run 2>&1 | grep FAIL | sort -u > /tmp/na.txt
