@@ -751,8 +751,9 @@ export function ManagerChat({
                   void filesToAttachments(files, attachments).then(setAttachments);
                 }
               }}
-              placeholder={desk ? `Bericht sturen naar ${agent.name}` : "Message… (Enter send · Shift+Enter newline)"}
-              aria-label="Message"
+              placeholder={desk ? `Message ${agent.name}` : "Message… (Enter send · Shift+Enter newline)"}
+              aria-label={`Message ${agent.name}`}
+              data-axe-composer-target={agent.id}
               rows={desk ? 1 : 2}
               className="flex-1 min-w-0 text-[12.5px] px-3 py-2 rounded-xl outline-none resize-none"
               style={{

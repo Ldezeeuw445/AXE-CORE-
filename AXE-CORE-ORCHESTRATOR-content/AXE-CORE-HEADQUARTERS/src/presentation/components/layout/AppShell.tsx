@@ -43,6 +43,8 @@ import { PhoneAppBar, PhoneBel } from '@/presentation/components/layout/PhoneChr
 import { MobieleTabSchil } from '@/presentation/components/layout/MobieleTabSchil';
 import { isLockPad, phoneZonderComposer } from '@/domain/phone/phoneChrome';
 import { phoneHeeftAppBar } from '@/domain/phone/phoneMenu';
+import { useManagersDeskStore } from '@/presentation/store/managersDeskStore';
+import { isManagersTabPad } from '@/domain/agents/managersComposerDoel';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -241,6 +243,13 @@ export function AppShell() {
   // already renders that same component inside MobileSystem, so every other
   // tab gets it here exactly once.
   const toonMobieleTabComposer = mobielTab && !phoneZonderComposer(location.pathname);
+  /* De Managers-desk heeft zijn eigen composer (ManagerChat). Blijft PlaatChat
+     hangen, dan zit hij onder een 100dvh-hoge kamer en wint: Luka ziet alleen
+     AXE Core, en elke send gaat naar wingman. Verberg de schil-composer (en
+     de Core-chatwolk die eraan dockt) op de Managers-tab, meteen vanaf het
+     pad zodat hij niet flitst voordat de desk-store bij is. */
+  const managersDeskActief = useManagersDeskStore((s) => s.deskActief)
+    || isManagersTabPad(location.pathname);
   /* Smal als dock (Luka, 2 okt). Blijft staan als je van tab wisselt: smal is
      een keuze voor rust, en spraak en bestanden zitten er nog gewoon in. Tot
      2 okt klapte hij helemaal weg en kwam hij op elke nieuwe tab terug. */
@@ -484,14 +493,14 @@ export function AppShell() {
           elke pagina Home met de dingen van die tab erbij. */}
       {/* De volledige composer (met alles erop) hoort óók op de telefoon-home,
           net als in de Tauri-app — niet mijn afgeslankte mobiele composer. */}
-      {!mobileCommandSurface && opPlaat && !volScherm && <PlaatChat />}
+      {!mobileCommandSurface && opPlaat && !volScherm && !managersDeskActief && <PlaatChat />}
       {/* The chat between Luka and AXE lives in AxePresenceDock's invisible
           cloud right of the composer (23 sep 2026) -- not in a per-tab card. */}
       {/* Luka, 21 sep 2026: on every page including Home now -- the idle particle
           anchors to the bottom nav's own AXE label (see AxePresenceDock.tsx), which
           Home already has, and Home's own big Core Sphere is a separate element
           entirely, so the two never compete. */}
-      {!mobileCommandSurface && opPlaat && <AxePresenceDock />}
+      {!mobileCommandSurface && opPlaat && !managersDeskActief && <AxePresenceDock />}
 
       {/* Het radiaal menu linksonder. Naast de chat en niet erin: het zijn
           sprongen naar ergens anders, en die horen niet tussen de knoppen
