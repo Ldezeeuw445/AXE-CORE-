@@ -5,7 +5,7 @@ vi.mock('@/infrastructure/persistence/userSettingsService', () => ({
   saveSetting: vi.fn(),
 }));
 
-import { lookUitCloud } from './useLook';
+import { lookUitCloud, isAxeNotchWebview } from './useLook';
 
 function opslag(begin: Record<string, string> = {}) {
   const data = { ...begin };
@@ -15,6 +15,15 @@ function opslag(begin: Record<string, string> = {}) {
     setItem: (k: string, v: string) => { data[k] = v; },
   };
 }
+
+describe('isAxeNotchWebview', () => {
+  it('herkent alleen de float-axe hash', () => {
+    expect(isAxeNotchWebview('#/float/axe')).toBe(true);
+    expect(isAxeNotchWebview('#/float/axe?x=1')).toBe(true);
+    expect(isAxeNotchWebview('#/float/notes')).toBe(false);
+    expect(isAxeNotchWebview('#/')).toBe(false);
+  });
+});
 
 describe('de look uit de cloud wordt ook lokaal onthouden', () => {
   // De iPhone-app startte elke keer licht tot de cloud antwoordde, omdat die

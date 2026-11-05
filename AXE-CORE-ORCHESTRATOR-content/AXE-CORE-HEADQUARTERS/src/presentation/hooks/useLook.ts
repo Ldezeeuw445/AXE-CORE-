@@ -16,10 +16,22 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 
 const KEY = 'axe_look';
 
+/** De notch-webview (`#/float/axe`) deelt geen React-state met HQ. */
+export function isAxeNotchWebview(
+  hash = typeof window === 'undefined' ? '' : window.location.hash,
+): boolean {
+  return /#\/float\/axe\b/.test(hash);
+}
+
 /** Zet het attribuut waar de stylesheet op reageert. */
 function apply(look: Look) {
   if (typeof document === 'undefined') return;
   document.documentElement.dataset.look = look;
+  // Notch: alleen DOM. zet_plaat_materiaal schrijft ~/.axe/look én plakt
+  // NSVisualEffectView op het aanroepende venster. Als de float-webview dat
+  // doet met DEFAULT_LOOK (glass) overschrijft hij HQ's black, en het donkere
+  // rechthoekige glas tekent de hoek-streepjes onder CSS-radius.
+  if (isAxeNotchWebview()) return;
   zetNativeGlas(look);
 }
 
@@ -55,6 +67,10 @@ function readLocal(): unknown {
  * om -- een flits die er precies uitziet als een fout.
  */
 export function applyStoredLookEarly() {
+  // Notch wacht op ~/.axe/look. Default-CSS van .axe-ov is al donker sterren-
+  // chroom; DEFAULT_LOOK (glass) hier toepassen maakt de balk zilver terwijl
+  // HQ black is — Luka's screenshot van 5 nov.
+  if (isAxeNotchWebview()) return;
   apply(resolveLook({ local: readLocal() }));
 }
 

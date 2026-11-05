@@ -28,5 +28,7 @@ export function applyLook(look: Look): void {
   if (typeof document === "undefined") return;
   document.documentElement.dataset.look = look;
   document.documentElement.style.setProperty("--axe-card-bg", AXE_CARD_BG);
-  document.documentElement.style.colorScheme = look === "glass" ? "light" : "dark";
+  // color-scheme op <html> laat WKWebView een rechthoekige backing schilderen
+  // (licht bij glass) die als hoek-streepjes naast CSS-radius zichtbaar is.
+  // Tokens in App.css zetten inkt/chrome; html blijft transparent.
 }

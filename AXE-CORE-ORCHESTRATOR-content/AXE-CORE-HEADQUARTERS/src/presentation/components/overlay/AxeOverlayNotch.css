@@ -1,15 +1,32 @@
+/* Transparent window + CSS-radius: clip the page to the notch so a
+ * rectangular OS backing (vibrancy / color-scheme / shadow) cannot paint
+ * dark diagonal ticks in the bottom corners. */
+html[data-axe-notch],
+html[data-axe-notch] body,
+html[data-axe-notch] #root {
+  background: transparent !important;
+  overflow: hidden;
+}
+html[data-axe-notch] {
+  clip-path: inset(0 round 0 0 var(--axe-notch-radius, 28px) var(--axe-notch-radius, 28px));
+}
+
 .axe-ov {
   --axe-notch-scale: 1;
   --axe-notch-h: 80px;
+  --axe-notch-radius: calc(28px * var(--axe-notch-scale));
   position: relative;
   width: 100%;
   max-width: none;
   margin: 0 auto;
-  border-radius: 0 0 calc(28px * var(--axe-notch-scale)) calc(28px * var(--axe-notch-scale));
+  border-radius: 0 0 var(--axe-notch-radius) var(--axe-notch-radius);
   overflow: hidden;
+  clip-path: inset(0 round 0 0 var(--axe-notch-radius) var(--axe-notch-radius));
   background: radial-gradient(ellipse at 50% 0%, #1a2233 0%, #07090e 70%);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 40px rgba(34, 211, 238, 0.06);
+  /* Alleen inset — outer box-shadow + overflow:hidden tekent donkere
+     hoek-streepjes op de afronding (zelfde bug als OS-window-shadow). */
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
   border-top: none;
   color: #E8EAED;
   font-family: Inter, system-ui, sans-serif;
@@ -26,7 +43,7 @@
   max-height: 100vh;
 }
 .axe-ov--drag {
-  box-shadow: 0 0 0 2px #22d3ee, 0 12px 40px rgba(34, 211, 238, 0.35);
+  box-shadow: 0 0 0 2px #22d3ee inset;
 }
 .axe-ov__stars {
   position: absolute; inset: 0; pointer-events: none; z-index: 0;
@@ -178,7 +195,7 @@
 :root[data-look='black'] .axe-ov {
   background: radial-gradient(ellipse at 50% 0%, #1a2233 0%, #07090e 70%);
   border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 40px rgba(34, 211, 238, 0.06);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
   color: #E8EAED;
 }
 :root[data-look='glass'] .axe-ov {
@@ -186,9 +203,7 @@
     radial-gradient(ellipse at 50% -10%, rgba(255, 255, 255, 0.55) 0%, rgba(230, 238, 250, 0.28) 42%, transparent 70%),
     linear-gradient(180deg, rgba(248, 250, 253, 0.62) 0%, rgba(198, 210, 228, 0.48) 100%);
   border-color: rgba(255, 255, 255, 0.55);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.65) inset,
-    0 14px 36px rgba(30, 50, 80, 0.22);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.65) inset;
   color: #1b2432;
 }
 :root[data-look='glass'] .axe-ov__stars {

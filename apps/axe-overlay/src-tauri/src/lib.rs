@@ -108,6 +108,20 @@ fn pin_log(msg: &str) {
     }
 }
 
+/// Doorzichtig notch-venster: geen OS-schaduw, geen ondoorzichtige backing.
+/// Anders tekent macOS een rechthoek achter CSS-radius → donkere hoek-streepjes.
+#[cfg(target_os = "macos")]
+fn macos_notch_window_shape(ns_win: cocoa::base::id) {
+    use cocoa::base::{id, NO};
+    use objc::{class, msg_send, sel, sel_impl};
+    unsafe {
+        let _: () = msg_send![ns_win, setOpaque: NO];
+        let _: () = msg_send![ns_win, setHasShadow: NO];
+        let clear: id = msg_send![class!(NSColor), clearColor];
+        let _: () = msg_send![ns_win, setBackgroundColor: clear];
+    }
+}
+
 /// AppKit setLevel/setFrame alleen op main thread (display/cmd watchers hoppen).
 pub(crate) fn pin_overlay_frame<R: Runtime>(app: &AppHandle<R>, expanded: bool) -> Result<(), String> {
     OVERLAY_EXPANDED.store(expanded, Ordering::Relaxed);
@@ -194,6 +208,7 @@ fn pin_overlay_frame_inner<R: Runtime>(app: &AppHandle<R>, expanded: bool) -> Re
         use objc::{msg_send, sel, sel_impl};
 
         let ns_win = win.ns_window().map_err(|e| e.to_string())? as id;
+        macos_notch_window_shape(ns_win);
         let (x, cocoa_y, w, h, top_y) = cocoa_center_frame(expanded)?;
         unsafe {
             let _: () = msg_send![ns_win, setMovable: cocoa::base::NO];
@@ -206,6 +221,7 @@ fn pin_overlay_frame_inner<R: Runtime>(app: &AppHandle<R>, expanded: bool) -> Re
         ));
         // set_always_on_top kan Tauri-positie terugzetten — Cocoa-frame opnieuw.
         let _ = win.set_always_on_top(true);
+        macos_notch_window_shape(ns_win);
         let (x2, y2, w2, h2, _) = cocoa_center_frame(expanded)?;
         unsafe {
             let ns_frame = NSRect::new(NSPoint::new(x2, y2), NSSize::new(w2, h2));
@@ -323,6 +339,7 @@ pub fn run() {
                     use objc::{msg_send, sel, sel_impl};
                     if let Ok(nsw) = win.ns_window() {
                         let ns_win = nsw as id;
+                        macos_notch_window_shape(ns_win);
                         unsafe {
                             let _: () = msg_send![ns_win, setMovable: cocoa::base::NO];
                             let _: () = msg_send![ns_win, setLevel: 25_i64];

@@ -1,8 +1,7 @@
 /** Always-on floating AXE notch — Mochi-style, flush top of main display. */
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import { AxeOverlayNotch } from '@/presentation/components/overlay/AxeOverlayNotch';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
-import { applyStoredLookEarly } from '@/presentation/hooks/useLook';
 import { isLook } from '@/domain/look';
 
 /** Collapsed: compact top-center notch (spec ~200–720×44). Expanded only on hover/click. */
@@ -32,6 +31,7 @@ function applyCssVars(m: NotchMetrics) {
   root.style.setProperty('--axe-notch-w', `${m.w}px`);
   root.style.setProperty('--axe-notch-h', `${m.collapsedH}px`);
   root.style.setProperty('--axe-notch-scale', String(m.uiScale));
+  root.style.setProperty('--axe-notch-radius', `${Math.round(28 * m.uiScale)}px`);
 }
 
 async function readMetrics(): Promise<NotchMetrics> {
@@ -96,44 +96,53 @@ async function dockTop(open: boolean) {
 }
 
 
+type LookStateDto = { look: string };
+
 /** Sync data-look with HQ main + standalone overlay (`~/.axe/look`).
- *  Float webview starts with applyStoredLookEarly from main.tsx, but does not
- *  re-apply when the main window toggles look (no shared React state). Poll the
- *  shared file HQ writes in zet_plaat_materiaal; also honor storage events. */
+ *  Alleen DOM — nooit zet_plaat_materiaal: dat schrijft het look-bestand en
+ *  plakt rechthoekig NSVisualEffectView op dit venster (hoek-streepjes). */
 function useSharedLookSync() {
   useEffect(() => {
-    applyStoredLookEarly();
-    let last: string | undefined = document.documentElement.dataset.look;
+    let last: string | undefined;
     const applyNext = (raw: unknown) => {
-      if (!isLook(raw) || raw === last) return;
-      last = raw;
-      try { localStorage.setItem('axe_look', raw); } catch { /* private */ }
-      // DOM only — main already wrote ~/.axe/look via zet_plaat_materiaal.
-      document.documentElement.dataset.look = raw;
-      document.documentElement.style.colorScheme = raw === 'glass' ? 'light' : 'dark';
+      const value = typeof raw === 'string' ? raw : (raw as LookStateDto | undefined)?.look;
+      if (!isLook(value) || value === last) return;
+      last = value;
+      try { localStorage.setItem('axe_look', value); } catch { /* private */ }
+      document.documentElement.dataset.look = value;
+      // color-scheme op <html> laat WKWebView een rechthoekige backing
+      // schilderen (licht bij glass, donker bij black) — dat zijn de
+      // hoek-streepjes. De notch-tokens in AxeOverlayNotch.css volstaan.
     };
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'axe_look') applyNext(e.newValue);
     };
     window.addEventListener('storage', onStorage);
     let stopped = false;
+    let unlisten: (() => void) | undefined;
     const tick = async () => {
       if (stopped || !isTauriRuntime()) return;
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        const raw = await invoke<string>('read_vault_file', {
-          vaultRoot: '/Users/luka/.axe',
-          relativePath: 'look',
-        }).catch(() => '');
-        applyNext((raw || '').trim());
+        const state = await invoke<LookStateDto>('get_axe_look');
+        applyNext(state);
       } catch { /* ignore */ }
     };
     const id = window.setInterval(() => { void tick(); }, 500);
     void tick();
+    if (isTauriRuntime()) {
+      void import('@tauri-apps/api/event').then(async ({ listen }) => {
+        if (stopped) return;
+        const fn = await listen<LookStateDto>('axe-look', (ev) => applyNext(ev.payload));
+        if (stopped) { fn(); return; }
+        unlisten = fn;
+      }).catch(() => { /* non-tauri */ });
+    }
     return () => {
       stopped = true;
       window.clearInterval(id);
       window.removeEventListener('storage', onStorage);
+      unlisten?.();
     };
   }, []);
 }
@@ -176,6 +185,12 @@ function useOverlayCmdBridge() {
 export default function FloatAxe() {
   useSharedLookSync();
   useOverlayCmdBridge();
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.dataset.axeNotch = '1';
+    return () => { delete root.dataset.axeNotch; };
+  }, []);
 
   useEffect(() => {
     const prev = [document.documentElement.style.background, document.body.style.background];

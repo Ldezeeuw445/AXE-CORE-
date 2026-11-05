@@ -243,7 +243,8 @@ export default function App() {
         /* private */
       }
     };
-    applyLook(resolveLook({ local: (() => { try { return localStorage.getItem("axe_look"); } catch { return undefined; } })() }));
+    // Geen DEFAULT glass vóór get_axe_look: :root-fallback is al donker chroom.
+    // Anders flitst/blijft de balk zilver terwijl ~/.axe/look black is.
     void (async () => {
       try {
         const initial = await invoke<LookStateDto>("get_axe_look");

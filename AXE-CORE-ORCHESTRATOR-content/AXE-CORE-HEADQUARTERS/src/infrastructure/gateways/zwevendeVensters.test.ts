@@ -35,4 +35,12 @@ describe('AXE overlay float (louis_rlee notch)', () => {
     expect(o.h).toBeLessThanOrEqual(80);
     expect(o.b).toBeGreaterThanOrEqual(400);
   });
+
+  it('zet OS-schaduw uit op de notch (hoek-streepjes op transparent + radius)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { dirname, join } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'zwevendeVensters.ts'), 'utf8');
+    expect(src).toContain("shadow: type !== 'axe'");
+  });
 });
