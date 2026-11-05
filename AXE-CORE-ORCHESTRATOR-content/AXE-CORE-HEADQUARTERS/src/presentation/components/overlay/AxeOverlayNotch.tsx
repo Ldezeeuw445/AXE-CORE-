@@ -1,6 +1,6 @@
 /**
  * Always-on AXE floating notch — louis_rlee / Mochi visual language.
- * Collapsed: starry dark pill + white blob + home/chat/+/settings/volume.
+ * Collapsed: HQ dark-shell pill (#0A0A0A) + blob + home/chat/+/settings/volume.
  * Expanded: chat history, composer, drop zone, live activity, approvals.
  * Icons are wired; body always fills the window when open (no empty glass).
  */

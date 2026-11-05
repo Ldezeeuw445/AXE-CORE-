@@ -1,68 +1,26 @@
 :root {
-  /* Fallbacks vóór data-look (HQ-tokens: black | glass) */
+  /* Vast HQ-schil (axe-surface.css --axe-surface / --axe-cyan). Geen look-wissel. */
   color-scheme: dark;
-  --axe-cyan: #22d3ee;
+  --axe-cyan: #22D3EE;
   --axe-violet: #a78bfa;
-  --axe-accent: #22d3ee;
+  --axe-accent: #22D3EE;
   --axe-accent-rgb: 34, 211, 238;
-  --axe-ink: #e8ecf5;
-  --axe-ink-2: #9aa3b5;
-  --axe-ink-3: #6f7a90;
-  /* Zelfde matzwart als HQ --axe-card-bg; look.ts zet --axe-card-bg bij elke look-sync. */
+  --axe-ink: #E8EAED;
+  --axe-ink-2: #8A8F98;
+  --axe-ink-3: #4A4D54;
   --axe-card-bg: linear-gradient(180deg, rgba(23, 23, 23, 0.94), rgba(12, 12, 12, 0.96));
   --axe-panel: var(--axe-card-bg);
   --axe-glass: rgba(255, 255, 255, 0.06);
-  --axe-border: rgba(255, 255, 255, 0.10);
-  --axe-text: #e8ecf5;
-  --axe-muted: #6f7a90;
-  --axe-warn: #ffcc66;
-  --axe-ok: #2ef2c2;
-  --axe-pill-bg: linear-gradient(135deg, rgba(18, 22, 34, 0.95), rgba(10, 12, 20, 0.92));
-  --axe-pill-shadow:
-    0 8px 28px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(34, 211, 238, 0.08) inset,
-    0 0 24px rgba(124, 58, 237, 0.18);
-  --axe-topbar-bg: linear-gradient(180deg, rgba(23, 23, 28, 0.94) 0%, rgba(15, 15, 18, 0.96) 100%);
+  --axe-border: rgba(255, 255, 255, 0.055);
+  --axe-text: #E8EAED;
+  --axe-muted: #6F757E;
+  --axe-warn: #F59E0B;
+  --axe-ok: #10B981;
+  --axe-pill-bg: #0A0A0A;
+  --axe-pill-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --axe-topbar-bg: #0A0A0A;
+  --axe-btn: #111111;
   font-family: "Inter", "SF Pro Display", system-ui, -apple-system, sans-serif;
-}
-
-/* HQ black — gerookt matzwart (axe-look.css :root[data-look='black']) */
-:root[data-look="black"] {
-  color-scheme: dark;
-  --axe-ink: #e8ecf5;
-  --axe-ink-2: #9aa3b5;
-  --axe-ink-3: #6f7a90;
-  --axe-text: var(--axe-ink);
-  --axe-muted: var(--axe-ink-3);
-  --axe-panel: var(--axe-card-bg);
-  --axe-glass: rgba(255, 255, 255, 0.06);
-  --axe-border: rgba(255, 255, 255, 0.10);
-  --axe-pill-bg: linear-gradient(180deg, rgba(23, 23, 28, 0.94) 0%, rgba(15, 15, 18, 0.96) 100%);
-  --axe-topbar-bg: linear-gradient(180deg, rgba(23, 23, 28, 0.96) 0%, rgba(14, 14, 17, 0.98) 100%);
-  --axe-pill-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.08) inset,
-    0 8px 24px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(255, 255, 255, 0.05);
-}
-
-/* HQ glass — notch/topbar chrome light-frosted; panel/cards stay matzwart (--axe-card-bg). */
-:root[data-look="glass"] {
-  color-scheme: light;
-  --axe-ink: #1b2432;
-  --axe-ink-2: rgba(27, 36, 50, 0.72);
-  --axe-ink-3: rgba(27, 36, 50, 0.50);
-  --axe-text: var(--axe-ink);
-  --axe-muted: var(--axe-ink-3);
-  --axe-panel: var(--axe-card-bg);
-  --axe-glass: rgba(0, 0, 0, 0.05);
-  --axe-border: rgba(20, 40, 70, 0.14);
-  --axe-pill-bg: linear-gradient(180deg, rgba(248, 250, 253, 0.72) 0%, rgba(198, 210, 228, 0.55) 100%);
-  --axe-topbar-bg: linear-gradient(180deg, rgba(248, 250, 253, 0.78) 0%, rgba(198, 210, 228, 0.58) 100%);
-  --axe-pill-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.7) inset,
-    0 1px 2px rgba(20, 40, 70, 0.12),
-    0 10px 28px rgba(30, 50, 80, 0.18),
-    0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 
 * { box-sizing: border-box; }
@@ -71,6 +29,11 @@ html, body, #root {
   background: transparent !important;
   overflow: hidden;
   user-select: none;
+}
+/* Transparent window + CSS-radius: clip so a rectangular OS backing cannot
+ * paint dark diagonal ticks in the bottom corners of the notch. */
+html {
+  clip-path: inset(0 round 0 0 16px 16px);
 }
 
 .overlay-root {
@@ -93,11 +56,11 @@ html, body, #root {
   border: 1px solid var(--axe-border);
   border-top: 0;
   border-radius: 0 0 16px 16px;
+  overflow: hidden;
+  clip-path: inset(0 round 0 0 16px 16px);
   background: var(--axe-topbar-bg);
   box-shadow: var(--axe-pill-shadow);
   color: var(--axe-text);
-  backdrop-filter: blur(18px) saturate(1.25);
-  -webkit-backdrop-filter: blur(18px) saturate(1.25);
   -webkit-app-region: no-drag;
 }
 .topbar-mascot {
@@ -115,7 +78,10 @@ html, body, #root {
   color: inherit;
   padding: 0;
 }
-.topbar-mascot:hover { background: var(--axe-glass); }
+.topbar-mascot:hover {
+  background: rgba(34, 211, 238, 0.16);
+  color: var(--axe-cyan);
+}
 .topbar-actions {
   display: flex;
   align-items: center;
@@ -135,22 +101,24 @@ html, body, #root {
   min-width: 0;
   height: 36px;
   padding: 2px 4px;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  background: transparent;
-  color: var(--axe-ink-2);
+  background: var(--axe-btn);
+  color: var(--axe-text);
   cursor: pointer;
   font-size: 9px;
   letter-spacing: 0.02em;
-  transition: background 140ms ease, color 140ms ease;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
 }
 .topbar-btn:hover {
-  background: var(--axe-glass);
-  color: var(--axe-text);
+  background: rgba(34, 211, 238, 0.16);
+  border-color: rgba(34, 211, 238, 0.45);
+  color: var(--axe-cyan);
 }
 .topbar-btn.on, .topbar-btn.ptt-on {
-  background: rgba(34, 211, 238, 0.14);
-  color: var(--axe-text);
+  background: var(--axe-cyan);
+  border-color: var(--axe-cyan);
+  color: #04252B;
 }
 .topbar-btn .tb-ic { font-size: 13px; line-height: 1; }
 .topbar-btn .tb-lb {
@@ -188,13 +156,14 @@ html, body, #root {
   border: 1px solid var(--axe-border);
   border-top: 0;
   border-radius: 0 0 16px 16px;
+  overflow: hidden;
+  clip-path: inset(0 round 0 0 16px 16px);
   background: var(--axe-pill-bg);
   box-shadow: var(--axe-pill-shadow);
   color: var(--axe-text);
   cursor: pointer;
   -webkit-app-region: no-drag;
   transition: box-shadow 280ms ease;
-  backdrop-filter: blur(18px) saturate(1.4);
 }
 .notch-pill:hover {
   box-shadow:
@@ -203,7 +172,7 @@ html, body, #root {
 }
 .overlay-root.dragging .notch-pill,
 .overlay-root.dragging .topbar {
-  box-shadow: 0 0 0 2px var(--axe-cyan), 0 12px 36px rgba(34,211,238,0.35);
+  box-shadow: 0 0 0 2px var(--axe-cyan) inset;
 }
 
 /* —— Emerge from notch / retract into notch —— */
@@ -383,7 +352,6 @@ html, body, #root {
     0 24px 64px rgba(0,0,0,0.55),
     0 0 0 1px rgba(34,211,238,0.06) inset,
     0 0 40px rgba(124,58,237,0.12);
-  backdrop-filter: blur(22px) saturate(1.5);
   overflow: hidden;
   -webkit-app-region: no-drag;
   animation: panel-open 360ms cubic-bezier(0.22, 1, 0.36, 1) both;

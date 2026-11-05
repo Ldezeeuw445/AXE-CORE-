@@ -24,18 +24,29 @@ test("AXE_CARD_BG is het HQ-matzwart (axe-surface.css --axe-card-bg)", async () 
   assert.equal(AXE_CARD_BG.replace(/\s+/g, ""), hq);
 });
 
-test("glass topbar-chrome verschilt zichtbaar van black (App.css)", async () => {
+test("overlay-notch is altijd HQ --axe-surface, nooit glass", async () => {
   const { readFileSync } = await import("node:fs");
   const css = readFileSync(new URL("./App.css", import.meta.url), "utf8");
-  const black = /:root\[data-look="black"\]\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
-  const glass = /:root\[data-look="glass"\]\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
-  assert.ok(black.includes("--axe-topbar-bg"), "black mist topbar");
-  assert.ok(glass.includes("--axe-topbar-bg"), "glass mist topbar");
-  const blackTop = /--axe-topbar-bg:\s*([^;]+);/.exec(black)?.[1];
-  const glassTop = /--axe-topbar-bg:\s*([^;]+);/.exec(glass)?.[1];
-  assert.notEqual(blackTop, glassTop);
-  assert.match(glassTop ?? "", /248,\s*250,\s*253/);
-  // Panel blijft matzwart-kaart (mat-zwart pass) in beide standen.
-  assert.match(black, /--axe-panel:\s*var\(--axe-card-bg\)/);
-  assert.match(glass, /--axe-panel:\s*var\(--axe-card-bg\)/);
+  const surface = readFileSync(new URL("../../../AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src/design/axe-surface.css", import.meta.url), "utf8");
+  assert.match(surface, /--axe-surface:\s*#0A0A0A/);
+  assert.match(css, /--axe-topbar-bg:\s*#0A0A0A/);
+  assert.doesNotMatch(css, /:root\[data-look="glass"\]/);
+  assert.doesNotMatch(css, /248,\s*250,\s*253/);
+});
+
+test("notch clip-path + cyaan knop-accent (geen rechthoek-hoekstreepjes)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("./App.css", import.meta.url), "utf8");
+  assert.match(css, /clip-path:\s*inset\(0 round 0 0 16px 16px\)/);
+  assert.match(css, /\.topbar-btn:hover\s*\{[^}]*--axe-cyan/s);
+  assert.match(css, /\.topbar-btn\.on,\s*\.topbar-btn\.ptt-on\s*\{[^}]*background:\s*var\(--axe-cyan\)/s);
+});
+
+test("overlay past geen look toe op de notch-chrome", async () => {
+  const { readFileSync } = await import("node:fs");
+  const app = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
+  const look = readFileSync(new URL("./look.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(app, /applyLook/);
+  assert.doesNotMatch(app, /get_axe_look/);
+  assert.doesNotMatch(look, /document\.documentElement\.style\.colorScheme/);
 });

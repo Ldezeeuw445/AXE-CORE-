@@ -10,7 +10,7 @@ mod gesture_lock;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::time::UNIX_EPOCH;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 // Menu, tray en venster-events bestaan alleen op desktop (achter de tray-icon-
 // feature). Op mobiel zijn die modules er niet, dus de import is desktop-only.
 #[cfg(desktop)]
@@ -192,6 +192,20 @@ fn dock_notch_frame(app: tauri::AppHandle, x: f64, y: f64, w: f64, h: f64) -> Re
     }
 }
 
+/// Doorzichtig notch-venster: geen OS-schaduw, geen ondoorzichtige backing.
+/// Anders tekent macOS een rechthoek achter CSS-radius → donkere hoek-streepjes.
+#[cfg(target_os = "macos")]
+fn macos_notch_window_shape(ns_win: cocoa::base::id) {
+    use cocoa::base::{id, NO};
+    use objc::{class, msg_send, sel, sel_impl};
+    unsafe {
+        let _: () = msg_send![ns_win, setOpaque: NO];
+        let _: () = msg_send![ns_win, setHasShadow: NO];
+        let clear: id = msg_send![class!(NSColor), clearColor];
+        let _: () = msg_send![ns_win, setBackgroundColor: clear];
+    }
+}
+
 fn dock_notch_frame_inner(app: &tauri::AppHandle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
     let win = app
         .get_webview_window("axe-float-axe")
@@ -204,6 +218,7 @@ fn dock_notch_frame_inner(app: &tauri::AppHandle, x: f64, y: f64, w: f64, h: f64
         use objc::{class, msg_send, sel, sel_impl};
 
         let ns_win = win.ns_window().map_err(|e| e.to_string())? as id;
+        macos_notch_window_shape(ns_win);
         unsafe {
             // NSStatusWindowLevel (25): allowed over the menu bar / notch strip.
             let _: () = msg_send![ns_win, setLevel: 25_i64];
@@ -253,6 +268,7 @@ fn dock_notch_frame_inner(app: &tauri::AppHandle, x: f64, y: f64, w: f64, h: f64
             use cocoa::foundation::{NSPoint, NSRect, NSSize};
             use objc::{msg_send, sel, sel_impl};
             let ns_win = win.ns_window().map_err(|e| e.to_string())? as id;
+            macos_notch_window_shape(ns_win);
             let screen: id = msg_send![ns_win, screen];
             if !screen.is_null() {
                 let sf: NSRect = msg_send![screen, frame];
@@ -276,6 +292,25 @@ fn dock_notch_frame_inner(app: &tauri::AppHandle, x: f64, y: f64, w: f64, h: f64
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+struct LookState {
+    look: String,
+}
+
+fn read_shared_look() -> LookState {
+    let raw = std::env::var_os("HOME")
+        .and_then(|h| fs::read_to_string(PathBuf::from(h).join(".axe").join("look")).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| s == "black" || s == "glass")
+        .unwrap_or_else(|| "glass".to_string());
+    LookState { look: raw }
+}
+
+#[tauri::command]
+fn get_axe_look() -> LookState {
+    read_shared_look()
 }
 
 #[tauri::command]
@@ -363,17 +398,23 @@ fn toon_sneltoets_venster(app: &tauri::AppHandle) {
 /// anders valt de vervaging weg zodra het venster van uitstraling verandert.
 #[tauri::command]
 fn zet_plaat_materiaal(window: tauri::Window, licht: bool) -> Result<(), String> {
-    // Deel look met de standalone notch (`apps/axe-overlay`) via ~/.axe/look.
+    let look = if licht { "glass" } else { "black" };
+    // Alleen het hoofdvenster mag ~/.axe/look schrijven én vibrancy zetten.
+    // De notch-webview (axe-float-axe) laadt dezelfde bundle en riep dit aan
+    // met DEFAULT_LOOK=glass: bestand werd glass terwijl HQ black was, en
+    // HudWindow-vibrancy (rechthoek, radius 18) gaf donkere hoek-streepjes
+    // onder de afgeronde CSS-balk.
+    if window.label() != "main" {
+        return Ok(());
+    }
     {
-        use std::fs;
-        use std::path::PathBuf;
-        let look = if licht { "glass" } else { "black" };
-        if let Some(home) = std::env::var_os("HOME") {
-            let dir = PathBuf::from(home).join(".axe");
+        let look_path = std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".axe"));
+        if let Some(dir) = look_path {
             let _ = fs::create_dir_all(&dir);
             let _ = fs::write(dir.join("look"), look);
         }
     }
+    let _ = window.app_handle().emit("axe-look", LookState { look: look.to_string() });
     #[cfg(target_os = "macos")]
     {
         use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
@@ -399,7 +440,7 @@ fn zet_plaat_materiaal(window: tauri::Window, licht: bool) -> Result<(), String>
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (window, licht);
+        let _ = licht;
     }
     Ok(())
 }
@@ -447,6 +488,7 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder.invoke_handler(tauri::generate_handler![
         zet_plaat_materiaal,
+        get_axe_look,
         write_vault_file,
         read_vault_file,
         vault_path_exists,
@@ -468,6 +510,7 @@ pub fn run() {
     #[cfg(not(desktop))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         zet_plaat_materiaal,
+        get_axe_look,
         write_vault_file,
         read_vault_file,
         vault_path_exists,

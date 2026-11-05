@@ -96,7 +96,9 @@ export async function openZwevend(type: ZwevendType): Promise<void> {
     alwaysOnTop: true,
     visibleOnAllWorkspaces: true,
     resizable: type !== 'axe',
-    shadow: true,
+    /* Notch: OS-schaduw op een transparent rechthoek + CSS-radius = donkere
+       diagonale streepjes in de onderste hoeken (Luka 5 nov). */
+    shadow: type !== 'axe',
     theme: 'dark',
     ...plek,
   });

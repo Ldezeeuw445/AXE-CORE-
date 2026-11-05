@@ -16,10 +16,20 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 
 const KEY = 'axe_look';
 
+/** De notch-webview (`#/float/axe`) deelt geen React-state met HQ. */
+export function isAxeNotchWebview(
+  hash = typeof window === 'undefined' ? '' : window.location.hash,
+): boolean {
+  return /#\/float\/axe\b/.test(hash);
+}
+
 /** Zet het attribuut waar de stylesheet op reageert. */
 function apply(look: Look) {
   if (typeof document === 'undefined') return;
   document.documentElement.dataset.look = look;
+  // Notch: nooit zet_plaat_materiaal. Dat schrijft ~/.axe/look (HQ-main is
+  // de eigenaar) én plakt rechthoekige vibrancy onder CSS-radius.
+  if (isAxeNotchWebview()) return;
   zetNativeGlas(look);
 }
 
@@ -55,6 +65,9 @@ function readLocal(): unknown {
  * om -- een flits die er precies uitziet als een fout.
  */
 export function applyStoredLookEarly() {
+  // Notch heeft één vaste schil en volgt data-look niet. DEFAULT_LOOK hier
+  // toepassen zou ~/.axe/look overschrijven — dat mag alleen het main-venster.
+  if (isAxeNotchWebview()) return;
   apply(resolveLook({ local: readLocal() }));
 }
 
