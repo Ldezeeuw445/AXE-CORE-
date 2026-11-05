@@ -390,6 +390,10 @@
       "kind": "migration"
     },
     {
+      "path": "supabase/migrations/20261104120000_core_task_attempts.sql",
+      "kind": "migration"
+    },
+    {
       "path": "supabase/northsea/migrations/20260916150000_p0_a_columns.sql",
       "kind": "migration"
     },
@@ -468,9 +472,9 @@
       "kind": "agent",
       "label": "AXE Core",
       "appId": "app:axe_core",
-      "description": "Talks to you, understands intent, answers directly, or hands off to a manager.",
+      "description": "Not a manager. Sits above the app managers, classifies what Luka asks, and forwards to the right manager. Never codes the apps himself.",
       "details": {
-        "role": "Orchestrator",
+        "role": "Boss · routes to the right manager",
         "tier": "axe",
         "runtime": "your ★ Primary engine",
         "route": ""
@@ -562,9 +566,9 @@
       "kind": "agent",
       "label": "AXE CORE Manager",
       "appId": "app:axe_core",
-      "description": "Directs the other Grok managers, merges, deploys and verifies live. Reports to Luka in short Dutch, recommendation first.",
+      "description": "Owns the AXE Core HQ app (repo AXE-CORE-): nav, Managers chat, shell, overlay hooks. Codes via branch/PR only — never auto-merge or deploy. Reports to Luka in short Dutch.",
       "details": {
-        "role": "Boss · orchestrator of the other managers",
+        "role": "Owns AXE Core app · codes & improves HQ",
         "tier": "managers",
         "runtime": "subscription CLI · standing pulse",
         "route": ""
@@ -2411,7 +2415,8 @@
         "supabase/migrations/20261028121000_coding_seats_identiteit.sql",
         "supabase/migrations/20261028133000_core_usage_config.sql",
         "supabase/migrations/20261028140000_bouwlus_negeert_gearchiveerde_retries.sql",
-        "supabase/migrations/20261029233000_core_trading_team.sql"
+        "supabase/migrations/20261029233000_core_trading_team.sql",
+        "supabase/migrations/20261104120000_core_task_attempts.sql"
       ]
     },
     {
@@ -3161,6 +3166,20 @@
       "sources": [
         "supabase/migrations/20260707125030_axe_core_system_state.sql",
         "supabase/migrations/20260707_axe_core_system_state.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_task_attempts",
+      "kind": "table",
+      "label": "core_task_attempts",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_task_attempts",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261104120000_core_task_attempts.sql"
       ]
     },
     {
@@ -5025,6 +5044,16 @@
       ]
     },
     {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_task_attempts",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_task_attempts",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261104120000_core_task_attempts.sql"
+      ]
+    },
+    {
       "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_task_events",
       "source": "supabase:pqnngpcgbdwxavbatbia",
       "target": "table:pqnngpcgbdwxavbatbia:core_task_events",
@@ -6192,7 +6221,8 @@
         "supabase/migrations/20261028121000_coding_seats_identiteit.sql",
         "supabase/migrations/20261028133000_core_usage_config.sql",
         "supabase/migrations/20261028140000_bouwlus_negeert_gearchiveerde_retries.sql",
-        "supabase/migrations/20261029233000_core_trading_team.sql"
+        "supabase/migrations/20261029233000_core_trading_team.sql",
+        "supabase/migrations/20261104120000_core_task_attempts.sql"
       ]
     },
     {

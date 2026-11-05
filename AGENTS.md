@@ -104,7 +104,7 @@ niet in blijven staan.
 cd AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
 npx tsc --noEmit          # 3 fouten — voeg er geen toe. LET OP: niet hetzelfde
                           # als `npm run typecheck`, zie hieronder
-npx vitest run            # 3161 tests; 3 staan al rood, voeg er geen bij
+npx vitest run            # 3161 tests; 2 staan al rood, voeg er geen bij
 npx eslint src            # 444 fouten, 34 waarschuwingen — voeg er geen toe
 python3 scripts/vps_sync.py check   # box en repo eens
 ```
@@ -135,14 +135,23 @@ Tot iemand die achttien opruimt: **noem altijd welk commando je draaide.**
 Vergelijk lijsten en geen aantallen. Deze drie staan al rood op `orchestrator`
 (gemeten 5 nov). Het zijn alle drie **ratels tegen verval**, geen bugs:
 
-| Bestand | Wat hij zegt |
-|---|---|
-| `src/design/colourRule.test.ts` | 129 schendingen waar er 128 mochten |
-| `src/domain/dodeCode.test.ts` | nieuwe export zonder aanroeper gevonden |
-| `src/domain/architecture/generateArchitectureManifest.test.ts` | snapshot loopt achter op een migratie van 4 nov |
+| Bestand | Wat hij zegt | Van wie |
+|---|---|---|
+| `src/design/colourRule.test.ts` | 129 schendingen waar er 128 mochten | schendingen liggen verspreid over meerdere blokken |
+| `src/domain/dodeCode.test.ts` | nieuwe export zonder aanroeper gevonden | COWORK 2 |
 
-De negentien van 30 september zijn er dus drie geworden — er is flink
-opgeruimd. Hoe je vergelijkt: 
+De negentien van 30 september zijn er twee geworden — er is flink opgeruimd.
+De derde (`generateArchitectureManifest`) is op 5 nov gerepareerd door de
+snapshot opnieuw te genereren met `AXE_WRITE_ARCHITECTURE=1`; hij liep achter
+op de migratie van 4 nov, de tabel `core_task_attempts` en twee gewijzigde
+manager-rollen.
+
+**De kleurratel hoor je niet te repareren door het plafond te verhogen.** De
+test zegt het zelf: hij gaat alleen omlaag. Staat hij op 129 waar er 128
+mogen, dan is er één schending bijgekomen en moet er één weg — niet
+`CEILING` omhoog.
+
+Hoe je vergelijkt: 
 
 ```bash
 npx vitest run 2>&1 | grep FAIL | sort -u > /tmp/na.txt
