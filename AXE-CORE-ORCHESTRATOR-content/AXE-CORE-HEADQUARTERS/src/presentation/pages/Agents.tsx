@@ -506,7 +506,7 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
     {/* axe-tabruimte en geen eigen achtergrond: UI-MAATSTAF regel 1 en 2 --
         de pagina ligt op de plaat en deelt de breedte van het browservak. */}
     <motion.div
-      className={`axe-tabruimte h-full ${managersOnly && weergave === 'roster' ? 'overflow-hidden pt-2 pb-2 sm:pt-2' : 'overflow-y-auto pt-4 pb-6 sm:pt-5'}`}
+      className={`axe-tabruimte h-full ${managersOnly && weergave === 'roster' ? 'overflow-hidden pt-2 pb-2 sm:pt-2 flex flex-col' : 'overflow-y-auto pt-4 pb-6 sm:pt-5'}`}
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
@@ -555,7 +555,7 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
         </>
       )}
 
-      <div className={`axe-viewctl axe-viewctl--inline ${managersOnly && weergave === 'roster' ? 'mb-2' : 'mb-4'}`} role="tablist" aria-label="Agents view">
+      <div className={`axe-viewctl axe-viewctl--inline ${managersOnly && weergave === 'roster' ? 'mb-2 shrink-0' : 'mb-4'}`} role="tablist" aria-label="Agents view">
         {zichtbareWeergaven.map((w) => (
           <button
             key={w.id}
@@ -581,6 +581,7 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
           elkaar is het hele punt van deze indeling. */}
       <div
         ref={ruimteRef}
+        className={managersOnly && weergave === 'roster' ? 'flex-1 min-h-0 flex flex-col' : undefined}
         style={{
           transition: 'padding-right .2s ease',
           paddingRight: ladeOpen && heeftRail ? ladeOverlap : undefined,
@@ -589,12 +590,8 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
       {!heeftRail && detail && <div className="mb-4">{detail}</div>}
       {weergave === 'roster' && managersOnly && (
         <div
-          className="axe-managers-room-wrap"
+          className="axe-managers-room-wrap flex-1 min-h-0 h-full"
           data-axe-managers-plaat="ja"
-          style={{
-            height: 'calc(100dvh - var(--axe-topbar-h, 56px) - var(--axe-bottomnav-h, 72px) - var(--axe-sab, 0px) - 52px)',
-            minHeight: 520,
-          }}
         >
           <ManagersDesk />
         </div>

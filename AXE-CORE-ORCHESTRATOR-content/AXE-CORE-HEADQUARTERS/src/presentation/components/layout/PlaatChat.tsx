@@ -56,6 +56,7 @@ import {
 } from '@/application/sphere/sphereDirector';
 import { designAgentBridge } from '@/presentation/components/axe-core/designAgentBridge';
 import { useCodeAgentKop } from '@/presentation/store/codeAgentKopStore';
+import { useManagersDeskStore } from '@/presentation/store/managersDeskStore';
 import { skillDef } from '@/domain/tierRouter/axeSkills';
 import { GoedkeuringBlok } from '@/presentation/components/shared/GoedkeuringBlok';
 import { GesprekStand } from '@/presentation/components/shared/GesprekStand';
@@ -274,6 +275,12 @@ export function PlaatChat() {
     if (location.pathname.includes('code-editor') && designAgentBridge.send(payload)) {
       return;
     }
+    /* Managers-desk: de gekozen manager bezit deze send. Zonder deze tak
+       gaat de globale composer (als hij nog hangt) altijd naar wingman. */
+    if (stuurManager) {
+      stuurManager(payload);
+      return;
+    }
     await voice.sendMessage(payload);
   };
 
@@ -313,6 +320,7 @@ export function PlaatChat() {
   const expandedChatHeight = 'auto';
   const opEditor = location.pathname.includes('code-editor');
   const codeKop = useCodeAgentKop(s => s.kop);
+  const stuurManager = useManagersDeskStore(s => s.stuur);
   /* Op de Code Editor: alleen de kop, net als het ingeklapte gesprek op Home.
    * De composer gaat daar naar de code-agent (zie handleSend); de kop zegt dat,
    * met welke motor en in welke repo. Geen gespreksrol eronder -- het gesprek

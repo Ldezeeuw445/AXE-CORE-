@@ -9,7 +9,7 @@
  * Projects Manager can dispatch to managers under it the same way.
  * Managers create durable coding tasks (branch/PR only — never auto-merge/deploy).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
 import { Search } from 'lucide-react';
 import { agentById, type AxeAgent, type AxeAgentId } from '@/domain/agents/roster';
@@ -34,7 +34,8 @@ import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar'
 import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { startAxeJobs } from '@/presentation/store/installTierRouter';
-import { classifyAxeTier } from '@/domain/tierRouter/axeRoute';
+import { managerChatRoute } from '@/domain/agents/managersComposerDoel';
+import { useManagersDeskStore } from '@/presentation/store/managersDeskStore';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 import { followupIsAkkoord, followupIsAfwijzing } from '@/domain/goedkeuringFollowup';
@@ -141,15 +142,7 @@ function startManagerJob(agentId: AxeAgentId, tekst: string, opts?: { device?: s
     tab: opts?.tab,
     repo,
     bron: 'followup',
-    route: {
-      ...classifyAxeTier(tekst),
-      tier: 3,
-      kind: 'agent',
-      agent: agentId,
-      skill: null,
-      confident: true,
-      reason: coding ? 'managers:coding-task' : 'managers:chat-room',
-    },
+    route: managerChatRoute(agentId, tekst),
   }]);
 }
 
@@ -171,6 +164,8 @@ export function ManagersDesk() {
   const server = useServerAgents();
   const navigate = useNavigate();
   const [, tick] = useState(0);
+  const zetDesk = useManagersDeskStore((s) => s.zet);
+  const stuurRef = useRef<(tekst: string) => void>(() => {});
 
   useEffect(() => {
     if (openParam && alleIds.includes(openParam) && openParam !== gekozen) {
@@ -208,12 +203,6 @@ export function ManagersDesk() {
     setSearchParams(next, { replace: true });
   };
 
-  const matchZoek = (a: AxeAgent) => {
-    const q = zoek.trim().toLowerCase();
-    if (!q) return true;
-    return `${a.name} ${a.kort} ${a.role}`.toLowerCase().includes(q);
-  };
-
   const handoff = (fromId: AxeAgentId, target: GrokManagerId, tekst: string) => {
     const door = doorgestuurdTekst(target);
     const fromChat = laadManagerChat(fromId);
@@ -233,6 +222,62 @@ export function ManagersDesk() {
     kies(target);
     startManagerJob(target, tekst, { device: job?.device ?? null, tab: job?.tab });
     tick((n) => n + 1);
+  };
+
+  const stuurNaarGekozen = (tekst: string) => {
+    if (!agent) return;
+    const srv = server.agents[agent.id];
+    const akkoord = followupIsAkkoord(tekst);
+    const afwijs = followupIsAfwijzing(tekst);
+    if ((akkoord || afwijs) && wachtOpOk(srv, job?.state === 'waiting')) {
+      void beslisAgentOk({
+        akkoord,
+        agent: srv,
+        job,
+        reden: akkoord ? 'Approved in Managers chat.' : 'Declined in Managers chat.',
+      }).then((ok) => {
+        if (ok && job) {
+          useAxeJobStore.getState().patch(job.id, { state: akkoord ? 'running' : 'failed' });
+        }
+        verversServerAgents();
+      });
+      return;
+    }
+
+    // Boss / Projects Manager: classify → relay line → hand off.
+    if (magDoorgeven(agent.id)) {
+      const target = isBoss(agent.id)
+        ? classificeerBossNaarManager(tekst)
+        : classificeerProjectsNaarManager(tekst);
+      // If Projects classifies to itself somehow, just run locally.
+      if (isProjectsOrch(agent.id) && target === PROJECTS_ORCH_ID) {
+        startManagerJob(agent.id, tekst, { device: job?.device ?? null, tab: job?.tab });
+        return;
+      }
+      handoff(agent.id, target, tekst);
+      return;
+    }
+
+    startManagerJob(agent.id, tekst, { device: job?.device ?? null, tab: job?.tab });
+  };
+
+  useEffect(() => {
+    stuurRef.current = stuurNaarGekozen;
+  });
+
+  useEffect(() => {
+    zetDesk({
+      deskActief: true,
+      gekozenId: gekozen,
+      stuur: (tekst) => stuurRef.current(tekst),
+    });
+    return () => zetDesk({ deskActief: false, gekozenId: null, stuur: null });
+  }, [gekozen, zetDesk]);
+
+  const matchZoek = (a: AxeAgent) => {
+    const q = zoek.trim().toLowerCase();
+    if (!q) return true;
+    return `${a.name} ${a.kort} ${a.role}`.toLowerCase().includes(q);
   };
 
   const renderRij = (a: AxeAgent, opts?: { pin?: boolean; orch?: boolean }) => {
@@ -388,41 +433,7 @@ export function ManagersDesk() {
             onMissie={(id, actie) => {
               void (actie === 'pause' ? pauseMission(id) : resumeMission(id)).then(verversServerAgents);
             }}
-            onOpvolging={(tekst) => {
-              const srv = server.agents[agent.id];
-              const akkoord = followupIsAkkoord(tekst);
-              const afwijs = followupIsAfwijzing(tekst);
-              if ((akkoord || afwijs) && wachtOpOk(srv, job?.state === 'waiting')) {
-                void beslisAgentOk({
-                  akkoord,
-                  agent: srv,
-                  job,
-                  reden: akkoord ? 'Approved in Managers chat.' : 'Declined in Managers chat.',
-                }).then((ok) => {
-                  if (ok && job) {
-                    useAxeJobStore.getState().patch(job.id, { state: akkoord ? 'running' : 'failed' });
-                  }
-                  verversServerAgents();
-                });
-                return;
-              }
-
-              // Boss / Projects Manager: classify → relay line → hand off.
-              if (magDoorgeven(agent.id)) {
-                const target = isBoss(agent.id)
-                  ? classificeerBossNaarManager(tekst)
-                  : classificeerProjectsNaarManager(tekst);
-                // If Projects classifies to itself somehow, just run locally.
-                if (isProjectsOrch(agent.id) && target === PROJECTS_ORCH_ID) {
-                  startManagerJob(agent.id, tekst, { device: job?.device ?? null, tab: job?.tab });
-                  return;
-                }
-                handoff(agent.id, target, tekst);
-                return;
-              }
-
-              startManagerJob(agent.id, tekst, { device: job?.device ?? null, tab: job?.tab });
-            }}
+            onOpvolging={stuurNaarGekozen}
             onGoedkeuring={(akkoord) => {
               void beslisAgentOk({
                 akkoord,
