@@ -369,6 +369,14 @@ export async function retryDurableTask(
   return call('POST', `/tasks/${encodeURIComponent(taskId)}/retry`, { by });
 }
 
+/** Reparatietaak voor lint/project-check. Geen send, geen order. */
+export async function fixDurableTask(
+  taskId: string,
+  by: string = 'luka',
+): Promise<{ task: DurableTaskRun }> {
+  return call('POST', `/tasks/${encodeURIComponent(taskId)}/fix`, { by });
+}
+
 export async function decideDurableTaskApproval(
   taskId: string,
   approvalId: string,
