@@ -110,6 +110,20 @@ if [[ -n "$GEWIJZIGD" ]] && git fetch -q origin orchestrator; then
     GEWIJZIGD="$(git status --porcelain --untracked-files=no)"
   fi
 fi
+# Een Cargo.lock die de build zelf bijschrijft is geen handwerk (31 okt: cocoa en
+# objc kwamen in src-tauri/Cargo.toml zonder lock; elke Tauri-build schreef ze
+# erbij en beide Macs plus de VPS-updates stonden 4 nov uren stil). Bewaren in
+# ~/.axe/autosync-bewaard en terugzetten: niets gaat verloren, niets blijft hangen.
+if [[ -n "$GEWIJZIGD" ]]; then
+  while IFS= read -r pad; do
+    [[ "$pad" == *Cargo.lock ]] || continue
+    BEWAAR_LOCK="$HOME/.axe/autosync-bewaard/$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$BEWAAR_LOCK/$(dirname "$pad")" && cp "$pad" "$BEWAAR_LOCK/$pad" \
+      && git checkout -q HEAD -- "$pad" \
+      && log "door de build bijgewerkte $pad bewaard in $BEWAAR_LOCK en teruggezet"
+  done < <(git diff --name-only HEAD)
+  GEWIJZIGD="$(git status --porcelain --untracked-files=no)"
+fi
 if [[ -n "$GEWIJZIGD" ]]; then
   # er wordt nu gewerkt; volgende ronde weer
   meld_vast "$(printf '%s\n' "$GEWIJZIGD" | wc -l | tr -d ' ') uncommitted file(s) in $REPO ($(printf '%s\n' "$GEWIJZIGD" | head -3 | awk '{print $2}' | tr '\n' ' '))" \
