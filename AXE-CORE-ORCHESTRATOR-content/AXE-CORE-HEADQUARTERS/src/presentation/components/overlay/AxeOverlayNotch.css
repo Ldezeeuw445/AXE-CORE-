@@ -145,10 +145,22 @@ html[data-axe-notch] {
   background: rgba(34,211,238,.1); border-radius: 8px; padding: 6px 10px;
 }
 .axe-ov__note button { margin-left: auto; background: none; border: none; color: inherit; cursor: pointer; }
+/**
+ * Het gesprek vult de hoogte; de composer plakt onderaan.
+ *
+ * Hier stond `max-height: 280px`. Trek je het paneel groot open, dan stopte
+ * het gesprek met groeien en bleef de invoerregel halverwege hangen met een
+ * gat eronder — precies wat er op Luka's screenshot van 5 nov te zien is.
+ *
+ * Twee regels samen lossen het op, en allebei zijn nodig: zonder de cap weg
+ * kan het gesprek de ruimte niet pakken, en zonder `margin-top: auto` op de
+ * composer zou een korte lijst hem alsnog omhoog trekken.
+ */
 .axe-ov__messages {
-  flex: 1 1 auto; min-height: 120px; max-height: 280px; overflow-y: auto;
+  flex: 1 1 0; min-height: 120px; overflow-y: auto;
   display: flex; flex-direction: column; gap: 8px; padding-right: 4px;
 }
+.axe-ov__input { margin-top: auto; }
 .axe-ov__empty { margin: 12px 0; font-size: 12.5px; color: rgba(255,255,255,.45); line-height: 1.45; }
 .axe-ov__msg {
   font-size: 13px; line-height: 1.4; padding: 8px 12px; border-radius: 14px; max-width: 95%;

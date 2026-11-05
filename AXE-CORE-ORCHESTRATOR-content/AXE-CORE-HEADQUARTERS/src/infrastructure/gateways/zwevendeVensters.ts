@@ -21,7 +21,11 @@ export const ZWEVENDE_VENSTERS: Record<ZwevendType, Ontwerp> = {
   phone: { label: 'axe-float-phone', route: '/float/phone', titel: 'AXE Phone', b: 420, h: 860, minB: 300, minH: 560 },
   /* Luka okt 2026: always-on AXE notch — lightweight, buiten de shell-flow; aparte
      apps/axe-overlay voor login-launch. Start collapsed (notch), expand in-UI. */
-  axe: { label: 'axe-float-axe', route: '/float/axe', titel: 'AXE', b: 1306, h: 44, minB: 720, minH: 40 },
+  // h en minH moeten minstens --axe-notch-h uit AxeOverlayNotch.css zijn (80px).
+  // Stonden op 44 en 40: het venster was bijna half zo hoog als wat erin moet,
+  // dus de icoontjes werden tegen de onderrand geknipt. Dat ziet eruit als een
+  // ontwerpkeuze en is het niet. `notchHoogteKlopt.test.ts` houdt de twee gelijk.
+  axe: { label: 'axe-float-axe', route: '/float/axe', titel: 'AXE', b: 1306, h: 80, minB: 720, minH: 80 },
 };
 
 export interface Frame { x: number; y: number; b: number; h: number }
