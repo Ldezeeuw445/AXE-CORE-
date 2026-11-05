@@ -8,10 +8,10 @@ import { useNavigate } from 'react-router';
 import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
 import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
 import { homeLiveStand, kaartRegels, seatsRegels, type LiveRegel, type LiveTaak } from '@/domain/homeLive';
-import { taakActieLabel, taakFoutVan } from '@/domain/taken/taakFout';
+import { taakActieLabel, taakFoutVan, type TaakActie } from '@/domain/taken/taakFout';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
-import { codingSeatsHeartbeat, retryDurableTask } from '@/infrastructure/gateways/axeCoreApiService';
+import { codingSeatsHeartbeat, fixDurableTask, retryDurableTask } from '@/infrastructure/gateways/axeCoreApiService';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 import { groepeerAbonnementen, stoelSleutel, type CodingSeat } from '@/domain/codingSeats';
 import './homeLive.css';
@@ -39,11 +39,15 @@ function Actie({
   actie,
   taskId,
 }: {
-  actie?: 'retry' | 'open' | 'reconnect';
+  actie?: TaakActie;
   taskId?: string;
 }) {
   const nav = useNavigate();
+  const [fout, setFout] = useState<string | null>(null);
   if (!actie) return null;
+  if (fout) {
+    return <span className="axe-home-live-actie" style={{ color: 'var(--err)' }}>{fout}</span>;
+  }
   return (
     <button
       type="button"
@@ -51,7 +55,12 @@ function Actie({
       onClick={() => {
         if (actie === 'reconnect') nav('/settings');
         else if (actie === 'open') nav('/tasks');
-        else if (taskId) void retryDurableTask(taskId).then(verversServerAgents);
+        else if (actie === 'fix' && taskId) {
+          void fixDurableTask(taskId).then(verversServerAgents).catch((e) => {
+            const tekst = e instanceof Error ? e.message : String(e);
+            setFout(`Could not start a lint repair: ${tekst}`);
+          });
+        } else if (actie === 'retry' && taskId) void retryDurableTask(taskId).then(verversServerAgents);
         else nav('/tasks');
       }}
     >
@@ -82,7 +91,7 @@ function FitLijst<T>({
   );
 }
 
-function recentRegel(t: LiveTaak): { tekst: string; actie?: 'retry' | 'open' | 'reconnect' } {
+function recentRegel(t: LiveTaak): { tekst: string; actie?: TaakActie } {
   if (t.stand !== 'failed') return { tekst: `${t.voortgang} ${t.agent} · ${t.titel}` };
   const fout = taakFoutVan(t.fout || t.titel, t.titel);
   return { tekst: `${t.voortgang} ${t.agent} · ${t.titel} — ${fout.regel}`, actie: fout.actie };

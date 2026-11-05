@@ -2,11 +2,19 @@
  * Eén regel waarom iets faalde, plus wat Luka eraan kan doen.
  * Geen jargon, geen afkapping: de pill en RECENT lezen dit.
  */
-export type TaakActie = 'retry' | 'open' | 'reconnect';
+export type TaakActie = 'retry' | 'open' | 'reconnect' | 'fix';
 
 export type TaakFout = {
   regel: string;
   actie: TaakActie;
+};
+
+/** Extra plekken waar lintregels kunnen staan (result, bewijs, events, steps). */
+export type TaakFoutBron = {
+  result?: unknown;
+  metadata?: unknown;
+  events?: unknown;
+  steps?: unknown;
 };
 
 function tekstVan(error: unknown): string {
@@ -22,9 +30,73 @@ function tekstVan(error: unknown): string {
   return String(error);
 }
 
-export function taakFoutVan(error: unknown, titel = ''): TaakFout {
+function kortPad(pad: string): string {
+  const stukken = pad.replace(/\\/g, '/').split('/');
+  return stukken.slice(-3).join('/');
+}
+
+const BESTAND = String.raw`([^\s:()]+?\.(?:tsx|ts|jsx|js|mjs|cjs|py))`;
+const COMPACT = new RegExp(`${BESTAND}:(\\d+)(?::\\d+)?[:\\s]+(?:error|warning)\\b[^\\n]*?([@\\w./-]+)\\s*$`, 'gim');
+const TSC = new RegExp(`${BESTAND}\\((\\d+),\\d+\\):\\s+error\\s+(TS\\d+)`, 'gi');
+const MULTI = new RegExp(`${BESTAND}\\n\\s+(\\d+):\\d+\\s+(?:error|warning)\\s+.+?\\s+([@\\w./-]+)\\s*$`, 'gim');
+
+function lintVondsten(tekst: string): string[] {
+  const uit: string[] = [];
+  const gezien = new Set<string>();
+  for (const rx of [MULTI, COMPACT, TSC]) {
+    rx.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = rx.exec(tekst))) {
+      const regel = `${kortPad(m[1])}:${m[2]} ${m[3]}`;
+      if (gezien.has(regel)) continue;
+      gezien.add(regel);
+      uit.push(regel);
+      if (uit.length >= 3) return uit;
+    }
+  }
+  return uit;
+}
+
+function verzamelTekst(waarde: unknown, diepte = 0, uit: string[] = []): string[] {
+  if (diepte > 10 || uit.length > 40) return uit;
+  if (typeof waarde === 'string') {
+    const s = waarde.trim();
+    if (s) uit.push(s.length > 4000 ? s.slice(-4000) : s);
+    return uit;
+  }
+  if (!waarde || typeof waarde !== 'object') return uit;
+  if (Array.isArray(waarde)) {
+    for (const v of waarde.slice(0, 24)) verzamelTekst(v, diepte + 1, uit);
+    return uit;
+  }
+  for (const [k, v] of Object.entries(waarde as Record<string, unknown>)) {
+    if (/token|password|secret|authorization/i.test(k)) continue;
+    verzamelTekst(v, diepte + 1, uit);
+  }
+  return uit;
+}
+
+/** Eerste lintregels (bestand + rule) uit error/result/events/steps. */
+export function lintUitlegVan(error: unknown, bron?: TaakFoutBron): string {
+  const stukken = verzamelTekst({ error, ...bron });
+  const vondsten = lintVondsten(stukken.join('\n'));
+  return vondsten.join('; ');
+}
+
+function projectCheckNaam(laag: string): 'Lint' | 'Typecheck' | 'Tests' | 'Project check' {
+  if (/\blint\b/.test(laag)) return 'Lint';
+  if (/\btypecheck\b/.test(laag)) return 'Typecheck';
+  if (/\btest(?:s|ing)?\b/.test(laag)) return 'Tests';
+  return 'Project check';
+}
+
+function isProjectCheckFout(laag: string): boolean {
+  return /project check failed|project checks are not verified|project checks failed/.test(laag);
+}
+
+export function taakFoutVan(error: unknown, titel = '', bron?: TaakFoutBron): TaakFout {
   const raw = tekstVan(error);
-  const laag = `${raw} ${titel}`.toLowerCase();
+  const laag = `${raw} ${titel} ${lintUitlegVan(error, bron)}`.toLowerCase();
 
   // 29 okt: de DAX-bouw liep vier keer stuk op een geweigerde GitHub-sleutel en
   // Home bood "Retry" aan, wat alleen dezelfde fout herhaalt. De sleutel kan
@@ -68,6 +140,14 @@ export function taakFoutVan(error: unknown, titel = ''): TaakFout {
   if (/orchestrator health/.test(laag)) {
     return { regel: 'Orchestrator health check found a real compile or test failure. Open the report.', actie: 'open' };
   }
+  if (isProjectCheckFout(laag)) {
+    const naam = projectCheckNaam(laag);
+    const hint = 'Fix starts a repair task; Retry only re-checks.';
+    const uitleg = lintUitlegVan(error, bron);
+    const kop = `${naam} failed`;
+    const regel = uitleg ? `${kop} — ${uitleg}. ${hint}` : `${kop} — ${hint}`;
+    return { regel: regel.slice(0, 280), actie: 'fix' };
+  }
   if (/consecutive_failures|schedule|cron/.test(laag) && /fail/.test(laag)) {
     return { regel: raw.slice(0, 180) || 'A schedule failed its last run.', actie: 'retry' };
   }
@@ -79,5 +159,6 @@ export function taakFoutVan(error: unknown, titel = ''): TaakFout {
 export function taakActieLabel(actie: TaakActie): string {
   if (actie === 'retry') return 'Retry';
   if (actie === 'reconnect') return 'Reconnect account';
+  if (actie === 'fix') return 'Fix';
   return 'Open';
 }

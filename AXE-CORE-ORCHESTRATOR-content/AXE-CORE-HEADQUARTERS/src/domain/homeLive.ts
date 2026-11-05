@@ -51,7 +51,7 @@ export type LiveRegel = {
   id: string;
   tekst: string;
   kleur: string;
-  actie?: 'retry' | 'open' | 'reconnect';
+  actie?: 'retry' | 'open' | 'reconnect' | 'fix';
 };
 
 export type HomeLiveStand = {

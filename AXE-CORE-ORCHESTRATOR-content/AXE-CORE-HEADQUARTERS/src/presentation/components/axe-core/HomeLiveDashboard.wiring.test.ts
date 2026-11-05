@@ -74,4 +74,11 @@ describe('Home live dashboard is aangesloten', () => {
     expect(dash).not.toContain('truncate');
     expect(dash).not.toContain('useLayoutEffect');
   });
+
+  it('RECENT biedt Fix voor lint/project-check, niet alleen Retry', () => {
+    const dash = bron('HomeLiveDashboard.tsx');
+    expect(dash).toMatch(/fixDurableTask/);
+    expect(dash).toMatch(/actie === 'fix'/);
+    expect(dash).toMatch(/taakActieLabel/);
+  });
 });

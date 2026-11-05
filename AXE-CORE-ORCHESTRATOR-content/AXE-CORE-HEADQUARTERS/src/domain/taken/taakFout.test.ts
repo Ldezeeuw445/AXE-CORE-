@@ -49,4 +49,71 @@ describe('taakFoutVan', () => {
     expect(f.actie).toBe('retry');
   });
 
+  it('maps project-check lint failures to Fix, not Retry', () => {
+    const f = taakFoutVan(
+      { message: 'Project check failed: lint' },
+      'Build next step: AXE Companion',
+    );
+    expect(f.actie).toBe('fix');
+    expect(taakActieLabel('fix')).toBe('Fix');
+    expect(f.regel).toMatch(/Lint failed/i);
+    expect(f.regel).toMatch(/Fix starts a repair task/i);
+    expect(f.regel).toMatch(/Retry only re-checks/i);
+  });
+
+  it('toont bestand en regel uit verification checks, niet alleen de one-liner', () => {
+    const f = taakFoutVan(
+      { message: 'Project check failed: lint' },
+      'Build next step: AXE Companion',
+      {
+        metadata: {
+          bewijs: {
+            verification: {
+              passed: false,
+              reason: 'Project check failed: lint',
+              checks: [{
+                name: 'lint',
+                passed: false,
+                detail: [
+                  '/Users/luka/AXE-COMPANION-OS-/src/app/index.tsx',
+                  "  12:3  error  'unused' is defined but never used  @typescript-eslint/no-unused-vars",
+                  '',
+                  '✖ 1 problem (1 error, 0 warnings)',
+                ].join('\n'),
+              }],
+            },
+          },
+        },
+      },
+    );
+    expect(f.actie).toBe('fix');
+    expect(f.regel).toMatch(/index\.tsx:12/);
+    expect(f.regel).toMatch(/@typescript-eslint\/no-unused-vars/);
+    expect(f.regel).toMatch(/Fix starts a repair task/i);
+  });
+
+  it('leest lintregels uit result, events en steps als die er zijn', () => {
+    const f = taakFoutVan(
+      { message: 'Project check failed: typecheck' },
+      'Build next step: AXE Core',
+      {
+        result: {
+          bewijs: {
+            verification: {
+              checks: [{
+                name: 'typecheck',
+                passed: false,
+                detail: 'src/foo.ts(4,1): error TS6133: unused is declared but never used.',
+              }],
+            },
+          },
+        },
+        events: [{ message: 'src/bar.ts:8:1 error Unexpected var  no-var' }],
+        steps: [{ error: { output: 'src/baz.tsx:2:1 error React Hook useEffect has a missing dependency  react-hooks/exhaustive-deps' } }],
+      },
+    );
+    expect(f.actie).toBe('fix');
+    expect(f.regel).toMatch(/foo\.ts:4|TS6133|bar\.ts:8|no-var|baz\.tsx:2|exhaustive-deps/);
+  });
+
 });

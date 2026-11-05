@@ -360,6 +360,9 @@ class TaskCancelRequest(BaseModel):
 class TaskRetryRequest(BaseModel):
     by: str = "luka"
 
+class TaskFixRequest(BaseModel):
+    by: str = "luka"
+
 class TaskApprovalRequest(BaseModel):
     kind: str
     title: str
@@ -621,6 +624,22 @@ async def retry_task(
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     await audit("task_retry", task_id, {"by": req.by, "new_id": task.get("id")},
+                request.client.host if request.client else "")
+    return {"task": task}
+
+@app.post("/tasks/{task_id}/fix", dependencies=[AUTH])
+async def fix_task(
+    task_id: str, request: Request, req: Optional[TaskFixRequest] = None,
+):
+    """Nieuwe reparatietaak voor lint/project-check. Geen send, geen order."""
+    req = req or TaskFixRequest()
+    try:
+        task = task_repo().fix(task_id, by=req.by)
+    except KeyError as exc:
+        raise HTTPException(404, "Task not found") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    await audit("task_fix", task_id, {"by": req.by, "new_id": task.get("id")},
                 request.client.host if request.client else "")
     return {"task": task}
 

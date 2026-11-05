@@ -1,6 +1,7 @@
 """Durable AXE task-run state machine and Supabase repository."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -30,6 +31,102 @@ def require_transition(current: str, target: str) -> None:
         return
     if current in TERMINAL or target not in TRANSITIONS.get(current, set()):
         raise ValueError(f"invalid task transition: {current} -> {target}")
+
+
+_BESTAND = r"([^\s:()]+?\.(?:tsx|ts|jsx|js|mjs|cjs|py))"
+_LINT_COMPACT = re.compile(
+    _BESTAND + r":(\d+)(?::\d+)?[:\s]+(?:error|warning)\b[^\n]*?([@\w./-]+)\s*$",
+    re.I | re.M,
+)
+_LINT_TSC = re.compile(_BESTAND + r"\((\d+),\d+\):\s+error\s+(TS\d+)", re.I)
+_LINT_MULTI = re.compile(
+    _BESTAND + r"\n\s+(\d+):\d+\s+(?:error|warning)\s+.+?\s+([@\w./-]+)\s*$",
+    re.I | re.M,
+)
+_VERBODEN_FIX = ("place order", "live order", "wire money", "verstuur", "auto_send")
+
+
+def _kort_pad(pad: str) -> str:
+    return "/".join(pad.replace("\\", "/").split("/")[-3:])
+
+
+def _verzamel_tekst(waarde: Any, diepte: int = 0, uit: list[str] | None = None) -> list[str]:
+    if uit is None:
+        uit = []
+    if diepte > 10 or len(uit) > 40:
+        return uit
+    if isinstance(waarde, str):
+        s = waarde.strip()
+        if s:
+            uit.append(s[-4000:] if len(s) > 4000 else s)
+        return uit
+    if isinstance(waarde, dict):
+        for k, v in waarde.items():
+            if re.search(r"token|password|secret|authorization", str(k), re.I):
+                continue
+            _verzamel_tekst(v, diepte + 1, uit)
+        return uit
+    if isinstance(waarde, list):
+        for v in waarde[:24]:
+            _verzamel_tekst(v, diepte + 1, uit)
+    return uit
+
+
+def _lint_vondsten(tekst: str) -> list[str]:
+    uit: list[str] = []
+    gezien: set[str] = set()
+    for rx in (_LINT_MULTI, _LINT_COMPACT, _LINT_TSC):
+        for m in rx.finditer(tekst or ""):
+            regel = f"{_kort_pad(m.group(1))}:{m.group(2)} {m.group(3)}"
+            if regel in gezien:
+                continue
+            gezien.add(regel)
+            uit.append(regel)
+            if len(uit) >= 4:
+                return uit
+    return uit
+
+
+def lint_uitleg_van(huidig: dict[str, Any], extra: Any = None) -> str:
+    stukken: list[str] = []
+    for bron in (huidig.get("error"), huidig.get("result"), huidig.get("metadata"), extra):
+        _verzamel_tekst(bron, 0, stukken)
+    return "; ".join(_lint_vondsten("\n".join(stukken)))
+
+
+def _repo_voor_fix(huidig: dict[str, Any]) -> str:
+    payload = huidig.get("payload") if isinstance(huidig.get("payload"), dict) else {}
+    meta = huidig.get("metadata") if isinstance(huidig.get("metadata"), dict) else {}
+    for bron in (payload.get("repo"), meta.get("repo")):
+        if isinstance(bron, str) and bron.strip():
+            return bron.strip()
+    tekst = f"{huidig.get('title') or ''} {huidig.get('source_app') or ''} {huidig.get('goal') or ''}".lower()
+    if "companion" in tekst:
+        return "axe-companion"
+    if "trading" in tekst:
+        return "trading-os"
+    if "axon" in tekst:
+        return "axon-memory"
+    return "axe-core"
+
+
+def _app_voor_fix(titel: str, repo: str) -> str:
+    m = re.search(r"build next step:\s*(.+)$", titel, re.I)
+    if m:
+        return m.group(1).strip()
+    laag = f"{titel} {repo}".lower()
+    if "companion" in laag:
+        return "AXE Companion"
+    if "trading" in laag:
+        return "Trading OS"
+    if "axon" in laag:
+        return "AXON Memory"
+    return titel.strip() or repo or "the repo"
+
+
+def _check_naam(fout: str) -> str:
+    m = re.search(r"project check failed:\s*(\S+)", fout or "", re.I)
+    return (m.group(1) if m else "lint").strip(" .:;")
 
 
 def redact_event_data(data: dict[str, Any] | None) -> dict[str, Any]:
@@ -449,6 +546,101 @@ class TaskRepository:
         self.append_event(
             task_id, "task.retried", actor_type="user", actor_id=by,
             data={"new_task_id": nieuw["id"]},
+        )
+        return nieuw
+
+    def fix(self, task_id: str, *, by: str = "luka") -> dict[str, Any]:
+        """Nieuwe reparatietaak voor lint/project-check. De mislukte rij blijft staan.
+
+        Retry herhaalt dezelfde check. Fix geeft de worker een opdracht om de
+        genoemde fouten te herstellen. Bouwlus/planner: pending, anders queued.
+        Geen trading-execute, geen send. De oude nag wordt gearchiveerd zodra
+        de reparatie bestaat.
+        """
+        UUID(task_id)
+        found = self._db().table("core_tasks").select("*").eq("id", task_id).limit(1).execute().data
+        if not found:
+            raise KeyError(task_id)
+        huidig = found[0]
+        if huidig.get("status") not in ("failed", "blocked", "cancelled"):
+            raise ValueError(f"task is {huidig.get('status')}, not fixable")
+        mode = str(huidig.get("execution_mode") or "read")
+        cap = str(huidig.get("capability") or "agentic")
+        titel = str(huidig.get("title") or "")
+        doel = str(huidig.get("goal") or "")
+        blob = f"{titel} {doel} {cap} {mode}".lower()
+        if mode == "execute" and cap in ("trading",) or any(w in blob for w in _VERBODEN_FIX):
+            raise ValueError("refusing to fix a send, order or money move")
+        extra = None
+        try:
+            extra = {
+                "events": self._db().table("core_task_events").select(
+                    "message,data,event_type"
+                ).eq("task_id", task_id).limit(40).execute().data,
+                "steps": self._db().table("core_task_steps").select(
+                    "error,output,title"
+                ).eq("task_id", task_id).limit(40).execute().data,
+            }
+        except Exception:  # noqa: BLE001
+            extra = None
+        fout = huidig.get("error") if isinstance(huidig.get("error"), dict) else {"message": huidig.get("error")}
+        fout_tekst = str((fout or {}).get("message") or doel or "Project check failed")
+        uitleg = lint_uitleg_van(huidig, extra)
+        repo = _repo_voor_fix(huidig)
+        app = _app_voor_fix(titel, repo)
+        check = _check_naam(fout_tekst)
+        concreet = uitleg or fout_tekst
+        nieuw_titel = f"Fix {check}: {app}"[:120]
+        nieuw_doel = (
+            f"Fix the failing {check} project check in {app} (repo {repo}). "
+            "Do not add features. Do not merge or deploy. Do not touch trading "
+            "allowlists, NorthSea auto_send, or live trading.\n"
+            f"Concrete failures:\n{concreet}\n"
+            "Repair those files/rules, then re-run the same check until it passes. "
+            "Commit on a branch; draft PR only."
+        )[:4000]
+        if cap in ("code", "trading", "research", "browser", "build", "computer_use", "general"):
+            cap = "agentic"
+        payload = dict(huidig.get("payload") or {})
+        payload.pop("send", None)
+        payload["repo"] = payload.get("repo") or repo
+        meta = dict(huidig.get("metadata") or {})
+        meta["fix_of"] = task_id
+        status = "queued"
+        if cap == "planner" or meta.get("oorsprong_bouw") == "ja":
+            cap = "planner"
+            status = "pending"
+            for k in ("archived", "archive_reason", "pogingen", "motor_gebruikt",
+                      "geblokkeerd", "motor"):
+                meta.pop(k, None)
+            meta["uiStatus"] = "todo"
+            meta["oorsprong_bouw"] = "ja"
+            meta["risico"] = "schrijven"
+        nieuw, _ = self.create({
+            "title": nieuw_titel,
+            "goal": nieuw_doel,
+            "description": huidig.get("description"),
+            "priority": huidig.get("priority") or "high",
+            "assignee": huidig.get("assignee"),
+            "requested_by": by,
+            "capability": cap,
+            "execution_mode": "read" if cap == "northsea_desk" else "patch",
+            "source_app": huidig.get("source_app") or "axe_core",
+            "parent_task_id": task_id,
+            "payload": payload,
+            "metadata": meta,
+            "status": status,
+            "idempotency_key": f"fix:{task_id}:{uuid4()}",
+        })
+        reden = "Repair task started."
+        self._db().table("core_tasks").update({
+            "error": {**(fout or {}), "archived": True, "archive_reason": reden},
+            "metadata": {**dict(huidig.get("metadata") or {}), "archived": True, "archive_reason": reden},
+        }).eq("id", task_id).execute()
+        self.append_event(
+            task_id, "task.fix_queued", actor_type="user", actor_id=by,
+            data={"new_task_id": nieuw["id"]},
+            message=nieuw_titel,
         )
         return nieuw
 

@@ -9,13 +9,13 @@ import { agentById } from '@/domain/agents/roster';
 import { balkLabel, jobLoopt } from '@/domain/tierRouter/axeJobRegels';
 import { regelVan } from '@/domain/tierRouter/agentVenster';
 import { homeLiveStand, werkPulseTekst } from '@/domain/homeLive';
-import { taakActieLabel, taakFoutVan } from '@/domain/taken/taakFout';
+import { taakActieLabel, taakFoutVan, type TaakActie } from '@/domain/taken/taakFout';
 import { taakMeldingVan } from '@/domain/taken/taakMelding';
 import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { retryDurableTask } from '@/infrastructure/gateways/axeCoreApiService';
+import { fixDurableTask, retryDurableTask } from '@/infrastructure/gateways/axeCoreApiService';
 import { speakGlobal } from '@/infrastructure/gateways/globalTts';
 import '@/presentation/components/axe-core/homeLive.css';
 
@@ -32,6 +32,7 @@ type TaakRij = {
   title: string;
   status: string;
   error?: unknown;
+  result?: unknown;
   assignee?: string | null;
   capability?: string | null;
   updated_at?: string;
@@ -43,13 +44,12 @@ type Melding = {
   titel: string;
   regel: string;
   mislukt: boolean;
-  actie: 'retry' | 'open' | 'reconnect';
+  actie: TaakActie;
 };
 
-async function archiveerTaak(id: string): Promise<void> {
+async function archiveerTaak(id: string, reden = 'Dismissed by Luka on Home.'): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;
-  const reden = 'Dismissed by Luka on Home.';
   const { data } = await sb.from('core_tasks').select('error,metadata').eq('id', id).maybeSingle();
   const fout = data?.error && typeof data.error === 'object' ? data.error as Record<string, unknown> : { message: data?.error ?? null };
   const meta = data?.metadata && typeof data.metadata === 'object' ? data.metadata as Record<string, unknown> : {};
@@ -102,7 +102,7 @@ export function AxeAgentsBalk() {
       const sinds = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
       const { data } = await sb
         .from('core_tasks')
-        .select('id,title,status,error,assignee,capability,updated_at,metadata')
+        .select('id,title,status,error,assignee,capability,updated_at,metadata,result')
         .gte('updated_at', sinds)
         .order('updated_at', { ascending: false })
         .limit(30);
@@ -115,7 +115,7 @@ export function AxeAgentsBalk() {
         return !err?.archived;
       });
       const lijst: Melding[] = vast.map((r) => {
-        const f = taakFoutVan(r.error, r.title);
+        const f = taakFoutVan(r.error, r.title, { result: r.result, metadata: r.metadata });
         return { id: r.id, titel: r.title, regel: f.regel, mislukt: true, actie: f.actie };
       });
       if (!bekend.current) {
@@ -154,7 +154,7 @@ export function AxeAgentsBalk() {
       ? `${meldingen.length} task update${meldingen.length === 1 ? '' : 's'}`
       : 'No task updates';
 
-  const doe = (m: Melding, soort: 'retry' | 'open' | 'reconnect' | 'dismiss' | 'speak') => {
+  const doe = (m: Melding, soort: TaakActie | 'dismiss' | 'speak') => {
     if (soort === 'dismiss') {
       setMeldingen((prev) => prev.filter((x) => x.id !== m.id));
       // Luka, 29 okt: Dismiss bracht de taak na 20 s terug, want de lijst laadt
@@ -170,10 +170,23 @@ export function AxeAgentsBalk() {
     }
     if (soort === 'reconnect') nav('/settings');
     else if (soort === 'open') nav('/tasks');
-    else void retryDurableTask(m.id).then(() => {
-      setMeldingen((prev) => prev.filter((x) => x.id !== m.id));
-      verversServerAgents();
-    });
+    else if (soort === 'fix') {
+      void fixDurableTask(m.id).then(() => {
+        setMeldingen((prev) => prev.filter((x) => x.id !== m.id));
+        void archiveerTaak(m.id, 'Repair task started.');
+        verversServerAgents();
+      }).catch((e) => {
+        const tekst = e instanceof Error ? e.message : String(e);
+        setMeldingen((prev) => prev.map((x) => (
+          x.id === m.id ? { ...x, regel: `Could not start a lint repair: ${tekst}` } : x
+        )));
+      });
+    } else if (soort === 'retry') {
+      void retryDurableTask(m.id).then(() => {
+        setMeldingen((prev) => prev.filter((x) => x.id !== m.id));
+        verversServerAgents();
+      });
+    }
   };
 
   return (
