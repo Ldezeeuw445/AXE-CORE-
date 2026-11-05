@@ -2,7 +2,6 @@
 import { useEffect, useLayoutEffect } from 'react';
 import { AxeOverlayNotch } from '@/presentation/components/overlay/AxeOverlayNotch';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
-import { isLook } from '@/domain/look';
 
 /** Collapsed: compact top-center notch (spec ~200–720×44). Expanded only on hover/click. */
 const WIDTH_FRAC = 0.34;
@@ -96,57 +95,6 @@ async function dockTop(open: boolean) {
 }
 
 
-type LookStateDto = { look: string };
-
-/** Sync data-look with HQ main + standalone overlay (`~/.axe/look`).
- *  Alleen DOM — nooit zet_plaat_materiaal: dat schrijft het look-bestand en
- *  plakt rechthoekig NSVisualEffectView op dit venster (hoek-streepjes). */
-function useSharedLookSync() {
-  useEffect(() => {
-    let last: string | undefined;
-    const applyNext = (raw: unknown) => {
-      const value = typeof raw === 'string' ? raw : (raw as LookStateDto | undefined)?.look;
-      if (!isLook(value) || value === last) return;
-      last = value;
-      try { localStorage.setItem('axe_look', value); } catch { /* private */ }
-      document.documentElement.dataset.look = value;
-      // color-scheme op <html> laat WKWebView een rechthoekige backing
-      // schilderen (licht bij glass, donker bij black) — dat zijn de
-      // hoek-streepjes. De notch-tokens in AxeOverlayNotch.css volstaan.
-    };
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'axe_look') applyNext(e.newValue);
-    };
-    window.addEventListener('storage', onStorage);
-    let stopped = false;
-    let unlisten: (() => void) | undefined;
-    const tick = async () => {
-      if (stopped || !isTauriRuntime()) return;
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const state = await invoke<LookStateDto>('get_axe_look');
-        applyNext(state);
-      } catch { /* ignore */ }
-    };
-    const id = window.setInterval(() => { void tick(); }, 500);
-    void tick();
-    if (isTauriRuntime()) {
-      void import('@tauri-apps/api/event').then(async ({ listen }) => {
-        if (stopped) return;
-        const fn = await listen<LookStateDto>('axe-look', (ev) => applyNext(ev.payload));
-        if (stopped) { fn(); return; }
-        unlisten = fn;
-      }).catch(() => { /* non-tauri */ });
-    }
-    return () => {
-      stopped = true;
-      window.clearInterval(id);
-      window.removeEventListener('storage', onStorage);
-      unlisten?.();
-    };
-  }, []);
-}
-
 /** Poll Hammerspoon IPC (~/.axe/overlay.cmd) → CustomEvent for AxeOverlayNotch. */
 function useOverlayCmdBridge() {
   useEffect(() => {
@@ -183,7 +131,6 @@ function useOverlayCmdBridge() {
 }
 
 export default function FloatAxe() {
-  useSharedLookSync();
   useOverlayCmdBridge();
 
   useLayoutEffect(() => {

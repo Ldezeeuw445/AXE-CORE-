@@ -1,6 +1,7 @@
 /**
- * Zelfde twee HQ-standen als AXE CORE (`domain/look.ts`): black | glass.
- * Overlay deelt ze via `~/.axe/look` (HQ schrijft bij wissel; overlay leest).
+ * HQ-look types (`domain/look.ts`): black | glass.
+ * De overlay-notch volgt die standen niet meer (Luka 5 nov): vaste HQ-schil
+ * `--axe-surface #0A0A0A`. `~/.axe/look` blijft van het HQ-main-venster.
  */
 export type Look = "black" | "glass";
 
@@ -23,12 +24,11 @@ export function resolveLook(sources: { shared?: unknown; local?: unknown }): Loo
 export const AXE_CARD_BG =
   "linear-gradient(180deg, rgba(23, 23, 23, 0.94), rgba(12, 12, 12, 0.96))";
 
-/** Pas `data-look` toe waar App.css op aanslaat. */
+/** Bewaard voor tests / HQ-look-helpers. Overlay-chrome volgt data-look niet. */
 export function applyLook(look: Look): void {
   if (typeof document === "undefined") return;
   document.documentElement.dataset.look = look;
   document.documentElement.style.setProperty("--axe-card-bg", AXE_CARD_BG);
-  // color-scheme op <html> laat WKWebView een rechthoekige backing schilderen
-  // (licht bij glass) die als hoek-streepjes naast CSS-radius zichtbaar is.
-  // Tokens in App.css zetten inkt/chrome; html blijft transparent.
+  // Geen color-scheme op <html>: WKWebView schildert anders een rechthoekige
+  // backing (hoek-streepjes naast CSS-radius). Notch-chrome staat in App.css.
 }

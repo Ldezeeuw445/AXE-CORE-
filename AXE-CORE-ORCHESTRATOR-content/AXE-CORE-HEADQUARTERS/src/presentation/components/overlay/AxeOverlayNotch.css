@@ -12,6 +12,13 @@ html[data-axe-notch] {
 }
 
 .axe-ov {
+  /* Vast HQ-schil. Tokens uit src/design/axe-surface.css:
+     --axe-surface #0A0A0A, --axe-elevated #111111, --axe-cyan #22D3EE.
+     Geen glass, geen data-look-wissel — Luka 5 nov. */
+  --axe-notch-shell: #0A0A0A;
+  --axe-notch-btn: #111111;
+  --axe-notch-accent: #22D3EE;
+  --axe-notch-ink: #E8EAED;
   --axe-notch-scale: 1;
   --axe-notch-h: 80px;
   --axe-notch-radius: calc(28px * var(--axe-notch-scale));
@@ -22,13 +29,13 @@ html[data-axe-notch] {
   border-radius: 0 0 var(--axe-notch-radius) var(--axe-notch-radius);
   overflow: hidden;
   clip-path: inset(0 round 0 0 var(--axe-notch-radius) var(--axe-notch-radius));
-  background: radial-gradient(ellipse at 50% 0%, #1a2233 0%, #07090e 70%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--axe-notch-shell);
+  border: 1px solid rgba(255, 255, 255, 0.055);
   /* Alleen inset — outer box-shadow + overflow:hidden tekent donkere
      hoek-streepjes op de afronding (zelfde bug als OS-window-shadow). */
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
   border-top: none;
-  color: #E8EAED;
+  color: var(--axe-notch-ink);
   font-family: Inter, system-ui, sans-serif;
   user-select: none;
   display: flex;
@@ -45,14 +52,7 @@ html[data-axe-notch] {
 .axe-ov--drag {
   box-shadow: 0 0 0 2px #22d3ee inset;
 }
-.axe-ov__stars {
-  position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background-image:
-    radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,.55), transparent),
-    radial-gradient(1px 1px at 70% 20%, rgba(255,255,255,.4), transparent),
-    radial-gradient(1.5px 1.5px at 45% 70%, rgba(255,255,255,.35), transparent),
-    radial-gradient(1px 1px at 85% 55%, rgba(255,255,255,.5), transparent);
-}
+.axe-ov__stars { display: none; }
 .axe-ov__top {
   position: relative; z-index: 1;
   display: flex; align-items: center; justify-content: space-between;
@@ -60,13 +60,29 @@ html[data-axe-notch] {
   min-height: var(--axe-notch-h); gap: calc(8px * var(--axe-notch-scale));
   flex-shrink: 0;
 }
-.axe-ov__icons { display: flex; gap: 10px; align-items: center; color: rgba(255,255,255,.55); }
+.axe-ov__icons { display: flex; gap: 8px; align-items: center; color: var(--axe-notch-ink); }
 .axe-ov__ico {
-  background: transparent; border: none; color: inherit; padding: 4px; cursor: pointer;
-  display: grid; place-items: center; border-radius: 8px;
+  background: var(--axe-notch-btn);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--axe-notch-ink);
+  width: calc(32px * var(--axe-notch-scale));
+  height: calc(32px * var(--axe-notch-scale));
+  padding: 0;
+  cursor: pointer;
+  display: grid; place-items: center;
+  border-radius: 8px;
 }
-.axe-ov__ico:hover, .axe-ov__ico[aria-pressed="true"] { color: #fff; background: rgba(255,255,255,.06); }
-.axe-ov__ico--hot { color: #22d3ee !important; }
+.axe-ov__ico:hover {
+  color: var(--axe-notch-accent);
+  background: rgba(34, 211, 238, 0.16);
+  border-color: rgba(34, 211, 238, 0.45);
+}
+.axe-ov__ico[aria-pressed="true"],
+.axe-ov__ico--hot {
+  color: #04252B;
+  background: var(--axe-notch-accent);
+  border-color: var(--axe-notch-accent);
+}
 .axe-ov__blob {
   width: calc(38px * var(--axe-notch-scale)); height: calc(28px * var(--axe-notch-scale));
   border-radius: calc(14px * var(--axe-notch-scale)); border: none; cursor: pointer; flex-shrink: 0;
@@ -93,8 +109,18 @@ html[data-axe-notch] {
   font-size: calc(11px * var(--axe-notch-scale)); letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,.55);
 }
 .axe-ov__mgr-btn {
-  background: rgba(255,255,255,.06); border: none; color: #fff; width: calc(22px * var(--axe-notch-scale)); height: calc(22px * var(--axe-notch-scale));
-  border-radius: 6px; cursor: pointer;
+  background: var(--axe-notch-btn);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--axe-notch-ink);
+  width: calc(22px * var(--axe-notch-scale));
+  height: calc(22px * var(--axe-notch-scale));
+  border-radius: 6px;
+  cursor: pointer;
+}
+.axe-ov__mgr-btn:hover {
+  color: var(--axe-notch-accent);
+  background: rgba(34, 211, 238, 0.16);
+  border-color: rgba(34, 211, 238, 0.45);
 }
 .axe-ov__appr-badge {
   margin-left: auto; background: rgba(251, 191, 36, 0.15); color: #fbbf24;
@@ -161,7 +187,8 @@ html[data-axe-notch] {
   background: none; border: none; color: rgba(255,255,255,.55); cursor: pointer; display: grid; place-items: center;
 }
 .axe-ov__send {
-  width: 28px; height: 28px; border-radius: 50%; background: #fff; color: #111;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--axe-notch-accent); color: #04252B;
   border: none; font-size: 14px; cursor: pointer; font-weight: 600;
 }
 .axe-ov__send:disabled { opacity: .4; cursor: default; }
@@ -187,60 +214,6 @@ html[data-axe-notch] {
   border-radius: 8px; padding: 8px 12px; cursor: pointer;
 }
 
-/* LOOK_SYNC_VARIANTS
- * De notch zat hard op donker (#1a2233→#07090e) en negeerde data-look.
- * HQ wisselt black|glass op <html>; deze selectors maken het verschil zichtbaar.
- * Kaarten/body elders blijven matzwart (mat-zwart pass) — alleen de notch-chrome.
+/* NOTCH_SHELL_FIXED
+ * Eén kleur: HQ --axe-surface. Geen :root[data-look] chrome op de notch.
  */
-:root[data-look='black'] .axe-ov {
-  background: radial-gradient(ellipse at 50% 0%, #1a2233 0%, #07090e 70%);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
-  color: #E8EAED;
-}
-:root[data-look='glass'] .axe-ov {
-  background:
-    radial-gradient(ellipse at 50% -10%, rgba(255, 255, 255, 0.55) 0%, rgba(230, 238, 250, 0.28) 42%, transparent 70%),
-    linear-gradient(180deg, rgba(248, 250, 253, 0.62) 0%, rgba(198, 210, 228, 0.48) 100%);
-  border-color: rgba(255, 255, 255, 0.55);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.65) inset;
-  color: #1b2432;
-}
-:root[data-look='glass'] .axe-ov__stars {
-  opacity: 0.2;
-  filter: brightness(0.4);
-}
-:root[data-look='glass'] .axe-ov__icons { color: rgba(27, 36, 50, 0.55); }
-:root[data-look='glass'] .axe-ov__ico:hover,
-:root[data-look='glass'] .axe-ov__ico[aria-pressed='true'] {
-  color: #1b2432;
-  background: rgba(0, 0, 0, 0.06);
-}
-:root[data-look='glass'] .axe-ov__manager { color: rgba(27, 36, 50, 0.55); }
-:root[data-look='glass'] .axe-ov__mgr-btn { background: rgba(0, 0, 0, 0.06); color: #1b2432; }
-:root[data-look='glass'] .axe-ov__input {
-  background: rgba(255, 255, 255, 0.55);
-  border-color: rgba(20, 40, 70, 0.12);
-}
-:root[data-look='glass'] .axe-ov__input input { color: #1b2432; }
-:root[data-look='glass'] .axe-ov__attach-btn { color: rgba(27, 36, 50, 0.55); }
-:root[data-look='glass'] .axe-ov__empty { color: rgba(27, 36, 50, 0.45); }
-:root[data-look='glass'] .axe-ov__msg--assistant { background: rgba(0, 0, 0, 0.06); }
-:root[data-look='glass'] .axe-ov__msg--system { color: rgba(27, 36, 50, 0.45); }
-:root[data-look='glass'] .axe-ov__act-chip {
-  color: rgba(27, 36, 50, 0.7);
-  background: rgba(0, 0, 0, 0.04);
-}
-:root[data-look='glass'] .axe-ov__hint { color: rgba(27, 36, 50, 0.4); }
-:root[data-look='glass'] .axe-ov__appr-card {
-  background: rgba(255, 255, 255, 0.45);
-  border-color: rgba(20, 40, 70, 0.1);
-}
-:root[data-look='glass'] .axe-ov__appr-card p { color: rgba(27, 36, 50, 0.65); }
-:root[data-look='glass'] .axe-ov__appr-actions button.ghost {
-  background: rgba(0, 0, 0, 0.06);
-  color: #1b2432;
-}
-:root[data-look='glass'] .axe-ov__link {
-  background: rgba(0, 0, 0, 0.06);
-}

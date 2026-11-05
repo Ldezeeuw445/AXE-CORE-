@@ -12,54 +12,53 @@ const rust = readFileSync(
   join(dir, '../../../../src-tauri/src/lib.rs'),
   'utf8',
 );
+const surface = readFileSync(
+  join(dir, '../../../design/axe-surface.css'),
+  'utf8',
+);
 
-describe('AxeOverlayNotch look sync', () => {
-  it('black en glass zetten zichtbaar andere notch-chrome', () => {
-    expect(css).toContain(":root[data-look='black'] .axe-ov");
-    expect(css).toContain(":root[data-look='glass'] .axe-ov");
-    const glassBlok = css.slice(css.indexOf(":root[data-look='glass'] .axe-ov"));
-    expect(glassBlok).toContain('rgba(248, 250, 253');
-    expect(glassBlok).toContain('#1b2432');
-    const blackBlok = css.slice(
-      css.indexOf(":root[data-look='black'] .axe-ov"),
-      css.indexOf(":root[data-look='glass'] .axe-ov"),
-    );
-    expect(blackBlok).toContain('#07090e');
-    expect(blackBlok).not.toContain('rgba(248, 250, 253');
-    // Default zonder data-look is al sterrenchroom, niet glass.
-    const kop = css.slice(0, css.indexOf('LOOK_SYNC_VARIANTS'));
-    expect(kop).toContain('#07090e');
-    expect(kop).not.toContain('rgba(248, 250, 253');
+describe('AxeOverlayNotch vaste HQ-schil', () => {
+  it('notch is altijd --axe-surface #0A0A0A, nooit glass', () => {
+    expect(surface).toMatch(/--axe-surface:\s*#0A0A0A/);
+    expect(css).toContain('--axe-notch-shell: #0A0A0A');
+    expect(css).toContain('background: var(--axe-notch-shell)');
+    expect(css).toContain('NOTCH_SHELL_FIXED');
+    expect(css).not.toContain(":root[data-look='glass'] .axe-ov");
+    expect(css).not.toContain(":root[data-look='black'] .axe-ov");
+    expect(css).not.toContain('rgba(248, 250, 253');
+  });
+
+  it('knoppen hebben vaste vulling en cyaan-accent bij hover/pressed', () => {
+    expect(css).toContain('--axe-notch-btn: #111111');
+    expect(css).toContain('--axe-notch-accent: #22D3EE');
+    expect(css).toMatch(/\.axe-ov__ico:hover\s*\{[^}]*var\(--axe-notch-accent\)/s);
+    expect(css).toMatch(/\.axe-ov__ico\[aria-pressed="true"\],\s*\.axe-ov__ico--hot\s*\{[^}]*background:\s*var\(--axe-notch-accent\)/s);
   });
 
   it('clip-path maskeert de afgeronde onderhoeken (geen OS-rechthoek-streepjes)', () => {
     expect(css).toContain('html[data-axe-notch]');
     expect(css).toMatch(/clip-path:\s*inset\(0 round 0 0/);
-    expect(css).toContain('box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset');
     expect(css).not.toMatch(/\.axe-ov \{[^}]*0 16px 40px rgba\(0, 0, 0/);
   });
 
-  it('FloatAxe leest ~/.axe/look via get_axe_look en schrijft hem niet', () => {
-    expect(floatTsx).toContain('useSharedLookSync');
-    expect(floatTsx).toContain('get_axe_look');
-    expect(floatTsx).toContain('axe-look');
-    expect(floatTsx).toContain('dataset.look');
+  it('FloatAxe schrijft ~/.axe/look niet en volgt geen glass-look', () => {
     expect(floatTsx).toContain('dataset.axeNotch');
+    expect(floatTsx).not.toContain('useSharedLookSync');
     expect(floatTsx).not.toMatch(/invoke\([^)]*zet_plaat_materiaal/);
     expect(floatTsx).not.toContain('applyStoredLookEarly');
     expect(floatTsx).not.toContain("relativePath: 'look'");
+    expect(floatTsx).not.toContain('get_axe_look');
   });
 
-  it('notch-webview past DEFAULT glass niet toe en roept geen native glas aan', () => {
+  it('notch-webview roept geen native glas aan (main blijft look-eigenaar)', () => {
     expect(useLook).toContain('isAxeNotchWebview');
     expect(useLook).toContain('#/float/axe');
     expect(useLook).toMatch(/if \(isAxeNotchWebview\(\)\) return;/);
   });
 
-  it('HQ schrijft ~/.axe/look alleen vanuit het main-venster en emit axe-look', () => {
+  it('HQ schrijft ~/.axe/look alleen vanuit het main-venster', () => {
     expect(rust).toContain('fn get_axe_look');
     expect(rust).toContain('window.label() != "main"');
-    expect(rust).toContain('emit("axe-look"');
     expect(rust).toContain('macos_notch_window_shape');
     expect(rust).toContain('setHasShadow: NO');
   });

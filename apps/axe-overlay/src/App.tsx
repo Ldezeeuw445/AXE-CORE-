@@ -17,12 +17,6 @@ import {
 } from "./status";
 import { NOTCH_TABS, tabActie, tabBadge, type NotchTab } from "./tabs";
 import {
-  applyLook,
-  DEFAULT_LOOK,
-  resolveLook,
-  type Look,
-} from "./look";
-import {
   TOPBAR_BUTTONS,
   TOPBAR_HEIGHT,
   topbarActie,
@@ -34,8 +28,6 @@ import "./App.css";
 /** Match CSS emerge/retract durations; collapsed H = TOPBAR_HEIGHT (Rust COLLAPSED_H). */
 const EMERGE_MS = 520;
 const RETRACT_MS = 420;
-
-type LookStateDto = { look: string };
 
 type ShellStateDto = {
   running: boolean;
@@ -86,7 +78,6 @@ export default function App() {
   const [notchPhase, setNotchPhase] = useState<NotchPhase>("hidden");
   const [shellRunning, setShellRunning] = useState(false);
   const [activeTab, setActiveTab] = useState<NotchTab>("chat");
-  const [look, setLook] = useState<Look>(DEFAULT_LOOK);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const recRef = useRef<SpeechRec | null>(null);
@@ -216,51 +207,6 @@ export default function App() {
       cancelled = true;
       unlisten?.();
       if (animTimer.current) window.clearTimeout(animTimer.current);
-    };
-  }, []);
-
-  // HQ look sync via ~/.axe/look (Rust look_watch → axe-look)
-  useEffect(() => {
-    let un: (() => void) | undefined;
-    let cancelled = false;
-    const apply = (raw: unknown) => {
-      if (cancelled) return;
-      const next = resolveLook({
-        shared: typeof raw === "string" ? raw : (raw as LookStateDto | undefined)?.look,
-        local: (() => {
-          try {
-            return localStorage.getItem("axe_look");
-          } catch {
-            return undefined;
-          }
-        })(),
-      });
-      setLook(next);
-      applyLook(next);
-      try {
-        localStorage.setItem("axe_look", next);
-      } catch {
-        /* private */
-      }
-    };
-    // Geen DEFAULT glass vóór get_axe_look: :root-fallback is al donker chroom.
-    // Anders flitst/blijft de balk zilver terwijl ~/.axe/look black is.
-    void (async () => {
-      try {
-        const initial = await invoke<LookStateDto>("get_axe_look");
-        if (!cancelled) apply(initial);
-      } catch {
-        if (!cancelled) apply(undefined);
-      }
-      try {
-        un = await listen<LookStateDto>("axe-look", (ev) => apply(ev.payload));
-      } catch {
-        /* non-tauri */
-      }
-    })();
-    return () => {
-      cancelled = true;
-      un?.();
     };
   }, []);
 
@@ -486,7 +432,6 @@ export default function App() {
           className="topbar"
           role="toolbar"
           aria-label="AXE Core topbar"
-          data-look={look}
           style={{ height: TOPBAR_HEIGHT }}
         >
           <button
