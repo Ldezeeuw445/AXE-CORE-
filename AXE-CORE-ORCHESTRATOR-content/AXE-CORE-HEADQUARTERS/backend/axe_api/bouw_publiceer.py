@@ -52,6 +52,24 @@ from typing import Callable, Optional
 
 import httpx
 
+LINT_BASIS = "eslint-baseline.json"
+LINT_REGELS_MAX = 8
+LINT_LOG_MAX = 1_000_000
+_LINT_EXT = r"ts|tsx|js|jsx|mjs|cjs"
+_LINT_UNIX = re.compile(
+    rf"^(?P<file>\S+\.(?:{_LINT_EXT})):(?P<line>\d+):(?P<col>\d+):\s+"
+    rf"(?P<msg>.*?)\s+\[(?P<rule>[^\]]+)\]\s*$"
+)
+_LINT_GATE = re.compile(
+    rf"^(?P<file>\S+\.(?:{_LINT_EXT})):(?P<line>\d+):(?P<col>\d+)\s+"
+    rf"(?P<sev>error|warning)\s+(?P<rule>\S+)\s+(?P<msg>.+)$"
+)
+_LINT_STYLISH = re.compile(
+    r"^\s+(?P<line>\d+):(?P<col>\d+)\s+(?P<sev>error|warning)\s+"
+    r"(?P<msg>.*)\s+(?P<rule>@?[\w./-]+)\s*$"
+)
+_LINT_KOP = re.compile(rf"(?P<file>\S+\.(?:{_LINT_EXT}))\s*$")
+
 # Paden die nooit mee mogen, ook niet als .gitignore ze vergeet.
 VERBODEN_PAD = re.compile(
     r"(^|/)(\.env(\.[\w-]+)?|[^/]*\.pem|[^/]*\.p12|[^/]*\.key|id_rsa[^/]*|id_ed25519[^/]*|"
@@ -535,6 +553,204 @@ def trading_os_prompt(bouwljist: dict | None) -> str:
     return "\n\n".join(delen)
 
 
+def _norm_lint_bestand(pad: str) -> str:
+    pad = (pad or "").strip().replace("\\", "/")
+    i = pad.find("/src/")
+    if i >= 0:
+        return pad[i + 1 :]
+    if pad.startswith("src/"):
+        return pad
+    return pad.lstrip("./")
+
+
+def _norm_lint_bericht(msg: str) -> str:
+    # react-hooks plakt een code-frame met het absolute pad; dat verschilt per machine.
+    return str(msg or "").split("\n", 1)[0].strip()
+
+
+def _lint_vinger(v: dict) -> tuple[str, str, str]:
+    return (_norm_lint_bestand(str(v.get("file") or "")), str(v.get("rule") or ""),
+            _norm_lint_bericht(str(v.get("message") or "")))
+
+
+def vondst_regel(v: dict) -> str:
+    """Eén regel die Home en een Fix-knop kunnen tonen: bestand:regel  severity  rule  message."""
+    plek = _norm_lint_bestand(str(v.get("file") or "?"))
+    if v.get("line"):
+        plek += f":{v['line']}"
+        if v.get("column"):
+            plek += f":{v['column']}"
+    return (f"{plek}  {v.get('severity') or 'error'}  {v.get('rule') or '?'}  "
+            f"{_norm_lint_bericht(str(v.get('message') or ''))}")
+
+
+def _vondsten_uit_eslint_json(data) -> list[dict]:
+    uit: list[dict] = []
+    if not isinstance(data, list):
+        return uit
+    for f in data:
+        if not isinstance(f, dict):
+            continue
+        pad = _norm_lint_bestand(str(f.get("filePath") or ""))
+        for m in f.get("messages") or []:
+            if not isinstance(m, dict):
+                continue
+            uit.append({
+                "file": pad,
+                "line": m.get("line"),
+                "column": m.get("column"),
+                "severity": "warning" if m.get("severity") == 1 else "error",
+                "rule": m.get("ruleId") or "eslint",
+                "message": _norm_lint_bericht(str(m.get("message") or "")),
+            })
+    return uit
+
+
+def lint_vondsten_uit(tekst: str) -> list[dict]:
+    """Stylish, unix, eslint-gate of eslint-JSON — de eerste echte file+rule-regels."""
+    if not tekst:
+        return []
+    s = tekst.strip()
+    i, j = s.find("["), s.rfind("]")
+    if i >= 0 and j > i:
+        try:
+            uit = _vondsten_uit_eslint_json(json.loads(s[i:j + 1]))
+            if uit:
+                return uit
+        except ValueError:
+            pass
+    uit: list[dict] = []
+    bestand = ""
+    for regel in tekst.splitlines():
+        unix = _LINT_UNIX.match(regel)
+        if unix:
+            uit.append({
+                "file": _norm_lint_bestand(unix.group("file")),
+                "line": int(unix.group("line")), "column": int(unix.group("col")),
+                "severity": "error", "rule": unix.group("rule"),
+                "message": _norm_lint_bericht(unix.group("msg")),
+            })
+            continue
+        gate = _LINT_GATE.match(regel)
+        if gate:
+            uit.append({
+                "file": _norm_lint_bestand(gate.group("file")),
+                "line": int(gate.group("line")), "column": int(gate.group("col")),
+                "severity": gate.group("sev"), "rule": gate.group("rule"),
+                "message": _norm_lint_bericht(gate.group("msg")),
+            })
+            continue
+        stylish = _LINT_STYLISH.match(regel)
+        if stylish and bestand:
+            uit.append({
+                "file": bestand,
+                "line": int(stylish.group("line")), "column": int(stylish.group("col")),
+                "severity": stylish.group("sev"), "rule": stylish.group("rule"),
+                "message": _norm_lint_bericht(stylish.group("msg")),
+            })
+            continue
+        kop = _LINT_KOP.search(regel)
+        if kop and not regel[:1].isspace():
+            bestand = _norm_lint_bestand(kop.group("file"))
+    return uit
+
+
+def lees_lint_basis(root) -> Optional[dict[tuple[str, str, str], int]]:
+    """None = geen bestand. Lege findings = we claimen nul schuld. Gooit bij kapotte JSON."""
+    from pathlib import Path
+    pad = Path(root) / LINT_BASIS
+    if not pad.is_file():
+        return None
+    data = json.loads(pad.read_text(encoding="utf-8"))
+    tel: dict[tuple[str, str, str], int] = {}
+    for f in data.get("findings") or []:
+        k = (_norm_lint_bestand(str(f.get("file") or "")), str(f.get("rule") or ""),
+             _norm_lint_bericht(str(f.get("message") or "")))
+        tel[k] = tel.get(k, 0) + int(f.get("count") or 1)
+    return tel
+
+
+def nieuwe_lint_vondsten(huidig: list[dict], basis: dict[tuple[str, str, str], int]) -> list[dict]:
+    rest = dict(basis)
+    nieuw: list[dict] = []
+    for v in huidig:
+        k = _lint_vinger(v)
+        n = rest.get(k, 0)
+        if n > 0:
+            rest[k] = n - 1
+        else:
+            nieuw.append(v)
+    return nieuw
+
+
+def beoordeel_lint(returncode: int, log: str, root) -> dict:
+    """Exit 0 is groen. Exit ≠ 0 faalt alleen op vondsten die de basis niet dekt.
+
+    Geen baseline, geen parseerbare vondsten, of een kapotte baseline: niet stil
+    groen. Dat is het pad terug: de poort blijft aan, de backlog staat in
+    eslint-baseline.json, en die krimpt met npm run lint:baseline.
+    """
+    vondsten = lint_vondsten_uit(log)
+    regels = [vondst_regel(v) for v in vondsten]
+    if returncode == 0:
+        return {"passed": True, "findings": regels[:LINT_REGELS_MAX], "nieuw": []}
+    if not vondsten:
+        return {"passed": False, "findings": [], "nieuw": [],
+                "reason_extra": (log or "")[-1500:]}
+    try:
+        basis = lees_lint_basis(root)
+    except (OSError, ValueError) as e:
+        return {"passed": False, "findings": regels[:LINT_REGELS_MAX], "nieuw": vondsten,
+                "reason_extra": f"could not read {LINT_BASIS}: {type(e).__name__}"}
+    if basis is None:
+        return {"passed": False, "findings": regels[:LINT_REGELS_MAX], "nieuw": vondsten}
+    nieuw = nieuwe_lint_vondsten(vondsten, basis)
+    if not nieuw:
+        return {"passed": True, "findings": [], "nieuw": [], "known": len(vondsten),
+                "detail": f"lint: {len(vondsten)} known findings, 0 new vs {LINT_BASIS}"}
+    return {"passed": False, "findings": [vondst_regel(v) for v in nieuw][:LINT_REGELS_MAX],
+            "nieuw": nieuw, "known": max(0, len(vondsten) - len(nieuw))}
+
+
+def lint_reden(oordeel: dict) -> str:
+    nieuw = oordeel.get("nieuw") or []
+    bekend = int(oordeel.get("known") or 0)
+    kop = f"Project check failed: lint ({len(nieuw)} new"
+    if bekend:
+        kop += f", {bekend} known"
+    kop += ")"
+    delen = [kop]
+    regels = oordeel.get("findings") or []
+    if regels:
+        delen.append("\n".join(regels))
+        if len(nieuw) > len(regels):
+            delen.append(f"+{len(nieuw) - len(regels)} more")
+    extra = oordeel.get("reason_extra") or ""
+    if extra and not regels:
+        delen.append(extra[-800:])
+    delen.append(
+        "Fix the new findings. After a real cleanup, shrink the committed "
+        f"{LINT_BASIS} with npm run lint:baseline. Do not grow it to hide new errors."
+    )
+    return "\n".join(delen)
+
+
+def taak_fout_veld(fout: str, bewijs: Optional[dict] = None) -> dict:
+    """error-object voor core_tasks: korte reden plus de eerste lintregels."""
+    uit: dict = {"message": (fout or "")[:2500]}
+    v = (bewijs or {}).get("verification") or {}
+    findings = list(v.get("lint_findings") or [])
+    if not findings:
+        for c in v.get("checks") or []:
+            if c.get("name") == "lint" and c.get("findings"):
+                findings = list(c["findings"])
+                break
+    if findings:
+        uit["findings"] = findings[:LINT_REGELS_MAX]
+        uit["detail"] = "\n".join(findings[:LINT_REGELS_MAX])[:1500]
+    return uit
+
+
 def _draai_controle(cmd: list[str], *, timeout: float, **kw):
     """Stop bij timeout ook de test/build-kindprocessen, niet alleen npm."""
     with subprocess.Popen(cmd, start_new_session=True, **kw) as proc:
@@ -583,6 +799,18 @@ def verifieer_bouw(pad: str, *, run: Callable = _draai_controle,
     checks: list[dict] = []
     deadline = time.monotonic() + budget_s
 
+    def _lees_log(logbestand, *, alles: bool) -> str:
+        from geheimen import verberg_geheimen
+        logbestand.seek(0, os.SEEK_END)
+        grootte = logbestand.tell()
+        if alles:
+            logbestand.seek(0)
+            ruw = logbestand.read(LINT_LOG_MAX)
+        else:
+            logbestand.seek(max(0, grootte - 4000))
+            ruw = logbestand.read()
+        return verberg_geheimen(ruw.decode("utf-8", "replace"))
+
     def uitvoeren(naam: str, args: list[str]) -> bool:
         try:
             # Geen onbeperkte capture_output: een testlus kan veel uitvoer maken.
@@ -591,13 +819,26 @@ def verifieer_bouw(pad: str, *, run: Callable = _draai_controle,
                         stdout=logbestand, stderr=subprocess.STDOUT,
                         env={**os.environ, "CI": "true"},
                         timeout=max(1, deadline - time.monotonic()))
+                lint = naam == "lint"
                 detail = ""
-                if p.returncode:
-                    from geheimen import verberg_geheimen
-                    logbestand.seek(0, os.SEEK_END)
-                    grootte = logbestand.tell()
-                    logbestand.seek(max(0, grootte - 4000))
-                    detail = verberg_geheimen(logbestand.read().decode("utf-8", "replace"))[-2000:]
+                if p.returncode or lint:
+                    detail = _lees_log(logbestand, alles=lint)
+                    if not lint:
+                        detail = detail[-2000:]
+            if lint:
+                oordeel = beoordeel_lint(p.returncode, detail, root)
+                check: dict = {"name": naam, "command": ["npm", *args],
+                               "exit_code": p.returncode, "passed": oordeel["passed"]}
+                if oordeel.get("findings"):
+                    check["findings"] = oordeel["findings"]
+                if oordeel.get("detail"):
+                    check["detail"] = oordeel["detail"]
+                elif not oordeel["passed"] and detail:
+                    check["detail"] = "\n".join(oordeel["findings"]) if oordeel.get("findings") else detail[-2000:]
+                if not oordeel["passed"]:
+                    check["reason"] = lint_reden(oordeel)
+                checks.append(check)
+                return oordeel["passed"]
             checks.append({"name": naam, "command": ["npm", *args],
                            "exit_code": p.returncode, "passed": p.returncode == 0,
                            **({"detail": detail} if detail else {})})
@@ -616,7 +857,12 @@ def verifieer_bouw(pad: str, *, run: Callable = _draai_controle,
         if naam == test and re.search(r"\bvitest\b", scripts[naam]) and not re.search(r"\bvitest\s+run\b", scripts[naam]):
             args += ["--", "--run"]
         if not uitvoeren(naam, args):
-            return {"passed": False, "reason": f"Project check failed: {naam}", "checks": checks}
+            laatste = checks[-1] if checks else {}
+            reden = laatste.get("reason") or f"Project check failed: {naam}"
+            uit = {"passed": False, "reason": reden, "checks": checks}
+            if laatste.get("findings"):
+                uit["lint_findings"] = laatste["findings"]
+            return uit
     return {"passed": True, "checks": checks, "reason": "Project checks passed; deployment not measured"}
 
 

@@ -104,13 +104,18 @@ niet in blijven staan.
 cd AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
 npx tsc --noEmit          # typecheck
 npx vitest run            # 2203 tests; 19 stonden al rood, voeg er geen bij
-npx eslint src            # 457 fouten, 34 waarschuwingen — voeg er geen toe
+npm run lint              # poort t.o.v. eslint-baseline.json — faalt alleen op NIEUWE vondsten
+npx eslint src            # volle backlog (lint:all); na een echte fix: npm run lint:baseline
 python3 scripts/vps_sync.py check   # box en repo eens
 ```
 
 **Deze getallen zijn een meetlat, geen wens** (gemeten 30 sep 2026). Ze stonden
 lang op 733 en 427 terwijl het er 2203 en 457 waren, en dan is "is het nog
 groen?" niet meer te beantwoorden: je ziet rood en weet niet of jij dat deed.
+Lint in de bouwlus (`npm run lint`) faalt alleen op vondsten die niet in
+`eslint-baseline.json` staan. De volle backlog blijft zichtbaar met
+`npx eslint src`. Na een echte fix krimpt de basis met `npm run lint:baseline`;
+groeien verbergt nieuwe fouten.
 
 De negentien rode tests staan al rood op `orchestrator` (stem, OpenAI-realtime,
 een paar wiring-tests). Vergelijk daarom lijsten en geen aantallen:
