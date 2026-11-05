@@ -135,11 +135,17 @@ async function zwevendOpen(type: ZwevendType): Promise<boolean> {
   return (await WebviewWindow.getByLabel(ZWEVENDE_VENSTERS[type].label)) !== null;
 }
 
+/** Sluit het venster als het er is; doet niets als het er niet is. */
+export async function sluitZwevend(type: ZwevendType): Promise<void> {
+  if (!(await zwevendOpen(type))) return;
+  const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+  await (await WebviewWindow.getByLabel(ZWEVENDE_VENSTERS[type].label))?.close();
+}
+
 /** Open als hij dicht is, sluit als hij open is (voor de knop in het radiaal dok). */
 export async function wisselZwevend(type: ZwevendType): Promise<void> {
   if (await zwevendOpen(type)) {
-    const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
-    await (await WebviewWindow.getByLabel(ZWEVENDE_VENSTERS[type].label))?.close();
+    await sluitZwevend(type);
   } else {
     await openZwevend(type);
   }

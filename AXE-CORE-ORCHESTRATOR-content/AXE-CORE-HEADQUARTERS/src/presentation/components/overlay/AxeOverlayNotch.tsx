@@ -542,7 +542,12 @@ export function AxeOverlayNotch({
       }}
     >
       <div className="axe-ov__stars" aria-hidden="true" />
-      <div className="axe-ov__top" data-tauri-drag-region>
+      {/* Géén data-tauri-drag-region. Die stond hier en maakte de hele balk
+          tot venstergreep, dus één onbedoelde sleep zette de notch uit het
+          midden en niets zette hem terug — precies wat Luka op 5 nov zag. Een
+          strook die bij de schermrand hoort, hoort niet te verschuiven; de
+          plek wordt bepaald in FloatAxe (dockTop) en nergens anders. */}
+      <div className="axe-ov__top">
         <div className="axe-ov__icons">{icons}</div>
         {/* De bol ademt, en zodra er iets is staat het woord ernaast. De kleur
             zit in dat woord; de bol krijgt alleen een ring (wet 10). */}

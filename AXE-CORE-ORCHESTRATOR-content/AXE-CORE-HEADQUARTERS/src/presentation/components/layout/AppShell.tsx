@@ -1,4 +1,3 @@
-import { openZwevend } from '@/infrastructure/gateways/zwevendeVensters';
 import { useEffect, useState, Suspense } from 'react';
 import { ChevronDown, Triangle } from 'lucide-react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
@@ -12,6 +11,7 @@ import { PlaatChat } from '@/presentation/components/layout/PlaatChat';
 import { TaskCompletionToasts } from '@/presentation/components/layout/TaskCompletionToasts';
 import { RadiaalDok } from '@/presentation/components/layout/RadiaalDok';
 import { useOpenPagina } from '@/presentation/hooks/useOpenPagina';
+import { useNotchBijMinimaliseren } from '@/presentation/hooks/useNotchBijMinimaliseren';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
@@ -117,8 +117,11 @@ function PageError({ fout }: { fout: string }) {
 }
 
 export function AppShell() {
-  // Always-on Mochi notch — open once on shell mount
-  useEffect(() => { void openZwevend('axe'); }, []);
+  /* Hier stond `openZwevend('axe')` bij het laden van de schil: de notch kwam
+     dus altijd op, bovenop een app die je net geopend had. Luka op 5 nov wil
+     twee wegen en geen derde — zelf openklikken in het radiale dok, of hij
+     komt als AXE Core geminimaliseerd wordt. Die tweede zit hierin. */
+  useNotchBijMinimaliseren();
 
   const openPagina = useOpenPagina();
   const location = useLocation();

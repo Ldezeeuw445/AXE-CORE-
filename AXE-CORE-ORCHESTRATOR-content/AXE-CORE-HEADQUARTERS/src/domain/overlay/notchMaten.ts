@@ -24,18 +24,17 @@
 export const NOTCH_HOOGTE = 80;
 
 /** Smaller dan dit lopen de knoppen links en rechts op elkaar. */
-export const NOTCH_MIN_BREEDTE = 720;
-
-/** Deel van de schermbreedte dat de notch pakt. */
-const NOTCH_BREEDTE_DEEL = 0.34;
+export const NOTCH_MIN_BREEDTE = 900;
 
 /**
- * Ruimte boven de notch voor de macOS-menubalk (~25pt).
+ * Deel van de schermbreedte dat de notch pakt.
  *
- * Vlak tegen de bovenrand verdwijnt hij eronder. Dit is geen smaak maar de
- * enige y waarop de hele strook zichtbaar blijft.
+ * Stond op 0,34. Luka op 5 nov: "hij mag van mij sowieso wel wat breder."
+ * Breder helpt ook de inhoud: op 0,34 van een 1440-scherm (490px, dus de
+ * ondergrens) staat het statuswoord naast de bol al bijna tegen de knoppen
+ * rechts aan.
  */
-export const MENUBALK_MARGE = 30;
+const NOTCH_BREEDTE_DEEL = 0.46;
 
 export interface NotchMaten {
   /** Breedte van het venster. */

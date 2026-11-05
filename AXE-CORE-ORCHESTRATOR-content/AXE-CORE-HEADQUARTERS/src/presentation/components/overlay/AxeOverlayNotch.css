@@ -12,10 +12,16 @@ html[data-axe-notch] {
 }
 
 .axe-ov {
-  /* Vast HQ-schil. Tokens uit src/design/axe-surface.css:
-     --axe-surface #0A0A0A, --axe-elevated #111111, --axe-cyan #22D3EE.
-     Geen glass, geen data-look-wissel — Luka 5 nov. */
-  --axe-notch-shell: #0A0A0A;
+  /* Vaste HQ-schil, in dezelfde kleur als de app: --axe-surface #0A0A0A.
+     Geen data-look-wissel: de notch volgt de glass/black-stand van de
+     hoofdschil niet, want hij staat op het bureaublad en niet in de app.
+
+     Wel doorzichtig, met wazig glas erachter, net als de Tauri-schil (Luka
+     5 nov). Dat is iets anders dan de look-wissel: het is één vaste stand.
+     De dekking is 0,72 en niet lager, want hierin staat tekst die leesbaar
+     moet blijven boven een willekeurig bureaublad — bij 0,5 leest een wit
+     woord niet meer tegen een licht venster erachter. */
+  --axe-notch-shell: rgba(10, 10, 10, 0.72);
   --axe-notch-btn: #111111;
   --axe-notch-accent: #22D3EE;
   --axe-notch-ink: #E8EAED;
@@ -30,6 +36,10 @@ html[data-axe-notch] {
   overflow: hidden;
   clip-path: inset(0 round 0 0 var(--axe-notch-radius) var(--axe-notch-radius));
   background: var(--axe-notch-shell);
+  /* Het wazige glas achter de doorzichtige plaat. -webkit- erbij omdat de
+     WebKit in de Tauri-webview de losse eigenschap nog nodig heeft. */
+  -webkit-backdrop-filter: blur(22px) saturate(130%);
+  backdrop-filter: blur(22px) saturate(130%);
   border: 1px solid rgba(255, 255, 255, 0.055);
   /* Alleen inset — outer box-shadow + overflow:hidden tekent donkere
      hoek-streepjes op de afronding (zelfde bug als OS-window-shadow). */
@@ -52,7 +62,36 @@ html[data-axe-notch] {
 .axe-ov--drag {
   box-shadow: 0 0 0 2px #22d3ee inset;
 }
-.axe-ov__stars { display: none; }
+/**
+ * Sterretjes op het zwarte vlak — "echt al heel subtiel detail" (Luka, 5 nov).
+ *
+ * Stond op `display: none`; de haak bestond al. Vaste punten in plaats van
+ * random, zodat ze niet per render verspringen en dus niet flikkeren. Vier
+ * maten: twee van 1,2px op 0,5 dekking en de rest kleiner en zwakker, want
+ * één gelijkmatig raster leest als een patroon en niet als sterren.
+ *
+ * De dekking van het geheel is 0,55 en de punten zelf halen nooit wit: bij
+ * vol wit wordt het een confettistrook in plaats van een detail dat je pas
+ * ziet als je kijkt.
+ */
+.axe-ov__stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    radial-gradient(1.2px 1.2px at 12% 32%, rgba(255,255,255,0.5), transparent 100%),
+    radial-gradient(1.2px 1.2px at 78% 24%, rgba(255,255,255,0.45), transparent 100%),
+    radial-gradient(1px 1px at 31% 68%, rgba(255,255,255,0.33), transparent 100%),
+    radial-gradient(1px 1px at 57% 44%, rgba(255,255,255,0.3), transparent 100%),
+    radial-gradient(1px 1px at 90% 61%, rgba(255,255,255,0.28), transparent 100%),
+    radial-gradient(0.8px 0.8px at 22% 82%, rgba(255,255,255,0.24), transparent 100%),
+    radial-gradient(0.8px 0.8px at 66% 78%, rgba(255,255,255,0.22), transparent 100%),
+    radial-gradient(0.8px 0.8px at 44% 18%, rgba(255,255,255,0.2), transparent 100%),
+    radial-gradient(0.8px 0.8px at 84% 88%, rgba(255,255,255,0.18), transparent 100%),
+    radial-gradient(0.7px 0.7px at 6% 56%, rgba(255,255,255,0.16), transparent 100%);
+  background-repeat: no-repeat;
+}
 /* Drie kolommen in plaats van space-between: de bol staat dan écht in het
    midden van de strook. Met space-between hing hij 20px naar rechts, omdat er
    links drie knoppen staan en rechts twee. */

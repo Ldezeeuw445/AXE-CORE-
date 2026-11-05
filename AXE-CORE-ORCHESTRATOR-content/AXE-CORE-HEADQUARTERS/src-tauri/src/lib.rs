@@ -279,15 +279,23 @@ fn dock_notch_frame_inner(app: &tauri::AppHandle, x: f64, y: f64, w: f64, h: f64
                 return Err("no screen for notch window".into());
             }
             let sf: NSRect = msg_send![screen, frame];
-            let vf: NSRect = msg_send![screen, visibleFrame];
-            // Flush under menu bar: top of visibleFrame, unless caller already offset y.
-            let top_y = vf.origin.y + vf.size.height;
+            // Vlak tegen de fysieke bovenrand, dus óver de menubalk heen.
+            //
+            // Hier stond `visibleFrame`, en die begint ONDER de menubalk. De
+            // notch hing daardoor een strook lager en voelde als een zwevend
+            // paneel, terwijl zijn bovenkant recht is en zijn onderkant rond
+            // -- de vorm van iets dat tegen de schermrand aan zit. `frame` is
+            // het hele scherm, en op NSStatusWindowLevel (25, hierboven
+            // gezet) mag een venster daar ook echt bovenop staan.
+            let top_y = sf.origin.y + sf.size.height;
             let cocoa_y = top_y - h;
             // Keep caller's x (already centered on primary in JS); clamp into this screen.
             let x_clamped = x.max(sf.origin.x).min(sf.origin.x + sf.size.width - w);
             let frame = NSRect::new(NSPoint::new(x_clamped, cocoa_y), NSSize::new(w, h));
             let _: () = msg_send![ns_win, setFrame: frame display: YES];
-            let _ = y; // top-left y unused; visibleFrame top is authoritative
+            // De y van de aanroeper blijft ongebruikt: de bovenrand van het
+            // gekozen scherm is bepalend, en die rekenen we hier zelf uit.
+            let _ = y;
         }
         let _ = win.set_always_on_top(true);
         // Re-apply after set_always_on_top (Tauri can shift the frame).
@@ -300,8 +308,11 @@ fn dock_notch_frame_inner(app: &tauri::AppHandle, x: f64, y: f64, w: f64, h: f64
             let screen: id = msg_send![ns_win, screen];
             if !screen.is_null() {
                 let sf: NSRect = msg_send![screen, frame];
-                let vf: NSRect = msg_send![screen, visibleFrame];
-                let top_y = vf.origin.y + vf.size.height;
+                // Zelfde keuze als hierboven: frame, niet visibleFrame. Deze
+                // tweede plaatsing herstelt het kader na set_always_on_top; nam
+                // die de visibleFrame, dan zakte de notch alsnog terug onder de
+                // menubalk en was de eerste plaatsing voor niets.
+                let top_y = sf.origin.y + sf.size.height;
                 let cocoa_y = top_y - h;
                 let x_clamped = x.max(sf.origin.x).min(sf.origin.x + sf.size.width - w);
                 let frame = NSRect::new(NSPoint::new(x_clamped, cocoa_y), NSSize::new(w, h));

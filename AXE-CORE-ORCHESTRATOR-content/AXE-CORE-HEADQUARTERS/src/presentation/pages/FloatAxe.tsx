@@ -1,8 +1,8 @@
 /** Always-on floating AXE notch — Mochi-style, flush top of main display. */
-import { useEffect, useLayoutEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { AxeOverlayNotch } from '@/presentation/components/overlay/AxeOverlayNotch';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
-import { MENUBALK_MARGE, notchMaten, type NotchMaten } from '@/domain/overlay/notchMaten';
+import { notchMaten, type NotchMaten } from '@/domain/overlay/notchMaten';
 
 /**
  * De maten komen uit `domain/overlay/notchMaten`, niet uit dit bestand.
@@ -92,8 +92,15 @@ async function dockTop(open: boolean) {
     const screenX = mon.position.x / scale;
     const screenY = mon.position.y / scale;
     const nx = screenX + (screenW - width) / 2;
-    // Onder de menubalk. Cocoa dock_notch_frame gebruikt visibleFrame.
-    const ny = screenY + MENUBALK_MARGE;
+    /* Vlak tegen de bovenrand, dus óver de menubalk heen.
+       Hier stond `screenY + 30`: ruimte vrijlaten voor de menubalk, waardoor
+       de notch eronder hing en als een los paneel aanvoelde. Luka op 5 nov:
+       hij heeft aan de bovenkant de vorm van iets dat tegen de rand aan zit,
+       dus dáár hoort hij ook. Het venster staat al op NSStatusWindowLevel
+       (25), het enige niveau waarop dat mag; de native kant moet dan wel de
+       hele `frame` nemen in plaats van de `visibleFrame` die onder de
+       menubalk begint — zie dock_notch_frame in src-tauri/src/lib.rs. */
+    const ny = screenY;
     try {
       await invoke('dock_notch_frame', { x: nx, y: ny, w: width, h: height });
     } catch {
@@ -147,6 +154,9 @@ function useOverlayCmdBridge() {
 
 export default function FloatAxe() {
   useOverlayCmdBridge();
+  // De open-stand leeft in AxeOverlayNotch; hier is alleen nodig wat het
+  // venster moet worden als hij opnieuw aandokt.
+  const openRef = useRef(false);
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -173,11 +183,35 @@ export default function FloatAxe() {
     };
   }, []);
 
+  /**
+   * Terug naar het midden zodra hij weer tevoorschijn komt.
+   *
+   * Eén keer aandokken bij het laden is niet genoeg: het venster blijft
+   * bestaan terwijl je het verbergt en weer opent, en een scherm erbij of
+   * eraf verandert waar "midden boven" is zonder dat deze pagina herlaadt.
+   * Dit zet hem bij elke keer dat hij zichtbaar of actief wordt terug —
+   * en dus ook op het scherm waar je dan zit.
+   */
+  useEffect(() => {
+    const opnieuw = () => {
+      // Mét de stand van nu: `dockTop(false)` zou een open paneel dichtklappen
+      // zodra je het aanklikt, en dan lijkt de notch zichzelf te sluiten.
+      if (document.visibilityState === 'hidden') return;
+      void dockTop(openRef.current);
+    };
+    window.addEventListener('focus', opnieuw);
+    document.addEventListener('visibilitychange', opnieuw);
+    return () => {
+      window.removeEventListener('focus', opnieuw);
+      document.removeEventListener('visibilitychange', opnieuw);
+    };
+  }, []);
+
   return (
     <div style={{ padding: 0, background: 'transparent', height: '100vh', boxSizing: 'border-box' }}>
       <AxeOverlayNotch
-        onHome={() => { void dockTop(false); }}
-        onOpenChange={(open) => { void dockTop(open); }}
+        onHome={() => { openRef.current = false; void dockTop(false); }}
+        onOpenChange={(open) => { openRef.current = open; void dockTop(open); }}
       />
     </div>
   );
