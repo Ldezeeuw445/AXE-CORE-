@@ -15,6 +15,9 @@ import { beslisApproval } from '@/application/approvals/beslisAgentOk';
 import './AxeOverlayNotch.css';
 import { groepeerSleep, sorteerSleep, type GesleeptItem, type SleepInvoer } from '@/domain/overlay/gesleepteItems';
 import { beoordeelNotch } from '@/domain/overlay/notchLeven';
+import { projectieUitVraag } from '@/application/sphere/vraagRouter';
+import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
+import { NotchResultaat } from './NotchResultaat';
 
 type Tab = 'chat' | 'approvals' | 'settings';
 
@@ -135,6 +138,7 @@ export function AxeOverlayNotch({
   // Begint op true: anders roept de notch "geen verbinding" in de seconde
   // vóór de eerste ronde, en dat is een vals alarm bij elke start.
   const [bereikbaar, setBereikbaar] = useState(true);
+  const [projectie, setProjectie] = useState<ProjectionPayload | null>(null);
   const [managerIdx, setManagerIdx] = useState(0);
   const [statusNote, setStatusNote] = useState('');
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
@@ -195,20 +199,27 @@ export function AxeOverlayNotch({
     const tick = async () => {
       // Beide rondes apart, zodat één storing de andere niet meesleept — en
       // zodat `bereikbaar` echt betekent "we hebben net iets gehoord".
-      let approvalsOk = true;
-      let takenOk = true;
+      // Begin op false en word alleen waar als er écht geantwoord is. De
+      // andere kant op (begin true, zet false bij een fout) laat een pad dat
+      // niemand voorzag doorgaan als "bereikbaar", en dat is de ene leugen
+      // die deze strook niet mag vertellen.
+      let approvalsOk = false;
+      let takenOk = false;
       try {
         const a = await listPendingApprovals(12);
         if (!cancelled) setApprovals(a.filter((x) => x.status === 'pending'));
+        approvalsOk = true;
       } catch {
-        approvalsOk = false;
+        /* onbereikbaar; de vorige lijst blijft staan */
       }
       try {
         const act = await fetchActivity();
-        takenOk = act.ok;
-        if (act.ok && !cancelled) setActivity(act.regels);
+        if (act.ok) {
+          if (!cancelled) setActivity(act.regels);
+          takenOk = true;
+        }
       } catch {
-        takenOk = false;
+        /* onbereikbaar */
       }
       if (!cancelled) setBereikbaar(approvalsOk && takenOk);
     };
@@ -333,6 +344,20 @@ export function AxeOverlayNotch({
     setMessages((m) => [...m, { role: 'user', content: payload, at: Date.now() }]);
     setBusy(true);
     onSend?.(payload);
+
+    /* "Laat me de kaart van LA zien" hoort niet als alinea tekst terug te
+       komen, en ook niet op Home te landen -- dat is juist het venster dat je
+       net geminimaliseerd hebt. Dit loopt naast het antwoord, niet ervoor:
+       een geocode die traag is of mislukt mag het gesprek niet ophouden, en
+       als de vraag niets te tonen heeft (het normale geval) blijft het stil. */
+    void (async () => {
+      try {
+        const p = await projectieUitVraag(text);
+        if (p) setProjectie(p);
+      } catch {
+        /* geen resultaatkaart; het tekstantwoord komt gewoon */
+      }
+    })();
     try {
       const reply = await sendChat(payload, messages, manager.label);
       setMessages((m) => [...m, { role: 'assistant', content: reply, at: Date.now() }]);
@@ -444,6 +469,7 @@ export function AxeOverlayNotch({
           setMessages([]);
           setFiles([]);
           setTekst('');
+          setProjectie(null);
           fileRef.current?.click();
         }}
       >
@@ -596,6 +622,10 @@ export function AxeOverlayNotch({
                   </div>
                 )}
               </div>
+
+              {projectie && (
+                <NotchResultaat projectie={projectie} onSluit={() => setProjectie(null)} />
+              )}
 
               {/* Per bakje, niet op één hoop. Een kopje verschijnt alleen als
                   er iets in zit; "Downloads" boven niets is ruis. */}

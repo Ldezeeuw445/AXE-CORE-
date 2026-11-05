@@ -291,6 +291,72 @@ html[data-axe-notch] {
   width: 28px; height: 32px; border-radius: 5px; background: #2a3140;
   display: grid; place-items: center; color: #22D3EE; font-size: 8px; font-weight: 700;
 }
+/**
+ * Het resultaat in de strook: een kaart of de eerste regels van wat AXE vond.
+ *
+ * Bewust klein. Dit is geen vervanging van 3D Maps of de Browser maar het
+ * antwoord op "wat bedoel je" — met één knop naar het grote venster dat er al
+ * is. Een halve kaart die zich voordoet als de hele is erger dan geen kaart.
+ */
+.axe-ov__resultaat {
+  display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,.1); border-radius: 12px;
+  background: rgba(255,255,255,.04); padding: 8px 10px;
+}
+.axe-ov__res-kop {
+  display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0;
+}
+.axe-ov__res-kop strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-ov__res-kop svg { color: var(--axe-notch-accent); flex-shrink: 0; }
+.axe-ov__res-kop button {
+  margin-left: auto; background: none; border: none; color: rgba(255,255,255,.5);
+  cursor: pointer; display: grid; place-items: center; flex-shrink: 0;
+}
+.axe-ov__res-sub {
+  font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+  color: rgba(255,255,255,.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.axe-ov__res-tekst { display: flex; flex-direction: column; gap: 4px; }
+.axe-ov__res-tekst p {
+  margin: 0; font-size: 12px; line-height: 1.4; color: rgba(255,255,255,.72);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+/* 3 bij 2 tegels, breed zoals de strook. Vaste verhouding: anders rekt de
+   kaart mee met de inhoud eronder en staat de pin niet meer op de plek. */
+.axe-ov__kaart {
+  position: relative; display: grid; gap: 0;
+  grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr);
+  aspect-ratio: 3 / 2; max-height: 180px; border-radius: 8px; overflow: hidden;
+  background: rgba(0,0,0,.45);
+}
+.axe-ov__tegel { position: relative; }
+.axe-ov__tegel img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+.axe-ov__tegel-namen { opacity: .85; }
+/* De plek zelf. Bij 3x2 valt het midden op de naad tussen de tegels, en dat
+   is precies waar tegelRaster hem zet. */
+.axe-ov__kaart-pin {
+  position: absolute; left: 50%; top: 50%; width: 9px; height: 9px;
+  transform: translate(-50%, -50%); border-radius: 50%;
+  background: var(--axe-notch-accent);
+  box-shadow: 0 0 0 2px rgba(0,0,0,.55), 0 0 10px var(--axe-notch-accent);
+}
+.axe-ov__res-voet { display: flex; align-items: center; gap: 8px; }
+.axe-ov__res-bron {
+  font-size: 10.5px; color: rgba(255,255,255,.45);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.axe-ov__res-groot {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+  color: var(--axe-notch-accent); border-radius: 8px; padding: 5px 10px;
+  font-family: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  flex-shrink: 0;
+}
+.axe-ov__res-groot:hover { border-color: rgba(34, 211, 238, 0.45); }
+
 .axe-ov__input {
   display: flex; align-items: center; gap: 8px;
   background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.1);
