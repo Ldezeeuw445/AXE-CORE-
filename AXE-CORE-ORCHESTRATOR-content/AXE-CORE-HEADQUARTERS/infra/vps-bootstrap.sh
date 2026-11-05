@@ -173,12 +173,24 @@ mkdir -p /etc/systemd/system/ollama.service.d
 # Strato-images) was `http://<ip>:11434` een deur om het hele slot heen, precies
 # de open modelbox van 13 september. Het slot in nginx is alleen een slot als het
 # de enige deur is.
+# De laatste vier stonden sinds de inrichting met de hand op de modelbox en niet
+# hier (gezien 5 nov via `systemctl show ollama`); een herinstallatie zou ze
+# stil laten vallen. Met deze set: 1 model resident, 7,8 GB van 16 GB vrij en
+# geen swap, naast de vijf DAX-containers.
+#   NUM_PARALLEL=2     twee verzoeken tegelijk op het geladen model
+#   MAX_QUEUE=64       daarboven wachten in plaats van meteen weigeren
+#   FLASH_ATTENTION=1  + KV_CACHE_TYPE=q8_0: ongeveer de helft minder geheugen
+#                      voor de context per verzoek, zodat die twee passen
 cat > /etc/systemd/system/ollama.service.d/override.conf <<EOF
 [Service]
 Environment="OLLAMA_HOST=127.0.0.1:11434"
 Environment="OLLAMA_ORIGINS=*"
 Environment="OLLAMA_MAX_LOADED_MODELS=${MAX_LOADED}"
 Environment="OLLAMA_KEEP_ALIVE=${KEEP_ALIVE}"
+Environment="OLLAMA_NUM_PARALLEL=2"
+Environment="OLLAMA_MAX_QUEUE=64"
+Environment="OLLAMA_FLASH_ATTENTION=1"
+Environment="OLLAMA_KV_CACHE_TYPE=q8_0"
 EOF
 systemctl daemon-reload
 systemctl enable --now ollama
