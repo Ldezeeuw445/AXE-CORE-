@@ -176,7 +176,7 @@ weer meer zijn — kijk daar dus eerst of er iemand anders loopt.
 cd AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
 npx tsc --noEmit          # 3 fouten — voeg er geen toe. LET OP: niet hetzelfde
                           # als `npm run typecheck`, zie hieronder
-npx vitest run            # 3245 tests, 430 bestanden; 2 staan al rood
+npx vitest run            # 3245 tests, 430 bestanden; 1 staat al rood
 npx eslint src            # 443 fouten, 34 waarschuwingen — voeg er geen toe
 python3 scripts/vps_sync.py check   # box en repo eens
 ```
@@ -203,24 +203,27 @@ testbestanden (`stuurAxeJobs.test.ts`, `goldOrb1amNy.test.ts`,
 Tot iemand die achttien opruimt: **noem altijd welk commando je draaide.**
 "Typecheck groen" zonder het commando erbij zegt niets.
 
-### De twee rode tests, bij naam
+### De rode test, bij naam
 
-Vergelijk lijsten en geen aantallen. Deze twee staan al rood op `orchestrator`
-(gemeten 5 nov). Het zijn allebei **ratels tegen verval**, geen bugs:
+Vergelijk lijsten en geen aantallen. Er staat er nog één rood op
+`orchestrator` (gemeten 5 nov). Het is een **ratel tegen verval**, geen bug:
 
 | Bestand | Wat hij zegt |
 |---|---|
-| `src/design/colourRule.test.ts` | 129 schendingen waar er 128 mochten |
-| `src/domain/dodeCode.test.ts` | twee nieuwe exports zonder aanroeper: `managerNaam` (`domain/agents/bossRoute.ts`), `lintUitlegVan` (`domain/taken/taakFout.ts`) |
+| `src/domain/dodeCode.test.ts` | twee exports zonder aanroeper: `managerNaam` (`domain/agents/bossRoute.ts`), `lintUitlegVan` (`domain/taken/taakFout.ts`) |
 
-De negentien van 30 september zijn er twee geworden — er is flink opgeruimd.
-De derde (`generateArchitectureManifest`) is op 5 nov gerepareerd door de
-snapshot opnieuw te genereren met `AXE_WRITE_ARCHITECTURE=1`.
+De negentien van 30 september zijn er één geworden.
+`generateArchitectureManifest` is op 5 nov gerepareerd door de snapshot
+opnieuw te genereren met `AXE_WRITE_ARCHITECTURE=1`. `colourRule` stond op
+129 waar er 128 mochten en is op 5 nov groen gemaakt zoals het hoort: vier
+gekleurde vullingen weg uit `ObsidianMemoryPanel.tsx`, en toen het plafond
+mee naar 125.
 
-**De kleurratel hoor je niet te repareren door het plafond te verhogen.** De
-test zegt het zelf: hij gaat alleen omlaag. Staat hij op 129 waar er 128
-mogen, dan is er één schending bijgekomen en moet er één weg — niet
-`CEILING` omhoog.
+**Een ratel repareer je nooit door het plafond te verhogen.** De kleurtest
+zegt het zelf: hij gaat alleen omlaag. Staat hij één boven zijn plafond, dan
+is er één schending bijgekomen en moet er één weg. Haal je er vier weg, zet
+`CEILING` dan ook vier lager — anders mogen die vier stil terugkomen en heb
+je alleen jezelf een goed gevoel gegeven.
 
 Hoe je vergelijkt:
 
@@ -330,19 +333,28 @@ Bestaande rechten niet massaal wijzigen; bestaande tabellen behouden hun grants.
 
 ## Waar de rest staat
 
-| Bestand | Waarvoor |
-|---|---|
-| `brain/` | wat AXE Core is, en wat waar blijft — lees dit eerst bij echt werk |
-| `BOUWLIJST.md` | wat af is, wat niet, in welke volgorde |
-| `UI-MAATSTAF.md` | hoe een tab eruit hoort te zien — de browser-tab is de meetlat |
-| `SLEUTELS.md` | waar elke sleutel woont |
-| `ECOSYSTEM.md` | alle apps, repo's, VPS'en, hoe ze uitrollen |
-| `ARCHITECTURE.md` | de lagen en waarom |
-| `WERKVERDELING.md` | wie waaraan werkt, en welke bestanden van wie zijn |
-| `docs/CREWAI-REFERENCE.md` | CrewAI-naslag (stond hier, hoorde er niet) |
-| `os3/` | Skill AXE + SETUP. CLI + hek bovenop bestaande workers. OS3 optioneel. |
-| `…/docs/MISSIES-EN-DAX.md` | missies (agents werken door zonder "ga door"), DAX-computers op STRATO, eeuwig AXE-gesprek, echte agentstatus |
-| `…/docs/programma/` | het productprogramma: de vijf masterspecs als canon, wat er echt draait, gapmatrix, taken (`programma.json`), incidenten. Lees dit vóór je aan een van de vijf producten begint |
+De meeste van deze bestanden staan **niet** naast dit bestand maar in de
+app-map (`AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/`). Dat scheelt
+je een zoektocht, dus het staat er per regel bij.
+
+| Bestand | Waar | Waarvoor |
+|---|---|---|
+| `brain/` | hoofdmap | wat AXE Core is, en wat waar blijft — lees dit eerst bij echt werk |
+| `docs/CREWAI-REFERENCE.md` | hoofdmap | CrewAI-naslag |
+| `os3/` | hoofdmap | Skill AXE + SETUP. CLI + hek bovenop bestaande workers. OS3 optioneel. |
+| `BOUWLIJST.md` | app-map | wat af is, wat niet, in welke volgorde |
+| `UI-MAATSTAF.md` | app-map | hoe een tab eruit hoort te zien — de browser-tab is de meetlat |
+| `SLEUTELS.md` | app-map | waar elke sleutel woont |
+| `ECOSYSTEM.md` | app-map | alle apps, repo's, VPS'en, hoe ze uitrollen |
+| `WERKVERDELING.md` | app-map | wie waaraan werkt, en welke bestanden van wie zijn |
+| `docs/MISSIES-EN-DAX.md` | app-map | missies (agents werken door zonder "ga door"), DAX-computers op STRATO, eeuwig AXE-gesprek, echte agentstatus |
+| `docs/programma/` | app-map | het productprogramma: de vijf masterspecs als canon, wat er echt draait, gapmatrix, taken (`programma.json`), incidenten. Lees dit vóór je aan een van de vijf producten begint |
+
+**`ARCHITECTURE.md` bestaat twee keer en de twee zijn niet hetzelfde.** Die in
+de app-map (178 regels, "AXE — the shape it should have") gaat over het systeem
+dat draait; die in de hoofdmap (144 regels, "God Mode Architecture") hoort bij
+de bevroren generatie van 31 oktober. Neem de app-map. Dit is val 3 in
+documentvorm — en de reden dat de kolom hierboven bestaat.
 
 ## Architectuur: CLI bovenop wat er al is
 

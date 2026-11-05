@@ -129,4 +129,4 @@ describe('the app itself', () => {
  * mechanism -- nobody has to remember the rule, because the rule remembers
  * itself.
  */
-const CEILING = 128;
+const CEILING = 125;
