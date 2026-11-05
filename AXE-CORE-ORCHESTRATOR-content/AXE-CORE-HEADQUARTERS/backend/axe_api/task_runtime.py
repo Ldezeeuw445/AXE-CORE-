@@ -38,6 +38,10 @@ _LINT_COMPACT = re.compile(
     _BESTAND + r":(\d+)(?::\d+)?[:\s]+(?:error|warning)\b[^\n]*?([@\w./-]+)\s*$",
     re.I | re.M,
 )
+_LINT_GATE = re.compile(
+    _BESTAND + r":(\d+)(?::\d+)?\s+(?:error|warning)\s+(@?[\w./-]+)\s+",
+    re.I,
+)
 _LINT_TSC = re.compile(_BESTAND + r"\((\d+),\d+\):\s+error\s+(TS\d+)", re.I)
 _LINT_MULTI = re.compile(
     _BESTAND + r"\n\s+(\d+):\d+\s+(?:error|warning)\s+.+?\s+([@\w./-]+)\s*$",
@@ -75,7 +79,7 @@ def _verzamel_tekst(waarde: Any, diepte: int = 0, uit: list[str] | None = None) 
 def _lint_vondsten(tekst: str) -> list[str]:
     uit: list[str] = []
     gezien: set[str] = set()
-    for rx in (_LINT_MULTI, _LINT_COMPACT, _LINT_TSC):
+    for rx in (_LINT_MULTI, _LINT_GATE, _LINT_COMPACT, _LINT_TSC):
         for m in rx.finditer(tekst or ""):
             regel = f"{_kort_pad(m.group(1))}:{m.group(2)} {m.group(3)}"
             if regel in gezien:

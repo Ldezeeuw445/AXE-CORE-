@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-Actie = str  # retry | open | reconnect
+Actie = str  # retry | open | reconnect | fix
 
 
 def _tekst(error: Any) -> str:
@@ -17,10 +17,18 @@ def _tekst(error: Any) -> str:
     if isinstance(error, str):
         return error
     if isinstance(error, dict):
+        findings = [x for x in (error.get("findings") or []) if isinstance(x, str) and x.strip()]
+        kern = ""
         for k in ("message", "output", "detail", "code"):
             v = error.get(k)
             if isinstance(v, str) and v.strip():
-                return v
+                kern = v
+                break
+        if findings:
+            rest = [f for f in findings if f not in kern]
+            return "\n".join([p for p in [kern, *rest] if p])
+        if kern:
+            return kern
     return str(error)
 
 
@@ -91,6 +99,16 @@ def taak_fout(error: Any, titel: str = "") -> dict[str, str]:
         return {
             "regel": "Orchestrator health check found a real compile or test failure. Open the report.",
             "actie": "open",
+        }
+    if re.search(r"project check failed|project checks are not verified|eslint-gate:", laag):
+        naam = "Lint" if re.search(r"\blint\b|eslint-gate:", laag) else (
+            "Typecheck" if "typecheck" in laag else "Tests" if re.search(r"\btest", laag) else "Project check"
+        )
+        regels = [s.strip() for s in raw.splitlines() if re.search(r":\d+", s) and re.search(r"\berror\b|\bwarning\b", s)]
+        uitleg = f" — {regels[0]}" if regels else ""
+        return {
+            "regel": re.sub(r"\s+", " ", f"{naam} failed{uitleg}. Fix starts a repair task; Retry only re-checks.").strip()[:280],
+            "actie": "fix",
         }
     regel = re.sub(r"\s+", " ", raw).strip()
     if regel:

@@ -22,10 +22,16 @@ function tekstVan(error: unknown): string {
   if (typeof error === 'string') return error;
   if (typeof error === 'object') {
     const o = error as Record<string, unknown>;
+    const findings = Array.isArray(o.findings)
+      ? o.findings.filter((x): x is string => typeof x === 'string' && x.trim() !== '')
+      : [];
     const m = o.message ?? o.output ?? o.detail;
-    if (typeof m === 'string') return m;
-    const code = o.code;
-    if (typeof code === 'string') return code;
+    const kern = typeof m === 'string' ? m : typeof o.code === 'string' ? o.code : '';
+    if (findings.length) {
+      const rest = findings.filter((f) => !kern.includes(f));
+      return [kern, ...rest].filter(Boolean).join('\n');
+    }
+    if (kern) return kern;
   }
   return String(error);
 }
@@ -37,13 +43,14 @@ function kortPad(pad: string): string {
 
 const BESTAND = String.raw`([^\s:()]+?\.(?:tsx|ts|jsx|js|mjs|cjs|py))`;
 const COMPACT = new RegExp(`${BESTAND}:(\\d+)(?::\\d+)?[:\\s]+(?:error|warning)\\b[^\\n]*?([@\\w./-]+)\\s*$`, 'gim');
+const GATE = new RegExp(`${BESTAND}:(\\d+)(?::\\d+)?\\s+(?:error|warning)\\s+(@?[\\w./-]+)\\s+`, 'gi');
 const TSC = new RegExp(`${BESTAND}\\((\\d+),\\d+\\):\\s+error\\s+(TS\\d+)`, 'gi');
 const MULTI = new RegExp(`${BESTAND}\\n\\s+(\\d+):\\d+\\s+(?:error|warning)\\s+.+?\\s+([@\\w./-]+)\\s*$`, 'gim');
 
 function lintVondsten(tekst: string): string[] {
   const uit: string[] = [];
   const gezien = new Set<string>();
-  for (const rx of [MULTI, COMPACT, TSC]) {
+  for (const rx of [MULTI, GATE, COMPACT, TSC]) {
     rx.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = rx.exec(tekst))) {
@@ -140,7 +147,7 @@ export function taakFoutVan(error: unknown, titel = '', bron?: TaakFoutBron): Ta
   if (/orchestrator health/.test(laag)) {
     return { regel: 'Orchestrator health check found a real compile or test failure. Open the report.', actie: 'open' };
   }
-  if (isProjectCheckFout(laag)) {
+  if (isProjectCheckFout(laag) || /eslint-gate:/.test(laag)) {
     const naam = projectCheckNaam(laag);
     const hint = 'Fix starts a repair task; Retry only re-checks.';
     const uitleg = lintUitlegVan(error, bron);

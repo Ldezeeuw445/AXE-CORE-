@@ -1,0 +1,1908 @@
+{
+  "version": 1,
+  "note": "Known eslint findings (file + rule + message). npm run lint fails only on fingerprints not in this file. After a real fix: npm run lint:baseline (shrinks). Do not grow this to hide new errors.",
+  "findings": [
+    {
+      "file": "src/app/App.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/app/shell-main.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file has exports. Move your component(s) to a separate file.",
+      "count": 31
+    },
+    {
+      "file": "src/application/agents/agenticEngine.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'browserSearch' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/agents/agenticEngine.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'callProvider' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/agents/agenticEngine.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'CodeEditRequest' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/agents/agenticEngine.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'findFile' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/agents/agenticEngine.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'GHFile' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/agents/agenticEngine.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'ghGetFile' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/agents/agenticEngine.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'ghGetTree' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/agents/agenticEngine.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'RepoConfig' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/agents/agenticEngine.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'repoHint' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/agents/agenticEngine.ts",
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'stepNumber' is not used in subsequent statements.",
+      "count": 1
+    },
+    {
+      "file": "src/application/agents/browserAgentLoop.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'callProvider' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/agents/codeEditorAgent.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'callProvider' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/chat/chatActionService.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'NAV_ITEMS' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/obsidian/kluisZaad.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'kluisZaadNotities' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/sphere/presentOnSphere.ts",
+      "rule": "no-restricted-imports",
+      "message": "'@/presentation/store/sphereProjectionStore' import is restricted from being used by a pattern. application/ must not depend on the UI — move shared types into domain/ instead.",
+      "count": 1
+    },
+    {
+      "file": "src/application/tools/nativeToolLoop.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'summarise' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/application/tools/toolRegistry.income.ts",
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'amount' is not used in subsequent statements.",
+      "count": 1
+    },
+    {
+      "file": "src/application/tradingTeam/strategies/goldOrb1amNy.ts",
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'pass' is not used in subsequent statements.",
+      "count": 1
+    },
+    {
+      "file": "src/domain/abonnementChat.test.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'ABONNEMENT_MOTOREN' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/domain/abonnementChat.test.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'ALLE_MOTOREN' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/domain/agents/serverStatus.ts",
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'regel' is not used in subsequent statements.",
+      "count": 1
+    },
+    {
+      "file": "src/domain/catalogs/defaultAgents.ts",
+      "rule": "no-restricted-imports",
+      "message": "'@/presentation/components/widgets/AgentCard' import is restricted from being used by a pattern. domain/ is the innermost layer — it may only import from domain/ and shared/.",
+      "count": 1
+    },
+    {
+      "file": "src/domain/catalogs/mindsetLines.ts",
+      "rule": "no-restricted-imports",
+      "message": "'@/infrastructure/persistence/userSettingsService' import is restricted from being used by a pattern. domain/ is the innermost layer — it may only import from domain/ and shared/.",
+      "count": 1
+    },
+    {
+      "file": "src/domain/customProviders.ts",
+      "rule": "no-restricted-imports",
+      "message": "'@/infrastructure/persistence/userSettingsService' import is restricted from being used by a pattern. domain/ is the innermost layer — it may only import from domain/ and shared/.",
+      "count": 1
+    },
+    {
+      "file": "src/domain/notities/notities.ts",
+      "rule": "no-irregular-whitespace",
+      "message": "Irregular whitespace not allowed.",
+      "count": 1
+    },
+    {
+      "file": "src/domain/replyLanguage.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_mode' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/domain/replyLanguage.ts",
+      "rule": "no-restricted-imports",
+      "message": "'@/infrastructure/persistence/userSettingsService' import is restricted from being used by a pattern. domain/ is the innermost layer — it may only import from domain/ and shared/.",
+      "count": 1
+    },
+    {
+      "file": "src/domain/speechText.ts",
+      "rule": "no-misleading-character-class",
+      "message": "Unexpected combined character in character class.",
+      "count": 1
+    },
+    {
+      "file": "src/domain/taskRuntime.test.ts",
+      "rule": "no-restricted-imports",
+      "message": "'@/infrastructure/gateways/axeCoreApiService' import is restricted from being used by a pattern. domain/ is the innermost layer — it may only import from domain/ and shared/.",
+      "count": 1
+    },
+    {
+      "file": "src/domain/terminalHosts.ts",
+      "rule": "eslint",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-new').",
+      "count": 1
+    },
+    {
+      "file": "src/domain/tools/smartThingsCatalog.ts",
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\-.",
+      "count": 2
+    },
+    {
+      "file": "src/domain/types/speech.d.ts",
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type.",
+      "count": 13
+    },
+    {
+      "file": "src/infrastructure/config/apiUrl.ts",
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/cartesiaTtsService.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'CARTESIA_URL' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/cartesiaTtsService.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'ctx' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/cartesiaTtsService.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'normalizeForSpeech' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/cartesiaTtsService.ts",
+      "rule": "prefer-const",
+      "message": "'analyser' is never reassigned. Use 'const' instead.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/cartesiaTtsService.ts",
+      "rule": "prefer-const",
+      "message": "'ctx' is never reassigned. Use 'const' instead.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/cartesiaTtsService.ts",
+      "rule": "prefer-const",
+      "message": "'niveauData' is never reassigned. Use 'const' instead.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/elevenLabsService.ts",
+      "rule": "react-hooks/rules-of-hooks",
+      "message": "React Hook \"useDirectElevenLabs\" is called in function \"isElevenLabsConfigured\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\".",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/elevenLabsService.ts",
+      "rule": "react-hooks/rules-of-hooks",
+      "message": "React Hook \"useDirectElevenLabs\" is called in function \"ttsFetch\" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word \"use\".",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/fishAudioService.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_voiceId' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/llmGateway.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'ollamaDirectError' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/llmGateway.ts",
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'repos' is not used in subsequent statements.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/llmGateway.ts",
+      "rule": "preserve-caught-error",
+      "message": "There is no `cause` attached to the symptom error being thrown.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/llmToolGateway.ts",
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'input' is not used in subsequent statements.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/maps3d/ollamaApi.ts",
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/openAiRealtimeVoice.test.ts",
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/openAiTtsService.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_stem' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/gateways/openAiTtsService.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'stemOverride' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/persistence/buildDurableMemoryContext.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'RagMemory' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/persistence/conversationReviewService.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'callProvider' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/persistence/financeDigestService.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'loadSetting' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/persistence/thinkThanksService.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'blob' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/persistence/thinkThanksService.ts",
+      "rule": "no-restricted-imports",
+      "message": "'@/application/attachments/attachmentService' import is restricted from being used by a pattern. infrastructure/ may only depend on domain/ and shared/.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/persistence/thinkThanksService.ts",
+      "rule": "no-restricted-imports",
+      "message": "'@/presentation/store/voiceStore' import is restricted from being used by a pattern. infrastructure/ may only depend on domain/ and shared/.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/persistence/thinkThanksService.ts",
+      "rule": "prefer-const",
+      "message": "'liveArtifact' is never reassigned. Use 'const' instead.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/persistence/tradingAgentBrain.test.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_entry' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/persistence/tradingAgentMemoryService.test.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_entry' is defined but never used.",
+      "count": 3
+    },
+    {
+      "file": "src/infrastructure/persistence/tradingAgentMemoryService.test.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_query' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/persistence/tradingCircuitBreakerService.test.ts",
+      "rule": "eslint",
+      "message": "Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any').",
+      "count": 1
+    },
+    {
+      "file": "src/infrastructure/supabase/webProxyAuth.test.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_args' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/architecture/ArchitectureInspector.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/ai/AISettingsModal.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Key' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/AgentCommitBalk.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/AICoreLogs.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/AppGrowthBadge.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/BrowserPanel.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'browserAnalyze' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/CodeStudioExtras.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/CodeStudioExtras.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/axe-core/FileUploadButton.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 3
+    },
+    {
+      "file": "src/presentation/components/axe-core/HolographicSphere.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'active' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/HolographicSphere.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'PRESETS' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/KimiToolsPanel.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_onClose' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/KimiToolsPanel.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'handleCodeReview' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/LearningLoopPanel.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/ManagerChat.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'job'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/ManagerChat.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 3
+    },
+    {
+      "file": "src/presentation/components/axe-core/MemoryLibraryPanel.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cn' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/MemoryLibraryPanel.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/MemoryPanel.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Brain' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/MemoryPanel.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Database' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/MemoryPanel.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Share2' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/MemoryPanel.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Sparkles' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/MemoryPanel.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'SPECIALIST_COLORS' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/MemoryPanel.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'SPECIALIST_ICONS' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/MemoryPanel.tsx",
+      "rule": "react-hooks/purity",
+      "message": "Error: Cannot call impure function during render",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/NeuralBrain.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'dt' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/NeuralBrain.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'HUB_GLOW_ACCENT' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/NeuralBrain.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'initialFocusHubId'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/NeuralBrain.tsx",
+      "rule": "react-hooks/refs",
+      "message": "Error: Cannot access refs during render",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/NeuralMemorySystem.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Activity' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/NeuralMemorySystem.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'BrainScene' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/NeuralMemorySystem.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'buildTerrainMesh' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/NeuralMemorySystem.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'GlobalCat' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/NeuralMemorySystem.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'OBSIDIAN_COLOR' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/NeuralMemorySystem.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Suspense' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/NeuralMemorySystem.tsx",
+      "rule": "react-hooks/purity",
+      "message": "Error: Cannot call impure function during render",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/axe-core/NeuralMemorySystem.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/axe-core/ObsidianMemoryPanel.tsx",
+      "rule": "no-misleading-character-class",
+      "message": "Unexpected surrogate pair in character class. Use 'u' flag.",
+      "count": 4
+    },
+    {
+      "file": "src/presentation/components/axe-core/ObsidianMemoryPanel.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/axe-core/ObsidianNeuralGraph.tsx",
+      "rule": "react-hooks/refs",
+      "message": "Error: Cannot access refs during render",
+      "count": 6
+    },
+    {
+      "file": "src/presentation/components/axe-core/PreviewPanel.tsx",
+      "rule": "react-hooks/refs",
+      "message": "Error: Cannot access refs during render",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/PreviewPanel.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/axe-core/sceneBackdrop.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/sceneBackdrop.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 5
+    },
+    {
+      "file": "src/presentation/components/axe-core/sphere/projections/PlacesPanel.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/terrain/MemoryTerrainMap.tsx",
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/terrain/MemoryTerrainMap.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'depthLevel' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/terrain/TerrainMarkers.tsx",
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type.",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/axe-core/terrain/TerrainMarkers.tsx",
+      "rule": "react-hooks/immutability",
+      "message": "Error: Cannot modify local variables after render completes",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/terrain/TerrainMarkers.tsx",
+      "rule": "react-hooks/immutability",
+      "message": "Error: This value cannot be modified",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/terrain/TerrainMarkers.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/axe-core/useGlobalMemoryStats.ts",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/browser/AddressBar.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/browser/BrowserApp.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'addDownload' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/browser/BrowserApp.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'aiMessages' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/browser/BrowserApp.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'contentHeight' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/browser/BrowserApp.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'handleAIBookmark' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/browser/BrowserApp.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'isHome' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/browser/BrowserApp.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'isLoading' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/browser/BrowserApp.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'sendAIMessage' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/browser/BrowserApp.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useCallback has a missing dependency: 'config.apiEndpoint'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/browser/BrowserApp.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/browser/HistoryPanel.tsx",
+      "rule": "react-hooks/purity",
+      "message": "Error: Cannot call impure function during render",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/browser/LiveBrowserView.tsx",
+      "rule": "react-hooks/refs",
+      "message": "Error: Cannot access refs during render",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/layout/AppShell.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/layout/AppZuil.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/layout/BottomBar.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useCallback has an unnecessary dependency: 'voice.voiceStatus'. Either exclude it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/layout/BottomNav.tsx",
+      "rule": "react-hooks/refs",
+      "message": "Error: Cannot access refs during render",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/layout/PlaatChat.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'setChatCollapsed'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/layout/PlaatChat.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'setCoreView'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/layout/PlaatChat.tsx",
+      "rule": "react-hooks/immutability",
+      "message": "Error: Cannot access variable before it is declared",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/layout/PlaatChat.tsx",
+      "rule": "react-hooks/purity",
+      "message": "Error: Cannot call impure function during render",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/layout/PlaatSlots.tsx",
+      "rule": "react-hooks/immutability",
+      "message": "Error: This value cannot be modified",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/layout/PlaatSlots.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/layout/PlaatSlots.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/layout/QuickNoteDock.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/layout/RightPanel.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 3
+    },
+    {
+      "file": "src/presentation/components/layout/SplitWorkspace.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'X' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/layout/TopbalkSlot.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/managers/ManagersDesk.tsx",
+      "rule": "react-hooks/purity",
+      "message": "Error: Cannot call impure function during render",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/managers/ManagersDesk.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/maps3d/OsintGlobeMap.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'MapPoint' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/maps3d/OSINTPanel.tsx",
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/maps3d/OSINTPanel.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'fetchCityEvents'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/maps3d/OSINTPanel.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/maps3d/SeismicPanel.tsx",
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type.",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/maps3d/SeismicPanel.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'fetchSeismicData'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/maps3d/SeismicPanel.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/maps3d/TacticalMatrixPanel.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/maps3d/WeatherWidget.tsx",
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/maps3d/WeatherWidget.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'X' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/maps3d/WeatherWidget.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'fetchWeather'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/maps3d/WeatherWidget.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/notities/NotitiesApp.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/overlay/AxeOverlayNotch.tsx",
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type.",
+      "count": 3
+    },
+    {
+      "file": "src/presentation/components/settings/AgentMotorenSection.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useMemo has an unnecessary dependency: 'toewijzing'. Either exclude it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/settings/AgentMotorenSection.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useMemo has unnecessary dependencies: 'overrides' and 'toewijzing'. Either exclude them or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/settings/CapabilityRouterSection.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'motion' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/settings/RouteSection.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'laad'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/settings/RouteSection.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/settings/StatusKaart.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 3
+    },
+    {
+      "file": "src/presentation/components/settings/ToolCallingSection.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/shared/SystemRegistryPanel.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Workflow' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/shared/SystemRegistryPanel.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/shared/Ticker.tsx",
+      "rule": "react-hooks/purity",
+      "message": "Error: Cannot call impure function during render",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/shared/Ticker.tsx",
+      "rule": "react-hooks/refs",
+      "message": "Error: Cannot access refs during render",
+      "count": 6
+    },
+    {
+      "file": "src/presentation/components/tasks/PlannerTaken.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/tasks/TasksDesk.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/trading/companion/annotations/FibAnnotationLayer.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'axisWidth' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/annotations/FibAnnotationLayer.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/ChartCanvas.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has missing dependencies: 'candles', 'compactLayout', 'gridStyle', 'navigationLocked', 'theme.axisSeparator', 'theme.bear', 'theme.bearBorder', 'theme.bearWick', 'theme.borderVisible', 'theme.bull', 'theme.bullBorder', 'theme.bullWick', 'theme.chartCanvasBackground', 'theme.crosshair', 'theme.crosshairLabelBg', 'theme.grid', and 'theme.textColor'. Either include them or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/ChartExecutionBridge.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 6
+    },
+    {
+      "file": "src/presentation/components/trading/companion/ChartIndicatorLayer.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'RIGHT_RAIL_OFFSET' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/ChartIndicatorLayer.tsx",
+      "rule": "react-hooks/refs",
+      "message": "Error: Cannot access refs during render",
+      "count": 31
+    },
+    {
+      "file": "src/presentation/components/trading/companion/ChartOrderConfirm.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/ChartToolsDrawer.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/CompanionChart.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'candles'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/CompanionChart.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 3
+    },
+    {
+      "file": "src/presentation/components/trading/companion/CompanionChartDesk.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'setFvgCount' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/CompanionChartDesk.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useCallback has a missing dependency: 'setDrawingFib'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/CompanionChartDesk.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/CompanionChartDesk.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/FibAnnotationLayer.tsx",
+      "rule": "react-hooks/refs",
+      "message": "Error: Cannot access refs during render",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/IndicatorPane.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useMemo has missing dependencies: 'colors.bearBar', 'colors.bullBar', 'colors.macdHistBear', and 'colors.macdHistBull'. Either include them or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/IndicatorPane.tsx",
+      "rule": "react-hooks/refs",
+      "message": "Error: Cannot access refs during render",
+      "count": 13
+    },
+    {
+      "file": "src/presentation/components/trading/companion/PositionLabelsOverlay.tsx",
+      "rule": "react-hooks/refs",
+      "message": "Error: Cannot access refs during render",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/PositionLabelsOverlay.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/components/trading/companion/TradePlanLine.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/companion/useLiveChartPolling.ts",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/trading/CompanionStyleChart.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/ui/badge.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/ui/button-group.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/ui/button.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/ui/carousel.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/ui/form.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/ui/navigation-menu.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/ui/sidebar.tsx",
+      "rule": "react-hooks/purity",
+      "message": "Error: Cannot call impure function during render",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/ui/sidebar.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/ui/toggle.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/voice/VoiceButton.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Phone' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/widgets/AgentCard.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'highlighted' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/widgets/HabitTrackerWidget.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/widgets/SmartHomeWidget.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/widgets/SmartRingWidget.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/components/widgets/ThinkThanksWidget.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/contexts/AuthContext.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/contexts/AuthContext.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/contexts/NotificationContext.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/hooks/useBrowserStore.ts",
+      "rule": "react-hooks/purity",
+      "message": "Error: Cannot call impure function during render",
+      "count": 3
+    },
+    {
+      "file": "src/presentation/hooks/useClapDetector.ts",
+      "rule": "react-hooks/refs",
+      "message": "Error: Cannot access refs during render",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/hooks/useLiveKit.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'addTranscriptTurn' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/maps3d/audio.ts",
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/maps3d/eventIcons.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'OSINTEvent' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/maps3d/exportMap.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'mapContainer' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/maps3d/useGoogleMaps3D.ts",
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type.",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/maps3d/useGoogleMaps3D.ts",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/agenda/DagLijst.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/Agents.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'accent' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/Agents.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/AppsPage.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/CodeEditorPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Bot' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/CodeEditorPage.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useCallback has a missing dependency: 'getSlots'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/CodeEditorPage.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useCallback has an unnecessary dependency: 'agentMessages'. Either exclude it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/CommandCenter.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'setRepos' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/CommandCenter.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'useRef' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/CommandCenter.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'WidgetCard' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/CommandCenter.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'loadTree'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/CommandCenter.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/ComputerUse.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/ComputerUseOverlay.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'machine'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/ComputerUseOverlay.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'mic'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/ComputerUseOverlay.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/ControlPlane.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Brain' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/ControlPlane.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'highlightRoutes' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/ControlPlane.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'tasks' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/controlPlane/SchedulesBlock.tsx",
+      "rule": "react-hooks/purity",
+      "message": "Error: Cannot call impure function during render",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/CronManager.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/DaxOverzicht.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useMemo has an unnecessary dependency: 'server.at'. Either exclude it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/FloatAxe.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'BASE_W' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/Home.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'dotColor' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/Home.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'hasProvider' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/Home.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'LiveIndicator' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/Home.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'setCoreView'. Either include it or remove the dependency array.",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/pages/HomeStage.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/Infrastructure.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/KnowledgeBase.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/Maps3D.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/Memory.tsx",
+      "rule": "eslint",
+      "message": "Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps').",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/Memory.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 6
+    },
+    {
+      "file": "src/presentation/pages/Organization.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/phone/PhoneBrowser.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'CREWAI_BASE_URL' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'FishAudioSection' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'getCartesiaVoiceId' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'getSelectedVoiceId' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'GROQ_BASE_URL' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'HERMES_BASE_URL' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'isCartesiaConfigured' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'isElevenLabsConfigured' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'isOpenAiTtsConfigured' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'KILOCODE_BASE_URL' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'OPENAI_STEMMEN' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'openAiStem' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'OPENCLAW_BASE_URL' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'OPENHANDS_BASE_URL' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'OPENJARVIS_BASE_URL' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'probeOpenAiTts' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'setCartesiaVoiceId' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'setOpenAiStem' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'setOpenAiStemState' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'setSelectedVoiceId' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Settings' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'SlotEditor' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'speakWithElevenLabs' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'STANDAARD_STEM' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'STEM_SLEUTEL' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'STEMMEN' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'stemVan' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'stopTTS' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'refresh'. Either include it or remove the dependency array.",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'testProvider'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'voice'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "react-hooks/immutability",
+      "message": "Error: Cannot access variable before it is declared",
+      "count": 3
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 4
+    },
+    {
+      "file": "src/presentation/pages/SettingsPage.tsx",
+      "rule": "react-refresh/only-export-components",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/TableEditor.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Plus' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/Tasks.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_genegeerd' is assigned a value but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/Tasks.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/pages/ThinkThanksPage.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'computeMergeSuggestions' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/ThinkThanksPage.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useMemo has an unnecessary dependency: 'items'. Either exclude it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/ThinkThanksPage.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 3
+    },
+    {
+      "file": "src/presentation/pages/tradingIntel/CorrelatieTab.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/tradingIntel/KalenderTab.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/tradingIntel/LseVaultTab.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/tradingIntel/ResearchTab.tsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'RUN_STALE_MS'. Either include it or remove the dependency array.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/tradingIntel/SettingsDrawer.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/tradingIntel/TradingTeamTab.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/pages/tradingIntel/useTradingDeskState.ts",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 2
+    },
+    {
+      "file": "src/presentation/pages/TradingMemory.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "message": "Error: Calling setState synchronously within an effect can trigger cascading renders",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/store/installStableChat.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'toast' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/store/installStableChat.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'TOOL_RUNTIMES' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/store/installStableChat.ts",
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'lastError' is not used in subsequent statements.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/store/voiceStore.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'apiExecuteHermes' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/store/voiceStore.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'apiExecuteKiloCode' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/store/voiceStore.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'apiExecuteOpenClaw' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/store/voiceStore.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'apiExecuteOpenHands' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/store/voiceStore.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'apiExecuteOpenJarvis' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/store/voiceStore.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'getCapabilityExecutionMode' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/store/voiceStore.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'saveGlobalMemory' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/store/voiceStore.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'speakWithBrowser' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/store/voiceStore.ts",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'tts' is defined but never used.",
+      "count": 1
+    },
+    {
+      "file": "src/presentation/store/voiceStore.ts",
+      "rule": "no-empty",
+      "message": "Empty block statement.",
+      "count": 9
+    },
+    {
+      "file": "src/presentation/store/voiceStore.ts",
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'resultBlock' is not used in subsequent statements.",
+      "count": 1
+    }
+  ]
+}

@@ -391,6 +391,22 @@ class TestVoerUitEerlijk:
         assert not any(v.get("status") == "completed" for t, s, v in rijen if s == "update")
         assert any("Project check failed" in v.get("message", "") for t, s, v in rijen if t == "core_notifications")
 
+    def test_mislukte_lint_zet_vondsten_in_error_en_result(self, monkeypatch):
+        pl, rijen = self._pl(monkeypatch, lambda *a: {})
+        regel = "src/presentation/store/voiceStore.ts:12:5  error  @typescript-eslint/no-unused-vars  'foo' is defined but never used."
+        fout = f"Project check failed: lint (1 new)\n{regel}"
+        bewijs = {"veranderd": True, "verification": {
+            "passed": False, "reason": fout, "lint_findings": [regel],
+            "checks": [{"name": "lint", "passed": False, "findings": [regel]}],
+        }}
+        taak = {"id": "bouw-lint", "title": "Build next step: AXE Core", "metadata": {}}
+        pl._sluit(taak, None, fout, "claude2", bewijs)
+        rij = next(v for t, s, v in rijen if s == "update" and v.get("error"))
+        assert rij["error"]["findings"][0].startswith("src/presentation/store/voiceStore.ts:12:5")
+        assert "voiceStore.ts:12:5" in rij["error"]["message"]
+        assert rij["result"]["bewijs"]["verification"]["lint_findings"][0] == regel
+        assert any("voiceStore.ts:12:5" in v.get("message", "") for t, s, v in rijen if t == "core_notifications")
+
     def test_gepushte_bouwrun_is_in_de_ui_nog_niet_live_of_done(self, monkeypatch):
         pl, rijen = self._pl(monkeypatch, lambda *a: {})
         taak = {"id": "bouw-pr", "title": "Build next step: AXE Companion", "metadata": {}}

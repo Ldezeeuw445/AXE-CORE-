@@ -1125,7 +1125,10 @@ class Planner:
             # Een oude fout (no_handler, verlopen login) hoort niet bij een geslaagde run.
             velden["error"] = None
         else:
-            velden["error"] = {"message": fout[:1000]}
+            import bouw_publiceer
+            velden["error"] = bouw_publiceer.taak_fout_veld(fout, bewijs)
+            if bewijs:
+                velden["result"] = {"output": fout[:4000], "bewijs": bewijs}
         self.sb().table("core_tasks").update(velden).eq("id", taak["id"]).execute()
         if is_bouw_next_step(taak):
             self._meld_bouw(taak, meta, tekst, fout, bewijs)
@@ -1152,7 +1155,7 @@ class Planner:
         pub = (bewijs or {}).get("publicatie") or {}
         if not tekst:
             soort, status = "error", "blocked"
-            detail = f"{fout[:350]}. AXE will retry within its task budget, then move to other work."
+            detail = f"{fout[:900]}\nAXE will retry within its task budget, then move to other work."
         elif pub.get("gepusht"):
             soort, status = "info", "ready for review"
             detail = f"Project checks passed. Code is pushed. Integration and deployment are not verified. {pub.get('pr') or ''}"
