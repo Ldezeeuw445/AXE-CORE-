@@ -79,8 +79,9 @@ def _inbound_stil(metrics: dict[str, Any], nu: datetime) -> Bevinding | None:
         titel="NorthSea: er komt geen mail meer binnen",
         detail=(
             f"{sinds} 0 inkomende mails, tegen {uitgaand} uitgaande in {STIL_WEKEN} weken. "
-            "Antwoorden van kopers bereiken de desk niet. Controleer of de MX van "
-            "northseacommodity.com naar Resend wijst of dat Gmail trade@ doorstuurt."
+            "Antwoorden van kopers bereiken de desk niet: sinds Google Workspace (8 okt) "
+            "landt alle mail in Gmail. Laat Gmail trade@ en support@ ook afleveren op "
+            "het Resend-ontvangstadres (Google Admin > Gmail > Routing)."
         ),
     )
 

@@ -76,7 +76,7 @@ def test_6_november_alleen_de_mail_is_stil():
     assert voor_luka == ["inbound_stil"]
     assert codes(b)[-1] == "wachtrij"  # alleen info, en achteraan
     stil = next(x for x in b if x.code == "inbound_stil")
-    assert "2026-10-05" in stil.detail and "MX" in stil.detail
+    assert "2026-10-05" in stil.detail and "Routing" in stil.detail
 
 
 def test_lopende_week_telt_niet_mee():
