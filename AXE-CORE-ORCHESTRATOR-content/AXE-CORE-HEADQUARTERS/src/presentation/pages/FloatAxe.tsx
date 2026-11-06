@@ -102,6 +102,10 @@ async function dockTop(open: boolean) {
        menubalk begint — zie dock_notch_frame in src-tauri/src/lib.rs. */
     const ny = screenY;
     try {
+      /* Geen setAlwaysOnTop hierna. Die zet het venster op niveau 3, en
+         daarop klemt macOS de notch onder de menubalk — het niveau 25 dat
+         dock_notch_frame zet is al hoger dan "altijd bovenop". Zie de
+         notitie onderaan dock_notch_frame_inner in lib.rs. */
       await invoke('dock_notch_frame', { x: nx, y: ny, w: width, h: height });
     } catch {
       await w.setSize(new LogicalSize(width, height));
@@ -111,8 +115,8 @@ async function dockTop(open: boolean) {
         mon.position.x + (mon.size.width - physW) / 2,
         mon.position.y,
       ));
+      await w.setAlwaysOnTop(true);
     }
-    await w.setAlwaysOnTop(true);
   } catch { /* preview browser */ }
 }
 

@@ -67,7 +67,12 @@ export async function openZwevend(type: ZwevendType): Promise<void> {
   const bestaand = await WebviewWindow.getByLabel(o.label);
   if (bestaand) {
     await bestaand.show();
-    await bestaand.setFocus();
+    /* Niet voor de notch. Die komt ook vanzelf op (useNotchBijMinimaliseren),
+       en setFocus is in tao `activateIgnoringOtherApps` — dan springt je
+       toetsenbord weg uit wat je op je andere scherm aan het typen was. De
+       notch is een strook om naar te kijken; klik je erin, dan krijgt hij de
+       focus vanzelf. */
+    if (type !== 'axe') await bestaand.setFocus();
     return;
   }
   const opgeslagen = leesFrame(type);
@@ -114,7 +119,12 @@ export async function openZwevend(type: ZwevendType): Promise<void> {
     minHeight: o.minH,
     decorations: false,
     transparent: true,
-    alwaysOnTop: true,
+    /* De notch niet: tao zet "altijd bovenop" asynchroon op niveau 3, en als
+       dat ná dock_notch_frame landt (niveau 25) klemt macOS hem weer onder de
+       menubalk. Het dokken zet zelf het juiste niveau. */
+    alwaysOnTop: type !== 'axe',
+    /* Verschijnen zonder het toetsenbord over te nemen. */
+    focus: type !== 'axe',
     visibleOnAllWorkspaces: true,
     resizable: type !== 'axe',
     /* Notch: OS-schaduw op een transparent rechthoek + CSS-radius = donkere

@@ -297,28 +297,21 @@ fn dock_notch_frame_inner(app: &tauri::AppHandle, x: f64, y: f64, w: f64, h: f64
             // gekozen scherm is bepalend, en die rekenen we hier zelf uit.
             let _ = y;
         }
-        let _ = win.set_always_on_top(true);
-        // Re-apply after set_always_on_top (Tauri can shift the frame).
-        unsafe {
-            use cocoa::base::{id, YES};
-            use cocoa::foundation::{NSPoint, NSRect, NSSize};
-            use objc::{msg_send, sel, sel_impl};
-            let ns_win = win.ns_window().map_err(|e| e.to_string())? as id;
-            macos_notch_window_shape(ns_win);
-            let screen: id = msg_send![ns_win, screen];
-            if !screen.is_null() {
-                let sf: NSRect = msg_send![screen, frame];
-                // Zelfde keuze als hierboven: frame, niet visibleFrame. Deze
-                // tweede plaatsing herstelt het kader na set_always_on_top; nam
-                // die de visibleFrame, dan zakte de notch alsnog terug onder de
-                // menubalk en was de eerste plaatsing voor niets.
-                let top_y = sf.origin.y + sf.size.height;
-                let cocoa_y = top_y - h;
-                let x_clamped = x.max(sf.origin.x).min(sf.origin.x + sf.size.width - w);
-                let frame = NSRect::new(NSPoint::new(x_clamped, cocoa_y), NSSize::new(w, h));
-                let _: () = msg_send![ns_win, setFrame: frame display: YES];
-            }
-        }
+        // Hier stond `win.set_always_on_top(true)` met daarna een tweede
+        // plaatsing. Dat was de reden dat de notch ná 0b5d25f8 nog steeds
+        // 30pt lager hing (gemeten op de iMac, 6 nov: y=30, laag 5).
+        //
+        // tao zet bij set_always_on_top het niveau op NSFloatingWindowLevel
+        // (3), en dat ASYNCHROON via de main queue -- het landt dus ná het
+        // niveau 25 hierboven. Op niveau 3 klemt macOS elk setFrame onder de
+        // menubalk; op 25 mag een randloos venster tegen de bovenrand. Zelf
+        // gemeten met een kaal NSWindow: borderless L25 → top 1440, dezelfde
+        // setFrame op L3 → 1410. De tweede plaatsing die het moest herstellen
+        // gebeurde dus precies op het niveau waarop het niet kan.
+        //
+        // Niveau 25 is al "altijd bovenop" (hoger dan floating), dus de
+        // aanroep was ook overbodig. Nooit meer set_always_on_top op dit
+        // venster, ook niet vanuit JS (FloatAxe.tsx).
         return Ok(());
     }
     #[cfg(not(target_os = "macos"))]
@@ -516,6 +509,41 @@ fn worker_dienst_herstart(id: String) -> Result<String, String> {
     launchd::kickstart(&id)
 }
 
+/// Hoofdvenster tonen zonder de focus te pakken -- voor alles wat AXE uit
+/// zichzelf doet (klap, wekwoord, een melding), niet voor een klik van Luka.
+///
+/// `show_main_window` hierboven doet `set_focus()`, en dat is in tao
+/// `activateIgnoringOtherApps`: het toetsenbord springt naar AXE, waar je ook
+/// zat. Op de Mac mini met het tweede scherm betekende dat: halverwege een
+/// zin op dat scherm sta je ineens in AXE op het hoofdscherm (Luka, 6 nov).
+/// Eerst opruimen wat stil kan; wie dan nog focus pakt, staat in focus.log.
+#[cfg(desktop)]
+#[tauri::command]
+fn toon_hoofdvenster_stil(app: tauri::AppHandle) {
+    toon_sneltoets_venster(&app);
+}
+
+/// Schrijft één regel naar ~/.axe/focus.log als een AXE-venster de focus
+/// krijgt. Geen gedrag, alleen bewijs: "hij pakt steeds het hoofdscherm" is
+/// op de Mac mini niet na te spelen vanaf de iMac, en met dit log staat er
+/// zwart op wit welk venster het was en wanneer. Blijft onder de 256 kB.
+#[cfg(desktop)]
+fn log_focus(label: &str) {
+    use std::io::Write;
+    let Some(home) = std::env::var_os("HOME") else { return };
+    let pad = PathBuf::from(home).join(".axe").join("focus.log");
+    if fs::metadata(&pad).map(|m| m.len() > 256 * 1024).unwrap_or(false) {
+        let _ = fs::rename(&pad, pad.with_extension("log.1"));
+    }
+    let nu = std::time::SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(&pad) {
+        let _ = writeln!(f, "{nu} focus {label}");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -534,6 +562,7 @@ pub fn run() {
         ensure_vault_dir,
         list_vault_files,
         show_main_window,
+        toon_hoofdvenster_stil,
         consume_overlay_open_route,
         platform_info,
             dock_notch_frame,
@@ -569,6 +598,13 @@ pub fn run() {
     // dicht of achter een ander programma zit. De webview beslist wat er
     // gemeld wordt (src/domain/systeemMelding.ts), deze plugin toont het.
     let builder = builder.plugin(tauri_plugin_notification::init());
+
+    #[cfg(desktop)]
+    let builder = builder.on_window_event(|window, event| {
+        if let WindowEvent::Focused(true) = event {
+            log_focus(window.label());
+        }
+    });
 
     builder
         .plugin(gesture_lock::plugin())
