@@ -41,8 +41,10 @@ class FakeDb(_BasisDb):
 
 NU = datetime(2026, 11, 6, 9, 30, tzinfo=timezone.utc)
 
+# Planner liep om 09:30 echt (core_job_runs van 6 nov).
 HEALTH_OK = {"database": {"reachable": True},
-             "scheduler": {"enabled": True, "last_status": "ok", "consecutive_failures": 0}}
+             "scheduler": {"enabled": True, "last_status": "ok", "consecutive_failures": 0,
+                           "last_run_at": "2026-11-06T09:30:32+00:00"}}
 
 # Letterlijk de weekcijfers van 6 nov (northsea_get_communications_metrics).
 METRICS_6NOV = {"by_week": {
@@ -66,10 +68,12 @@ def codes(b):
     return [x.code for x in b]
 
 
-def test_6_november_geeft_beide_stilstanden_voor_luka():
+def test_6_november_alleen_de_mail_is_stil():
+    # Het auditlog zegt "laatste tick 29 okt" (afgekapt), de planner liep om 09:30:
+    # dat mag GEEN valse "motor draait niet" geven.
     b = nb.beoordeel(HEALTH_OK, OPS_6NOV, METRICS_6NOV, NU)
     voor_luka = [x.code for x in b if x.voor == "luka"]
-    assert set(voor_luka) == {"motor_stil", "inbound_stil"}
+    assert voor_luka == ["inbound_stil"]
     assert codes(b)[-1] == "wachtrij"  # alleen info, en achteraan
     stil = next(x for x in b if x.code == "inbound_stil")
     assert "2026-10-05" in stil.detail and "MX" in stil.detail
@@ -90,9 +94,9 @@ def test_rustige_markt_is_geen_storing():
     assert "inbound_stil" not in codes(nb.beoordeel(HEALTH_OK, {}, m, NU))
 
 
-def test_verse_tick_is_geen_stilstand():
-    ops = dict(OPS_6NOV, recently_completed=[{"action": "engine_tick", "at": "2026-11-06T09:15:00+00:00"}])
-    assert "motor_stil" not in codes(nb.beoordeel(HEALTH_OK, ops, {}, NU))
+def test_planner_twee_uur_stil_is_wel_stilstand():
+    h = dict(HEALTH_OK, scheduler=dict(HEALTH_OK["scheduler"], last_run_at="2026-11-06T07:00:00+00:00"))
+    assert "motor_stil" in codes(nb.beoordeel(h, OPS_6NOV, {}, NU))
 
 
 def test_planner_en_database_fouten():
@@ -111,10 +115,10 @@ def test_manager_vraagt_luka_en_stuurt_melding():
     db = FakeDb()
     uit = gm.run_northseamgr(db, NU, ophaler=_ophaler(HEALTH_OK, OPS_6NOV, METRICS_6NOV))
     assert uit["gelezen"] is True
-    assert set(uit["voor_luka"]) == {"motor_stil", "inbound_stil"}
+    assert uit["voor_luka"] == ["inbound_stil"]
     titels = [r.get("title") for r in db.rows("core_approvals")]
     assert "NorthSea: er komt geen mail meer binnen" in titels
-    assert "NorthSea: de motor tikt niet" in titels
+    assert not any("motor" in (t or "") for t in titels)
     meldingen = [r.get("message", "") for r in db.rows("core_notifications")]
     assert any(m.startswith("NorthSea: er komt geen mail meer binnen") for m in meldingen)
     assert any(m.startswith("NorthSea vandaag 06-11") for m in meldingen)
@@ -127,7 +131,7 @@ def test_tweede_pulse_vraagt_niet_opnieuw():
     gm.run_northseamgr(db, NU, ophaler=o)
     gm.run_northseamgr(db, NU, ophaler=o)
     titels = [r.get("title") for r in db.rows("core_approvals")]
-    assert titels.count("NorthSea: de motor tikt niet") == 1
+    assert titels.count("NorthSea: er komt geen mail meer binnen") == 1
 
 
 def test_kan_hij_niet_lezen_dan_zegt_hij_dat():

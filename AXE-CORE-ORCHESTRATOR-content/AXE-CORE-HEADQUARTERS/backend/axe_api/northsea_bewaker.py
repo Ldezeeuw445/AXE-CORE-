@@ -85,25 +85,28 @@ def _inbound_stil(metrics: dict[str, Any], nu: datetime) -> Bevinding | None:
     )
 
 
-def _motor_stil(ops: dict[str, Any], nu: datetime) -> Bevinding | None:
-    ticks = [_tijd(r.get("at")) for r in (ops.get("recently_completed") or [])
-             if isinstance(r, dict) and r.get("action") == "engine_tick"]
-    ticks = [t for t in ticks if t]
-    planner = ops.get("next_scheduled") or {}
-    if not planner.get("enabled"):
+def _motor_stil(health: dict[str, Any], nu: datetime) -> Bevinding | None:
+    """Stilstand = de planner heeft de motor al twee uur niet gedraaid.
+
+    Hier stond de laatste `engine_tick` uit live operations. Die leest het
+    auditlog afgekapt in (health meldt `northsea_audit_events` als truncated)
+    en gaf op 6 nov "29 oktober", terwijl core_job_runs elk kwartier een echte
+    run met werk erin liet zien. Het eerste pulse na de uitrol zou Luka dus een
+    valse "motor tikt niet" hebben gestuurd. De run-tijd van de planner is de
+    meting die klopt.
+    """
+    s = health.get("scheduler") or {}
+    if not s.get("enabled"):
         return None
-    laatste = max(ticks) if ticks else None
+    laatste = _tijd(s.get("last_run_at"))
     if laatste and nu - laatste < MOTOR_STIL_NA:
         return None
-    wanneer = laatste.strftime("%d-%m %H:%M UTC") if laatste else "nergens in het log"
+    wanneer = laatste.strftime("%d-%m %H:%M UTC") if laatste else "onbekend"
     return Bevinding(
         code="motor_stil",
         voor="luka",
-        titel="NorthSea: de motor tikt niet",
-        detail=(
-            f"De planner meldt '{planner.get('last_status') or '?'}', maar de laatste engine-tick is {wanneer}. "
-            "Follow-ups, chase en onderzoek lopen dan niet. Kijk naar /internal/engine/tick op de VPS (:8040)."
-        ),
+        titel="NorthSea: de motor draait niet",
+        detail=f"De laatste run van de NorthSea-motor was {wanneer}; hij hoort elk kwartier te draaien.",
     )
 
 
@@ -150,7 +153,7 @@ def beoordeel(health: dict[str, Any], ops: dict[str, Any], metrics: dict[str, An
     uit = [b for b in (
         _database(health),
         _planner_fout(health),
-        _motor_stil(ops, nu),
+        _motor_stil(health, nu),
         _inbound_stil(metrics, nu),
         _wachtrij(ops),
     ) if b]
