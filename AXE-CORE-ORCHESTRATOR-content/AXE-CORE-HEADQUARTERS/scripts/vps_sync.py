@@ -138,6 +138,7 @@ MANIFEST = {
     # action_type "staande" en bij elke /cron/tick (zorg_voor_roosters).
     "/opt/axe-core-api/staande_diensten.py": ("backend/axe_api/staande_diensten.py", "axe-core-api"),
     "/opt/axe-core-api/grok_managers.py": ("backend/axe_api/grok_managers.py", "axe-core-api"),
+    "/opt/axe-core-api/northsea_bewaker.py": ("backend/axe_api/northsea_bewaker.py", "axe-core-api"),
     # 28 okt: de developer-DAX bouwt zoals Grok Bot (task_worker + staande_diensten).
     "/opt/axe-core-api/dax_bouw.py": ("backend/axe_api/dax_bouw.py", "axe-core-api"),
     # Android-poller (#245): main.py mount device_notify (GET /device/notifications).
@@ -223,6 +224,7 @@ WORKER_IMPORTS = {
     "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "grok_managers.py", "taak_fout.py", "gezondheid.py", "memory_schrijfhek.py", "geheimen.py", "device_notify.py", "modelbox.py"),
     "memory_schrijfhek.py": ("geheimen.py",),
     "staande_diensten.py": ("grok_managers.py", "dax_bouw.py"),
+    "grok_managers.py": ("northsea_bewaker.py", "goedkeuring_melding.py", "northsea_gateway.py"),
 }
 
 IN_SYNC, REPO_AHEAD, BOX_DRIFT, MISSING = "IN SYNC", "REPO AHEAD", "BOX DRIFT", "MISSING"

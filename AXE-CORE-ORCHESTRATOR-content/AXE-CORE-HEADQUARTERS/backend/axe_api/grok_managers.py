@@ -223,6 +223,15 @@ def _vraag_luka(db: Any, agent: str, wat: str, waarom: str) -> None:
         "requested_by": agent,
         "metadata": {"agent": agent, "manager": True},
     })
+    # Zonder deze regel stond de vraag alleen in de app: een manager die Luka
+    # nodig heeft maar hem niet bereikt, is een manager die wacht. De push gaat
+    # via core_notifications -> /cron/tick, met dezelfde 24-uurs ontdubbeling
+    # als elke andere goedkeuringsvraag.
+    try:
+        from goedkeuring_melding import schrijf_goedkeuring_melding
+        schrijf_goedkeuring_melding(db, wat, waarom)
+    except Exception:  # noqa: BLE001 -- de approval-rij is de bron; de bel is extra
+        pass
 
 
 def run_axemanager(db: Any, nu: datetime) -> dict[str, Any]:
@@ -330,19 +339,61 @@ def run_tradingos(db: Any, nu: datetime) -> dict[str, Any]:
     }
 
 
-def run_northseamgr(db: Any, nu: datetime) -> dict[str, Any]:
-    pending = _rijen(db, "core_approvals", "id,title,kind,status", status="pending")
-    desk = [t for t in _rijen(db, "core_tasks", "id,status,capability,title")
-            if t.get("capability") == "northsea_desk"]
-    stuur_bericht(
-        db, "northseamgr", BAAS, "report",
-        f"NorthSea: first deal remains the priority. {len(pending)} OK-vragen. No send, auto_send_* untouched.",
-    )
+# Eén keer per dag een overzicht, bij de eerste pulse na dit uur (Amsterdam).
+DAGOVERZICHT_UUR = 8
+
+
+def _dagoverzicht_tijd(nu: datetime) -> bool:
+    try:
+        from zoneinfo import ZoneInfo
+        lokaal = nu.astimezone(ZoneInfo("Europe/Amsterdam"))
+    except Exception:  # noqa: BLE001
+        lokaal = nu
+    return lokaal.hour >= DAGOVERZICHT_UUR
+
+
+def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any]:
+    """NorthSea-eigenaar: kijkt in de échte NorthSea-database, niet in AXE's eigen tabellen.
+
+    Wat Luka moet doen wordt een vraag (approval + push). De rest komt één keer
+    per dag in een overzicht. Niets versturen, niets goedkeuren, geen vlaggen.
+    """
+    import northsea_bewaker as bewaker
+    try:
+        health, ops, metrics = bewaker.haal(ophaler)
+    except Exception as exc:  # noqa: BLE001
+        # Niet stil zijn als hij niet kan kijken: dat was precies het probleem.
+        stuur_bericht(db, "northseamgr", BAAS, "report",
+                      f"NorthSea: kan de desk niet lezen ({str(exc)[:160]}).")
+        return {"job": "northsea desk owner", "priority": "first deal", "gelezen": False, "fout": str(exc)[:300],
+                "sent": 0, "flags": "untouched"}
+
+    bevindingen = bewaker.beoordeel(health, ops, metrics, nu)
+    voor_luka = [b for b in bevindingen if b.voor == "luka"]
+    for b in voor_luka:
+        _vraag_luka(db, "northseamgr", b.titel, b.detail)
+
+    overzicht = False
+    if _dagoverzicht_tijd(nu):
+        try:
+            from goedkeuring_melding import schrijf_goedkeuring_melding
+            regels = [f"{b.titel}. {b.detail}".strip() for b in bevindingen][:5]
+            kop = f"NorthSea vandaag {nu.strftime('%d-%m')}"
+            # Zelfde kop binnen 24 uur = geen tweede (ontdubbeling in de melding).
+            overzicht = schrijf_goedkeuring_melding(
+                db, kop, " | ".join(regels) or "Niets dat op jou wacht.") is not None
+        except Exception:  # noqa: BLE001
+            overzicht = False
+
+    samenvatting = "; ".join(b.titel for b in bevindingen) or "desk loopt, niets voor Luka"
+    stuur_bericht(db, "northseamgr", BAAS, "report", f"NorthSea: {samenvatting}.")
     return {
         "job": "northsea desk owner",
         "priority": "first deal",
-        "pending_ok": len(pending),
-        "desk_tasks": len(desk),
+        "gelezen": True,
+        "voor_luka": [b.code for b in voor_luka],
+        "bevindingen": [b.code for b in bevindingen],
+        "dagoverzicht": overzicht,
         "sent": 0,
         "flags": "untouched",
     }
