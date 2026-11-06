@@ -118,6 +118,11 @@ def test_manager_vraagt_luka_en_stuurt_melding():
     assert uit["voor_luka"] == ["inbound_stil"]
     titels = [r.get("title") for r in db.rows("core_approvals")]
     assert "NorthSea: er komt geen mail meer binnen" in titels
+    # core_approvals heeft geen kolommen wat/waarom; daarop faalde de insert
+    # sinds 27 okt stil. Alleen echte kolommen, en gekoppeld aan een taak.
+    kaart = db.rows("core_approvals")[0]
+    assert not {"wat", "waarom"} & set(kaart)
+    assert kaart["kind"] == "manager_ask" and kaart["task_id"]
     assert not any("motor" in (t or "") for t in titels)
     meldingen = [r.get("message", "") for r in db.rows("core_notifications")]
     assert any(m.startswith("NorthSea: er komt geen mail meer binnen") for m in meldingen)

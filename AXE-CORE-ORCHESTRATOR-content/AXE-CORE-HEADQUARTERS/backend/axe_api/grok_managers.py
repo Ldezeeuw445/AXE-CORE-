@@ -212,26 +212,19 @@ def _vraag_luka(db: Any, agent: str, wat: str, waarom: str) -> None:
         "goal": waarom,
     })
     taak_id = (taak or {}).get("id")
-    _schrijf(db, "core_approvals", {
-        "task_id": taak_id,
-        "status": "pending",
-        "kind": "manager_ask",
-        "title": wat,
-        "detail": waarom,
-        "wat": wat,
-        "waarom": waarom,
-        "requested_by": agent,
-        "metadata": {"agent": agent, "manager": True},
-    })
-    # Zonder deze regel stond de vraag alleen in de app: een manager die Luka
-    # nodig heeft maar hem niet bereikt, is een manager die wacht. De push gaat
-    # via core_notifications -> /cron/tick, met dezelfde 24-uurs ontdubbeling
-    # als elke andere goedkeuringsvraag.
-    try:
-        from goedkeuring_melding import schrijf_goedkeuring_melding
-        schrijf_goedkeuring_melding(db, wat, waarom)
-    except Exception:  # noqa: BLE001 -- de approval-rij is de bron; de bel is extra
-        pass
+    # Via de ene helper die de planner en de crews ook gebruiken. Hier stond
+    # een eigen insert met de kolommen `wat` en `waarom`, die core_approvals
+    # niet heeft: de insert faalde stil (_schrijf slikt fouten), dus sinds
+    # 27 okt heeft geen manager ooit een kaart bij Luka kunnen neerleggen.
+    # Gevonden 6 nov: de NorthSea-melding kwam wel, de kaart niet.
+    if not taak_id:
+        return
+    from goedkeuring_melding import vraag_luka
+    vraag_luka(
+        db, taak_id,
+        titel=wat, detail=waarom, kind="manager_ask",
+        requested_by=agent, metadata={"agent": agent, "manager": True},
+    )
 
 
 def run_axemanager(db: Any, nu: datetime) -> dict[str, Any]:
