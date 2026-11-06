@@ -438,3 +438,34 @@ html[data-axe-notch] {
 /* NOTCH_SHELL_FIXED
  * Eén kleur: HQ --axe-surface. Geen :root[data-look] chrome op de notch.
  */
+
+/* ── Het handvat: de notch ingeklapt ───────────────────────────────────────
+ * Het hele venster is de knop (180x16), tegen de bovenrand; klik = strook
+ * terug. Zelfde plaat als de strook, zodat het hetzelfde ding is, alleen
+ * kleiner. Het streepje erin is wat je ziet: wit met lage dekking, geen kleur.
+ */
+.axe-ov__handvat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0 0 9px 9px;
+  background: rgba(10, 10, 10, 0.72);
+  -webkit-backdrop-filter: blur(22px) saturate(130%);
+  backdrop-filter: blur(22px) saturate(130%);
+  cursor: pointer;
+}
+.axe-ov__handvat > span {
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.55);
+  transition: width 0.15s ease, background 0.15s ease;
+}
+.axe-ov__handvat:hover > span,
+.axe-ov__handvat:focus-visible > span { width: 64px; background: rgba(255, 255, 255, 0.85); }
+@media (prefers-reduced-motion: reduce) { .axe-ov__handvat > span { transition: none; } }

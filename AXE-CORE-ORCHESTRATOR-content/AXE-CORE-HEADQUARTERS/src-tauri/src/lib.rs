@@ -293,6 +293,26 @@ fn dock_notch_frame_inner(app: &tauri::AppHandle, x: f64, y: f64, w: f64, h: f64
             let x_clamped = x.max(sf.origin.x).min(sf.origin.x + sf.size.width - w);
             let frame = NSRect::new(NSPoint::new(x_clamped, cocoa_y), NSSize::new(w, h));
             let _: () = msg_send![ns_win, setFrame: frame display: YES];
+            // Wat macOS er echt van maakte, naar ~/.axe/notch.log. Op de Mac
+            // mini hing hij op 6 nov nog lager terwijl de iMac al op y=0
+            // stond, en daar kan niemand vanaf de iMac meten. Met deze regel
+            // staat er zwart op wit of macOS hem klemde (top < schermtop) of
+            // dat hij op het verkeerde scherm landde.
+            let echt: NSRect = msg_send![ns_win, frame];
+            let niveau: i64 = msg_send![ns_win, level];
+            #[cfg(desktop)]
+            log_regel(
+                "notch.log",
+                &format!(
+                    "scherm_top={} venster_top={} x={} b={} h={} niveau={}",
+                    top_y,
+                    echt.origin.y + echt.size.height,
+                    echt.origin.x,
+                    echt.size.width,
+                    echt.size.height,
+                    niveau
+                ),
+            );
             // De y van de aanroeper blijft ongebruikt: de bovenrand van het
             // gekozen scherm is bepalend, en die rekenen we hier zelf uit.
             let _ = y;
@@ -529,9 +549,15 @@ fn toon_hoofdvenster_stil(app: tauri::AppHandle) {
 /// zwart op wit welk venster het was en wanneer. Blijft onder de 256 kB.
 #[cfg(desktop)]
 fn log_focus(label: &str) {
+    log_regel("focus.log", &format!("focus {label}"));
+}
+
+/// Eén regel met tijdstempel in ~/.axe/<naam>, onder de 256 kB.
+#[cfg(desktop)]
+fn log_regel(naam: &str, regel: &str) {
     use std::io::Write;
     let Some(home) = std::env::var_os("HOME") else { return };
-    let pad = PathBuf::from(home).join(".axe").join("focus.log");
+    let pad = PathBuf::from(home).join(".axe").join(naam);
     if fs::metadata(&pad).map(|m| m.len() > 256 * 1024).unwrap_or(false) {
         let _ = fs::rename(&pad, pad.with_extension("log.1"));
     }
@@ -540,7 +566,7 @@ fn log_focus(label: &str) {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(&pad) {
-        let _ = writeln!(f, "{nu} focus {label}");
+        let _ = writeln!(f, "{nu} {regel}");
     }
 }
 

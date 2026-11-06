@@ -11,7 +11,7 @@
  * volgende openen teruggezet -- ook op het tweede scherm.
  */
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
-import { NOTCH_HOOGTE, NOTCH_MIN_BREEDTE, notchMaten } from '@/domain/overlay/notchMaten';
+import { HANDVAT_BREEDTE, HANDVAT_HOOGTE, NOTCH_HOOGTE, NOTCH_MIN_BREEDTE, notchMaten } from '@/domain/overlay/notchMaten';
 
 export type ZwevendType = 'notes' | 'phone' | 'axe';
 
@@ -115,8 +115,10 @@ export async function openZwevend(type: ZwevendType): Promise<void> {
     title: o.titel,
     width: type === 'axe' ? axeW : (opgeslagen?.b ?? o.b),
     height: type === 'axe' ? axeH : (opgeslagen?.h ?? o.h),
-    minWidth: o.minB,
-    minHeight: o.minH,
+    /* De notch mag kleiner dan zijn strook: ingeklapt is hij een handvat van
+       180x16, en met de strook-minimum (900x80) zou macOS dat weigeren. */
+    minWidth: type === 'axe' ? HANDVAT_BREEDTE : o.minB,
+    minHeight: type === 'axe' ? HANDVAT_HOOGTE : o.minH,
     decorations: false,
     transparent: true,
     /* De notch niet: tao zet "altijd bovenop" asynchroon op niveau 3, en als

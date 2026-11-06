@@ -81,3 +81,24 @@ describe('AXE pakt de focus niet uit zichzelf', () => {
     expect(rust).toMatch(/generate_handler!\[[\s\S]*toon_hoofdvenster_stil/);
   });
 });
+
+describe('de notch klapt in tot een handvat (Luka, 6 nov)', () => {
+  it('het handvat heeft eigen, kleine maten binnen de menubalk', async () => {
+    const { HANDVAT_BREEDTE, HANDVAT_HOOGTE } = await import('@/domain/overlay/notchMaten');
+    expect(HANDVAT_HOOGTE).toBeLessThanOrEqual(24);
+    expect(HANDVAT_BREEDTE).toBeGreaterThanOrEqual(120);
+  });
+
+  it('dockTop gebruikt die maten als hij ingeklapt is', () => {
+    const dock = floatAxe.slice(floatAxe.indexOf('async function dockTop'));
+    expect(dock).toMatch(/handvat \? HANDVAT_HOOGTE/);
+    expect(dock).toMatch(/handvat \? HANDVAT_BREEDTE/);
+  });
+
+  it('de strook heeft een inklapknop en FloatAxe toont dan alleen het handvat', () => {
+    const notch = lees('AxeOverlayNotch.tsx');
+    expect(notch).toContain('onInklappen');
+    expect(floatAxe).toContain('onInklappen={() => kiesHandvat(true)}');
+    expect(floatAxe).toContain('axe-ov__handvat');
+  });
+});

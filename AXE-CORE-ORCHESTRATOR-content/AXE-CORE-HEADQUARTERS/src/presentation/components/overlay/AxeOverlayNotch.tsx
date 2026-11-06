@@ -5,7 +5,7 @@
  * Icons are wired; body always fills the window when open (no empty glass).
  */
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
-import { Home, MessageSquare, Plus, Settings, Volume2, Paperclip, X } from 'lucide-react';
+import { ChevronUp, Home, MessageSquare, Plus, Settings, Volume2, Paperclip, X } from 'lucide-react';
 import { aiProxyUrl, vpsAuthHeaders, isTauriRuntime, VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 import {
   listPendingApprovals,
@@ -120,10 +120,13 @@ export function AxeOverlayNotch({
   onHome,
   onSend,
   onOpenChange,
+  onInklappen,
 }: {
   onHome?: () => void;
   onSend?: (text: string) => void;
   onOpenChange?: (open: boolean) => void;
+  /** Klapt de notch in tot alleen een handvat. Zonder deze prop geen knop. */
+  onInklappen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('chat');
@@ -506,6 +509,20 @@ export function AxeOverlayNotch({
       >
         <Volume2 size={15} strokeWidth={1.7} />
       </button>
+      {onInklappen && (
+        <button
+          type="button"
+          className="axe-ov__ico"
+          aria-label="Collapse to handle"
+          title="Inklappen"
+          onClick={() => {
+            set(false);
+            onInklappen();
+          }}
+        >
+          <ChevronUp size={15} strokeWidth={1.7} />
+        </button>
+      )}
     </>
   );
 

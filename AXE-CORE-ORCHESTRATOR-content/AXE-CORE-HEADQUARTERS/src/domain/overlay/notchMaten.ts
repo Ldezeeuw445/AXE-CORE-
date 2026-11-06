@@ -23,6 +23,15 @@
 /** Hoogte van de ingeklapte strook. De CSS is hierop getekend bij schaal 1. */
 export const NOTCH_HOOGTE = 80;
 
+/**
+ * Het handvat: wat er van de notch over is als je hem inklapt (Luka, 6 nov:
+ * "goed in kunnen klappen en er alleen een handle is dan"). Breed genoeg om
+ * zonder te mikken te raken, laag genoeg om binnen de menubalk (24-30pt) te
+ * blijven en niets af te dekken.
+ */
+export const HANDVAT_BREEDTE = 180;
+export const HANDVAT_HOOGTE = 16;
+
 /** Smaller dan dit lopen de knoppen links en rechts op elkaar. */
 export const NOTCH_MIN_BREEDTE = 900;
 

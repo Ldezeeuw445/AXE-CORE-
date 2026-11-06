@@ -1,8 +1,8 @@
 /** Always-on floating AXE notch — Mochi-style, flush top of main display. */
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AxeOverlayNotch } from '@/presentation/components/overlay/AxeOverlayNotch';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
-import { notchMaten, type NotchMaten } from '@/domain/overlay/notchMaten';
+import { HANDVAT_BREEDTE, HANDVAT_HOOGTE, notchMaten, type NotchMaten } from '@/domain/overlay/notchMaten';
 
 /**
  * De maten komen uit `domain/overlay/notchMaten`, niet uit dit bestand.
@@ -72,6 +72,16 @@ async function readMetrics(): Promise<NotchMaten> {
  * nog steeds op je eerste. Deze kant is nu goed; die Rust-regel moet mee, en
  * gaat in een eigen commit omdat een Tauri-build hier niet te verifiëren is.
  */
+/** Ingeklapt tot handvat: onthouden over herstarts, per Mac. */
+const HANDVAT_SLEUTEL = 'axe_notch_handvat';
+function leesHandvat(): boolean {
+  try { return localStorage.getItem(HANDVAT_SLEUTEL) === '1'; } catch { return false; }
+}
+function bewaarHandvat(aan: boolean) {
+  try { localStorage.setItem(HANDVAT_SLEUTEL, aan ? '1' : '0'); } catch { /* alleen niet onthouden */ }
+}
+let handvat = leesHandvat();
+
 async function dockTop(open: boolean) {
   if (!isTauriRuntime()) return;
   try {
@@ -80,8 +90,8 @@ async function dockTop(open: boolean) {
     const { invoke } = await import('@tauri-apps/api/core');
     const m = await readMetrics();
     const w = getCurrentWindow();
-    const height = open ? m.uitklapH : m.inklapH;
-    const width = m.b;
+    const height = handvat ? HANDVAT_HOOGTE : open ? m.uitklapH : m.inklapH;
+    const width = handvat ? HANDVAT_BREEDTE : m.b;
     const mon = await huidigeMonitor();
     if (!mon) {
       await w.setSize(new LogicalSize(width, height));
@@ -145,7 +155,13 @@ function useOverlayCmdBridge() {
           const cmd = line.trim();
           if (!cmd) continue;
           if (cmd === 'collapse') void dockTop(false);
-          else if (cmd === 'expand' || cmd === 'chat' || cmd === 'approvals') void dockTop(true);
+          else if (cmd === 'expand' || cmd === 'chat' || cmd === 'approvals') {
+            /* AXE wil iets laten zien: dan komt de strook terug uit het handvat. */
+            handvat = false;
+            bewaarHandvat(false);
+            window.dispatchEvent(new CustomEvent('axe-notch-handvat', { detail: false }));
+            void dockTop(true);
+          }
           window.dispatchEvent(new CustomEvent('axe-overlay-cmd', { detail: cmd }));
         }
       } catch { /* ignore */ }
@@ -211,11 +227,40 @@ export default function FloatAxe() {
     };
   }, []);
 
+  const [alleenHandvat, zetAlleenHandvat] = useState(handvat);
+  useEffect(() => {
+    const op = (e: Event) => zetAlleenHandvat(Boolean((e as CustomEvent<boolean>).detail));
+    window.addEventListener('axe-notch-handvat', op);
+    return () => window.removeEventListener('axe-notch-handvat', op);
+  }, []);
+  const kiesHandvat = (aan: boolean) => {
+    handvat = aan;
+    bewaarHandvat(aan);
+    openRef.current = false;
+    zetAlleenHandvat(aan);
+    void dockTop(false);
+  };
+
+  if (alleenHandvat) {
+    return (
+      <button
+        type="button"
+        className="axe-ov__handvat"
+        aria-label="Show AXE strip"
+        title="AXE"
+        onClick={() => kiesHandvat(false)}
+      >
+        <span aria-hidden="true" />
+      </button>
+    );
+  }
+
   return (
     <div style={{ padding: 0, background: 'transparent', height: '100vh', boxSizing: 'border-box' }}>
       <AxeOverlayNotch
         onHome={() => { openRef.current = false; void dockTop(false); }}
         onOpenChange={(open) => { openRef.current = open; void dockTop(open); }}
+        onInklappen={() => kiesHandvat(true)}
       />
     </div>
   );
