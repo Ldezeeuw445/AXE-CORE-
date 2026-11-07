@@ -306,6 +306,29 @@ def normalize_command(command: str) -> str:
     return " ".join(command.split())
 
 
+from northsea_gateway import AGENT_LEESACTIES as _NORTHSEA_LEESACTIES  # noqa: E402
+
+# Een desk-antwoord kan groot zijn (een hele draad); het model krijgt een kop.
+NORTHSEA_MAX_CHARS = 12000
+
+
+async def _northsea_lees(actie: str, params: Any) -> dict[str, Any]:
+    """Eén leesactie op de echte NorthSea-desk. Alleen de lijst hierboven; een
+    fout wordt een antwoord aan het model, geen crash van de lus."""
+    if actie not in _NORTHSEA_LEESACTIES:
+        return {"error": f"{actie!r} is not a NorthSea read action",
+                "allowed": list(_NORTHSEA_LEESACTIES)}
+    import northsea_gateway
+    try:
+        antwoord = await northsea_gateway.call_action(actie, params if isinstance(params, dict) else {})
+    except northsea_gateway.NorthSeaGatewayError as e:
+        return {"error": e.code, "message": e.message}
+    tekst = json.dumps(antwoord, default=str, ensure_ascii=False)
+    if len(tekst) > NORTHSEA_MAX_CHARS:
+        return {"truncated": True, "result_head": tekst[:NORTHSEA_MAX_CHARS]}
+    return antwoord if isinstance(antwoord, dict) else {"result": antwoord}
+
+
 TOOL_DECLARATIONS = [
     {
         "name": "run_shell",
@@ -384,6 +407,22 @@ TOOL_DECLARATIONS = [
                 "workspace": {"type": "string", "description": "AXE Core (default), AXE Companion or Trading OS"},
             },
             "required": ["device", "tool"],
+        },
+    },
+    {
+        "name": "northsea_read",
+        "description": (
+            "Read the live NorthSea desk (deals, blockers, mails and their thread, "
+            "what waits on Luka, health). Read-only: it can never send, approve or "
+            "change anything. Deals: DEAL-001, a UUID or '#idprefix'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": list(_NORTHSEA_LEESACTIES)},
+                "params": {"type": "object", "description": "e.g. {\"deal\": \"DEAL-002\"} or {\"communication\": \"<id>\"}"},
+            },
+            "required": ["action"],
         },
     },
     {
@@ -1589,6 +1628,11 @@ async def _lus(
                 await on_event("axe.progress", f"Step {step}: checking which Macs are online", {})
                 result = {"devices": await asyncio.to_thread(device_actions.list_devices)}
                 transcript.append({"step": step, "tool": "list_devices"})
+            elif name == "northsea_read":
+                result = await _northsea_lees(str(args.get("action") or ""), args.get("params"))
+                await on_event("axe.progress", f"Step {step}: NorthSea {args.get('action')}", {})
+                transcript.append({"step": step, "tool": "northsea_read", "action": args.get("action"),
+                                   "ok": "error" not in result})
             elif name == "run_crew":
                 ws = _HUIDIGE_AGENT_WS.get() or {}
                 specialists = args.get("specialists") if isinstance(args.get("specialists"), list) else crew_voor(ws)

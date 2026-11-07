@@ -21,6 +21,9 @@ class _Query(FakeQuery):
     def gt(self, _k, _v):
         return self
 
+    def gte(self, _k, _v):
+        return self
+
     def order(self, *_a, **_k):
         return self
 

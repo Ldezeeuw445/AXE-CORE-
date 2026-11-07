@@ -37,6 +37,11 @@ from typing import Any, Awaitable, Callable
 # dat er twintig oude mails tegelijk afgaan. De desk zelf heeft ze dan al.
 VENSTER = timedelta(hours=6)
 JOB = "northsea_mail"
+# Een belangrijke mail krijgt ook een leesbeurt van de NorthSea-manager in zijn
+# werklus (agent_loop, tool northsea_read): wat staat er, bij welke deal, wat
+# moet Luka beslissen. Gratis modellen, alleen lezen, hooguit zoveel per dag.
+ANALYSE_DOOR = "northsea-mailwachter"
+MAX_ANALYSES_PER_DAG = 8
 
 BELANGRIJK: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b(signed|countersigned|executed|ondertekend|getekend|signature)\b", re.I), "getekend document"),
@@ -133,17 +138,54 @@ def nieuwe(items: list[dict[str, Any]], nu: datetime) -> list[MailMelding]:
 Claim = Callable[[str, str], bool]
 
 
+def analyse_opdracht(m: MailMelding) -> str:
+    return (
+        f"A mail just reached the NorthSea desk (communication {m.communicatie_id}): {m.titel}. "
+        f"Why it matters: {m.reden}.\n"
+        "Use northsea_read: get_communication_thread for this communication, then the deal "
+        "(get_deal, get_deal_blockers) if it belongs to one, and list_pending_approvals for a "
+        "draft the desk already made. Do not research, send or approve anything.\n"
+        "Finish with three short Dutch lines for Luka: 1) wat er staat, 2) bij welke deal en "
+        "wat dat verandert, 3) wat hij nu moet beslissen of doen (of: niets). Prove it with "
+        "`echo` of the communication id you read."
+    )
+
+
+def zet_analyse_klaar(db: Any, m: MailMelding, nu: datetime) -> bool:
+    """Eén leestaak voor northseamgr. False als het dagbudget op is of de insert faalt."""
+    try:
+        vandaag = (db.table("core_tasks").select("id").eq("requested_by", ANALYSE_DOOR)
+                   .gte("created_at", nu.replace(hour=0, minute=0, second=0, microsecond=0).isoformat())
+                   .execute().data) or []
+        if len(vandaag) >= MAX_ANALYSES_PER_DAG:
+            return False
+        db.table("core_tasks").insert({
+            "title": f"Duiden: {m.titel}"[:120],
+            "goal": analyse_opdracht(m),
+            "status": "queued", "priority": "high", "source_app": "axe_core",
+            "requested_by": ANALYSE_DOOR, "capability": "agentic", "assignee": "northseamgr",
+            "execution_mode": "read",
+            "payload": {"crew": False, "free_models": True, "northsea_communication_id": m.communicatie_id},
+            "metadata": {"northsea_mail_analyse": True, "northsea_communication_id": m.communicatie_id},
+        }).execute()
+        return True
+    except Exception:  # noqa: BLE001 -- de melding zelf is al weg; dit is extra
+        return False
+
+
 def meld(db: Any, meldingen: list[MailMelding], claim: Claim) -> dict[str, int]:
     """Schrijf elke melding één keer. `claim` is de atomaire (job, sleutel)-claim
     uit main.py: bij meerdere uvicorn-workers meldt er precies één."""
     from goedkeuring_melding import LUKA_USER_ID, melding_voor_goedkeuring, vraag_luka
 
-    uit = {"nu": 0, "gewoon": 0, "al_gemeld": 0}
+    uit = {"nu": 0, "gewoon": 0, "al_gemeld": 0, "analyses": 0}
     for m in meldingen:
         if not claim(JOB, m.communicatie_id):
             uit["al_gemeld"] += 1
             continue
         if m.niveau == "nu":
+            if zet_analyse_klaar(db, m, datetime.now(timezone.utc)):
+                uit["analyses"] += 1
             taak = None
             try:
                 taak = (db.table("core_tasks").insert({

@@ -345,6 +345,46 @@ def _dagoverzicht_tijd(nu: datetime) -> bool:
     return lokaal.hour >= DAGOVERZICHT_UUR
 
 
+def meld_mailduidingen(db: Any) -> int:
+    """Afgeronde leesbeurten van de mailwachter (northsea_mailwachter.zet_analyse_klaar)
+    naar Luka: een bericht in het managersgesprek en een melding in de bel.
+
+    Een taak die klaar is maar nergens gemeld wordt, is voor Luka niet gebeurd.
+    Elke duiding één keer: daarna staat metadata.gemeld op True.
+    """
+    from northsea_mailwachter import ANALYSE_DOOR
+    try:
+        rijen = (db.table("core_tasks").select("id,title,result,metadata,status")
+                 .eq("requested_by", ANALYSE_DOOR).eq("status", "completed").execute().data) or []
+    except Exception:  # noqa: BLE001
+        return 0
+    gemeld = 0
+    for r in rijen:
+        meta = r.get("metadata") if isinstance(r.get("metadata"), dict) else {}
+        if meta.get("gemeld"):
+            continue
+        res = r.get("result") if isinstance(r.get("result"), dict) else {}
+        duiding = str(res.get("summary") or "").strip()
+        if not duiding:
+            continue
+        kop = str(r.get("title") or "NorthSea mail")[:120]
+        try:
+            stuur_bericht(db, "northseamgr", BAAS, "report", f"{kop}\n{duiding}")
+        except Verboden:
+            pass  # de tekst van een model mag de melding hieronder niet tegenhouden
+        try:
+            from goedkeuring_melding import LUKA_USER_ID, melding_voor_goedkeuring
+            db.table("core_notifications").insert({
+                "recipient": LUKA_USER_ID, "type": "info",
+                "message": melding_voor_goedkeuring(kop, duiding[:600]),
+            }).execute()
+            db.table("core_tasks").update({"metadata": {**meta, "gemeld": True}}).eq("id", r["id"]).execute()
+            gemeld += 1
+        except Exception:  # noqa: BLE001 -- volgende pulse opnieuw
+            continue
+    return gemeld
+
+
 def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any]:
     """NorthSea-eigenaar: kijkt in de échte NorthSea-database, niet in AXE's eigen tabellen.
 
@@ -352,6 +392,7 @@ def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any
     per dag in een overzicht. Niets versturen, niets goedkeuren, geen vlaggen.
     """
     import northsea_bewaker as bewaker
+    duidingen = meld_mailduidingen(db)
     try:
         health, ops, metrics = bewaker.haal(ophaler)
     except Exception as exc:  # noqa: BLE001
@@ -387,6 +428,7 @@ def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any
         "voor_luka": [b.code for b in voor_luka],
         "bevindingen": [b.code for b in bevindingen],
         "dagoverzicht": overzicht,
+        "mailduidingen": duidingen,
         "sent": 0,
         "flags": "untouched",
     }

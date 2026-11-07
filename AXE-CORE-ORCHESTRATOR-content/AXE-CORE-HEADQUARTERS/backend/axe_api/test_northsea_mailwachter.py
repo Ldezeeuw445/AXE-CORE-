@@ -87,7 +87,10 @@ def test_ronde_meldt_kaart_en_melding_en_nooit_twee_keer():
     db, claim = FakeDb(), _claim()
     o = _ophaler([GETEKEND, GEWOON, AFWEZIG, TEST])
     uit = asyncio.run(mw.ronde(db, claim, NU, o))
-    assert uit == {"nu": 1, "gewoon": 1, "al_gemeld": 0}
+    assert uit == {"nu": 1, "gewoon": 1, "al_gemeld": 0, "analyses": 1}
+    analyse = next(r for r in db.rows("core_tasks") if r.get("requested_by") == mw.ANALYSE_DOOR)
+    assert analyse["assignee"] == "northseamgr" and analyse["execution_mode"] == "read"
+    assert analyse["payload"]["free_models"] is True and "c1" in analyse["goal"]
     kaart = db.rows("core_approvals")[0]
     assert kaart["kind"] == "northsea_mail" and kaart["task_id"]
     assert kaart["metadata"]["northsea_communication_id"] == "c1"
@@ -96,7 +99,7 @@ def test_ronde_meldt_kaart_en_melding_en_nooit_twee_keer():
     assert any(b.startswith("NorthSea mail van Harcros - RE  NCNDA + FPA: Belangrijk") for b in berichten)
 
     tweede = asyncio.run(mw.ronde(db, claim, NU, o))
-    assert tweede == {"nu": 0, "gewoon": 0, "al_gemeld": 2}
+    assert tweede == {"nu": 0, "gewoon": 0, "al_gemeld": 2, "analyses": 0}
     assert len(db.rows("core_notifications")) == 2
 
 
@@ -104,3 +107,33 @@ def test_gateway_kent_de_leesactie_en_niets_schrijvends():
     import northsea_gateway as g
     spec = g.ACTIONS["list_recent_inbound"]
     assert spec.tool == "northsea_list_recent_inbound" and not spec.fixed
+
+
+def test_dagbudget_voor_duidingen():
+    db = FakeDb()
+    m = mw.beoordeel_mail(GETEKEND)
+    for _ in range(mw.MAX_ANALYSES_PER_DAG):
+        assert mw.zet_analyse_klaar(db, m, NU) is True
+    assert mw.zet_analyse_klaar(db, m, NU) is False
+
+
+def test_afgeronde_duiding_bereikt_luka_een_keer():
+    import grok_managers as gm
+    db = FakeDb()
+    db.table("core_tasks").insert({"requested_by": mw.ANALYSE_DOOR, "status": "completed",
+                                   "title": "Duiden: NorthSea mail van Harcros", "metadata": {},
+                                   "result": {"summary": "Harcros stuurde NCNDA getekend terug. DEAL-002. Jij: tekenen."}}).execute()
+    assert gm.meld_mailduidingen(db) == 1
+    assert any("NCNDA getekend" in r.get("message", "") for r in db.rows("core_notifications"))
+    assert any("NCNDA getekend" in (r.get("body") or "") for r in db.rows("core_manager_messages"))
+    assert gm.meld_mailduidingen(db) == 0
+
+
+def test_desk_agent_leest_alleen():
+    import northsea_gateway as g
+    from agent_workspace import AGENT_WORKSPACES
+    for a in ("northsea", "northseamgr"):
+        tools = AGENT_WORKSPACES[a]["tools"]
+        assert "northsea_read" in tools and "write_file" not in tools
+    for actie in g.AGENT_LEESACTIES:
+        assert not g.ACTIONS[actie].tool.startswith(("northsea_research", "northsea_prepare", "northsea_send", "northsea_approve"))
