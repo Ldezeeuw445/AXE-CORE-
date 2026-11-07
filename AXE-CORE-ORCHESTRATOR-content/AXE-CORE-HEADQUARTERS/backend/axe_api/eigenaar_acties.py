@@ -101,6 +101,16 @@ ACTIES = (
         "how": "Supabase SQL editor: update public.core_schedules set enabled = false "
                "where job_key = 'northsea:uitrol-inventaris';",
     },
+    {
+        "id": "northsea-gmail-routing",
+        "title": "NorthSea: buyer replies must reach the desk (Gmail routing, set up 6 Nov)",
+        "how": "1) Send a test mail from your own @gmail.com to trade@northseacommodity.com, subject "
+               "'Test desk - signed NCNDA attached'; within a minute it should ring here. "
+               "2) admin.google.com > Apps > Gmail > Routing: sign in again as support@, open "
+               "'NorthSea desk kopie support', set the route to 'Resend ontvangst NorthSea' "
+               "(deliver to support@northseacommodity.com) and save. Forgot the password: "
+               "'Forgot password?' on the sign-in screen.",
+    },
 )
 
 Meting = Callable[..., Awaitable[tuple[Optional[bool], str]]]
@@ -274,6 +284,27 @@ async def _inventaris_uit(client, supabase_url, key, env, nu):
     return not aan, "still enabled" if aan else "off"
 
 
+# Sinds 5 okt kwam er niets binnen (zie northsea_bewaker). Eén echte inbound mail
+# in een week bewijst dat Gmail de kopie weer bij Resend aflevert.
+NORTHSEA_INBOUND_VENSTER = timedelta(days=7)
+
+
+async def _northsea_inbound(client, supabase_url, key, env, nu):
+    url = (env.get("NORTHSEA_SUPABASE_URL") or "").strip().rstrip("/")
+    sk = (env.get("NORTHSEA_SUPABASE_SERVICE_ROLE") or "").strip()
+    if not url or not sk:
+        return None, "cannot measure here: no NORTHSEA_SUPABASE_URL on this host"
+    sinds = (nu - NORTHSEA_INBOUND_VENSTER).isoformat()
+    r = await client.get(url + "/rest/v1/communications", headers=_rest(sk, Prefer="count=exact", Range="0-0"),
+                         params={"select": "id", "direction": "eq.inbound", "channel": "eq.email",
+                                 "is_synthetic": "is.false", "occurred_at": f"gte.{sinds}"})
+    m = re.search(r"/(\d+)$", r.headers.get("content-range", ""))
+    if not r.is_success or not m:
+        return None, f"cannot measure: communications answered {r.status_code}"
+    n = int(m.group(1))
+    return n > 0, f"{n} inbound mails reached the desk in the last 7 days"
+
+
 METINGEN: dict[str, Meting] = {
     "build-loop-canon": _bouwlus_canon,
     "product-registry": _productregister,
@@ -283,6 +314,7 @@ METINGEN: dict[str, Meting] = {
     "vps-github-key": _vps_github,
     "phone-push": _push_abonnement,
     "northsea-inventory-job-off": _inventaris_uit,
+    "northsea-gmail-routing": _northsea_inbound,
 }
 
 

@@ -67,6 +67,10 @@ def wereld(gedaan: bool, lus_rijen: int | None = None, functions_live: bool | No
             return httpx.Response(200, json=[])
         if pad.endswith("/core_schedules"):
             return httpx.Response(200, json=[{"enabled": not gedaan}])
+        if pad.endswith("/communications"):
+            q = request.url.params
+            assert q["direction"] == "eq.inbound" and q["is_synthetic"] == "is.false"
+            return httpx.Response(206, headers={"content-range": f"0-0/{2 if gedaan else 0}"}, json=[])
         return httpx.Response(404)
 
     return handler, posts
@@ -179,7 +183,7 @@ def test_herinnering_pas_vanaf_acht_uur_en_een_keer_per_dag():
     assert ea.herinnering(stand, VOOR_ACHT, None) is None
     datum, tekst = ea.herinnering(stand, NA_ACHT, None)
     assert datum == "2026-10-17"
-    assert tekst.startswith("Owner actions: 8 open\n1. Build loop")
+    assert tekst.startswith("Owner actions: 9 open\n1. Build loop")
     assert "deploy.sh check" in tekst
     assert ea.herinnering(stand, NA_ACHT, "2026-10-17") is None
 
@@ -202,7 +206,7 @@ def test_herinner_schrijft_een_rij_per_dag_met_vast_id(tmp_path):
     assert len(posts) == 1
     rij = posts[0]
     assert rij["recipient"] == ea.USER_ID and rij["type"] == "warning"
-    assert rij["message"].startswith("Owner actions: 8 open")
+    assert rij["message"].startswith("Owner actions: 9 open")
     # Zelfde datum, zelfde id: een herhaalde poging na een timeout wordt geen tweede rij.
     assert rij["id"] == "%s" % ea.uuid.uuid5(ea.uuid.NAMESPACE_URL, "axe-eigenaar-acties/2026-10-17")
 
@@ -237,3 +241,12 @@ def test_de_github_sleutel_van_de_vps_wordt_gemeten_niet_aangenomen():
     assert done is False and "401" in gemeten
     handler, _ = wereld(gedaan=True)
     assert meting(handler, ea._vps_github)[0] is True
+
+
+def test_northsea_routing_is_pas_af_als_er_echte_mail_binnenkomt():
+    handler, _ = wereld(gedaan=False)
+    done, gemeten = meting(handler, ea._northsea_inbound)
+    assert done is False and "0 inbound" in gemeten
+    handler, _ = wereld(gedaan=True)
+    assert meting(handler, ea._northsea_inbound)[0] is True
+    assert meting(handler, ea._northsea_inbound, env={})[0] is None
