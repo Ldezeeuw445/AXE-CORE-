@@ -39,8 +39,15 @@ class FakeQuery:
         self.limit_n = n
         return self
 
+    def order(self, k, desc=False):
+        self.volgorde = (k, desc)
+        return self
+
     def execute(self):
         rows = self.db.setdefault(self.table, [])
+        if self.op == "select" and getattr(self, "volgorde", None):
+            k, desc = self.volgorde
+            rows = sorted(rows, key=lambda r: str(r.get(k) or ""), reverse=desc)
         if self.op in ("insert", "upsert"):
             row = {"id": f"{self.table}-{len(rows) + 1}", **self.body}
             rows.append(row)
@@ -139,6 +146,18 @@ def test_intel_plaatst_geen_orders():
     body = sd.run_intel(db, NU)
     assert body["orders"] == 0
     assert body["signals"]["bias"] == "bullish"
+
+
+def test_intel_meldt_een_oude_bias_niet_als_actueel():
+    """8 nov 2026: zonder sorteren kwam 7 juni boven, terwijl 31 aug de
+    nieuwste was; en ook die is te oud om 'actueel' te heten."""
+    db = FakeDb(intel_market_tide=[
+        {"bias": "bearish", "snapshot_time": "2026-06-07T10:48:33+00:00"},
+        {"bias": "bullish", "snapshot_time": "2026-08-31T19:55:00+00:00"},
+    ])
+    s = sd.run_intel(db, NU)["signals"]
+    assert s["bias"] is None and s["vers"] is False
+    assert s["at"].startswith("2026-08-31")
 
 
 def test_onbekende_agent_faalt_eerlijk():

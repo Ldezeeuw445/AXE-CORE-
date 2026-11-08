@@ -291,16 +291,25 @@ def run_apps(db: Any, nu: datetime) -> dict[str, Any]:
 
 def run_intel(db: Any, nu: datetime) -> dict[str, Any]:
     """Signalen met bron. Geen orders."""
-    tide = _rijen(db, "intel_market_tide", "bias,snapshot_time,call_put_ratio", limiet=3)
+    # Nieuwste eerst: zonder sorteren meldde dit op 8 nov een bias van 7 juni
+    # als actueel. Ouder dan een dag heet niet actueel (intel_bewaker.signaal).
+    import intel_bewaker as ib
+    try:
+        tide = (db.table("intel_market_tide").select("bias,snapshot_time,call_put_ratio")
+                .order("snapshot_time", desc=True).limit(1).execute().data) or []
+    except Exception:  # noqa: BLE001
+        tide = []
     opties = _rijen(db, "intel_unusual_options", "id,symbol", limiet=20)
     laatste = tide[0] if tide else {}
+    sig = ib.signaal(laatste, nu)
     return {
         "job": "market intelligence",
         "signals": {
             "options_seen": len(opties),
-            "bias": laatste.get("bias"),
-            "at": laatste.get("snapshot_time"),
-            "call_put_ratio": laatste.get("call_put_ratio"),
+            "bias": sig["bias"],
+            "at": sig["at"],
+            "vers": sig["vers"],
+            "call_put_ratio": laatste.get("call_put_ratio") if sig["vers"] else None,
         },
         "orders": 0,
     }

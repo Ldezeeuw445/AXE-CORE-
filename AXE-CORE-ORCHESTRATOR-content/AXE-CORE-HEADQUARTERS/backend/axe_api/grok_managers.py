@@ -438,16 +438,37 @@ def run_axon(db: Any, nu: datetime) -> dict[str, Any]:
     }
 
 
+def _nieuwste(db: Any, tabel: str, kolommen: str, kolom: str) -> dict[str, Any] | None:
+    """De nieuwste rij op `kolom`. Zonder sorteren gaf de database zomaar een rij."""
+    try:
+        rijen = (db.table(tabel).select(kolommen).order(kolom, desc=True).limit(1).execute().data) or []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("grok: %s onleesbaar (%s)", tabel, exc)
+        return None
+    return rijen[0] if rijen else None
+
+
 def run_tradingos(db: Any, nu: datetime) -> dict[str, Any]:
-    tide = _rijen(db, "intel_market_tide", "bias,snapshot_time", limiet=3)
-    stuur_bericht(
-        db, "tradingos", BAAS, "report",
-        f"Trading OS pulse. bias={(tide[0] or {}).get('bias') if tide else None}. orders=0.",
-    )
+    """Eigenaar van Trading OS (alleen lezen): zegt eerlijk hoe vers de data is.
+    Geen orders, geen advies; een oude bias heet niet actueel."""
+    import intel_bewaker as ib
+    tide = _nieuwste(db, "intel_market_tide", "bias,snapshot_time", "snapshot_time")
+    feeds = _rijen(db, "intel_sync_log", "feed_id,source,last_sync_at,rows_synced,last_error", limiet=100)
+    sig = ib.signaal(tide, nu)
+    bevindingen = ib.beoordeel(feeds, tide, nu)
+    overzicht = _dagoverzicht(db, nu, "Trading OS", bevindingen)
+    kop = f"bias {sig['bias']} ({sig['at']})" if sig["vers"] else "geen actueel signaal"
+    gerapporteerd = _rapporteer_bij_verandering(
+        db, "tradingos", f"Trading OS: {kop}; " + ("; ".join(b.titel for b in bevindingen) or "feeds vers")
+        + ". Orders: 0.")
     return {
         "job": "trading os owner",
         "repos": list(REPO_SCOPE["tradingos"]["repos"]),
-        "bias": (tide[0] or {}).get("bias") if tide else None,
+        "bias": sig["bias"],
+        "signaal_op": sig["at"],
+        "bevindingen": [b.code for b in bevindingen],
+        "dagoverzicht": overzicht,
+        "gerapporteerd": gerapporteerd,
         "orders": 0,
         "live": False,
     }

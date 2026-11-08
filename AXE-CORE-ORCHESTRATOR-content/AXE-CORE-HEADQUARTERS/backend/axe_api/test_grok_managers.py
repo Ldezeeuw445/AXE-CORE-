@@ -92,6 +92,24 @@ def test_tradingos_pulse_plaatst_geen_orders():
     assert body["live"] is False
 
 
+def test_tradingos_zegt_eerlijk_dat_de_feeds_stilstaan():
+    """De echte stand van 8 nov: alle feeds sinds 14 aug stil, twee nooit gedraaid."""
+    db = FakeDb(
+        intel_market_tide=[{"bias": "bearish", "snapshot_time": "2026-08-31T19:55:00+00:00"}],
+        intel_sync_log=[
+            {"feed_id": "marketTide", "source": "finnhub", "last_sync_at": "2026-08-14T23:39:37+00:00"},
+            {"feed_id": "energyFlows", "source": "eia", "last_sync_at": "2026-07-24T21:30:32+00:00"},
+            {"feed_id": "darkPool", "source": None, "last_sync_at": "2000-01-01T00:00:00+00:00"},
+        ],
+    )
+    body = gm.run_tradingos(db, NU)
+    assert body["bias"] is None and body["orders"] == 0
+    assert body["bevindingen"] == ["feeds_stil", "feeds_nooit", "signaal_oud"]
+    rapport = [r for r in db.db["core_manager_messages"] if r["from_agent"] == "tradingos"][0]["body"]
+    assert "geen actueel signaal" in rapport and "2 marktfeeds staan stil" in rapport
+    assert db.db.get("core_approvals", []) == []  # niet live: geen kaart, alleen het overzicht
+
+
 def test_northsea_pulse_raakt_geen_vlag_en_verstuurt_niet():
     body = gm.run_northseamgr(FakeDb(core_approvals=[], core_tasks=[]), NU)
     assert body["sent"] == 0
