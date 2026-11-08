@@ -13,10 +13,14 @@ AXE CORE en MCP.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
 from typing import Any
 
 import httpx
+
+log = logging.getLogger("northsea_mcp.repository")
 
 UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
@@ -86,16 +90,57 @@ class SupabaseRepository:
     def __init__(self, url: str, key: str, timeout: float = 20.0, client: httpx.AsyncClient | None = None):
         self._url = url.rstrip("/")
         self._headers = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-        self._client = client or httpx.AsyncClient(timeout=timeout)
+        self._timeout = timeout
+        # Alleen een client die we zelf maakten mogen we vervangen; een
+        # meegegeven client (tests) blijft van de aanroeper.
+        self._eigen_client = client is None
+        self._client = client or self._maak_client()
+        self._oud: set[asyncio.Task] = set()
+
+    def _maak_client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(timeout=self._timeout,
+                                 limits=httpx.Limits(max_connections=60, max_keepalive_connections=20, keepalive_expiry=30.0))
 
     async def aclose(self) -> None:
         await self._client.aclose()
 
+    async def _sluit_later(self, client: httpx.AsyncClient) -> None:
+        # Lopende aanvragen op de oude client krijgen nog even de tijd.
+        await asyncio.sleep(60)
+        await client.aclose()
+
+    def _vervang_client(self, kapot: httpx.AsyncClient) -> None:
+        """Een verse verbindingspool na een timeout.
+
+        Op 8 nov liep elke snapshot urenlang precies `timeout` seconden vast
+        zonder één antwoord van de database, terwijl een paar minuten later
+        dezelfde vraag wel lukte en de server sinds 24 okt niet herstart was:
+        het patroon van een verbindingspool die vastloopt. Een nieuwe pool
+        kost één handshake; een vastgelopen pool kost elke tool-aanroep.
+        """
+        if not self._eigen_client or self._client is not kapot:
+            return  # een andere aanroep verving hem al
+        self._client = self._maak_client()
+        taak = asyncio.get_running_loop().create_task(self._sluit_later(kapot))
+        self._oud.add(taak)
+        taak.add_done_callback(self._oud.discard)
+
     async def _get(self, table: str, params: dict[str, str]) -> list[dict]:
-        try:
-            r = await self._client.get(f"{self._url}/rest/v1/{table}", params=params, headers=self._headers)
-        except httpx.HTTPError as e:
-            raise RepositoryError(f"database unreachable ({type(e).__name__})") from e
+        # Lezen is idempotent: na een timeout één keer opnieuw, op een verse pool.
+        # Schrijven doet dat bewust niet (dan zou een insert dubbel kunnen landen).
+        for poging in (1, 2):
+            client = self._client
+            try:
+                r = await client.get(f"{self._url}/rest/v1/{table}", params=params, headers=self._headers)
+                break
+            except httpx.TimeoutException as e:
+                log.warning("lezen %s: %s (poging %d)", table, type(e).__name__, poging)
+                if poging == 2:
+                    raise RepositoryError(f"database unreachable ({type(e).__name__})") from e
+                self._vervang_client(client)
+            except httpx.HTTPError as e:
+                log.warning("lezen %s: %s", table, type(e).__name__)
+                raise RepositoryError(f"database unreachable ({type(e).__name__})") from e
         if r.status_code >= 400:
             raise RepositoryError(f"database read failed for {table} ({r.status_code})")
         data = r.json()

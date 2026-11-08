@@ -31,6 +31,7 @@ tenzij de aanroeper `northsea.identity` heeft -- dezelfde regel als review_deal.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import time
 from collections import Counter
@@ -45,6 +46,8 @@ CACHE_S = 30.0
 MAX_LIMIT = 100
 GATES = ("buyer", "seller", "commercial", "evidence", "protection", "introduction", "transaction", "fulfilment", "settlement")
 GATE_CODES = {g: f"G{i}" for i, g in enumerate(GATES, 1)}
+log = logging.getLogger("northsea_mcp.readlayer")
+
 CORE_TABLES = ("opportunities", "companies", "buyer_requirements", "supplier_offers")
 OPEN_TASK = ("open", "waiting", "in_progress")
 
@@ -129,11 +132,16 @@ class InspectService:
             for naam, res in zip(namen, uit):
                 if isinstance(res, BaseException):
                     tables[naam] = []
-                    errors[naam] = "read failed" if isinstance(res, RepositoryError) else type(res).__name__
+                    # RepositoryError-tekst is veilig (geen sleutel, geen query). Hier
+                    # stond alleen "read failed", waardoor de storing van 8 nov in
+                    # het log onzichtbaar was: welke tabel, welke fout.
+                    errors[naam] = str(res) if isinstance(res, RepositoryError) else type(res).__name__
                 else:
                     tables[naam], afgekapt = res
                     if afgekapt:
                         truncated.add(naam)
+            if errors:
+                log.warning("snapshot: %d van %d tabellen niet gelezen: %s", len(errors), len(namen), errors)
             if any(n in errors for n in CORE_TABLES):
                 raise RepositoryError("core NorthSea tables could not be read")
             self._snap = Snapshot(tables, truncated, errors, datetime.now(timezone.utc), int((time.monotonic() - t0) * 1000))
