@@ -101,3 +101,13 @@ def test_alles_groen_zegt_alles_draait():
     uit = gm.run_companionmgr(db, NU)
     assert uit["bevindingen"] == [] and uit["herkanst"] == []
     assert "alles draait" in db.rows("core_manager_messages")[0]["body"]
+
+
+def test_overgeslagen_run_in_oude_rust_wordt_herkanst():
+    """13:05 die dag: de motor maakte zijn tijdbudget op (skipped) en kreeg
+    toch weer 6 uur rust van zijn oude teller van 12."""
+    r = [job("northsea:engine", "skipped", 12, "2026-11-08T19:05:02+00:00",
+             "northsea engine_tick: hit its time budget; progress is saved")]
+    assert [x["job_key"] for x in rb.herkansen(r, NU)] == ["northsea:engine"]
+    gewoon = [job("axe-review-desk-sources", "skipped", 0, "2026-11-08T19:05:02+00:00")]
+    assert rb.herkansen(gewoon, NU) == []

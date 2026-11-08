@@ -38,6 +38,10 @@ HERKANS_ELKE = timedelta(hours=1)
 _TIJDELIJK = re.compile(r'"http"\s*:\s*50[234]\b|\btime ?out\b|timed out|upstream_error|ReadTimeout', re.I)
 
 
+# Overgeslagen omdat hij aan het inhalen was -- niet omdat hij op Luka wacht.
+_INHAAL = re.compile(r"time budget|still running|already running", re.I)
+
+
 @dataclass(frozen=True)
 class Bevinding:
     code: str
@@ -80,7 +84,11 @@ def herkansen(rijen: list[dict[str, Any]], nu: datetime) -> list[dict[str, Any]]
     """Jobs die na een tijdelijke fout in lange rust liggen: nu één keer opnieuw."""
     uit = []
     for r in rijen:
-        if not r.get("enabled") or not tijdelijk(r):
+        # Ook: overgeslagen (tijdbudget op) met een oude foutenteller. Die kreeg
+        # tot 8 nov ten onrechte de terugval-rust van die teller (planning.py).
+        verkeerde_rust = (r.get("last_status") == "skipped" and _fouten(r) > 0
+                          and bool(_INHAAL.search(str(r.get("last_result") or ""))))
+        if not r.get("enabled") or not (tijdelijk(r) or verkeerde_rust):
             continue
         volgende = _tijd(r.get("next_run_at"))
         if not volgende or volgende - nu < LANGE_RUST:

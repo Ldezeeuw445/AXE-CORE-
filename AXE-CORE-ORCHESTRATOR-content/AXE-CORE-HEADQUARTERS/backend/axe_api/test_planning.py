@@ -319,3 +319,17 @@ def test_finished_run_for_the_moment_just_moves_the_schedule_on():
     uit = run(p.Uitvoerder(lambda: sb, "vps", "vps:test", actie, nu=lambda: NU).tick())
     assert sb.db["core_schedules"][0]["next_run_at"] == "2026-09-16T13:00:00+00:00"
     assert uit[0]["status"] == "skipped"
+
+
+def test_overgeslagen_run_na_een_storing_geeft_geen_nieuwe_rust():
+    """8 nov 2026: de NorthSea-motor kwam na 12 mislukte runs terug, maakte
+    zijn tijdbudget op (skipped, voortgang bewaard) en ging toch weer 6 uur in
+    rust. Een overgeslagen run telt niet als fout; hij volgt gewoon het rooster."""
+    sb = FakeSb([sched(consecutive_failures=12)])
+
+    async def actie(soort, payload):
+        return {"status": "skipped", "output": "hit its time budget; progress is saved"}
+
+    run(p.Uitvoerder(lambda: sb, "vps", "vps:test", actie, nu=lambda: NU).tick())
+    s = sb.db["core_schedules"][0]
+    assert s["next_run_at"].startswith("2026-09-16T13:00") and s["consecutive_failures"] == 12

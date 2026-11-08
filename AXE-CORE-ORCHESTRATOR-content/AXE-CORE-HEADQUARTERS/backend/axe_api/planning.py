@@ -299,7 +299,11 @@ class Uitvoerder:
                 patch["next_run_at"] = volgende(s["cron_expr"], s.get("timezone") or "UTC", einde).isoformat()
             except (ValueError, KeyError):
                 patch["enabled"], patch["next_run_at"] = False, None
-        rust = rust_minuten(teller) if status != "ok" else 0
+        # Alleen een echte mislukking verlengt de rust. Een overgeslagen run
+        # (tijdbudget op, vorige tick loopt nog) telt niet als fout (na_run),
+        # maar kreeg hier wel de rust van de oude teller: 8 nov ging de
+        # NorthSea-motor na een inhaal-run om 13:05 weer 6 uur in rust.
+        rust = rust_minuten(teller) if status in ("fail", "timeout") else 0
         if rust and trigger == "cron" and patch.get("next_run_at"):
             later = einde + timedelta(minutes=rust)
             if datetime.fromisoformat(patch["next_run_at"]) < later:
