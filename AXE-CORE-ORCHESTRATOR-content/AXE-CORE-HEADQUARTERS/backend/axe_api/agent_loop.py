@@ -107,6 +107,22 @@ def _ollama_headers() -> dict[str, str]:
     return kop
 
 OLLAMA_MODEL = os.environ.get("AXE_AGENT_FALLBACK_MODEL", "llama3.1:8b-32k")
+
+
+def _ollama_keep_alive() -> str | int:
+    """Hoe lang het model na gebruik in het geheugen blijft.
+
+    Tot 8 nov stond hier -1 (voor altijd). Ollama is de LAATSTE terugval (na
+    Groq en OpenAI) en hield de modelbox zo permanent onder de 1500 MB vrij
+    (AXE_DAX_MIN_FREE_MB, sinds de OOM van 29 sep), waardoor geen enkele
+    DAX-bot nog draaide. 30 minuten: warm zolang hij gebruikt wordt, daarna
+    vrij. Een getal (bv. "-1") gaat als getal mee, zoals Ollama het verwacht.
+    """
+    v = os.environ.get("AXE_OLLAMA_KEEP_ALIVE", "30m").strip() or "30m"
+    try:
+        return int(v)
+    except ValueError:
+        return v
 _ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 # Groq eerst, OpenAI als reserve (25 sep). Gemini gaf 402 "prepayment credits
@@ -1052,9 +1068,9 @@ async def _call_ollama(contents: list[dict[str, Any]]) -> dict[str, Any]:
     payload = {
         "model": OLLAMA_MODEL,
         "stream": False,
-        # Pinned in memory. Measured on Hetzner: 103s cold, 2.3s warm -- a
-        # fallback that takes a minute and a half to wake up is not a fallback.
-        "keep_alive": -1,
+        # Measured on Hetzner: 103s cold, 2.3s warm. Niet meer voor altijd
+        # vastgepind: zie _ollama_keep_alive (de DAX-bots kregen geen geheugen).
+        "keep_alive": _ollama_keep_alive(),
         "messages": _to_ollama_messages(contents),
         "tools": [
             {"type": "function", "function": {
