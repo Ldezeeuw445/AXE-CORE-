@@ -97,4 +97,59 @@ def test_snapshot_logt_welke_tabel_faalde(caplog):
     assert "deal_events" in caplog.text
 
 
+def test_snapshot_vuurt_hooguit_vier_tabellen_tegelijk():
+    """8 nov 13:25-14:30: ruim 30 verzoeken tegelijk per snapshot, elke minuut,
+    en de PostgREST-pool van AXE Commodities liep vast."""
+    from northsea_mcp.readlayer import GELIJKTIJDIG, InspectService
+
+    class Repo:
+        bezig = piek = 0
+        gelezen: list = []
+
+        async def fetch_all(self, naam):
+            Repo.bezig += 1
+            Repo.piek = max(Repo.piek, Repo.bezig)
+            await asyncio.sleep(0.001)
+            Repo.bezig -= 1
+            Repo.gelezen.append(naam)
+            return [], False
+
+    asyncio.run(InspectService(Repo()).snapshot())
+    assert GELIJKTIJDIG == 4 and Repo.piek == 4
+    assert len(Repo.gelezen) > 20  # alles werd wel gelezen
+
+
+def test_inkomende_mail_leest_alleen_de_mailtabellen():
+    """De mailwachter vraagt elke minuut naar nieuwe mail; dat mag niet de hele
+    desk (deal_events, auditlog) kosten."""
+    from northsea_mcp.readlayer import INBOUND_TABLES, InspectService
+    from northsea_mcp.readtools import ReadTools
+    from northsea_mcp.service import Caller
+
+    class Repo:
+        gelezen: list = []
+
+        async def fetch_all(self, naam):
+            Repo.gelezen.append(naam)
+            return [], False
+
+    inspect = InspectService(Repo())
+    rt = ReadTools(inspect)
+
+    async def run():
+        uit = await rt.recent_inbound(Caller(principal="t", client_id="t", scopes=frozenset({"northsea.read"})), days=1)
+        eerste = list(Repo.gelezen)
+        await rt.recent_inbound(Caller(principal="t", client_id="t", scopes=frozenset({"northsea.read"})), days=1)
+        return uit, eerste
+    uit, eerste = asyncio.run(run())
+    assert sorted(eerste) == sorted(INBOUND_TABLES)
+    assert "deal_events" not in eerste and "northsea_audit_events" not in eerste
+    assert Repo.gelezen == eerste  # tweede keer binnen 30 s: uit de cache
+    assert uit["items"] == []
+
+    # Een volledige snapshot daarna krijgt wél alle tabellen, niet de deel-snapshot.
+    snap = asyncio.run(inspect.snapshot())
+    assert "deal_events" in snap.t
+
+
 _ = repo_mod  # module bewust geïmporteerd: monkeypatch werkt op de klasse
