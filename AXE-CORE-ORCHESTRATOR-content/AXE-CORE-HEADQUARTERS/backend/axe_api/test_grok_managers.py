@@ -107,6 +107,7 @@ def test_tradingos_zegt_eerlijk_dat_de_feeds_stilstaan():
     assert body["bevindingen"] == ["feeds_stil", "feeds_nooit", "signaal_oud"]
     rapport = [r for r in db.db["core_manager_messages"] if r["from_agent"] == "tradingos"][0]["body"]
     assert "geen actueel signaal" in rapport and "2 marktfeeds staan stil" in rapport
+    assert "Geen actueel marktsignaal" not in rapport  # niet twee keer hetzelfde zeggen
     assert db.db.get("core_approvals", []) == []  # niet live: geen kaart, alleen het overzicht
 
 

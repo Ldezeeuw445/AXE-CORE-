@@ -459,7 +459,8 @@ def run_tradingos(db: Any, nu: datetime) -> dict[str, Any]:
     overzicht = _dagoverzicht(db, nu, "Trading OS", bevindingen)
     kop = f"bias {sig['bias']} ({sig['at']})" if sig["vers"] else "geen actueel signaal"
     gerapporteerd = _rapporteer_bij_verandering(
-        db, "tradingos", f"Trading OS: {kop}; " + ("; ".join(b.titel for b in bevindingen) or "feeds vers")
+        db, "tradingos", f"Trading OS: {kop}; "
+        + ("; ".join(b.titel for b in bevindingen if b.code != "signaal_oud") or "feeds vers")
         + ". Orders: 0.")
     return {
         "job": "trading os owner",
