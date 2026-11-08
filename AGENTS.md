@@ -217,7 +217,15 @@ De negentien van 30 september zijn er één geworden.
 opnieuw te genereren met `AXE_WRITE_ARCHITECTURE=1`. `colourRule` stond op
 129 waar er 128 mochten en is op 5 nov groen gemaakt zoals het hoort: vier
 gekleurde vullingen weg uit `ObsidianMemoryPanel.tsx`, en toen het plafond
-mee naar 125.
+mee naar 125. Op 8 nov drie vullingen weg uit `tradingIntel/StatusStrip.tsx`
+en het plafond naar 122.
+
+Dat waren vijf schendingen in dat bestand en de teller zakte met drie. Dat is
+geen half werk: de detector leest 60 tekens dóór na `background:`, dus een
+gekleurde *rand* op dezelfde regel telt mee als vulling. Een rand mag kleur
+dragen. De uitleg staat bij `CEILING` in de test — lees die voor je aan de
+volgende veegronde begint, want anders ga je eigenschappen verschuiven om de
+teller te laten zakken en verandert er niets op het scherm.
 
 **Een ratel repareer je nooit door het plafond te verhogen.** De kleurtest
 zegt het zelf: hij gaat alleen omlaag. Staat hij één boven zijn plafond, dan
