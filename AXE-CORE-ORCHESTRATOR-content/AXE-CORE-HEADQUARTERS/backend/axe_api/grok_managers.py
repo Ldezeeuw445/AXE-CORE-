@@ -265,21 +265,101 @@ def run_axemanager(db: Any, nu: datetime) -> dict[str, Any]:
     }
 
 
+OPEN_TAAK = ("pending", "queued", "retrying", "waiting_approval", "planning", "running", "in_progress", "verifying")
+
+
+def _open_taken(db: Any) -> list[dict[str, Any]]:
+    """Alleen de open rijen. Zonder filter las de manager 200 willekeurige van
+    ruim 2.200 taken (vooral oude afgeronde) en telde daarop."""
+    try:
+        return (db.table("core_tasks").select("id,status,assignee,title,capability,created_at,updated_at,metadata")
+                .in_("status", list(OPEN_TAAK)).limit(1000).execute().data) or []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("grok: open taken onleesbaar (%s)", exc)
+        return []
+
+
+def _rapporteer_bij_verandering(db: Any, agent: str, body: str) -> bool:
+    """Een rapport aan de baas alleen als het iets nieuws zegt.
+
+    Elk kwartier "31 open rows" is ruis in het managersgesprek dat Luka leest.
+    """
+    try:
+        eerdere = (db.table("core_manager_messages").select("body,created_at").eq("from_agent", agent)
+                   .eq("to_agent", BAAS).eq("kind", "report").order("created_at", desc=True)
+                   .limit(1).execute().data) or []
+    except Exception:  # noqa: BLE001 -- liever één rapport te veel dan stil
+        eerdere = []
+    if eerdere and (eerdere[0].get("body") or "").strip() == body.strip():
+        return False
+    stuur_bericht(db, agent, BAAS, "report", body)
+    return True
+
+
+def _dagoverzicht(db: Any, nu: datetime, naam: str, bevindingen: list[Any]) -> bool:
+    if not _dagoverzicht_tijd(nu):
+        return False
+    try:
+        from goedkeuring_melding import schrijf_goedkeuring_melding
+        regels = [f"{b.titel}. {b.detail}".strip() for b in bevindingen][:5]
+        # Zelfde kop binnen 24 uur = geen tweede (ontdubbeling in de melding).
+        return schrijf_goedkeuring_melding(
+            db, f"{naam} vandaag {nu.strftime('%d-%m')}", " | ".join(regels) or "Niets dat op jou wacht.") is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _ruim_dubbele_voorstellen_op(db: Any, rijen: list[dict[str, Any]], nu: datetime) -> list[dict[str, Any]]:
+    """Wat de manager zelf mag oplossen: dubbele `pending`-voorstellen.
+
+    Alleen voorstellen die nog niemand oppakte; de nieuwste blijft staan, de
+    rest wordt `cancelled` met de reden erbij (terug te zetten als het fout was).
+    """
+    import projecten_bewaker as pb
+    opgeruimd = []
+    for r in pb.dubbele_voorstellen(rijen)[:pb.MAX_OPRUIMEN_PER_PULSE]:
+        meta = r.get("metadata") if isinstance(r.get("metadata"), dict) else {}
+        try:
+            db.table("core_tasks").update({
+                "status": "cancelled",
+                "metadata": {**meta, "opgeruimd_door": "projectsmgr", "reden": "dubbel voorstel",
+                             "opgeruimd_op": nu.isoformat()},
+            }).eq("id", r["id"]).eq("status", "pending").execute()
+            opgeruimd.append(r)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("projectsmgr: kon dubbel voorstel %s niet opruimen (%s)", r.get("id"), exc)
+    return opgeruimd
+
+
 def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
-    taken = _rijen(db, "core_tasks", "id,status,assignee,title,capability")
-    open_ = [t for t in taken if t.get("status") in ("queued", "pending", "retrying", "waiting_approval")]
-    zonder = [t for t in open_ if not t.get("assignee")]
-    opdrachten = inbox(db, "projectsmgr")
-    stuur_bericht(
-        db, "projectsmgr", BAAS, "report",
-        f"{len(open_)} open rows, {len(zonder)} unassigned. No sends.",
-    )
+    """Eigenaar van de takenlijst: ziet wat stilstaat, ruimt dubbels op, roept
+    Luka alleen voor wat hij zelf niet kan oplossen."""
+    import projecten_bewaker as pb
+    rijen = _open_taken(db)
+    opgeruimd = _ruim_dubbele_voorstellen_op(db, rijen, nu)
+    weg = {r.get("id") for r in opgeruimd}
+    rijen = [r for r in rijen if r.get("id") not in weg]
+
+    bevindingen = pb.beoordeel(rijen, nu)
+    voor_luka = [b for b in bevindingen if b.voor == "luka"]
+    for b in voor_luka:
+        _vraag_luka(db, "projectsmgr", b.titel, b.detail)
+    overzicht = _dagoverzicht(db, nu, "Taken", bevindingen)
+
+    delen = [b.titel for b in bevindingen]
+    if opgeruimd:
+        delen.insert(0, f"{len(opgeruimd)} dubbele voorstellen opgeruimd")
+    gerapporteerd = _rapporteer_bij_verandering(
+        db, "projectsmgr", "Taken: " + ("; ".join(delen) if delen else "niets staat stil") + ".")
     return {
         "job": "projects and tasks",
-        "open": len(open_),
-        "unassigned": len(zonder),
-        "directives": len(opdrachten),
-        "assigned": 0 if not zonder else "proposed only",
+        "open": len(rijen),
+        "voor_luka": [b.code for b in voor_luka],
+        "bevindingen": [b.code for b in bevindingen],
+        "opgeruimd": len(opgeruimd),
+        "dagoverzicht": overzicht,
+        "gerapporteerd": gerapporteerd,
+        "directives": len(inbox(db, "projectsmgr")),
     }
 
 
