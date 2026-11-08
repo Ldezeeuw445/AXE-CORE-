@@ -363,19 +363,60 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
     }
 
 
+ROOSTER_KOLOMMEN = ("id,name,app,job_key,enabled,last_status,last_result,consecutive_failures,"
+                   "next_run_at,last_run_at,lease_owner,lease_until,metadata")
+
+
+def _herkans_vroeg(db: Any, rijen: list[dict[str, Any]], nu: datetime) -> list[dict[str, Any]]:
+    """Wat de manager zelf mag oplossen: na een tijdelijke fout (502, time-out)
+    de terugval-rust van de planner inkorten, één keer per uur per job.
+
+    8 nov: een databasestoring van een uur hield de NorthSea-motor door de
+    6-uursrust tot 14:13 stil. De job blijft dezelfde job met dezelfde grenzen.
+    """
+    import roosters_bewaker as rb
+    gedaan = []
+    for r in rb.herkansen(rijen, nu):
+        meta = r.get("metadata") if isinstance(r.get("metadata"), dict) else {}
+        try:
+            db.table("core_schedules").update({
+                "next_run_at": nu.isoformat(),
+                "metadata": {**meta, "vroeg_herkanst_op": nu.isoformat(), "vroeg_herkanst_door": "companionmgr"},
+            }).eq("id", r["id"]).eq("enabled", True).execute()
+            gedaan.append(r)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("companionmgr: kon %s niet herkansen (%s)", r.get("job_key"), exc)
+    return gedaan
+
+
 def run_companionmgr(db: Any, nu: datetime) -> dict[str, Any]:
-    roosters = _rijen(db, "core_schedules", "name,app,last_status,enabled")
-    eigen = [r for r in roosters if r.get("app") in ("axe_companion", "axe_core")]
-    fail = [r for r in eigen if r.get("last_status") in ("fail", "timeout")]
-    stuur_bericht(
-        db, "companionmgr", BAAS, "report",
-        f"Companion/CORE jobs {len(eigen)}, failing {len(fail)}. Smoke only, no deploy out of plan.",
-    )
+    """Eigenaar van de vaste jobs: ziet wat faalt of blijft liggen, herkanst
+    na een tijdelijke storing, roept Luka alleen als het blijft falen."""
+    import roosters_bewaker as rb
+    rijen = _rijen(db, "core_schedules", ROOSTER_KOLOMMEN, limiet=500)
+    herkanst = _herkans_vroeg(db, rijen, nu)
+    bevindingen = rb.beoordeel(rijen, nu)
+    voor_luka = [b for b in bevindingen if b.voor == "luka"]
+    for b in voor_luka:
+        _vraag_luka(db, "companionmgr", b.titel, b.detail)
+    overzicht = _dagoverzicht(db, nu, "Vaste jobs", bevindingen)
+
+    delen = [b.titel for b in bevindingen]
+    if herkanst:
+        delen.insert(0, "nu opnieuw gestart: " + ", ".join(str(r.get("name") or r.get("job_key")) for r in herkanst))
+    gerapporteerd = _rapporteer_bij_verandering(
+        db, "companionmgr", "Vaste jobs: " + ("; ".join(delen) if delen else "alles draait") + ".")
+    aan = [r for r in rijen if r.get("enabled")]
     return {
-        "job": "companion owner",
+        "job": "companion and standing jobs owner",
         "repo": "AXE-COMPANION-OS-",
-        "jobs": len(eigen),
-        "failing": len(fail),
+        "jobs": len(aan),
+        "failing": sum(1 for r in aan if r.get("last_status") in ("fail", "timeout")),
+        "herkanst": [r.get("job_key") for r in herkanst],
+        "voor_luka": [b.code for b in voor_luka],
+        "bevindingen": [b.code for b in bevindingen],
+        "dagoverzicht": overzicht,
+        "gerapporteerd": gerapporteerd,
         "deployed": 0,
     }
 
