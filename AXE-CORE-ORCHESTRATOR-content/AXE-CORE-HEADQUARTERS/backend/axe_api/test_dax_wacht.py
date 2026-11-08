@@ -456,3 +456,26 @@ def test_hartslag_zonder_internet_blijft_geldige_json():
     hart = dax_wacht.lees_hartslag(uit.stdout)
     assert hart["net"] == {"github": 0, "public_api": 0}
     assert not dax_wacht._ok_http(hart["net"]["github"])
+
+
+def test_vastgepinde_ollama_krijgt_zijn_timer_terug_maar_wordt_nooit_geladen():
+    """8 nov: keep_alive -1 hield de modelbox onder MIN_VRIJ_MB."""
+    import agent_loop
+    from datetime import datetime, timezone
+    nu = datetime(2026, 11, 8, 19, 30, tzinfo=timezone.utc)
+    model = agent_loop.OLLAMA_MODEL
+    gepost = []
+
+    def post(url, body):
+        gepost.append(body)
+        return {}
+
+    vast = {"models": [{"name": model, "expires_at": "2318-02-21T10:00:00Z"}]}
+    assert dax_wacht.ontpin_ollama(post=post, get=lambda u: vast, nu=nu).startswith("keep_alive")
+    assert gepost == [{"model": model, "keep_alive": agent_loop._ollama_keep_alive()}]
+
+    gepost.clear()
+    warm = {"models": [{"name": model, "expires_at": "2026-11-08T19:55:00Z"}]}
+    assert dax_wacht.ontpin_ollama(post=post, get=lambda u: warm, nu=nu) == "not pinned"
+    assert dax_wacht.ontpin_ollama(post=post, get=lambda u: {"models": []}, nu=nu) == "not pinned"
+    assert gepost == []  # niet geladen = niet laden
