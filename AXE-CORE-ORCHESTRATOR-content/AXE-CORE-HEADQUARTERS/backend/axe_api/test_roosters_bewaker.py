@@ -111,3 +111,10 @@ def test_overgeslagen_run_in_oude_rust_wordt_herkanst():
     assert [x["job_key"] for x in rb.herkansen(r, NU)] == ["northsea:engine"]
     gewoon = [job("axe-review-desk-sources", "skipped", 0, "2026-11-08T19:05:02+00:00")]
     assert rb.herkansen(gewoon, NU) == []
+
+
+def test_herkansen_valt_niet_tussen_twee_pulses():
+    """18:40:00 op 8 nov: de vorige herkans stond op 17:40:02, net geen uur."""
+    r = rijen()
+    r[0]["metadata"] = {"vroeg_herkanst_op": "2026-11-08T11:05:02+00:00"}
+    assert [x["job_key"] for x in rb.herkansen(r, NU)] == ["northsea:engine"]

@@ -33,7 +33,10 @@ FALEND_NA = 3          # zoveel keer achter elkaar mislukt = een melding waard
 LUKA_NA = 6            # en vanaf hier moet Luka het weten
 ACHTER_NA = timedelta(minutes=30)   # next_run_at zo ver voorbij en niemand pakt hem
 LANGE_RUST = timedelta(minutes=45)  # verder weg dan dit na een fout = terugval-rust
-HERKANS_ELKE = timedelta(hours=1)
+# Niet precies een uur: de manager pulst elke 20 minuten, en 8 nov om 18:40
+# zat er 59:59.9 tussen (de herkans van 17:40:02 telde vanaf de schrijftijd),
+# zodat de Engine een hele pulse langer stillag. 50 min = elk derde pulse.
+HERKANS_ELKE = timedelta(minutes=50)
 
 _TIJDELIJK = re.compile(r'"http"\s*:\s*50[234]\b|\btime ?out\b|timed out|upstream_error|ReadTimeout', re.I)
 
