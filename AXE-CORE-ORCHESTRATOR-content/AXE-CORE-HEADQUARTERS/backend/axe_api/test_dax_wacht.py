@@ -440,3 +440,19 @@ def test_alleen_gratis_slaat_betaalde_aanbieders_over(monkeypatch):
     assert motor["engine"] == "ollama"
     stappen, _ = asyncio.run(draai(False))
     assert "gemini" in stappen and agent_loop.OPENAI_MODEL in stappen
+
+
+def test_hartslag_zonder_internet_blijft_geldige_json():
+    """8 nov 2026: curl gaf "000" (geen verbinding) en `"github":000` brak de
+    JSON. Alle vijf DAX-bots heetten daardoor onbereikbaar, terwijl alleen hun
+    internet weg was. Nu meldt de hartslag 0 en zegt blokkades wat er mist."""
+    import shutil
+    import subprocess
+    import pytest
+    if not shutil.which("bash"):
+        pytest.skip("geen bash")
+    nep = "curl(){ printf 000; }\nexport -f curl\n"
+    uit = subprocess.run(["bash", "-c", nep + dax_wacht.HARTSLAG], capture_output=True, text=True, timeout=30)
+    hart = dax_wacht.lees_hartslag(uit.stdout)
+    assert hart["net"] == {"github": 0, "public_api": 0}
+    assert not dax_wacht._ok_http(hart["net"]["github"])

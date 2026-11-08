@@ -57,7 +57,9 @@ HARTSLAG = r"""
 set +e
 b(){ command -v "$1" >/dev/null 2>&1 && echo true || echo false; }
 f(){ [ -s "$1" ] && echo true || echo false; }
-code(){ c=$(curl -s -o /dev/null -m 8 -w '%{http_code}' "$1" 2>/dev/null); echo "${c:-0}"; }
+# curl geeft "000" als er geen verbinding is; als JSON-getal is dat ongeldig
+# (voorloopnullen), en dan leek de hele computer onbereikbaar. 10# maakt er 0 van.
+code(){ c=$(curl -s -o /dev/null -m 8 -w '%{http_code}' "$1" 2>/dev/null); case "$c" in ''|*[!0-9]*) c=0;; esac; echo $((10#$c)); }
 mem_av=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo 2>/dev/null)
 mem_tot=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo 2>/dev/null)
 cg=$(cat /sys/fs/cgroup/memory.current 2>/dev/null)
