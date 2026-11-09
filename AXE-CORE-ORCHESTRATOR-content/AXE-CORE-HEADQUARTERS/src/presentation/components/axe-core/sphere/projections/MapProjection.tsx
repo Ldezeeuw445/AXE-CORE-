@@ -1,12 +1,7 @@
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
-
-function tileXY(lat: number, lng: number, zoom: number) {
-  const n = 2 ** zoom;
-  const x = Math.floor(((lng + 180) / 360) * n);
-  const latRad = (lat * Math.PI) / 180;
-  const y = Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n);
-  return { x, y };
-}
+// Dezelfde Mercator-rekening als de minikaart in de notch. Stond hier als
+// privé-functie; `domain/maps/tegels` toetst hem tegen bekende tegelnummers.
+import { tegelXY as tileXY } from '@/domain/maps/tegels';
 
 /** Map fills the circular hologram portal on Home — never leaves the sphere. */
 export function MapProjection({ payload }: { payload: ProjectionPayload }) {

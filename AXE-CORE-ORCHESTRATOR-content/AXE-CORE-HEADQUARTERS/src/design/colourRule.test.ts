@@ -129,4 +129,25 @@ describe('the app itself', () => {
  * mechanism -- nobody has to remember the rule, because the rule remembers
  * itself.
  */
-const CEILING = 128;
+const CEILING = 122;
+
+/**
+ * Let op bij de volgende veegronde: niet elke telling is een vulling.
+ *
+ * Het venster van BACKGROUND loopt bewust 60 tekens dóór na `background:`,
+ * zodat een afgekapte `rgba(239,68,68,0.1)` niet onder de radar blijft. De
+ * prijs is dat een gekleurde RAND op dezelfde regel meegeteld wordt:
+ *
+ *   style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(248,113,113,0.45)' }}
+ *
+ * Dat is geen vulling maar een rand, en een rand mag kleur dragen. Gemeten op
+ * 8 nov in `tradingIntel/StatusStrip.tsx`: drie echte vullingen eruit, maar de
+ * teller zakte van 125 naar 122 en niet naar 120, omdat drie regels nog hun
+ * rode of violette rand binnen dat venster hebben staan.
+ *
+ * Verleid je dan niet tot het verschuiven van eigenschappen om de teller te
+ * laten zakken: dan fop je de detector en verandert er niets op het scherm.
+ * Wil iemand dit echt oplossen, dan moet het venster stoppen bij de volgende
+ * CSS-eigenschap in plaats van bij 60 tekens — en dat verandert de telling
+ * voor het hele project, dus dat is een eigen ronde met een eigen meting.
+ */

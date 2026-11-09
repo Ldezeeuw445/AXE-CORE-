@@ -1993,6 +1993,10 @@ async def insert_row(table_name: str, req: RowData, request: Request):
         try:
             import memory_schrijfhek as hek
             reden, data = hek.filter_rij(sb(), table_name, data)
+            if reden == "vervang" and data is not None:
+                rij_id = data.pop("id")
+                result = sb().table(table_name).update(data).eq("id", rij_id).execute()
+                return result.data
             if reden != "ok" or data is None:
                 return {"skipped": reden}
         except Exception as hek_err:
@@ -3487,6 +3491,13 @@ async def claude_subscriptions_usage(fresh: int = 0):
     return {"accounts": accounts}
 
 
+@app.get("/keys/overview", dependencies=[AUTH])
+async def keys_overview():
+    """Keys per app: naam, doel, plek en status. Nooit een waarde (sleutels.py)."""
+    import sleutels as _sl
+    return await asyncio.to_thread(_sl.lees, sb())
+
+
 @app.get("/claude/repos", dependencies=[AUTH])
 async def claude_repos():
     """Which repos this host will let Claude Code touch, and whether each one is
@@ -4686,6 +4697,14 @@ async def run_always_awake_jobs() -> None:
             await _ingest_unusual_whales()
     except Exception as e:
         logging.warning(f"[always_awake] intel ingest failed: {e}")
+    # NorthSea-mail: elke tik, niet elk kwartier. Een getekende NCNDA hoort binnen
+    # een minuut op Luka's slotscherm (6 nov); de pushronde hierna in dezelfde tik
+    # stuurt hem meteen door. Begrensd, zodat een trage gateway de tik niet ophoudt.
+    try:
+        import northsea_mailwachter
+        await asyncio.wait_for(northsea_mailwachter.ronde(sb(), _claim_job_run), timeout=25)
+    except Exception as e:
+        logging.warning(f"[always_awake] northsea mail failed: {e}")
     try:
         if await _nightly_review_due() and _claim_job_run("conversation_review", today):
             await run_conversation_review(6)

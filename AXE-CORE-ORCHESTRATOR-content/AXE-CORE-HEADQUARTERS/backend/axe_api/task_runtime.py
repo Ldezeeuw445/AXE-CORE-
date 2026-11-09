@@ -509,6 +509,17 @@ class TaskRepository:
         huidig = found[0]
         if huidig.get("status") not in ("failed", "blocked", "cancelled"):
             raise ValueError(f"task is {huidig.get('status')}, not retryable")
+        # 5 nov: twee keer Retry op dezelfde mislukte taak (twee knoppen, twee
+        # schermen of een dubbelklik) gaf tien DAX-builds voor vijf taken, elk
+        # paar in dezelfde wachtrij. Staat er al een herkansing van deze taak
+        # open, dan is dat de herkansing; pas als die zelf eindigt mag er een
+        # nieuwe komen.
+        kinderen = self._db().table("core_tasks").select("*").eq("parent_task_id", task_id).execute().data or []
+        open_herkansing = [k for k in kinderen
+                           if (k.get("metadata") or {}).get("retry_of") == task_id
+                           and (k.get("status") or "pending") not in TERMINAL]
+        if open_herkansing:
+            return open_herkansing[0]
         mode = str(huidig.get("execution_mode") or "read")
         cap = str(huidig.get("capability") or "agentic")
         titel = str(huidig.get("title") or "")
@@ -760,10 +771,24 @@ class TaskRepository:
         }).eq("id", approval_id).eq("status", "pending").execute().data
         if not rows:
             raise RuntimeError("approval changed concurrently")
-        self._db().table("core_tasks").update({
+        hervat: dict[str, Any] = {
             "status": "queued" if approved else "rejected",
             "next_attempt_at": datetime.now(timezone.utc).isoformat(),
-        }).eq("id", task_id).eq("status", "waiting_approval").execute()
+        }
+        if approved:
+            # Wachten op Luka is geen mislukte poging. Een taak die op zijn
+            # laatste poging om een ja vroeg, kwam met attempt == max_attempts
+            # terug in de rij, en claim_next_core_task pakt alleen
+            # attempt < max_attempts: "DAX build: next task in axon-memory"
+            # stond zo van 5 tot 9 nov in de wachtrij, goedgekeurd en vergeten.
+            # Zelfde regel als defer_core_task: de poging komt terug.
+            try:
+                rij = (self._db().table("core_tasks").select("attempt").eq("id", task_id)
+                       .limit(1).execute().data) or [{}]
+                hervat["attempt"] = max(0, int(rij[0].get("attempt") or 0) - 1)
+            except Exception:
+                pass
+        self._db().table("core_tasks").update(hervat).eq("id", task_id).eq("status", "waiting_approval").execute()
         try:
             taak = self.get(task_id)
             meta = dict((taak or {}).get("metadata") or {})

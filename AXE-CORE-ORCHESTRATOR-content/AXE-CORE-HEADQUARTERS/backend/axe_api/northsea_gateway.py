@@ -91,7 +91,28 @@ ACTIONS: dict[str, ActionSpec] = {
     "get_pipeline_summary": ActionSpec("northsea_get_pipeline_summary", ()),
     "get_system_health": ActionSpec("northsea_get_system_health", ()),
     "get_communications_metrics": ActionSpec("northsea_get_communications_metrics", (), ("weeks",)),
+    # De mailwachter (northsea_mailwachter.py) kijkt elke minuut wat er binnenkwam,
+    # zodat een getekend document Luka direct bereikt. Alleen lezen.
+    "list_recent_inbound": ActionSpec("northsea_list_recent_inbound", (), ("days", "limit")),
+    # Wat de NorthSea-manager in zijn werklus (agent_loop, tool northsea_read)
+    # nodig heeft om een binnengekomen mail echt te begrijpen: de deal, wat hem
+    # blokkeert, de mail en zijn draad, en wat er op Luka wacht. Alleen lezen.
+    "get_deal": ActionSpec("northsea_get_deal", ("deal",)),
+    "get_deal_blockers": ActionSpec("northsea_get_deal_blockers", ("deal",)),
+    "get_communication": ActionSpec("northsea_get_communication", ("communication",)),
+    "get_communication_thread": ActionSpec("northsea_get_communication_thread", ("communication",)),
+    "list_pending_approvals": ActionSpec("northsea_list_pending_approvals", (), ("limit", "offset")),
 }
+
+# De acties die de agentlus mag gebruiken. Bewust zonder research_*,
+# qualify_opportunity en investigate_blockers (die kosten crew-budget) en zonder
+# prepare_outreach: de desk-agent leest, Luka beslist.
+AGENT_LEESACTIES: tuple[str, ...] = (
+    "get_live_operations", "get_pipeline_summary", "get_system_health",
+    "get_communications_metrics", "list_recent_inbound", "get_next_actions",
+    "review_deal", "process_reply", "get_deal", "get_deal_blockers",
+    "get_communication", "get_communication_thread", "list_pending_approvals",
+)
 
 
 def _build_arguments(spec: ActionSpec, params: dict[str, Any]) -> dict[str, Any]:

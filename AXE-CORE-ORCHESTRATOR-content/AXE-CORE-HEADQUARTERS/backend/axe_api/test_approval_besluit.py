@@ -94,3 +94,20 @@ def test_een_onbekende_approval_blijft_niet_gevonden():
     r, _ = repo()
     with pytest.raises(KeyError):
         r.decide_approval(TAAK, "00000000-0000-4000-8000-000000000000", True, "luka", None)
+
+
+def test_ja_op_de_laatste_poging_geeft_de_poging_terug():
+    """5 nov: goedgekeurd op poging 3 van 3, daarna vier dagen in de wachtrij
+    omdat de worker alleen attempt < max_attempts oppakt."""
+    r, db = repo()
+    db.rijen["core_tasks"][0].update({"attempt": 3, "max_attempts": 3})
+    r.decide_approval(TAAK, OK, True, "luka", "ok")
+    taak = db.rijen["core_tasks"][0]
+    assert taak["status"] == "queued" and taak["attempt"] == 2
+
+
+def test_nee_laat_de_poging_staan():
+    r, db = repo()
+    db.rijen["core_tasks"][0].update({"attempt": 3, "max_attempts": 3})
+    r.decide_approval(TAAK, OK, False, "luka", "nee")
+    assert db.rijen["core_tasks"][0]["attempt"] == 3

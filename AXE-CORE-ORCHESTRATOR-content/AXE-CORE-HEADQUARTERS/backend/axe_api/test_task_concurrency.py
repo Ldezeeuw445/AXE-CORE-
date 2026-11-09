@@ -359,3 +359,47 @@ def test_kies_handler_alias_en_northsea():
     assert tw.kies_handler(h, "northsea_desk") is ns
     assert tw.kies_handler(h, "code") is ag
     assert tw.kies_handler(h, "planner") is None
+
+
+def test_stoppende_worker_zet_lopende_taak_terug_zonder_pogingverlies():
+    """Gevonden live 9 nov: een deploy-herstart maakte van een lopende taak op
+    zijn laatste poging 'worker_lost'. Annuleren van de worker = terug in de rij."""
+    teruggezet: list[tuple] = []
+
+    class Repo(NepRepo):
+        def defer(self, task_id, worker_id, lease_token, delay_seconds=20, reason="capacity"):
+            teruggezet.append((task_id, worker_id, lease_token, reason))
+            return {"id": task_id, "status": "queued"}
+
+    gestart = asyncio.Event()
+
+    async def lang_werk(task, context):
+        gestart.set()
+        await asyncio.sleep(3600)
+
+    taak = maak_taak(1)
+    taak["attempt"] = 3  # laatste poging
+    repo = Repo([taak])
+    worker = TaskWorker(repo, {"test": lang_werk}, worker_id="test:slot-0", lease_seconds=60)
+
+    async def scenario():
+        loopt = asyncio.ensure_future(worker.run_once())
+        await gestart.wait()
+        loopt.cancel()
+        try:
+            await loopt
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(scenario())
+    assert teruggezet == [("taak-1", "test:slot-0", LEASE, "worker_restart")]
+    assert ("taak-1", "failed") not in repo.overgangen
+    assert ("taak-1", "retrying") not in repo.overgangen
+
+
+def test_terugzetten_na_stop_crasht_nooit():
+    class Kapot:
+        def defer(self, *a, **k):
+            raise RuntimeError("lease_lost")
+
+    assert tw.terugzetten_na_stop(Kapot(), maak_taak(2), None, "w") is False

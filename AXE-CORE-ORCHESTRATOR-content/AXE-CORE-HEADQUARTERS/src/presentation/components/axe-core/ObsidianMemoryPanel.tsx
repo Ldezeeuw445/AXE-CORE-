@@ -326,7 +326,15 @@ export default function ObsidianMemoryPanel({
                 onClick={() => void handleSyncVault()}
                 disabled={!canVault || syncBusy || !vaultPath.trim()}
                 className="text-[10px] px-2 py-1 rounded-lg flex items-center gap-1"
-                style={{ background: 'rgba(52,211,153,0.12)', color: '#6EE7B7' }}
+                /* Wet 10: de kleur zit in het woord, de vulling is oppervlak.
+                   Een groen vlak achter "Sync now" is decoratie die toevallig
+                   bij het woord staat; het groene woord mét rand leest als
+                   een handeling en laat de ratel in colourRule.test.ts dalen. */
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  color: '#6EE7B7',
+                  border: '1px solid rgba(52,211,153,0.3)',
+                }}
               >
                 <HardDrive size={10} /> {syncBusy ? 'Syncing…' : 'Sync now'}
               </button>
@@ -368,9 +376,13 @@ export default function ObsidianMemoryPanel({
           <button
             onClick={() => setFolderFilter('all')}
             className="text-[9px] px-2 py-0.5 rounded font-mono"
+            /* Selectie draagt kleur ÉN gewicht. Kleur alleen is te zwak om
+               "deze staat aan" te betekenen, en een gekleurd vlak eromheen is
+               precies wat wet 10 verbiedt. */
             style={{
-              background: folderFilter === 'all' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)',
+              background: 'rgba(255,255,255,0.04)',
               color: folderFilter === 'all' ? 'var(--accent-cyan)' : 'var(--text-muted)',
+              fontWeight: folderFilter === 'all' ? 700 : 400,
             }}
           >
             all
@@ -380,9 +392,12 @@ export default function ObsidianMemoryPanel({
               key={name}
               onClick={() => setFolderFilter(name)}
               className="text-[9px] px-2 py-0.5 rounded font-mono"
+              /* Zelfde vorm als de "all"-knop ernaast. Zou die neutraal zijn
+                 en deze getint, dan leest één rij knoppen als twee soorten. */
               style={{
-                background: folderFilter === name ? `${FOLDER_COLORS[name] || 'var(--accent-cyan)'}22` : 'rgba(255,255,255,0.04)',
+                background: 'rgba(255,255,255,0.04)',
                 color: folderFilter === name ? (FOLDER_COLORS[name] || 'var(--accent-cyan)') : 'var(--text-muted)',
+                fontWeight: folderFilter === name ? 700 : 400,
               }}
             >
               {name} ({count})
@@ -440,7 +455,11 @@ export default function ObsidianMemoryPanel({
             onClick={() => void handleDecay()}
             disabled={decayBusy}
             className="flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-lg"
-            style={{ background: 'rgba(167,139,250,0.12)', color: '#C4B5FD' }}
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              color: '#C4B5FD',
+              border: '1px solid rgba(167,139,250,0.3)',
+            }}
           >
             <Sparkles size={11} /> {decayBusy ? 'Decay…' : 'Decay pass'}
           </button>
@@ -512,7 +531,9 @@ export default function ObsidianMemoryPanel({
             {(selected.tags || []).length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-4">
                 {(selected.tags || []).map(t => (
-                  <span key={t} className="text-[10px] px-2 py-0.5 rounded-full font-mono" style={{ background: 'rgba(59,130,246,0.12)', color: '#93C5FD' }}>#{t}</span>
+                  /* Tags en wikilinks hieronder zijn dezelfde soort label, dus
+                     dezelfde vorm: oppervlak als vulling, kleur in het woord. */
+                  <span key={t} className="text-[10px] px-2 py-0.5 rounded-full font-mono" style={{ background: 'rgba(255,255,255,0.05)', color: '#93C5FD' }}>#{t}</span>
                 ))}
               </div>
             )}
@@ -520,7 +541,7 @@ export default function ObsidianMemoryPanel({
               <div className="flex flex-wrap items-center gap-2 mb-4">
                 <Link2 size={12} color="var(--text-muted)" />
                 {(selected.wikilinks || []).map(w => (
-                  <span key={w} className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'rgba(167,139,250,0.12)', color: '#C4B5FD' }}>[[{w}]]</span>
+                  <span key={w} className="text-[10px] px-2 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.05)', color: '#C4B5FD' }}>[[{w}]]</span>
                 ))}
               </div>
             )}

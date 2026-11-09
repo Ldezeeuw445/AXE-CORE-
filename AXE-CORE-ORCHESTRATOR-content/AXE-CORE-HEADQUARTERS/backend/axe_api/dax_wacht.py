@@ -57,7 +57,9 @@ HARTSLAG = r"""
 set +e
 b(){ command -v "$1" >/dev/null 2>&1 && echo true || echo false; }
 f(){ [ -s "$1" ] && echo true || echo false; }
-code(){ c=$(curl -s -o /dev/null -m 8 -w '%{http_code}' "$1" 2>/dev/null); echo "${c:-0}"; }
+# curl geeft "000" als er geen verbinding is; als JSON-getal is dat ongeldig
+# (voorloopnullen), en dan leek de hele computer onbereikbaar. 10# maakt er 0 van.
+code(){ c=$(curl -s -o /dev/null -m 8 -w '%{http_code}' "$1" 2>/dev/null); case "$c" in ''|*[!0-9]*) c=0;; esac; echo $((10#$c)); }
 mem_av=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo 2>/dev/null)
 mem_tot=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo 2>/dev/null)
 cg=$(cat /sys/fs/cgroup/memory.current 2>/dev/null)
@@ -184,6 +186,41 @@ def model_blokkade(http_get: Callable[[str, float], tuple[int, str]] | None = No
     if os.environ.get("GROQ_API_KEY"):
         return None
     return f"no model for the agent loop: {ollama_fout} and no GROQ_API_KEY"
+
+
+def _ontpin_nodig(ps: dict[str, Any], model: str, nu: datetime) -> bool:
+    """Staat `model` geladen met een verlooptijd van meer dan een dag? Dan is
+    het nog de oude keep_alive -1 (Ollama zet die op een datum ver weg)."""
+    for m in ps.get("models") or []:
+        if m.get("name") == model or m.get("model") == model:
+            tot = _tijd(m.get("expires_at"))
+            return bool(tot and tot - nu > timedelta(days=1))
+    return False
+
+
+def ontpin_ollama(post: Callable[[str, dict[str, Any]], dict[str, Any]] | None = None,
+                  get: Callable[[str], dict[str, Any]] | None = None, nu: datetime | None = None) -> str:
+    """8 nov: Ollama stond vastgepind (keep_alive -1) en hield de modelbox onder
+    MIN_VRIJ_MB, zodat geen DAX-bot draaide. agent_loop pint niet meer, maar een
+    al geladen model houdt zijn oude afspraak tot de volgende aanvraag -- en
+    Ollama is de laatste terugval, dus die kan dagen wegblijven. Hier zetten we
+    alleen de timer van een AL GELADEN model terug; laden doen we nooit."""
+    import agent_loop
+    host = os.environ.get("OLLAMA_HOST", "https://ollama.axecompanion.com").rstrip("/")
+    model = agent_loop.OLLAMA_MODEL
+    nu = nu or _nu()
+    if get is None or post is None:
+        import httpx
+
+        def get(url: str) -> dict[str, Any]:  # noqa: F811
+            return httpx.get(url, headers=agent_loop._ollama_headers(), timeout=10).json()
+
+        def post(url: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: F811
+            return httpx.post(url, headers=agent_loop._ollama_headers(), json=body, timeout=60).json()
+    if not _ontpin_nodig(get(f"{host}/api/ps"), model, nu):
+        return "not pinned"
+    post(f"{host}/api/generate", {"model": model, "keep_alive": agent_loop._ollama_keep_alive()})
+    return f"keep_alive {agent_loop._ollama_keep_alive()}"
 
 
 def _http_get(url: str, timeout: float) -> tuple[int, str]:
@@ -413,6 +450,12 @@ def ronde(client_factory: Callable[[], Any], *, runtime_factory: Callable[[DaxCo
             except Exception as exc:  # noqa: BLE001
                 verslag["mission_error"] = str(exc)[:300]
         uit["bots"][agent] = verslag
+    krap = [b for b in uit["bots"].values() if 0 < int(b.get("mem_free_mb") or 0) < MIN_VRIJ_MB]
+    if krap:
+        try:
+            uit["ollama_ontpind"] = ontpin_ollama()
+        except Exception as exc:  # noqa: BLE001 — mag de DAX-ronde nooit breken
+            uit["ollama_ontpind"] = f"error: {str(exc)[:200]}"
     # G1: ook de Mac-workers (Mac Mini/iMac) meten; stil > 3 min = melding.
     try:
         import worker_wacht

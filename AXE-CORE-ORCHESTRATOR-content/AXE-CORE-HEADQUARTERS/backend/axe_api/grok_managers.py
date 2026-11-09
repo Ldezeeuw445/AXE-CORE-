@@ -212,137 +212,465 @@ def _vraag_luka(db: Any, agent: str, wat: str, waarom: str) -> None:
         "goal": waarom,
     })
     taak_id = (taak or {}).get("id")
-    _schrijf(db, "core_approvals", {
-        "task_id": taak_id,
-        "status": "pending",
-        "kind": "manager_ask",
-        "title": wat,
-        "detail": waarom,
-        "wat": wat,
-        "waarom": waarom,
-        "requested_by": agent,
-        "metadata": {"agent": agent, "manager": True},
-    })
+    # Via de ene helper die de planner en de crews ook gebruiken. Hier stond
+    # een eigen insert met de kolommen `wat` en `waarom`, die core_approvals
+    # niet heeft: de insert faalde stil (_schrijf slikt fouten), dus sinds
+    # 27 okt heeft geen manager ooit een kaart bij Luka kunnen neerleggen.
+    # Gevonden 6 nov: de NorthSea-melding kwam wel, de kaart niet.
+    if not taak_id:
+        return
+    from goedkeuring_melding import vraag_luka
+    vraag_luka(
+        db, taak_id,
+        titel=wat, detail=waarom, kind="manager_ask",
+        requested_by=agent, metadata={"agent": agent, "manager": True},
+    )
+
+
+def _laatste_rapporten(db: Any) -> dict[str, dict[str, Any]]:
+    uit: dict[str, dict[str, Any]] = {}
+    for m in GROK_IDS:
+        if m == BAAS:
+            continue
+        try:
+            rij = (db.table("core_manager_messages").select("body,created_at").eq("from_agent", m)
+                   .eq("to_agent", BAAS).eq("kind", "report").order("created_at", desc=True)
+                   .limit(1).execute().data) or []
+        except Exception:  # noqa: BLE001
+            rij = []
+        if rij:
+            uit[m] = rij[0]
+    return uit
+
+
+def _sluit_opgeloste_vragen(db: Any, vragen: list[dict[str, Any]], rapporten: dict[str, dict[str, Any]],
+                            nu: datetime) -> list[dict[str, Any]]:
+    """Wat de baas zelf mag: een manager-vraag die de manager niet meer meldt
+    van Luka's lijst halen. 9 nov stond "er komt geen mail meer binnen" er
+    nog, drie dagen nadat de mail weer binnenkwam."""
+    import baas_bewaker as bb
+    gesloten = []
+    for v in bb.opgeloste_vragen(vragen, rapporten, nu):
+        reden = f"{v.get('requested_by')} meldt dit niet meer (rapport {rapporten[v['requested_by']].get('created_at')})"
+        meta = v.get("metadata") if isinstance(v.get("metadata"), dict) else {}
+        try:
+            db.table("core_approvals").update({
+                "status": "expired",
+                "metadata": {**meta, "gesloten_door": BAAS, "reden": reden, "gesloten_op": nu.isoformat()},
+            }).eq("id", v["id"]).eq("status", "pending").execute()
+            if v.get("task_id"):
+                db.table("core_tasks").update({"status": "cancelled"}).eq("id", v["task_id"]) \
+                    .eq("status", "waiting_approval").execute()
+            gesloten.append(v)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("axemanager: kon vraag %s niet sluiten (%s)", v.get("id"), exc)
+    return gesloten
 
 
 def run_axemanager(db: Any, nu: datetime) -> dict[str, Any]:
-    """Baas: leest rapporten, stuurt richting, beveelt eerst, vraagt Luka zelden."""
-    pending = _rijen(db, "core_approvals", "id,title,status", status="pending")
-    taken = _rijen(db, "core_tasks", "id,status,assignee")
-    rapporten = inbox(db, BAAS)
-    roosters = _rijen(db, "core_schedules", "name,job_key,last_status,last_result,enabled")
-    mgr_jobs = [r for r in roosters if str(r.get("job_key") or "").startswith("axe_core:staande-")
-                and any(k in str(r.get("job_key")) for k in GROK_IDS)]
-    for r in rapporten:
+    """Baas: ziet of de managers zelf draaien, haalt vragen die opgelost zijn
+    van Luka's lijst, en zegt alleen iets als er iets verandert."""
+    import baas_bewaker as bb
+    vragen = _rijen(db, "core_approvals", "id,title,status,kind,requested_by,task_id,metadata,created_at",
+                    status="pending")
+    roosters = _rijen(db, "core_schedules", "name,job_key,enabled,last_status,consecutive_failures,last_run_at",
+                      limiet=500)
+    rapporten = _laatste_rapporten(db)
+    gesloten = _sluit_opgeloste_vragen(db, vragen, rapporten, nu)
+    weg = {v.get("id") for v in gesloten}
+    open_vragen = [v for v in vragen if v.get("id") not in weg]
+
+    bevindingen = bb.beoordeel(roosters, tuple(m for m in GROK_IDS if m != BAAS), nu)
+    voor_luka = [b for b in bevindingen if b.voor == "luka"]
+    for b in voor_luka:
+        _vraag_luka(db, BAAS, b.titel, b.detail)
+
+    # Geen directives meer elke pulse: 720 per dag "stuur niets" was ruis in
+    # het gesprek dat Luka leest. Ongelezen rapporten worden wel gelezen.
+    for r in inbox(db, BAAS):
         try:
-            db.table("core_manager_messages").update({
-                "read_at": nu.isoformat(),
-            }).eq("id", r["id"]).execute()
+            db.table("core_manager_messages").update({"read_at": nu.isoformat()}).eq("id", r["id"]).execute()
         except Exception:  # noqa: BLE001
             pass
-    queued = sum(1 for t in taken if t.get("status") in ("queued", "retrying", "pending", "waiting_approval"))
-    aanbeveling = (
-        f"Aanbeveling: {len(pending)} vragen voor jou, {queued} taken open, "
-        f"{len(rapporten)} rapporten van managers."
-        if pending or queued or rapporten else
-        "Aanbeveling: niets buiten het plan; managers lopen, geen ja nodig."
-    )
-    for andere in GROK_IDS:
-        if andere == BAAS:
-            continue
-        stuur_bericht(db, BAAS, andere, "directive",
-                      f"Pulse {nu.strftime('%H:%M')} UTC. Rapporteer blokkades; stuur niets, verhandel niets.")
+
+    delen = [b.titel for b in bevindingen]
+    if gesloten:
+        delen.insert(0, "opgelost en van je lijst gehaald: " + "; ".join(str(v.get("title")) for v in gesloten))
+    aanbeveling = (f"Aanbeveling: {len(open_vragen)} vragen wachten op jou"
+                   + ("; " + "; ".join(delen) if delen else "; alle managers draaien") + ".")
+    gerapporteerd = False
+    if gesloten:
+        # Eén keer per gesloten vraag, zodat Luka in het managersgesprek ziet
+        # waarom een kaart verdween. (Baas -> baas valt buiten mag_peer_bericht.)
+        toets_actie("report", aanbeveling)
+        gerapporteerd = _schrijf(db, "core_manager_messages", {
+            "from_agent": BAAS, "to_agent": BAAS, "kind": "report", "body": aanbeveling[:4000],
+        }) is not None
     return {
         "job": "orchestrate managers",
         "aanbeveling": aanbeveling,
-        "pending_ok": len(pending),
-        "queued": queued,
-        "rapporten": len(rapporten),
-        "manager_jobs": len(mgr_jobs),
+        "pending_ok": len(open_vragen),
+        "gesloten": [v.get("title") for v in gesloten],
+        "voor_luka": [b.code for b in voor_luka],
+        "bevindingen": [b.code for b in bevindingen],
+        "gerapporteerd": gerapporteerd,
         "taal": "nl",
     }
 
 
+OPEN_TAAK = ("pending", "queued", "retrying", "waiting_approval", "planning", "running", "in_progress", "verifying")
+
+
+def _open_taken(db: Any) -> list[dict[str, Any]]:
+    """Alleen de open rijen. Zonder filter las de manager 200 willekeurige van
+    ruim 2.200 taken (vooral oude afgeronde) en telde daarop."""
+    try:
+        return (db.table("core_tasks").select("id,status,assignee,title,capability,created_at,updated_at,metadata")
+                .in_("status", list(OPEN_TAAK)).limit(1000).execute().data) or []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("grok: open taken onleesbaar (%s)", exc)
+        return []
+
+
+def _rapporteer_bij_verandering(db: Any, agent: str, body: str) -> bool:
+    """Een rapport aan de baas alleen als het iets nieuws zegt.
+
+    Elk kwartier "31 open rows" is ruis in het managersgesprek dat Luka leest.
+    """
+    try:
+        eerdere = (db.table("core_manager_messages").select("body,created_at").eq("from_agent", agent)
+                   .eq("to_agent", BAAS).eq("kind", "report").order("created_at", desc=True)
+                   .limit(1).execute().data) or []
+    except Exception:  # noqa: BLE001 -- liever één rapport te veel dan stil
+        eerdere = []
+    if eerdere and (eerdere[0].get("body") or "").strip() == body.strip():
+        return False
+    stuur_bericht(db, agent, BAAS, "report", body)
+    return True
+
+
+def _met_sleutels(db: Any, app: str, body: str) -> str:
+    """Rapport plus één zin over kapotte sleutels van deze app (sleutels.py).
+
+    Alleen als er iets kapot is, en het rapport verandert alleen als dat
+    verandert: geen ruis, wel één bericht zodra een sleutel stuk gaat."""
+    try:
+        import sleutels
+        regel = sleutels.manager_regel(db, app)
+    except Exception:  # noqa: BLE001
+        regel = ""
+    return f"{body} {regel}." if regel else body
+
+
+def _dagoverzicht(db: Any, nu: datetime, naam: str, bevindingen: list[Any]) -> bool:
+    if not _dagoverzicht_tijd(nu):
+        return False
+    try:
+        from goedkeuring_melding import schrijf_goedkeuring_melding
+        regels = [f"{b.titel}. {b.detail}".strip() for b in bevindingen][:5]
+        # Zelfde kop binnen 24 uur = geen tweede (ontdubbeling in de melding).
+        return schrijf_goedkeuring_melding(
+            db, f"{naam} vandaag {nu.strftime('%d-%m')}", " | ".join(regels) or "Niets dat op jou wacht.") is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _ruim_dubbele_voorstellen_op(db: Any, rijen: list[dict[str, Any]], nu: datetime) -> list[dict[str, Any]]:
+    """Wat de manager zelf mag oplossen: dubbele `pending`-voorstellen.
+
+    Alleen voorstellen die nog niemand oppakte; de nieuwste blijft staan, de
+    rest wordt `cancelled` met de reden erbij (terug te zetten als het fout was).
+    """
+    import projecten_bewaker as pb
+    opgeruimd = []
+    for r in pb.dubbele_voorstellen(rijen)[:pb.MAX_OPRUIMEN_PER_PULSE]:
+        meta = r.get("metadata") if isinstance(r.get("metadata"), dict) else {}
+        try:
+            db.table("core_tasks").update({
+                "status": "cancelled",
+                "metadata": {**meta, "opgeruimd_door": "projectsmgr", "reden": "dubbel voorstel",
+                             "opgeruimd_op": nu.isoformat()},
+            }).eq("id", r["id"]).eq("status", "pending").execute()
+            opgeruimd.append(r)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("projectsmgr: kon dubbel voorstel %s niet opruimen (%s)", r.get("id"), exc)
+    return opgeruimd
+
+
 def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
-    taken = _rijen(db, "core_tasks", "id,status,assignee,title,capability")
-    open_ = [t for t in taken if t.get("status") in ("queued", "pending", "retrying", "waiting_approval")]
-    zonder = [t for t in open_ if not t.get("assignee")]
-    opdrachten = inbox(db, "projectsmgr")
-    stuur_bericht(
-        db, "projectsmgr", BAAS, "report",
-        f"{len(open_)} open rows, {len(zonder)} unassigned. No sends.",
-    )
+    """Eigenaar van de takenlijst: ziet wat stilstaat, ruimt dubbels op, roept
+    Luka alleen voor wat hij zelf niet kan oplossen."""
+    import projecten_bewaker as pb
+    rijen = _open_taken(db)
+    opgeruimd = _ruim_dubbele_voorstellen_op(db, rijen, nu)
+    weg = {r.get("id") for r in opgeruimd}
+    rijen = [r for r in rijen if r.get("id") not in weg]
+
+    bevindingen = pb.beoordeel(rijen, nu)
+    voor_luka = [b for b in bevindingen if b.voor == "luka"]
+    for b in voor_luka:
+        _vraag_luka(db, "projectsmgr", b.titel, b.detail)
+    overzicht = _dagoverzicht(db, nu, "Taken", bevindingen)
+
+    delen = [b.titel for b in bevindingen]
+    if opgeruimd:
+        delen.insert(0, f"{len(opgeruimd)} dubbele voorstellen opgeruimd")
+    gerapporteerd = _rapporteer_bij_verandering(
+        db, "projectsmgr", _met_sleutels(
+            db, "AXE Core", "Taken: " + ("; ".join(delen) if delen else "niets staat stil") + "."))
     return {
         "job": "projects and tasks",
-        "open": len(open_),
-        "unassigned": len(zonder),
-        "directives": len(opdrachten),
-        "assigned": 0 if not zonder else "proposed only",
+        "open": len(rijen),
+        "voor_luka": [b.code for b in voor_luka],
+        "bevindingen": [b.code for b in bevindingen],
+        "opgeruimd": len(opgeruimd),
+        "dagoverzicht": overzicht,
+        "gerapporteerd": gerapporteerd,
+        "directives": len(inbox(db, "projectsmgr")),
     }
 
 
+ROOSTER_KOLOMMEN = ("id,name,app,job_key,enabled,last_status,last_result,consecutive_failures,"
+                   "next_run_at,last_run_at,lease_owner,lease_until,metadata")
+
+
+def _herkans_vroeg(db: Any, rijen: list[dict[str, Any]], nu: datetime) -> list[dict[str, Any]]:
+    """Wat de manager zelf mag oplossen: na een tijdelijke fout (502, time-out)
+    de terugval-rust van de planner inkorten, één keer per uur per job.
+
+    8 nov: een databasestoring van een uur hield de NorthSea-motor door de
+    6-uursrust tot 14:13 stil. De job blijft dezelfde job met dezelfde grenzen.
+    """
+    import roosters_bewaker as rb
+    gedaan = []
+    for r in rb.herkansen(rijen, nu):
+        meta = r.get("metadata") if isinstance(r.get("metadata"), dict) else {}
+        try:
+            db.table("core_schedules").update({
+                "next_run_at": nu.isoformat(),
+                "metadata": {**meta, "vroeg_herkanst_op": nu.isoformat(), "vroeg_herkanst_door": "companionmgr"},
+            }).eq("id", r["id"]).eq("enabled", True).execute()
+            gedaan.append(r)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("companionmgr: kon %s niet herkansen (%s)", r.get("job_key"), exc)
+    return gedaan
+
+
 def run_companionmgr(db: Any, nu: datetime) -> dict[str, Any]:
-    roosters = _rijen(db, "core_schedules", "name,app,last_status,enabled")
-    eigen = [r for r in roosters if r.get("app") in ("axe_companion", "axe_core")]
-    fail = [r for r in eigen if r.get("last_status") in ("fail", "timeout")]
-    stuur_bericht(
-        db, "companionmgr", BAAS, "report",
-        f"Companion/CORE jobs {len(eigen)}, failing {len(fail)}. Smoke only, no deploy out of plan.",
-    )
+    """Eigenaar van de vaste jobs: ziet wat faalt of blijft liggen, herkanst
+    na een tijdelijke storing, roept Luka alleen als het blijft falen."""
+    import roosters_bewaker as rb
+    rijen = _rijen(db, "core_schedules", ROOSTER_KOLOMMEN, limiet=500)
+    herkanst = _herkans_vroeg(db, rijen, nu)
+    bevindingen = rb.beoordeel(rijen, nu)
+    voor_luka = [b for b in bevindingen if b.voor == "luka"]
+    for b in voor_luka:
+        _vraag_luka(db, "companionmgr", b.titel, b.detail)
+    overzicht = _dagoverzicht(db, nu, "Vaste jobs", bevindingen)
+
+    delen = [b.titel for b in bevindingen]
+    if herkanst:
+        delen.insert(0, "nu opnieuw gestart: " + ", ".join(str(r.get("name") or r.get("job_key")) for r in herkanst))
+    gerapporteerd = _rapporteer_bij_verandering(
+        db, "companionmgr", _met_sleutels(
+            db, "AXE Companion", "Vaste jobs: " + ("; ".join(delen) if delen else "alles draait") + "."))
+    aan = [r for r in rijen if r.get("enabled")]
     return {
-        "job": "companion owner",
+        "job": "companion and standing jobs owner",
         "repo": "AXE-COMPANION-OS-",
-        "jobs": len(eigen),
-        "failing": len(fail),
+        "jobs": len(aan),
+        "failing": sum(1 for r in aan if r.get("last_status") in ("fail", "timeout")),
+        "herkanst": [r.get("job_key") for r in herkanst],
+        "voor_luka": [b.code for b in voor_luka],
+        "bevindingen": [b.code for b in bevindingen],
+        "dagoverzicht": overzicht,
+        "gerapporteerd": gerapporteerd,
         "deployed": 0,
     }
 
 
+def _vandaag(db: Any, tabel: str, kolommen: str, nu: datetime) -> list[dict[str, Any]]:
+    """Alleen de rijen van vandaag (UTC, zoals de daglimiet telt): licht lezen."""
+    try:
+        dag = nu.strftime("%Y-%m-%dT00:00:00+00:00")
+        return (db.table(tabel).select(kolommen).gte("created_at", dag).limit(500).execute().data) or []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("axon: %s onleesbaar (%s)", tabel, exc)
+        return []
+
+
+def _lokaal_uur(nu: datetime) -> int:
+    try:
+        from zoneinfo import ZoneInfo
+        return nu.astimezone(ZoneInfo("Europe/Amsterdam")).hour
+    except Exception:  # noqa: BLE001
+        return nu.hour
+
+
 def run_axon(db: Any, nu: datetime) -> dict[str, Any]:
-    memories = _rijen(db, "memory", "id,agent,kind", limiet=50)
-    rag = _rijen(db, "rag_memories", "id", limiet=20)
-    stuur_bericht(
-        db, "axon", BAAS, "report",
-        f"AXON pulse. memory seen {len(memories)}, rag {len(rag)}. No HOLD writes.",
-    )
+    """Eigenaar van het geheugen: ziet of de agents vandaag nog kunnen leren en
+    of er ruis langs het hek komt. Roept Luka alleen als hij het niet zelf kan."""
+    import axon_bewaker as ab
+    rag = _vandaag(db, "rag_memories", "id,category,metadata->>source,created_at", nu)
+    # PostgREST geeft metadata->>source terug als "source".
+    rag = [{**r, "metadata": {"source": r["source"]}} if "source" in r else r for r in rag]
+    memory = _vandaag(db, "memory", "id,agent,key,content,created_at", nu)
+    t = ab.tel(rag, memory)
+    bevindingen = ab.beoordeel(rag, memory, _lokaal_uur(nu))
+    voor_luka = [b for b in bevindingen if b.voor == "luka"]
+    for b in voor_luka:
+        _vraag_luka(db, "axon", b.titel, b.detail)
+    overzicht = _dagoverzicht(db, nu, "Geheugen", bevindingen)
+    kop = f"vandaag {t['lessen']} lessen, {t['notities']} notities (limiet {ab.GEHEUGEN_MAG_PER_DAG})"
+    gerapporteerd = _rapporteer_bij_verandering(
+        db, "axon", f"Geheugen: {kop}; " + ("; ".join(b.titel for b in bevindingen) or "hek houdt") + ".")
     return {
         "job": "axon memory owner",
         "repo": "axon-memory",
         "supabase": "ktaditgtbubonrahyiig",
-        "memory_seen": len(memories),
-        "rag_seen": len(rag),
+        **t,
+        "voor_luka": [b.code for b in voor_luka],
+        "bevindingen": [b.code for b in bevindingen],
+        "dagoverzicht": overzicht,
+        "gerapporteerd": gerapporteerd,
         "invented": 0,
     }
 
 
+def _nieuwste(db: Any, tabel: str, kolommen: str, kolom: str) -> dict[str, Any] | None:
+    """De nieuwste rij op `kolom`. Zonder sorteren gaf de database zomaar een rij."""
+    try:
+        rijen = (db.table(tabel).select(kolommen).order(kolom, desc=True).limit(1).execute().data) or []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("grok: %s onleesbaar (%s)", tabel, exc)
+        return None
+    return rijen[0] if rijen else None
+
+
 def run_tradingos(db: Any, nu: datetime) -> dict[str, Any]:
-    tide = _rijen(db, "intel_market_tide", "bias,snapshot_time", limiet=3)
-    stuur_bericht(
-        db, "tradingos", BAAS, "report",
-        f"Trading OS pulse. bias={(tide[0] or {}).get('bias') if tide else None}. orders=0.",
-    )
+    """Eigenaar van Trading OS (alleen lezen): zegt eerlijk hoe vers de data is.
+    Geen orders, geen advies; een oude bias heet niet actueel."""
+    import intel_bewaker as ib
+    tide = _nieuwste(db, "intel_market_tide", "bias,snapshot_time", "snapshot_time")
+    feeds = _rijen(db, "intel_sync_log", "feed_id,source,last_sync_at,rows_synced,last_error", limiet=100)
+    sig = ib.signaal(tide, nu)
+    bevindingen = ib.beoordeel(feeds, tide, nu)
+    overzicht = _dagoverzicht(db, nu, "Trading OS", bevindingen)
+    kop = f"bias {sig['bias']} ({sig['at']})" if sig["vers"] else "geen actueel signaal"
+    gerapporteerd = _rapporteer_bij_verandering(
+        db, "tradingos", _met_sleutels(db, "Trading OS", f"Trading OS: {kop}; "
+        + ("; ".join(b.titel for b in bevindingen if b.code != "signaal_oud") or "feeds vers")
+        + ". Orders: 0."))
     return {
         "job": "trading os owner",
         "repos": list(REPO_SCOPE["tradingos"]["repos"]),
-        "bias": (tide[0] or {}).get("bias") if tide else None,
+        "bias": sig["bias"],
+        "signaal_op": sig["at"],
+        "bevindingen": [b.code for b in bevindingen],
+        "dagoverzicht": overzicht,
+        "gerapporteerd": gerapporteerd,
         "orders": 0,
         "live": False,
     }
 
 
-def run_northseamgr(db: Any, nu: datetime) -> dict[str, Any]:
-    pending = _rijen(db, "core_approvals", "id,title,kind,status", status="pending")
-    desk = [t for t in _rijen(db, "core_tasks", "id,status,capability,title")
-            if t.get("capability") == "northsea_desk"]
-    stuur_bericht(
-        db, "northseamgr", BAAS, "report",
-        f"NorthSea: first deal remains the priority. {len(pending)} OK-vragen. No send, auto_send_* untouched.",
-    )
+# Eén keer per dag een overzicht, bij de eerste pulse na dit uur (Amsterdam).
+DAGOVERZICHT_UUR = 8
+
+
+def _dagoverzicht_tijd(nu: datetime) -> bool:
+    try:
+        from zoneinfo import ZoneInfo
+        lokaal = nu.astimezone(ZoneInfo("Europe/Amsterdam"))
+    except Exception:  # noqa: BLE001
+        lokaal = nu
+    return lokaal.hour >= DAGOVERZICHT_UUR
+
+
+def meld_mailduidingen(db: Any) -> int:
+    """Afgeronde leesbeurten van de mailwachter (northsea_mailwachter.zet_analyse_klaar)
+    naar Luka: een bericht in het managersgesprek en een melding in de bel.
+
+    Een taak die klaar is maar nergens gemeld wordt, is voor Luka niet gebeurd.
+    Elke duiding één keer: daarna staat metadata.gemeld op True.
+    """
+    from northsea_mailwachter import ANALYSE_DOOR
+    try:
+        rijen = (db.table("core_tasks").select("id,title,result,metadata,status")
+                 .eq("requested_by", ANALYSE_DOOR).eq("status", "completed").execute().data) or []
+    except Exception:  # noqa: BLE001
+        return 0
+    gemeld = 0
+    for r in rijen:
+        meta = r.get("metadata") if isinstance(r.get("metadata"), dict) else {}
+        if meta.get("gemeld"):
+            continue
+        res = r.get("result") if isinstance(r.get("result"), dict) else {}
+        duiding = str(res.get("summary") or "").strip()
+        if not duiding:
+            continue
+        kop = str(r.get("title") or "NorthSea mail")[:120]
+        try:
+            stuur_bericht(db, "northseamgr", BAAS, "report", f"{kop}\n{duiding}")
+        except Verboden:
+            pass  # de tekst van een model mag de melding hieronder niet tegenhouden
+        try:
+            from goedkeuring_melding import LUKA_USER_ID, melding_voor_goedkeuring
+            db.table("core_notifications").insert({
+                "recipient": LUKA_USER_ID, "type": "info",
+                "message": melding_voor_goedkeuring(kop, duiding[:600]),
+            }).execute()
+            db.table("core_tasks").update({"metadata": {**meta, "gemeld": True}}).eq("id", r["id"]).execute()
+            gemeld += 1
+        except Exception:  # noqa: BLE001 -- volgende pulse opnieuw
+            continue
+    return gemeld
+
+
+def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any]:
+    """NorthSea-eigenaar: kijkt in de échte NorthSea-database, niet in AXE's eigen tabellen.
+
+    Wat Luka moet doen wordt een vraag (approval + push). De rest komt één keer
+    per dag in een overzicht. Niets versturen, niets goedkeuren, geen vlaggen.
+    """
+    import northsea_bewaker as bewaker
+    duidingen = meld_mailduidingen(db)
+    try:
+        health, ops, metrics = bewaker.haal(ophaler)
+    except Exception as exc:  # noqa: BLE001
+        # Niet stil zijn als hij niet kan kijken: dat was precies het probleem.
+        _rapporteer_bij_verandering(db, "northseamgr", f"NorthSea: kan de desk niet lezen ({str(exc)[:160]}).")
+        return {"job": "northsea desk owner", "priority": "first deal", "gelezen": False, "fout": str(exc)[:300],
+                "sent": 0, "flags": "untouched"}
+
+    bevindingen = bewaker.beoordeel(health, ops, metrics, nu)
+    voor_luka = [b for b in bevindingen if b.voor == "luka"]
+    for b in voor_luka:
+        _vraag_luka(db, "northseamgr", b.titel, b.detail)
+
+    overzicht = False
+    if _dagoverzicht_tijd(nu):
+        try:
+            from goedkeuring_melding import schrijf_goedkeuring_melding
+            regels = [f"{b.titel}. {b.detail}".strip() for b in bevindingen][:5]
+            kop = f"NorthSea vandaag {nu.strftime('%d-%m')}"
+            # Zelfde kop binnen 24 uur = geen tweede (ontdubbeling in de melding).
+            overzicht = schrijf_goedkeuring_melding(
+                db, kop, " | ".join(regels) or "Niets dat op jou wacht.") is not None
+        except Exception:  # noqa: BLE001
+            overzicht = False
+
+    samenvatting = "; ".join(b.titel for b in bevindingen) or "desk loopt, niets voor Luka"
+    # Alleen bij verandering: 8 nov 97 keer per dag hetzelfde rapport.
+    _rapporteer_bij_verandering(db, "northseamgr", _met_sleutels(db, "NorthSea", f"NorthSea: {samenvatting}."))
     return {
         "job": "northsea desk owner",
         "priority": "first deal",
-        "pending_ok": len(pending),
-        "desk_tasks": len(desk),
+        "gelezen": True,
+        "voor_luka": [b.code for b in voor_luka],
+        "bevindingen": [b.code for b in bevindingen],
+        "dagoverzicht": overzicht,
+        "mailduidingen": duidingen,
         "sent": 0,
         "flags": "untouched",
     }

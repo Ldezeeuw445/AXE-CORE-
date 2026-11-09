@@ -13,7 +13,7 @@ from typing import Any
 
 from . import __version__, canon
 from .readlayer import (
-    GATES, MARKET_INSTRUMENTS, OPEN_TASK, READINESS_FRAMEWORK, UUID, InspectService, View, _lower, _since, iso, page, resolve_one,
+    GATES, INBOUND_TABLES, MARKET_INSTRUMENTS, OPEN_TASK, READINESS_FRAMEWORK, UUID, InspectService, View, _lower, _since, iso, page, resolve_one,
     thread_key, ts,
 )
 from .service import Caller, NotFound, ServiceError
@@ -423,8 +423,9 @@ class ReadTools:
 
     # ── COMMUNICATIONS ───────────────────────────────────────────────────────
     async def list_communications(self, caller: Caller, *, direction=None, channel=None, delivery_status=None, counterparty=None, deal=None,
-                                  classification=None, urgency=None, since=None, has_analysis=None, limit=25, offset=0) -> dict:
-        v = await self.v(caller)
+                                  classification=None, urgency=None, since=None, has_analysis=None, limit=25, offset=0,
+                                  _view: View | None = None) -> dict:
+        v = _view or await self.v(caller)
         sinds = _since(since)
         cid = self.company(v, counterparty).get("id") if counterparty else None
         did = self.deal(v, deal).get("id") if deal else None
@@ -474,7 +475,10 @@ class ReadTools:
 
     async def recent_inbound(self, caller: Caller, *, days=7, limit=25, offset=0) -> dict:
         since = iso(_now_minus(days))
-        uit = await self.list_communications(caller, direction="inbound", since=since, limit=limit, offset=offset)
+        # De mailwachter vraagt dit elke minuut: alleen de mailtabellen, niet de
+        # hele desk (8 nov liep de database daardoor vast, zie GELIJKTIJDIG).
+        v = await self.i.view(caller, tabellen=INBOUND_TABLES)
+        uit = await self.list_communications(caller, direction="inbound", since=since, limit=limit, offset=offset, _view=v)
         uit["filters"] = {"direction": "inbound", "days": days}
         return uit
 

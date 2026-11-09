@@ -13,7 +13,7 @@ import { useUIStore } from '@/presentation/store/uiStore';
 import { zetServerAgentsStand } from '@/presentation/components/axe-core/useServerAgents';
 import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 import { NotificationProvider } from '@/presentation/contexts/NotificationContext';
-import { showMainWindow } from '@/infrastructure/gateways/tauriShell';
+import { showMainWindowQuietly } from '@/infrastructure/gateways/tauriShell';
 import { isIngebed } from '@/presentation/components/layout/zweef/ingebed';
 import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import { useAxeDeviceHeartbeat } from '@/presentation/hooks/useAxeDeviceHeartbeat';
@@ -213,7 +213,7 @@ export default function App() {
   useClapDetector(clapEnabled, () => {
     const voice = useVoiceStore.getState();
     stopTTS();
-    void showMainWindow();
+    void showMainWindowQuietly();
     if (voice.voiceStatus === 'listening' || voice.voiceStatus === 'processing') return;
     navigate('/');
     voice.startListening().catch(() => {});

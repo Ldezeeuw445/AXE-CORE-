@@ -169,6 +169,8 @@ _BRIEVEN: dict[str, str] = {
 _LEES = ("run_shell", "read_file", "list_devices", "run_on_device", "finish")
 _VOL = ("run_shell", "read_file", "write_file", "list_devices", "run_on_device", "finish")
 _CREW = _VOL + ("run_crew",)
+# De NorthSea-desk leest de échte desk via de gateway (alleen leesacties).
+_NORTHSEA = _LEES + ("northsea_read",)
 
 AGENT_WORKSPACES: dict[str, dict[str, Any]] = {
     "axe": {
@@ -183,7 +185,7 @@ AGENT_WORKSPACES: dict[str, dict[str, Any]] = {
     },
     "northsea": {
         "role": "Commodity desk manager", "system_prompt": _BRIEVEN["northsea"],
-        "tools": _LEES, "preferred_device": None, "memory_scope": "agent",
+        "tools": _NORTHSEA, "preferred_device": None, "memory_scope": "agent",
         "crew": [],
         "dax_computer": "dax-northsea-01", "computer_mode": "persistent",
     },
@@ -279,7 +281,7 @@ AGENT_WORKSPACES: dict[str, dict[str, Any]] = {
     "northseamgr": {
         "role": "Owns NorthSea Desk · first deal is the priority",
         "system_prompt": _BRIEVEN["northseamgr"],
-        "tools": _LEES, "preferred_device": None, "memory_scope": "agent",
+        "tools": _NORTHSEA, "preferred_device": None, "memory_scope": "agent",
         "crew": [],
     },
 }

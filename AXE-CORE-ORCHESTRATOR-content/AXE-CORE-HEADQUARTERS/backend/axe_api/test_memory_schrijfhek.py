@@ -57,3 +57,76 @@ def test_herschrijf_zet_hash_in_sleutel_en_weiger_cron():
         "value": "Cron fired: desk -> ok",
     })
     assert reden == "run_log" and uit is None
+
+
+class _Res:
+    def __init__(self, data):
+        self.data = data
+        self.count = len(data)
+
+
+class _RagQ:
+    def __init__(self, rijen):
+        self.rijen = rijen
+        self.vw = []
+
+    def select(self, *_a, **_k):
+        return self
+
+    def contains(self, kolom, waarde):
+        self.vw.append(lambda r: all((r.get(kolom) or {}).get(k) == v for k, v in waarde.items()))
+        return self
+
+    def gte(self, kolom, waarde):
+        self.vw.append(lambda r: str(r.get(kolom) or "") >= waarde)
+        return self
+
+    def order(self, kolom, desc=False):
+        self.volg = (kolom, desc)
+        return self
+
+    def limit(self, n):
+        self.n = n
+        return self
+
+    def execute(self):
+        uit = [r for r in self.rijen if all(f(r) for f in self.vw)]
+        if getattr(self, "volg", None):
+            uit.sort(key=lambda r: str(r.get(self.volg[0]) or ""), reverse=self.volg[1])
+        return _Res(uit[: getattr(self, "n", len(uit))])
+
+
+class _RagDb:
+    def __init__(self, rijen):
+        self.rijen = rijen
+
+    def table(self, _naam):
+        return _RagQ(self.rijen)
+
+
+def _notitie(tekst, pad="Trading/ETHUSD-scorecard.md"):
+    return {"category": "system", "content": f"[obsidian:{pad}] {tekst}",
+            "metadata": {"source": "obsidian", "path": pad}}
+
+
+def test_obsidian_notitie_die_er_al_staat_wordt_vervangen_niet_toegevoegd():
+    """9 nov: 23.110 van de 28.084 RAG-rijen waren kopieën van 1.196 notities;
+    de scorecards kwamen 3-4 keer per nacht opnieuw binnen en de daglimiet
+    van 120 was om 03:18 op."""
+    db = _RagDb([
+        {"id": "oud", "created_at": "2026-11-07T01:00:00+00:00",
+         "metadata": {"source": "obsidian", "path": "Trading/ETHUSD-scorecard.md", "content_hash": "x"}},
+        {"id": "nieuwst", "created_at": "2026-11-08T01:00:00+00:00",
+         "metadata": {"source": "obsidian", "path": "Trading/ETHUSD-scorecard.md", "content_hash": "y"}},
+    ])
+    reden, uit = hek.filter_rij(db, "rag_memories", _notitie("winrate 54%"))
+    assert reden == "vervang" and uit["id"] == "nieuwst"
+    assert uit["metadata"]["path"] == "Trading/ETHUSD-scorecard.md"
+
+
+def test_nieuwe_notitie_en_echte_les_gaan_gewoon_door():
+    db = _RagDb([{"id": "a", "created_at": "2026-11-08T01:00:00+00:00",
+                  "metadata": {"source": "obsidian", "path": "Andere.md"}}])
+    assert hek.filter_rij(db, "rag_memories", _notitie("eerste keer"))[0] == "ok"
+    les = {"category": "agent", "content": "Planner: een taak zonder eigenaar blijft liggen.", "metadata": {}}
+    assert hek.filter_rij(db, "rag_memories", les)[0] == "ok"

@@ -1,39 +1,48 @@
 /** Always-on floating AXE notch — Mochi-style, flush top of main display. */
-import { useEffect, useLayoutEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AxeOverlayNotch } from '@/presentation/components/overlay/AxeOverlayNotch';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+import { HANDVAT_BREEDTE, HANDVAT_HOOGTE, notchMaten, type NotchMaten } from '@/domain/overlay/notchMaten';
 
-/** Collapsed: compact top-center notch (spec ~200–720×44). Expanded only on hover/click. */
-const WIDTH_FRAC = 0.34;
-const MIN_W = 720;
-const COLLAPSED_H = 44;
-const BASE_W = 560;
-const BASE_H = 54;
-
-export type NotchMetrics = { w: number; collapsedH: number; expandedH: number; uiScale: number };
-
-function metricsForScreen(screenW: number, screenH: number): NotchMetrics {
-  const w = Math.max(MIN_W, Math.round(screenW * WIDTH_FRAC));
-  const collapsedH = COLLAPSED_H;
-  // Expanded drops down — ~42% of screen height, at least as tall as width*0.7
-  const expandedH = Math.max(Math.round(w * 0.7), Math.round(screenH * 0.42), 720);
-  const uiScale = collapsedH / BASE_H;
-  return { w, collapsedH, expandedH, uiScale };
+/**
+ * De maten komen uit `domain/overlay/notchMaten`, niet uit dit bestand.
+ *
+ * Hier stond `COLLAPSED_H = 44` met een eigen breedte-formule, en deze pagina
+ * is de laatste die aan het woord is: hij overschrijft bij elke start de
+ * CSS-variabele én de vensterhoogte. Het venster en de CSS stonden al op 80,
+ * maar dit zette hem terug naar 44 — dus de notch bleef te laag en niemand
+ * kon zien waarom.
+ *
+ * `uiScale` is om dezelfde reden weg. Die rekende `44 / 54 = 0,81` en kromp
+ * daarmee alles tot onder zijn eigen ontwerp. De CSS is getekend op
+ * NOTCH_HOOGTE bij schaal 1, en die 1 is de standaard in de CSS zelf.
+ */
+function metricsForScreen(screenW: number, screenH: number): NotchMaten {
+  return notchMaten(screenW, screenH);
 }
 
-const FALLBACK: NotchMetrics = metricsForScreen(1920, 1080);
+const FALLBACK: NotchMaten = metricsForScreen(1920, 1080);
 
-let cached: NotchMetrics = FALLBACK;
+let cached: NotchMaten = FALLBACK;
 
-function applyCssVars(m: NotchMetrics) {
-  const root = document.documentElement;
-  root.style.setProperty('--axe-notch-w', `${m.w}px`);
-  root.style.setProperty('--axe-notch-h', `${m.collapsedH}px`);
-  root.style.setProperty('--axe-notch-scale', String(m.uiScale));
-  root.style.setProperty('--axe-notch-radius', `${Math.round(28 * m.uiScale)}px`);
+function applyCssVars(m: NotchMaten) {
+  // Alleen de hoogte. `--axe-notch-w` werd hier gezet en door geen enkele
+  // regel CSS gelezen, en radius/scale zijn gelijk aan hun eigen standaard.
+  document.documentElement.style.setProperty('--axe-notch-h', `${m.inklapH}px`);
 }
 
-async function readMetrics(): Promise<NotchMetrics> {
+/**
+ * Het scherm waar je zit, niet het scherm dat toevallig "primair" heet.
+ *
+ * Andersom stond de notch op de ene monitor terwijl Luka op de andere werkte,
+ * en dan is een altijd-aanwezige balk juist altijd afwezig.
+ */
+async function huidigeMonitor() {
+  const { primaryMonitor, currentMonitor } = await import('@tauri-apps/api/window');
+  return (await currentMonitor()) || (await primaryMonitor());
+}
+
+async function readMetrics(): Promise<NotchMaten> {
   if (!isTauriRuntime()) {
     const w = typeof window !== 'undefined' ? window.screen.width : 1920;
     const h = typeof window !== 'undefined' ? window.screen.height : 1080;
@@ -42,13 +51,10 @@ async function readMetrics(): Promise<NotchMetrics> {
     return cached;
   }
   try {
-    const { primaryMonitor, currentMonitor } = await import('@tauri-apps/api/window');
-    const mon = (await primaryMonitor()) || (await currentMonitor());
+    const mon = await huidigeMonitor();
     if (!mon) return cached;
     const scale = mon.scaleFactor || 1;
-    const screenW = mon.size.width / scale;
-    const screenH = mon.size.height / scale;
-    cached = metricsForScreen(screenW, screenH);
+    cached = metricsForScreen(mon.size.width / scale, mon.size.height / scale);
     applyCssVars(cached);
     return cached;
   } catch {
@@ -56,18 +62,37 @@ async function readMetrics(): Promise<NotchMetrics> {
   }
 }
 
-/** Dock window flush to the top edge of the primary display, horizontally centered. */
+/**
+ * Zet het venster bovenaan het scherm waar je zit, horizontaal gecentreerd.
+ *
+ * LET OP — half af, en dat is geen slordigheid maar een grens: de native kant
+ * (`dock_notch_frame` in src-tauri/src/lib.rs) kiest zélf het scherm met de
+ * oorsprong dichtst bij (0,0), dus het primaire, en klemt de x die hier
+ * berekend wordt dáárin vast. Werk je op je tweede scherm, dan landt de notch
+ * nog steeds op je eerste. Deze kant is nu goed; die Rust-regel moet mee, en
+ * gaat in een eigen commit omdat een Tauri-build hier niet te verifiëren is.
+ */
+/** Ingeklapt tot handvat: onthouden over herstarts, per Mac. */
+const HANDVAT_SLEUTEL = 'axe_notch_handvat';
+function leesHandvat(): boolean {
+  try { return localStorage.getItem(HANDVAT_SLEUTEL) === '1'; } catch { return false; }
+}
+function bewaarHandvat(aan: boolean) {
+  try { localStorage.setItem(HANDVAT_SLEUTEL, aan ? '1' : '0'); } catch { /* alleen niet onthouden */ }
+}
+let handvat = leesHandvat();
+
 async function dockTop(open: boolean) {
   if (!isTauriRuntime()) return;
   try {
-    const { getCurrentWindow, primaryMonitor, currentMonitor } = await import('@tauri-apps/api/window');
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
     const { LogicalSize } = await import('@tauri-apps/api/dpi');
     const { invoke } = await import('@tauri-apps/api/core');
     const m = await readMetrics();
     const w = getCurrentWindow();
-    const height = open ? m.expandedH : m.collapsedH;
-    const width = m.w;
-    const mon = (await primaryMonitor()) || (await currentMonitor());
+    const height = handvat ? HANDVAT_HOOGTE : open ? m.uitklapH : m.inklapH;
+    const width = handvat ? HANDVAT_BREEDTE : m.b;
+    const mon = await huidigeMonitor();
     if (!mon) {
       await w.setSize(new LogicalSize(width, height));
       return;
@@ -77,9 +102,20 @@ async function dockTop(open: boolean) {
     const screenX = mon.position.x / scale;
     const screenY = mon.position.y / scale;
     const nx = screenX + (screenW - width) / 2;
-    // Flush under the menu bar (~30pt). Cocoa dock_notch_frame uses visibleFrame.
-    const ny = screenY + 30;
+    /* Vlak tegen de bovenrand, dus óver de menubalk heen.
+       Hier stond `screenY + 30`: ruimte vrijlaten voor de menubalk, waardoor
+       de notch eronder hing en als een los paneel aanvoelde. Luka op 5 nov:
+       hij heeft aan de bovenkant de vorm van iets dat tegen de rand aan zit,
+       dus dáár hoort hij ook. Het venster staat al op NSStatusWindowLevel
+       (25), het enige niveau waarop dat mag; de native kant moet dan wel de
+       hele `frame` nemen in plaats van de `visibleFrame` die onder de
+       menubalk begint — zie dock_notch_frame in src-tauri/src/lib.rs. */
+    const ny = screenY;
     try {
+      /* Geen setAlwaysOnTop hierna. Die zet het venster op niveau 3, en
+         daarop klemt macOS de notch onder de menubalk — het niveau 25 dat
+         dock_notch_frame zet is al hoger dan "altijd bovenop". Zie de
+         notitie onderaan dock_notch_frame_inner in lib.rs. */
       await invoke('dock_notch_frame', { x: nx, y: ny, w: width, h: height });
     } catch {
       await w.setSize(new LogicalSize(width, height));
@@ -89,8 +125,8 @@ async function dockTop(open: boolean) {
         mon.position.x + (mon.size.width - physW) / 2,
         mon.position.y,
       ));
+      await w.setAlwaysOnTop(true);
     }
-    await w.setAlwaysOnTop(true);
   } catch { /* preview browser */ }
 }
 
@@ -119,7 +155,13 @@ function useOverlayCmdBridge() {
           const cmd = line.trim();
           if (!cmd) continue;
           if (cmd === 'collapse') void dockTop(false);
-          else if (cmd === 'expand' || cmd === 'chat' || cmd === 'approvals') void dockTop(true);
+          else if (cmd === 'expand' || cmd === 'chat' || cmd === 'approvals') {
+            /* AXE wil iets laten zien: dan komt de strook terug uit het handvat. */
+            handvat = false;
+            bewaarHandvat(false);
+            window.dispatchEvent(new CustomEvent('axe-notch-handvat', { detail: false }));
+            void dockTop(true);
+          }
           window.dispatchEvent(new CustomEvent('axe-overlay-cmd', { detail: cmd }));
         }
       } catch { /* ignore */ }
@@ -132,6 +174,9 @@ function useOverlayCmdBridge() {
 
 export default function FloatAxe() {
   useOverlayCmdBridge();
+  // De open-stand leeft in AxeOverlayNotch; hier is alleen nodig wat het
+  // venster moet worden als hij opnieuw aandokt.
+  const openRef = useRef(false);
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -158,11 +203,64 @@ export default function FloatAxe() {
     };
   }, []);
 
+  /**
+   * Terug naar het midden zodra hij weer tevoorschijn komt.
+   *
+   * Eén keer aandokken bij het laden is niet genoeg: het venster blijft
+   * bestaan terwijl je het verbergt en weer opent, en een scherm erbij of
+   * eraf verandert waar "midden boven" is zonder dat deze pagina herlaadt.
+   * Dit zet hem bij elke keer dat hij zichtbaar of actief wordt terug —
+   * en dus ook op het scherm waar je dan zit.
+   */
+  useEffect(() => {
+    const opnieuw = () => {
+      // Mét de stand van nu: `dockTop(false)` zou een open paneel dichtklappen
+      // zodra je het aanklikt, en dan lijkt de notch zichzelf te sluiten.
+      if (document.visibilityState === 'hidden') return;
+      void dockTop(openRef.current);
+    };
+    window.addEventListener('focus', opnieuw);
+    document.addEventListener('visibilitychange', opnieuw);
+    return () => {
+      window.removeEventListener('focus', opnieuw);
+      document.removeEventListener('visibilitychange', opnieuw);
+    };
+  }, []);
+
+  const [alleenHandvat, zetAlleenHandvat] = useState(handvat);
+  useEffect(() => {
+    const op = (e: Event) => zetAlleenHandvat(Boolean((e as CustomEvent<boolean>).detail));
+    window.addEventListener('axe-notch-handvat', op);
+    return () => window.removeEventListener('axe-notch-handvat', op);
+  }, []);
+  const kiesHandvat = (aan: boolean) => {
+    handvat = aan;
+    bewaarHandvat(aan);
+    openRef.current = false;
+    zetAlleenHandvat(aan);
+    void dockTop(false);
+  };
+
+  if (alleenHandvat) {
+    return (
+      <button
+        type="button"
+        className="axe-ov__handvat"
+        aria-label="Show AXE strip"
+        title="AXE"
+        onClick={() => kiesHandvat(false)}
+      >
+        <span aria-hidden="true" />
+      </button>
+    );
+  }
+
   return (
     <div style={{ padding: 0, background: 'transparent', height: '100vh', boxSizing: 'border-box' }}>
       <AxeOverlayNotch
-        onHome={() => { void dockTop(false); }}
-        onOpenChange={(open) => { void dockTop(open); }}
+        onHome={() => { openRef.current = false; void dockTop(false); }}
+        onOpenChange={(open) => { openRef.current = open; void dockTop(open); }}
+        onInklappen={() => kiesHandvat(true)}
       />
     </div>
   );

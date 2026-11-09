@@ -923,6 +923,9 @@ def run_agent(
 
     geprobeerd: list[str] = []
     overslaan: set[str] = set()
+    # Waarom elke overgeslagen stoel uitviel, zodat de planner kan melden
+    # "Claude 2 moet opnieuw inloggen; Claude 3 nam het over".
+    stoelfouten: dict[str, str] = {}
     huidige = kies_vrije_stoel(gevraagd, balanceer=checks) or gevraagd
     laatste: dict | None = None
     while huidige and huidige not in geprobeerd:
@@ -934,11 +937,17 @@ def run_agent(
         if laatste.get("status") == "ok":
             if len(geprobeerd) > 1:
                 laatste["seats_tried"] = geprobeerd
+                laatste["seat_errors"] = stoelfouten
             return laatste
-        fout = str(laatste.get("error") or laatste.get("result") or "")
+        # Beide lezen: de CLI meldt "Not logged in" in result (JSON op stdout)
+        # met een lege stderr, terwijl error dan al "... eindigde met 1" is.
+        # 9 nov: zes planner-runs op een niet-ingelogde Claude 2 zonder
+        # dat de volgende stoel het overnam.
+        fout = " ".join(str(x) for x in (laatste.get("error"), laatste.get("result")) if x)
         if _auth_fout(fout) or _limit_message(fout) or _model_fout(fout):
             if not _model_fout(fout):
                 _onthoud_stoel_fout(huidige, fout)
+            stoelfouten[huidige] = fout[-300:]
             overslaan.add(huidige)
             volgende = kies_vrije_stoel(gevraagd, overslaan=overslaan, balanceer=checks)
             if volgende:
@@ -949,6 +958,8 @@ def run_agent(
     if laatste is not None:
         if geprobeerd:
             laatste["seats_tried"] = geprobeerd
+        if stoelfouten:
+            laatste["seat_errors"] = stoelfouten
         return laatste
     return {"status": "error", "error": f"Geen vrije stoel voor '{gevraagd}'.", "engine": gevraagd}
 
@@ -1146,10 +1157,14 @@ def _run_agent_stoel(
     tekst = result_text or stdout[:8000]
     if fallback_note:
         tekst = (fallback_note + tekst)[:8000]
+    fout = foutzin()
+    if mislukt and result_text and not _stderr_staart(proc.stderr):
+        # Lege stderr: de reden staat in result ("Not logged in · Please run /login").
+        fout = f"{fout} {result_text[:300]}"
     return finish({**basis, "status": "error" if mislukt else "ok",
             "result": tekst,
             "meta": parsed if isinstance(parsed, dict) else None,
-            **({"error": foutzin()} if mislukt else {})})
+            **({"error": fout} if mislukt else {})})
 
 
 # Een Claude-stoel die dagen niets doet, stond op Subscriptions als "Limit seen ·

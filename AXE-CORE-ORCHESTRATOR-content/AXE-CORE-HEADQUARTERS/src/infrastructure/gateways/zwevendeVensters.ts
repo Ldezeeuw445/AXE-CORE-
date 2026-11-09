@@ -11,6 +11,7 @@
  * volgende openen teruggezet -- ook op het tweede scherm.
  */
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+import { HANDVAT_BREEDTE, HANDVAT_HOOGTE, NOTCH_HOOGTE, NOTCH_MIN_BREEDTE, notchMaten } from '@/domain/overlay/notchMaten';
 
 export type ZwevendType = 'notes' | 'phone' | 'axe';
 
@@ -21,7 +22,20 @@ export const ZWEVENDE_VENSTERS: Record<ZwevendType, Ontwerp> = {
   phone: { label: 'axe-float-phone', route: '/float/phone', titel: 'AXE Phone', b: 420, h: 860, minB: 300, minH: 560 },
   /* Luka okt 2026: always-on AXE notch — lightweight, buiten de shell-flow; aparte
      apps/axe-overlay voor login-launch. Start collapsed (notch), expand in-UI. */
-  axe: { label: 'axe-float-axe', route: '/float/axe', titel: 'AXE', b: 1306, h: 44, minB: 720, minH: 40 },
+  // Hoogte en breedte komen uit domain/overlay/notchMaten — hetzelfde getal
+  // dat de CSS en FloatAxe gebruiken. Stond hier eerst los op 44 en 40: het
+  // venster was bijna half zo hoog als wat erin moet, dus de icoontjes werden
+  // tegen de onderrand geknipt. Dat ziet eruit als een ontwerpkeuze en is het
+  // niet. `notchHoogteKlopt.test.ts` houdt alle plekken gelijk.
+  axe: {
+    label: 'axe-float-axe',
+    route: '/float/axe',
+    titel: 'AXE',
+    b: notchMaten(1920, 1080).b,
+    h: NOTCH_HOOGTE,
+    minB: NOTCH_MIN_BREEDTE,
+    minH: NOTCH_HOOGTE,
+  },
 };
 
 export interface Frame { x: number; y: number; b: number; h: number }
@@ -53,7 +67,12 @@ export async function openZwevend(type: ZwevendType): Promise<void> {
   const bestaand = await WebviewWindow.getByLabel(o.label);
   if (bestaand) {
     await bestaand.show();
-    await bestaand.setFocus();
+    /* Niet voor de notch. Die komt ook vanzelf op (useNotchBijMinimaliseren),
+       en setFocus is in tao `activateIgnoringOtherApps` — dan springt je
+       toetsenbord weg uit wat je op je andere scherm aan het typen was. De
+       notch is een strook om naar te kijken; klik je erin, dan krijgt hij de
+       focus vanzelf. */
+    if (type !== 'axe') await bestaand.setFocus();
     return;
   }
   const opgeslagen = leesFrame(type);
@@ -72,14 +91,21 @@ export async function openZwevend(type: ZwevendType): Promise<void> {
   if (type === 'axe') {
     try {
       const { primaryMonitor, currentMonitor } = await import('@tauri-apps/api/window');
-      const mon = (await primaryMonitor()) || (await currentMonitor());
+      // Het scherm waar je zit, niet het scherm dat toevallig "primair" heet.
+      // Andersom stond de notch op de ene monitor terwijl Luka op de andere
+      // werkte, en dan is een altijd-aanwezige balk juist altijd afwezig.
+      // primaryMonitor blijft de terugval voor als het actieve scherm niet
+      // te bepalen is.
+      const mon = (await currentMonitor()) || (await primaryMonitor());
       if (mon) {
         const scale = mon.scaleFactor || 1;
         const screenW = mon.size.width / scale;
+        const screenH = mon.size.height / scale;
         const screenX = mon.position.x / scale;
         const screenY = mon.position.y / scale;
-        axeW = Math.max(720, Math.round(screenW * 0.34));
-        axeH = 80;
+        const maten = notchMaten(screenW, screenH);
+        axeW = maten.b;
+        axeH = maten.inklapH;
         plek = { x: screenX + (screenW - axeW) / 2, y: screenY };
       }
     } catch { /* fall through */ }
@@ -89,11 +115,18 @@ export async function openZwevend(type: ZwevendType): Promise<void> {
     title: o.titel,
     width: type === 'axe' ? axeW : (opgeslagen?.b ?? o.b),
     height: type === 'axe' ? axeH : (opgeslagen?.h ?? o.h),
-    minWidth: o.minB,
-    minHeight: o.minH,
+    /* De notch mag kleiner dan zijn strook: ingeklapt is hij een handvat van
+       180x16, en met de strook-minimum (900x80) zou macOS dat weigeren. */
+    minWidth: type === 'axe' ? HANDVAT_BREEDTE : o.minB,
+    minHeight: type === 'axe' ? HANDVAT_HOOGTE : o.minH,
     decorations: false,
     transparent: true,
-    alwaysOnTop: true,
+    /* De notch niet: tao zet "altijd bovenop" asynchroon op niveau 3, en als
+       dat ná dock_notch_frame landt (niveau 25) klemt macOS hem weer onder de
+       menubalk. Het dokken zet zelf het juiste niveau. */
+    alwaysOnTop: type !== 'axe',
+    /* Verschijnen zonder het toetsenbord over te nemen. */
+    focus: type !== 'axe',
     visibleOnAllWorkspaces: true,
     resizable: type !== 'axe',
     /* Notch: OS-schaduw op een transparent rechthoek + CSS-radius = donkere
@@ -114,11 +147,17 @@ async function zwevendOpen(type: ZwevendType): Promise<boolean> {
   return (await WebviewWindow.getByLabel(ZWEVENDE_VENSTERS[type].label)) !== null;
 }
 
+/** Sluit het venster als het er is; doet niets als het er niet is. */
+export async function sluitZwevend(type: ZwevendType): Promise<void> {
+  if (!(await zwevendOpen(type))) return;
+  const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+  await (await WebviewWindow.getByLabel(ZWEVENDE_VENSTERS[type].label))?.close();
+}
+
 /** Open als hij dicht is, sluit als hij open is (voor de knop in het radiaal dok). */
 export async function wisselZwevend(type: ZwevendType): Promise<void> {
   if (await zwevendOpen(type)) {
-    const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
-    await (await WebviewWindow.getByLabel(ZWEVENDE_VENSTERS[type].label))?.close();
+    await sluitZwevend(type);
   } else {
     await openZwevend(type);
   }

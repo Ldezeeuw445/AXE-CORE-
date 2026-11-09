@@ -54,7 +54,8 @@ def test_toets_actie_blokkeert_vlaggen_orders_geld_deals_en_sends():
     )
 
 
-def test_axemanager_pulse_schrijft_directives_en_geen_verboden():
+def test_axemanager_pulse_stuurt_geen_directives_meer_en_geen_verboden():
+    """Tot 9 nov: 720 berichten per dag "stuur niets" in het managersgesprek."""
     db = FakeDb(core_approvals=[{"id": "a", "status": "pending", "title": "Yes needed"}],
                 core_tasks=[{"id": "t", "status": "queued"}],
                 core_schedules=[], core_manager_messages=[])
@@ -64,9 +65,7 @@ def test_axemanager_pulse_schrijft_directives_en_geen_verboden():
     assert "aanbeveling" in body
     for woord in sd.VERBODEN:
         assert woord not in body
-    berichten = db.db["core_manager_messages"]
-    assert {b["to_agent"] for b in berichten} == set(gm.GROK_IDS) - {gm.BAAS}
-    assert all(b["from_agent"] == gm.BAAS and b["kind"] == "directive" for b in berichten)
+    assert not [b for b in db.db["core_manager_messages"] if b["kind"] == "directive"]
 
 
 def test_andere_managers_rapporteren_terug_zonder_te_verzenden():
@@ -90,6 +89,25 @@ def test_tradingos_pulse_plaatst_geen_orders():
     body = gm.run_tradingos(FakeDb(intel_market_tide=[{"bias": "bullish"}]), NU)
     assert body["orders"] == 0
     assert body["live"] is False
+
+
+def test_tradingos_zegt_eerlijk_dat_de_feeds_stilstaan():
+    """De echte stand van 8 nov: alle feeds sinds 14 aug stil, twee nooit gedraaid."""
+    db = FakeDb(
+        intel_market_tide=[{"bias": "bearish", "snapshot_time": "2026-08-31T19:55:00+00:00"}],
+        intel_sync_log=[
+            {"feed_id": "marketTide", "source": "finnhub", "last_sync_at": "2026-08-14T23:39:37+00:00"},
+            {"feed_id": "energyFlows", "source": "eia", "last_sync_at": "2026-07-24T21:30:32+00:00"},
+            {"feed_id": "darkPool", "source": None, "last_sync_at": "2000-01-01T00:00:00+00:00"},
+        ],
+    )
+    body = gm.run_tradingos(db, NU)
+    assert body["bias"] is None and body["orders"] == 0
+    assert body["bevindingen"] == ["feeds_stil", "feeds_nooit", "signaal_oud"]
+    rapport = [r for r in db.db["core_manager_messages"] if r["from_agent"] == "tradingos"][0]["body"]
+    assert "geen actueel signaal" in rapport and "2 marktfeeds staan stil" in rapport
+    assert "Geen actueel marktsignaal" not in rapport  # niet twee keer hetzelfde zeggen
+    assert db.db.get("core_approvals", []) == []  # niet live: geen kaart, alleen het overzicht
 
 
 def test_northsea_pulse_raakt_geen_vlag_en_verstuurt_niet():

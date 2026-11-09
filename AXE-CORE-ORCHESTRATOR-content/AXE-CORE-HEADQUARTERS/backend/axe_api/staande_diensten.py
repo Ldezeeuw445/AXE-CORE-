@@ -291,16 +291,25 @@ def run_apps(db: Any, nu: datetime) -> dict[str, Any]:
 
 def run_intel(db: Any, nu: datetime) -> dict[str, Any]:
     """Signalen met bron. Geen orders."""
-    tide = _rijen(db, "intel_market_tide", "bias,snapshot_time,call_put_ratio", limiet=3)
+    # Nieuwste eerst: zonder sorteren meldde dit op 8 nov een bias van 7 juni
+    # als actueel. Ouder dan een dag heet niet actueel (intel_bewaker.signaal).
+    import intel_bewaker as ib
+    try:
+        tide = (db.table("intel_market_tide").select("bias,snapshot_time,call_put_ratio")
+                .order("snapshot_time", desc=True).limit(1).execute().data) or []
+    except Exception:  # noqa: BLE001
+        tide = []
     opties = _rijen(db, "intel_unusual_options", "id,symbol", limiet=20)
     laatste = tide[0] if tide else {}
+    sig = ib.signaal(laatste, nu)
     return {
         "job": "market intelligence",
         "signals": {
             "options_seen": len(opties),
-            "bias": laatste.get("bias"),
-            "at": laatste.get("snapshot_time"),
-            "call_put_ratio": laatste.get("call_put_ratio"),
+            "bias": sig["bias"],
+            "at": sig["at"],
+            "vers": sig["vers"],
+            "call_put_ratio": laatste.get("call_put_ratio") if sig["vers"] else None,
         },
         "orders": 0,
     }
@@ -385,9 +394,21 @@ try:
 except Exception:  # noqa: BLE001 — net zo: de bouwdienst mag de rest niet kielen
     _DAX_BOUW = ()
 
-# Bestaande 24/7-jobs plus de zes Grok-managers (27 okt 2026), en de bouwende
-# developer-DAX (28 okt), ernaast.
-DIENSTEN = DIENSTEN + _GROK_DIENSTEN + _DAX_BOUW
+try:
+    import intel_feeds as _intel_feeds
+    _INTEL_FEEDS: tuple[dict[str, Any], ...] = _intel_feeds.diensten()
+except Exception:  # noqa: BLE001 — net zo
+    _INTEL_FEEDS = ()
+
+try:
+    import intel_wereld as _intel_wereld
+    _INTEL_WERELD: tuple[dict[str, Any], ...] = _intel_wereld.diensten()
+except Exception:  # noqa: BLE001 — net zo
+    _INTEL_WERELD = ()
+
+# Bestaande 24/7-jobs plus de zes Grok-managers (27 okt 2026), de bouwende
+# developer-DAX (28 okt) en de intel-feeds voor Trading OS (9 nov: markt, wereld, lucht).
+DIENSTEN = DIENSTEN + _GROK_DIENSTEN + _DAX_BOUW + _INTEL_FEEDS + _INTEL_WERELD
 
 STAANDE_AGENTS = frozenset(str(d["agent"]) for d in DIENSTEN)
 

@@ -394,3 +394,14 @@ def test_task_workspace_isolates_relative_shell_and_file_tools(monkeypatch, tmp_
 
     assert (a / "artifact.txt").read_text() == "A"
     assert (b / "artifact.txt").read_text() == "B"
+
+
+def test_ollama_blijft_niet_meer_voor_altijd_in_het_geheugen(monkeypatch):
+    """8 nov: keep_alive -1 hield de modelbox onder AXE_DAX_MIN_FREE_MB en geen
+    DAX-bot draaide nog. Standaard nu 30 minuten, instelbaar."""
+    monkeypatch.delenv("AXE_OLLAMA_KEEP_ALIVE", raising=False)
+    assert agent_loop._ollama_keep_alive() == "30m"
+    monkeypatch.setenv("AXE_OLLAMA_KEEP_ALIVE", "-1")
+    assert agent_loop._ollama_keep_alive() == -1
+    monkeypatch.setenv("AXE_OLLAMA_KEEP_ALIVE", "10m")
+    assert agent_loop._ollama_keep_alive() == "10m"

@@ -36,7 +36,11 @@ export function StatusStrip({ desk, onOpenSettings }: { desk: TradingDeskState; 
       {circuitBreaker?.tripped && (
         <div
           className="flex items-center gap-2 px-4 py-1.5 shrink-0"
-          style={{ background: 'rgba(248,113,113,0.12)', borderBottom: '1px solid rgba(248,113,113,0.3)' }}
+          /* Wet 10: kleur in de letters, niet in het vlak. De rode wasem is
+             weg; de rand eronder en de rode woorden blijven, en die lees je.
+             Een omgeslagen circuit breaker is hiermee niet minder opvallend:
+             het is de enige rode tekst op de hele balk. */
+          style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(248,113,113,0.45)' }}
         >
           <ShieldAlert size={14} style={{ color: '#fca5a5' }} />
           <span className="text-[11px]" style={{ color: '#fca5a5' }}>
@@ -47,7 +51,7 @@ export function StatusStrip({ desk, onOpenSettings }: { desk: TradingDeskState; 
             type="button"
             onClick={() => void resetBreaker()}
             className="text-[11px] px-2 py-0.5 rounded"
-            style={{ background: 'rgba(248,113,113,0.18)', color: '#fca5a5', border: '1px solid rgba(248,113,113,0.35)' }}
+            style={{ background: 'rgba(255,255,255,0.06)', color: '#fca5a5', border: '1px solid rgba(248,113,113,0.45)' }}
           >
             Reset breaker
           </button>
@@ -55,17 +59,25 @@ export function StatusStrip({ desk, onOpenSettings }: { desk: TradingDeskState; 
       )}
       <div
         className="flex items-center gap-x-3 gap-y-1 flex-wrap px-4 py-2 border-b shrink-0 text-[11px]"
-        style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'linear-gradient(180deg, rgba(167,139,250,0.04), transparent)' }}
+        /* Het violette verloop is eruit. Het droeg geen toestand — het was een
+           gekleurd vlak achter woorden die hun eigen kleur al hebben, precies
+           het geval dat wet 10 beschrijft. */
+        style={{ borderColor: 'rgba(255,255,255,0.06)' }}
       >
         <button
           type="button"
           disabled={autopilotBusy || !autopilot}
           onClick={() => void toggleAutopilot()}
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium shrink-0"
+          /* Aan of uit wordt al drie keer gezegd: door het woord ON/OFF, door
+             de kleur van dat woord, en door de stip ernaast die oplicht. De
+             groene vulling was de vierde en de enige die wet 10 breekt.
+             Vetter bij "aan", want kleur alleen is te zwak voor een toestand. */
           style={{
-            background: autopilot?.enabled ? 'rgba(52,211,153,0.16)' : 'rgba(255,255,255,0.06)',
+            background: 'rgba(255,255,255,0.06)',
             color: autopilot?.enabled ? '#6ee7b7' : 'rgba(255,255,255,0.5)',
-            border: `1px solid ${autopilot?.enabled ? 'rgba(52,211,153,0.35)' : 'rgba(255,255,255,0.12)'}`,
+            fontWeight: autopilot?.enabled ? 700 : 500,
+            border: `1px solid ${autopilot?.enabled ? 'rgba(52,211,153,0.45)' : 'rgba(255,255,255,0.12)'}`,
           }}
         >
           <span
@@ -116,7 +128,11 @@ export function StatusStrip({ desk, onOpenSettings }: { desk: TradingDeskState; 
             void triggerKillSwitch();
           }}
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium disabled:opacity-50"
-          style={{ background: 'rgba(248,113,113,0.12)', color: '#fca5a5', border: '1px solid rgba(248,113,113,0.3)' }}
+          /* De kill switch moet eruit springen, en dat doet hij: rood woord,
+             rood icoon, rode rand. Een rood vlak erachter voegt niets toe dat
+             je léést — en wet 8 houdt de enige vullende knop per weergave bij
+             PrimaryButton, niet hier. */
+          style={{ background: 'rgba(255,255,255,0.06)', color: '#fca5a5', border: '1px solid rgba(248,113,113,0.45)' }}
           title="Flatten every open position and stop autopilot immediately"
         >
           <OctagonAlert size={13} />

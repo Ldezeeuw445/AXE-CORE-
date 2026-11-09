@@ -18,14 +18,26 @@ const surface = readFileSync(
 );
 
 describe('AxeOverlayNotch vaste HQ-schil', () => {
-  it('notch is altijd --axe-surface #0A0A0A, nooit glass', () => {
+  it('notch houdt de kleur van de app en volgt de look-wissel niet', () => {
+    // Eén vaste stand, in de kleur van --axe-surface (#0A0A0A = 10,10,10).
+    // Sinds 5 nov mét dekking, want Luka wil hem doorzichtig zoals de
+    // Tauri-schil. Dat is iets anders dan meeschakelen met data-look: die
+    // regels mogen er nog steeds niet zijn, en dat is wat hieronder staat.
     expect(surface).toMatch(/--axe-surface:\s*#0A0A0A/);
-    expect(css).toContain('--axe-notch-shell: #0A0A0A');
+    expect(css).toMatch(/--axe-notch-shell:\s*rgba\(10,\s*10,\s*10,\s*0?\.\d+\)/);
     expect(css).toContain('background: var(--axe-notch-shell)');
     expect(css).toContain('NOTCH_SHELL_FIXED');
     expect(css).not.toContain(":root[data-look='glass'] .axe-ov");
     expect(css).not.toContain(":root[data-look='black'] .axe-ov");
     expect(css).not.toContain('rgba(248, 250, 253');
+  });
+
+  it('doorzichtig betekent ook wazig glas erachter, niet alleen minder dekking', () => {
+    // Zonder blur kijk je door de notch heen naar scherpe vensters en is tekst
+    // erin niet te lezen. De -webkit-variant hoort erbij: de WebKit in de
+    // Tauri-webview heeft de losse eigenschap nog nodig.
+    expect(css).toMatch(/\.axe-ov \{[^}]*backdrop-filter:\s*blur\(/s);
+    expect(css).toMatch(/-webkit-backdrop-filter:\s*blur\(/);
   });
 
   it('knoppen hebben vaste vulling en cyaan-accent bij hover/pressed', () => {

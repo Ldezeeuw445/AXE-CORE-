@@ -31,6 +31,7 @@ tenzij de aanroeper `northsea.identity` heeft -- dezelfde regel als review_deal.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import time
 from collections import Counter
@@ -45,7 +46,21 @@ CACHE_S = 30.0
 MAX_LIMIT = 100
 GATES = ("buyer", "seller", "commercial", "evidence", "protection", "introduction", "transaction", "fulfilment", "settlement")
 GATE_CODES = {g: f"G{i}" for i, g in enumerate(GATES, 1)}
+log = logging.getLogger("northsea_mcp.readlayer")
+
 CORE_TABLES = ("opportunities", "companies", "buyer_requirements", "supplier_offers")
+
+# Zoveel tabellen tegelijk, niet meer. 8 nov: elke snapshot vuurde ruim 30
+# verzoeken tegelijk af (23 tabellen, de grote in pagina's) en de mailwachter
+# vroeg er elke minuut één. De PostgREST-pool van AXE Commodities telt maar een
+# handvol verbindingen; de rest wachtte, liep tegen de statement-timeout en de
+# hele database leek urenlang plat (13:25-14:30 en eerder in golven).
+GELIJKTIJDIG = 4
+
+# Wat een lijst met inkomende mail echt nodig heeft (communication_summary).
+# Niet deal_events of het auditlog: die twee waren samen 10 van de 31 verzoeken.
+INBOUND_TABLES = ("communications", "email_intelligence", "call_intelligence", "reply_drafts",
+                  "companies", "contacts", "opportunities")
 OPEN_TASK = ("open", "waiting", "in_progress")
 
 # Het readiness-kader zoals Luka het wil zien. De database heeft een eigen
@@ -116,32 +131,83 @@ class InspectService:
         self._snap: Snapshot | None = None
         self._t = 0.0
         self._lock = asyncio.Lock()
+        self._delen: dict[tuple[str, ...], tuple[float, Snapshot]] = {}
 
     # ── Laden ────────────────────────────────────────────────────────────────
-    async def snapshot(self, fresh: bool = False) -> Snapshot:
+    async def _lees(self, namen: list[str]) -> list[Any]:
+        rem = asyncio.Semaphore(GELIJKTIJDIG)
+
+        async def een(naam: str):
+            async with rem:
+                return await self.repo.fetch_all(naam)
+        return await asyncio.gather(*(een(n) for n in namen), return_exceptions=True)
+
+    async def snapshot(self, fresh: bool = False, tabellen: Iterable[str] | None = None) -> Snapshot:
+        """De hele desk, of alleen `tabellen` (een deel-snapshot, apart bewaard).
+
+        Een deel-snapshot vervangt nooit de volledige: wie daarna alles vraagt,
+        krijgt geen lege tabellen terug.
+        """
+        if tabellen is not None:
+            return await self._deel(tuple(sorted(set(tabellen))), fresh)
         async with self._lock:
             if not fresh and self._snap and time.monotonic() - self._t < self.cache_s:
                 return self._snap
             t0 = time.monotonic()
             namen = list(SNAPSHOT_SELECT)
-            uit = await asyncio.gather(*(self.repo.fetch_all(n) for n in namen), return_exceptions=True)
+            uit = await self._lees(namen)
             tables, truncated, errors = {}, set(), {}
             for naam, res in zip(namen, uit):
                 if isinstance(res, BaseException):
                     tables[naam] = []
-                    errors[naam] = "read failed" if isinstance(res, RepositoryError) else type(res).__name__
+                    # RepositoryError-tekst is veilig (geen sleutel, geen query). Hier
+                    # stond alleen "read failed", waardoor de storing van 8 nov in
+                    # het log onzichtbaar was: welke tabel, welke fout.
+                    errors[naam] = str(res) if isinstance(res, RepositoryError) else type(res).__name__
                 else:
                     tables[naam], afgekapt = res
                     if afgekapt:
                         truncated.add(naam)
+            if errors:
+                log.warning("snapshot: %d van %d tabellen niet gelezen: %s", len(errors), len(namen), errors)
             if any(n in errors for n in CORE_TABLES):
                 raise RepositoryError("core NorthSea tables could not be read")
             self._snap = Snapshot(tables, truncated, errors, datetime.now(timezone.utc), int((time.monotonic() - t0) * 1000))
             self._t = time.monotonic()
             return self._snap
 
-    async def view(self, caller: Caller) -> "View":
-        return View(await self.snapshot(), caller)
+    async def _deel(self, namen: tuple[str, ...], fresh: bool) -> Snapshot:
+        onbekend = [n for n in namen if n not in SNAPSHOT_SELECT]
+        if onbekend:
+            raise ValueError(f"geen snapshot-tabel: {onbekend}")
+        async with self._lock:
+            # Is de volledige snapshot vers genoeg, dan is die al goed.
+            if not fresh and self._snap and time.monotonic() - self._t < self.cache_s:
+                return self._snap
+            oud = self._delen.get(namen)
+            if not fresh and oud and time.monotonic() - oud[0] < self.cache_s:
+                return oud[1]
+            t0 = time.monotonic()
+            uit = await self._lees(list(namen))
+            tables, truncated, errors = {}, set(), {}
+            for naam, res in zip(namen, uit):
+                if isinstance(res, BaseException):
+                    tables[naam] = []
+                    errors[naam] = str(res) if isinstance(res, RepositoryError) else type(res).__name__
+                else:
+                    tables[naam], afgekapt = res
+                    if afgekapt:
+                        truncated.add(naam)
+            if errors:
+                log.warning("deel-snapshot: %d van %d tabellen niet gelezen: %s", len(errors), len(namen), errors)
+            if any(n in errors for n in namen if n in CORE_TABLES) or "communications" in errors:
+                raise RepositoryError("core NorthSea tables could not be read")
+            snap = Snapshot(tables, truncated, errors, datetime.now(timezone.utc), int((time.monotonic() - t0) * 1000))
+            self._delen[namen] = (time.monotonic(), snap)
+            return snap
+
+    async def view(self, caller: Caller, tabellen: Iterable[str] | None = None) -> "View":
+        return View(await self.snapshot(tabellen=tabellen), caller)
 
 
 class View:

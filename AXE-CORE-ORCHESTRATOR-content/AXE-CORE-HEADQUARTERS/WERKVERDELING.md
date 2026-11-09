@@ -26,9 +26,20 @@ botsen, ook niet als meerdere sessies tegelijk pushen.
    ```bash
    npx tsc --noEmit && npx vitest run && npx eslint src
    ```
-   733 tests groen. Lint: 427 fouten en 28 waarschuwingen — dat is de nullijn,
-   voeg er geen toe. (Stond hier eerder als 21; dat was het aantal in één
-   bestand, niet in het project. Gemeten 9 sep.)
+   **Nullijn, gemeten 5 nov 2026 op `d9a01f5`:** 3161 tests waarvan 3 rood,
+   444 lint-fouten en 34 waarschuwingen, en 3 TS-fouten met `npx tsc --noEmit`.
+   Voeg er geen toe.
+
+   Twee dingen die je anders verkeerd leest, allebei uitgelegd in `AGENTS.md`:
+   `npm run typecheck` geeft 18 in plaats van 3 omdat het twee configuraties
+   draait, en de drie rode tests zijn ratels tegen verval (`colourRule`,
+   `dodeCode`, `generateArchitectureManifest`) — vergelijk dus lijsten en geen
+   aantallen.
+
+   (Stond hier tot vandaag als 733 tests en 427/28, gemeten 9 sep, terwijl
+   `AGENTS.md` 2203 en 457/34 zei van 30 sep. Twee meetlatten die elkaar
+   tegenspreken is erger dan één die verouderd is: dan weet niemand meer welke
+   de nullijn is. Eén bron, en die staat in `AGENTS.md`.)
 5. **Bewijs, geen aanname.** Een test die faalt zonder je wijziging, of een
    meting. "Het staat in de code" telt niet.
 

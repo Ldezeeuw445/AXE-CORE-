@@ -60,6 +60,23 @@ def test_retry_kloont_failed_als_queued_agentic():
     assert db.rijen["core_tasks"][0]["status"] == "failed"
 
 
+def test_twee_keer_retry_geeft_een_herkansing_zolang_die_open_staat():
+    """5 nov: elke mislukte DAX-build werd twee keer herkanst, tien taken voor vijf."""
+    db = _Db(core_tasks=[{
+        "id": TAAK, "title": "DAX build: next task in AXE-CORE-", "goal": "build", "status": "failed",
+        "capability": "agentic", "execution_mode": "patch", "payload": {"dax_bouw": True}, "metadata": {},
+    }], core_task_events=[])
+    repo = TaskRepository(lambda: db)
+    eerste = repo.retry(TAAK, by="luka")
+    tweede = repo.retry(TAAK, by="luka")
+    assert tweede["id"] == eerste["id"]
+    assert len([r for r in db.rijen["core_tasks"] if r.get("parent_task_id") == TAAK]) == 1
+    # Is die herkansing zelf mislukt, dan mag er wel een nieuwe.
+    eerste["status"] = "failed"
+    derde = repo.retry(TAAK, by="luka")
+    assert derde["id"] != eerste["id"]
+
+
 def test_retry_weiger_trading_execute():
     db = _Db(core_tasks=[{
         "id": TAAK, "title": "Place a live order", "goal": "buy", "status": "failed",

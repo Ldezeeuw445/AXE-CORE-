@@ -54,6 +54,31 @@ export async function listMonitors(): Promise<MonitorInfo[]> {
     }));
 }
 
+/**
+ * De index (zoals listMonitors ze nummert) van het scherm waar je zit.
+ *
+ * `openPageOnMonitor` wil een index, en wie die niet weet vult 0 in — het
+ * meest linkse scherm. Dat is dezelfde fout als de notch die altijd op het
+ * primaire scherm opende: je drukt op "open groot" en het venster verschijnt
+ * op een monitor waar je niet naar kijkt. Bij twijfel 0, want een venster op
+ * het verkeerde scherm is nog altijd beter dan geen venster.
+ */
+export async function huidigeMonitorIndex(): Promise<number> {
+  if (!isTauriRuntime()) return 0;
+  try {
+    const { availableMonitors, currentMonitor } = await import('@tauri-apps/api/window');
+    const hier = await currentMonitor();
+    if (!hier) return 0;
+    const gesorteerd = (await availableMonitors()).sort((a, b) => a.position.x - b.position.x);
+    const i = gesorteerd.findIndex(
+      (m) => m.position.x === hier.position.x && m.position.y === hier.position.y,
+    );
+    return i < 0 ? 0 : i;
+  } catch {
+    return 0;
+  }
+}
+
 /** Known app routes AXE is allowed to open in a new window — mirrors the
  *  <Route path="..."> list in src/app/App.tsx. Keeping an explicit allowlist
  *  (rather than accepting any string) means a malformed/hallucinated page
@@ -153,7 +178,12 @@ export async function openPersonalComputerUse(): Promise<void> {
       alwaysOnTop: true,
       resizable: true,
       center: true,
-      shadow: true,
+      /* Een doorzichtig venster met afgeronde hoeken in CSS krijgt van het
+         OS alsnog een rechthoekige schaduw. Die tekent een donkere omtrek
+         rondom het paneel, los van de inhoud — precies wat Luka op 5 nov op
+         Computer Use zag. Dezelfde bug stond eerder in de notch; zie de
+         notitie bij `shadow` in zwevendeVensters.ts. */
+      shadow: false,
     });
     await new Promise<void>((resolve, reject) => {
       win.once('tauri://created', () => resolve());

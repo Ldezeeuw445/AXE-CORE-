@@ -8690,6 +8690,23 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-managers-room-lijst-kop {
   align-items: center;
 }
+
+/* Chat / Activity & plans / Memory in de kop, tussen de zoekbalk en DAX.
+   Stonden hiervoor in een eigen zwarte balk boven dit paneel, los van
+   alles waar ze bij horen (Luka, 5 nov). Geen eigen achtergrond: de kop
+   is al een vlak, en kleur hoort in letters — zie UI-MAATSTAF.md. */
+.axe-managers-room-weergave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.axe-managers-room-weergave .axe-viewknop {
+  padding: 5px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
 .axe-managers-room-rij[data-axe-orch='ja'] {
   background: rgba(192, 132, 252, 0.08);
   border-color: rgba(192, 132, 252, 0.22);
