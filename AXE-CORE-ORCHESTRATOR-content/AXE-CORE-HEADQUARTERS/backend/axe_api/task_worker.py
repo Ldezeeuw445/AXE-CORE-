@@ -138,6 +138,24 @@ def blokkade_uit_rapport(result: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
+def terugzetten_na_stop(repo: TaskRepository, task: dict[str, Any], context: Any, worker_id: str) -> bool:
+    """Zet een lopende taak bij het stoppen van de worker terug in de rij.
+
+    defer_core_task geeft de poging terug en werkt alleen met de eigen lease,
+    dus een taak die intussen al verder was (verifying, cancelled) blijft
+    gewoon staan. Faalt het, dan valt alles terug op het oude gedrag: de lease
+    verloopt en een volgende claim pakt hem op.
+    """
+    token = (getattr(context, "task", None) or {}).get("lease_token") or task.get("lease_token")
+    try:
+        repo.defer(task["id"], worker_id, token, 5, "worker_restart")
+        log.info("[task_worker] task %s back in the queue (worker stopping)", task["id"])
+        return True
+    except Exception as exc:  # noqa: BLE001 -- bij stoppen nooit zelf crashen
+        log.warning("[task_worker] could not requeue %s on stop: %s", task["id"], exc)
+        return False
+
+
 class TaskContext:
     def __init__(self, repo: TaskRepository, task: dict[str, Any], lease_seconds: int):
         self.repo = repo
@@ -302,6 +320,16 @@ class TaskWorker:
                 task["id"], self.worker_id, context.task.get("lease_token") or task.get("lease_token"),
                 wacht.retry_after_s, "provider_capacity",
             )
+        except asyncio.CancelledError:
+            # De worker stopt (deploy, herstart, SIGTERM) terwijl deze taak loopt.
+            # Gevonden live 9 nov: een autodeploy herstartte de worker twee
+            # minuten nadat hij een taak op zijn laatste poging pakte; de lease
+            # verliep en claim_next_core_task maakte er 'worker_lost' van. Een
+            # herstart is geen fout van de taak: terug in de rij, poging terug.
+            # Blokkerend aangeroepen, want deze coroutine is net geannuleerd en
+            # een volgende await zou meteen weer afbreken.
+            terugzetten_na_stop(self.repo, task, context, self.worker_id)
+            raise
         except TaskCancelled:
             # Annuleren is geen mislukking. De taak staat al op 'cancelled' en
             # heeft geen lease meer; verifying of retrying proberen zou alleen
@@ -887,5 +915,23 @@ async def _dax_slaapronde(register: Any, elke: int = 300) -> None:
             log.warning("[dax] sleep round failed: %s", exc)
 
 
+async def _main() -> None:
+    """run_forever, maar SIGTERM/SIGINT annuleren hem netjes.
+
+    Zonder dit stopt Python bij SIGTERM (systemctl restart) meteen, zonder
+    finally of except: lopende taken bleven 'running' tot hun lease verliep en
+    verloren daarna een poging. Nu annuleert het signaal de hoofdtaak, elke
+    lopende _draai zet zijn taak terug in de rij, en dan pas stopt het proces.
+    """
+    import signal as _signal
+    loop = asyncio.get_running_loop()
+    hoofd = asyncio.ensure_future(run_forever())
+    for sig in (_signal.SIGTERM, _signal.SIGINT):
+        with contextlib.suppress(NotImplementedError, RuntimeError):
+            loop.add_signal_handler(sig, hoofd.cancel)
+    with contextlib.suppress(asyncio.CancelledError):
+        await hoofd
+
+
 if __name__ == "__main__":
-    asyncio.run(run_forever())
+    asyncio.run(_main())
