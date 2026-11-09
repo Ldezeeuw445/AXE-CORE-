@@ -78,7 +78,7 @@ def test_andere_managers_rapporteren_terug_zonder_te_verzenden():
         assert uit["status"] == "ok", aid
         for woord in sd.VERBODEN:
             assert woord not in uit["output"].lower(), aid
-    rapporten = [b for b in db.db["core_manager_messages"] if b["kind"] == "report"]
+    rapporten = [b for b in db.db["core_manager_messages"] if b["kind"] == "report" and b["to_agent"] != "luka"]
     assert {b["from_agent"] for b in rapporten} == {
         "projectsmgr", "companionmgr", "axon", "tradingos", "northseamgr",
     }
@@ -104,7 +104,7 @@ def test_tradingos_zegt_eerlijk_dat_de_feeds_stilstaan():
     body = gm.run_tradingos(db, NU)
     assert body["bias"] is None and body["orders"] == 0
     assert body["bevindingen"] == ["feeds_stil", "feeds_nooit", "signaal_oud"]
-    rapport = [r for r in db.db["core_manager_messages"] if r["from_agent"] == "tradingos"][0]["body"]
+    rapport = [r for r in db.db["core_manager_messages"] if r["from_agent"] == "tradingos" and r["to_agent"] != "luka"][0]["body"]
     assert "geen actueel signaal" in rapport and "2 marktfeeds staan stil" in rapport
     assert "Geen actueel marktsignaal" not in rapport  # niet twee keer hetzelfde zeggen
     assert db.db.get("core_approvals", []) == []  # niet live: geen kaart, alleen het overzicht

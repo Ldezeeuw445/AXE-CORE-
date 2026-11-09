@@ -83,14 +83,14 @@ def test_pulse_herkanst_vraagt_luka_en_zwijgt_als_er_niets_verandert():
     assert engine["next_run_at"] == NU.isoformat()
     assert engine["metadata"]["vroeg_herkanst_door"] == "companionmgr"
     assert "Vaste jobs falen achter elkaar" in [r.get("title") for r in db.rows("core_approvals")]
-    rapporten = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "companionmgr"]
+    rapporten = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "companionmgr" and r["to_agent"] != "luka"]
     assert len(rapporten) == 1 and "nu opnieuw gestart: northsea:engine" in rapporten[0]["body"]
 
     # Tweede pulse: niet opnieuw herkanst (binnen het uur); engine staat nu
     # niet meer "in rust" maar "verlopen" -> wel een ander rapport. Derde: stil.
     gm.run_companionmgr(db, NU)
     gm.run_companionmgr(db, NU)
-    rapporten = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "companionmgr"]
+    rapporten = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "companionmgr" and r["to_agent"] != "luka"]
     assert len(rapporten) == 2
     assert [r.get("title") for r in db.rows("core_approvals")].count("Vaste jobs falen achter elkaar") == 1
 

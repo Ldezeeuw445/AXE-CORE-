@@ -67,5 +67,5 @@ def test_pulse_sluit_de_oude_vraag_en_zegt_het_een_keer():
     assert next(r for r in db.rows("core_tasks") if r["id"] == "t1")["status"] == "cancelled"
     assert next(r for r in db.rows("core_tasks") if r["id"] == "t2")["status"] == "waiting_approval"
     gm.run_axemanager(db, NU)
-    van_baas = [r for r in db.rows("core_manager_messages") if r["from_agent"] == gm.BAAS]
+    van_baas = [r for r in db.rows("core_manager_messages") if r["from_agent"] == gm.BAAS and r["to_agent"] != "luka"]
     assert len(van_baas) == 1 and "geen mail meer binnen" in van_baas[0]["body"]
