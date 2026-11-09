@@ -1101,6 +1101,30 @@ export async function usageCreditsSnapshot(): Promise<UsageCreditsSnapshot> {
   return call('GET', '/usage-credits');
 }
 
+/** Keys per app (GET /keys/overview): naam, doel, plek en status. Nooit een waarde. */
+export type KeyStatus = 'works' | 'present' | 'missing' | 'broken' | 'unseen';
+
+export interface KeyRow {
+  name: string;
+  purpose: string;
+  where: string;
+  status: KeyStatus;
+  detail: string;
+  feeds: string[];
+  warning?: string;
+}
+
+export interface KeysPerApp {
+  app: string;
+  manager: string;
+  counts: Record<KeyStatus, number>;
+  keys: KeyRow[];
+}
+
+export async function keysOverview(): Promise<{ generated_at: string; apps: KeysPerApp[] }> {
+  return call('GET', '/keys/overview');
+}
+
 /** Read-only tierkaart van de VPS (PR #214): agent → tier → model → stoel. */
 export async function listAgentTiers(): Promise<AgentTierKaart> {
   return call('GET', '/agent-tiers');

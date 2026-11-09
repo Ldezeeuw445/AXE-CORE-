@@ -3491,6 +3491,13 @@ async def claude_subscriptions_usage(fresh: int = 0):
     return {"accounts": accounts}
 
 
+@app.get("/keys/overview", dependencies=[AUTH])
+async def keys_overview():
+    """Keys per app: naam, doel, plek en status. Nooit een waarde (sleutels.py)."""
+    import sleutels as _sl
+    return await asyncio.to_thread(_sl.lees, sb())
+
+
 @app.get("/claude/repos", dependencies=[AUTH])
 async def claude_repos():
     """Which repos this host will let Claude Code touch, and whether each one is

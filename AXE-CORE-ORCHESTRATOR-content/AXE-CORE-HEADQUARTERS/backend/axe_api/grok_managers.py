@@ -349,6 +349,19 @@ def _rapporteer_bij_verandering(db: Any, agent: str, body: str) -> bool:
     return True
 
 
+def _met_sleutels(db: Any, app: str, body: str) -> str:
+    """Rapport plus één zin over kapotte sleutels van deze app (sleutels.py).
+
+    Alleen als er iets kapot is, en het rapport verandert alleen als dat
+    verandert: geen ruis, wel één bericht zodra een sleutel stuk gaat."""
+    try:
+        import sleutels
+        regel = sleutels.manager_regel(db, app)
+    except Exception:  # noqa: BLE001
+        regel = ""
+    return f"{body} {regel}." if regel else body
+
+
 def _dagoverzicht(db: Any, nu: datetime, naam: str, bevindingen: list[Any]) -> bool:
     if not _dagoverzicht_tijd(nu):
         return False
@@ -403,7 +416,8 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
     if opgeruimd:
         delen.insert(0, f"{len(opgeruimd)} dubbele voorstellen opgeruimd")
     gerapporteerd = _rapporteer_bij_verandering(
-        db, "projectsmgr", "Taken: " + ("; ".join(delen) if delen else "niets staat stil") + ".")
+        db, "projectsmgr", _met_sleutels(
+            db, "AXE Core", "Taken: " + ("; ".join(delen) if delen else "niets staat stil") + "."))
     return {
         "job": "projects and tasks",
         "open": len(rijen),
@@ -458,7 +472,8 @@ def run_companionmgr(db: Any, nu: datetime) -> dict[str, Any]:
     if herkanst:
         delen.insert(0, "nu opnieuw gestart: " + ", ".join(str(r.get("name") or r.get("job_key")) for r in herkanst))
     gerapporteerd = _rapporteer_bij_verandering(
-        db, "companionmgr", "Vaste jobs: " + ("; ".join(delen) if delen else "alles draait") + ".")
+        db, "companionmgr", _met_sleutels(
+            db, "AXE Companion", "Vaste jobs: " + ("; ".join(delen) if delen else "alles draait") + "."))
     aan = [r for r in rijen if r.get("enabled")]
     return {
         "job": "companion and standing jobs owner",
@@ -543,9 +558,9 @@ def run_tradingos(db: Any, nu: datetime) -> dict[str, Any]:
     overzicht = _dagoverzicht(db, nu, "Trading OS", bevindingen)
     kop = f"bias {sig['bias']} ({sig['at']})" if sig["vers"] else "geen actueel signaal"
     gerapporteerd = _rapporteer_bij_verandering(
-        db, "tradingos", f"Trading OS: {kop}; "
+        db, "tradingos", _met_sleutels(db, "Trading OS", f"Trading OS: {kop}; "
         + ("; ".join(b.titel for b in bevindingen if b.code != "signaal_oud") or "feeds vers")
-        + ". Orders: 0.")
+        + ". Orders: 0."))
     return {
         "job": "trading os owner",
         "repos": list(REPO_SCOPE["tradingos"]["repos"]),
@@ -647,7 +662,7 @@ def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any
 
     samenvatting = "; ".join(b.titel for b in bevindingen) or "desk loopt, niets voor Luka"
     # Alleen bij verandering: 8 nov 97 keer per dag hetzelfde rapport.
-    _rapporteer_bij_verandering(db, "northseamgr", f"NorthSea: {samenvatting}.")
+    _rapporteer_bij_verandering(db, "northseamgr", _met_sleutels(db, "NorthSea", f"NorthSea: {samenvatting}."))
     return {
         "job": "northsea desk owner",
         "priority": "first deal",

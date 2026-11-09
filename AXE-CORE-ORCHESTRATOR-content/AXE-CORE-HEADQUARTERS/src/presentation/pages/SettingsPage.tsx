@@ -54,6 +54,7 @@ import { MindsetQuotesSection } from '@/presentation/components/settings/Mindset
 import { AgentMotorenSection } from '@/presentation/components/settings/AgentMotorenSection';
 import { CodingSeatsSection } from '@/presentation/components/settings/CodingSeatsSection';
 import { UsageCreditsSection } from '@/presentation/components/settings/UsageCreditsSection';
+import { KeysPerAppSection } from '@/presentation/components/settings/KeysPerAppSection';
 import { ollamaHeaders, ollamaUrl } from '@/infrastructure/config/ollamaSleutel';
 import {
   readAllProviderUsage,
@@ -2080,6 +2081,7 @@ export default function SettingsPage() {
     { id: 'accounts', label: 'Accounts' },
     { id: 'usage', label: 'Usage' },
     { id: 'providers', label: 'Providers' },
+    { id: 'keys', label: 'Keys per app' },
     { id: 'voice', label: 'Voice' },
     { id: 'trust', label: 'Trust' },
     { id: 'routing', label: 'Routing' },
@@ -2133,6 +2135,8 @@ export default function SettingsPage() {
           <OllamaModelsSection />
         </SectieBlok>
         )}
+
+        {sectie === 'keys' && <KeysPerAppSection />}
 
         {sectie === 'voice' && (
         <SectieBlok id="voice" titel="VOICE">
