@@ -177,7 +177,8 @@ cd AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
 npx tsc --noEmit          # 3 fouten — voeg er geen toe. LET OP: niet hetzelfde
                           # als `npm run typecheck`, zie hieronder
 npx vitest run            # 3245 tests, 430 bestanden; 1 staat al rood
-npx eslint src            # 443 fouten, 34 waarschuwingen — voeg er geen toe
+npm run lint              # poort t.o.v. eslint-baseline.json — faalt alleen op NIEUWE vondsten
+npx eslint src            # volle backlog (~443 fouten, 34 waarschuwingen); na een echte fix: npm run lint:baseline
 python3 scripts/vps_sync.py check   # box en repo eens
 ```
 
@@ -186,6 +187,11 @@ python3 scripts/vps_sync.py check   # box en repo eens
 dan is "is het nog groen?" niet meer te beantwoorden: je ziet rood en weet niet
 of jij dat deed. Klopt een getal niet meer, meet opnieuw en werk het hier bij —
 een meetlat die achterloopt is erger dan geen meetlat.
+
+Lint in de bouwlus (`npm run lint`) faalt alleen op vondsten die niet in
+`eslint-baseline.json` staan. De volle backlog blijft zichtbaar met
+`npx eslint src`. Na een echte fix krimpt de basis met `npm run lint:baseline`;
+groeien verbergt nieuwe fouten.
 
 ### De twee typechecks zijn het oneens, en dat is geen detail
 

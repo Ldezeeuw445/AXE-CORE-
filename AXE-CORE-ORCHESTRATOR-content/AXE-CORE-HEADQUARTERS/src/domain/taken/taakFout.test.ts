@@ -40,6 +40,17 @@ describe('taakFoutVan', () => {
     expect(f.regel).toBe('disk full on dax-3');
     expect(f.actie).toBe('retry');
   });
+
+  it('houdt de eerste lintregel leesbaar voor Home', () => {
+    const regel = "src/presentation/store/voiceStore.ts:12:5  error  @typescript-eslint/no-unused-vars  'foo' is defined but never used.";
+    const f = taakFoutVan({
+      message: `Project check failed: lint (1 new)\n${regel}`,
+      findings: [regel],
+    }, 'Build next step: AXE Core');
+    expect(f.regel).toMatch(/voiceStore\.ts:12/);
+    expect(f.regel).toMatch(/no-unused-vars/);
+    expect(f.actie).toBe('fix');
+  });
   it('maps every-provider / rate-limit cascades to a short friendly line', () => {
     const f = taakFoutVan(
       'every provider failed — groq openai/gpt-oss-120b 429 rate limit | gemini-pro-latest: afkoelend | openai gpt-4.1-mini 429 no credits remaining',

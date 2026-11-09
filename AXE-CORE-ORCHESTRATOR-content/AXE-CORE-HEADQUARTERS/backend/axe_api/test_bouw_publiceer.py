@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import subprocess
+from pathlib import Path
 
 import httpx
 import pytest
@@ -455,6 +456,158 @@ def test_dependencies_zonder_lifecycle_scripts_en_geen_verzonnen_succes(tmp_path
         return subprocess.CompletedProcess(cmd, 0)
     assert bp.verifieer_bouw(str(tmp_path), run=run, zoek=lambda _: "npm")["passed"] is True
     assert "--ignore-scripts" in calls[0]
+
+
+LINT_STYLISH = """/tmp/hq/src/presentation/store/voiceStore.ts
+  12:5  error  'foo' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  14:5  error  'bar' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/tmp/hq/src/presentation/pages/tradingIntel/useTradingDeskState.ts
+  40:3  error  Error: Calling setState synchronously within an effect can trigger cascading renders  react-hooks/set-state-in-effect
+
+✖ 3 problems (3 errors, 0 warnings)
+"""
+
+LINT_NIEUW = """/tmp/hq/src/presentation/store/voiceStore.ts
+  12:5  error  'foo' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  14:5  error  'bar' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  80:1  error  'baz' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+✖ 3 problems (3 errors, 0 warnings)
+"""
+
+
+def _lint_run(log: str, codes=None):
+    codes = codes or {}
+
+    def run(cmd, **kw):
+        naam = cmd[2] if len(cmd) > 2 else ""
+        stdout = kw.get("stdout")
+        if stdout is not None and naam == "lint":
+            stdout.write(log.encode())
+            stdout.flush()
+        return subprocess.CompletedProcess(cmd, codes.get(naam, 1 if naam == "lint" else 0))
+    return run
+
+
+def _basis(vondsten):
+    tel = {}
+    for v in vondsten:
+        k = (v["file"], v["rule"], v["message"])
+        tel[k] = tel.get(k, 0) + 1
+    return {"version": 1, "findings": [
+        {"file": f, "rule": r, "message": m, "count": n} for (f, r, m), n in tel.items()
+    ]}
+
+
+def test_lint_vinger_negeert_code_frame_met_absoluut_pad():
+    lang = ("Error: Calling setState synchronously within an effect can trigger cascading renders\n\n"
+            "/Users/luka/AXE-CORE-/src/app/App.tsx:207:18\n  useEffect(() => {")
+    kort = "Error: Calling setState synchronously within an effect can trigger cascading renders"
+    a = {"file": "src/app/App.tsx", "rule": "react-hooks/set-state-in-effect", "message": lang}
+    b = {"file": "src/app/App.tsx", "rule": "react-hooks/set-state-in-effect",
+         "message": kort + "\n/agent/repos/other/src/app/App.tsx:1"}
+    assert bp.nieuwe_lint_vondsten([b], {bp._lint_vinger(a): 1}) == []
+    assert "/Users/" not in bp.vondst_regel(a)
+
+
+def test_lint_stylish_houdt_regel_aan_het_eind_niet_een_woord_uit_de_message():
+    v = bp.lint_vondsten_uit(LINT_STYLISH)
+    assert len(v) == 3
+    assert v[0]["file"] == "src/presentation/store/voiceStore.ts"
+    assert v[0]["rule"] == "@typescript-eslint/no-unused-vars"
+    assert "Allowed unused vars" in v[0]["message"]
+    assert v[2]["rule"] == "react-hooks/set-state-in-effect"
+    regel = bp.vondst_regel(v[0])
+    assert "voiceStore.ts:12:5" in regel and "@typescript-eslint/no-unused-vars" in regel
+
+
+def test_lint_zonder_baseline_faalt_met_bestand_en_regel_niet_stil(tmp_path):
+    (tmp_path / "package.json").write_text('{"scripts":{"lint":"eslint src"}}')
+    (tmp_path / "node_modules").mkdir()
+    uit = bp.verifieer_bouw(str(tmp_path), run=_lint_run(LINT_STYLISH), zoek=lambda _: "npm")
+    assert uit["passed"] is False
+    assert "Project check failed: lint" in uit["reason"]
+    assert "voiceStore.ts:12:5" in uit["reason"]
+    assert "@typescript-eslint/no-unused-vars" in uit["reason"]
+    assert uit["lint_findings"][0].startswith("src/presentation/store/voiceStore.ts:12:5")
+    assert "Do not grow" in uit["reason"]
+
+
+def test_lint_met_baseline_neemt_bestaande_schuld_niet_als_breuk(tmp_path):
+    (tmp_path / "package.json").write_text('{"scripts":{"lint":"eslint src","typecheck":"tsc"}}')
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "eslint-baseline.json").write_text(json.dumps(_basis(bp.lint_vondsten_uit(LINT_STYLISH))))
+    gezien = []
+
+    def run(cmd, **kw):
+        naam = cmd[2] if len(cmd) > 2 else ""
+        gezien.append(naam)
+        stdout = kw.get("stdout")
+        if stdout is not None and naam == "lint":
+            stdout.write(LINT_STYLISH.encode())
+            stdout.flush()
+        return subprocess.CompletedProcess(cmd, 0 if naam == "typecheck" else 1)
+
+    uit = bp.verifieer_bouw(str(tmp_path), run=run, zoek=lambda _: "npm")
+    assert uit["passed"] is True
+    assert gezien == ["typecheck", "lint"]
+    lint = next(c for c in uit["checks"] if c["name"] == "lint")
+    assert lint["passed"] is True and lint["exit_code"] == 1
+    assert "0 new" in lint["detail"]
+
+
+def test_lint_met_baseline_faalt_alleen_op_de_nieuwe_vondst(tmp_path):
+    (tmp_path / "package.json").write_text('{"scripts":{"lint":"eslint src"}}')
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "eslint-baseline.json").write_text(json.dumps(_basis(bp.lint_vondsten_uit(LINT_STYLISH))))
+    uit = bp.verifieer_bouw(str(tmp_path), run=_lint_run(LINT_NIEUW), zoek=lambda _: "npm")
+    assert uit["passed"] is False
+    assert "1 new" in uit["reason"]
+    assert "baz" in uit["reason"]
+    assert "useTradingDeskState" not in uit["reason"]
+    assert any("baz" in r for r in uit["lint_findings"])
+
+
+def test_lint_kapotte_baseline_json_wordt_niet_stil_groen(tmp_path):
+    (tmp_path / "package.json").write_text('{"scripts":{"lint":"eslint src"}}')
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "eslint-baseline.json").write_text("dit is geen json{")
+    uit = bp.verifieer_bouw(str(tmp_path), run=_lint_run(LINT_STYLISH), zoek=lambda _: "npm")
+    assert uit["passed"] is False
+    assert "Project check failed: lint" in uit["reason"]
+    assert "could not read" in uit["reason"] or "voiceStore" in uit["reason"]
+
+
+def test_lint_zonder_parseerbare_vondsten_wordt_niet_stil_groen(tmp_path):
+    (tmp_path / "package.json").write_text('{"scripts":{"lint":"eslint src"}}')
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "eslint-baseline.json").write_text(json.dumps({"version": 1, "findings": []}))
+    uit = bp.verifieer_bouw(str(tmp_path), run=_lint_run("eslint crashed: cannot find config"), zoek=lambda _: "npm")
+    assert uit["passed"] is False
+    assert "Project check failed: lint" in uit["reason"]
+    assert "cannot find config" in uit["reason"]
+
+
+def test_eslint_gate_node_unit():
+    hq = Path(__file__).resolve().parents[2]
+    r = subprocess.run(["node", "--test", str(hq / "scripts" / "eslint-gate.test.mjs")],
+                       cwd=str(hq), capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_lint_gate_output_eerste_n_regels_in_reden():
+    regels = [
+        f"src/f{i}.ts:1:1  error  no-empty  Empty block statement."
+        for i in range(12)
+    ]
+    log = "eslint-gate: FAIL 12 new / 0 known\n" + "\n".join(regels)
+    oordeel = bp.beoordeel_lint(1, log, "/tmp/no-such-basis")
+    assert oordeel["passed"] is False
+    assert len(oordeel["findings"]) == bp.LINT_REGELS_MAX
+    reden = bp.lint_reden(oordeel)
+    assert "f0.ts:1:1" in reden and "+4 more" in reden
+    assert "f11.ts" not in reden
 
 
 @pytest.fixture

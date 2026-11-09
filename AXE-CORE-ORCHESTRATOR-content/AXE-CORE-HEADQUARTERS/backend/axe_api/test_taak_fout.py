@@ -25,3 +25,14 @@ def test_login():
 
 def test_onbekend_blijft_leesbaar():
     assert taak_fout({"message": "disk full on dax-3"})["regel"] == "disk full on dax-3"
+
+
+def test_lint_vondst_blijft_leesbaar():
+    regel = "src/presentation/store/voiceStore.ts:12:5  error  @typescript-eslint/no-unused-vars  'foo' is defined but never used."
+    uit = taak_fout({
+        "message": f"Project check failed: lint (1 new)\n{regel}",
+        "findings": [regel],
+    }, "Build next step: AXE Core")
+    assert "voiceStore.ts:12" in uit["regel"]
+    assert "no-unused-vars" in uit["regel"]
+    assert uit["actie"] == "fix"

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { metModelTest } from './keysMetModellen';
-import type { KeyRow } from '@/infrastructure/gateways/axeCoreApiService';
+import { metModelTest, type KeyRowShape } from './keysMetModellen';
+
+type KeyRow = KeyRowShape & { name: string; where: string; feeds: string[] };
 
 const rij = (x: Partial<KeyRow>): KeyRow => ({
   name: 'X', purpose: 'p', where: 'VPS', status: 'missing', detail: 'Not set on the VPS', feeds: [], ...x,
