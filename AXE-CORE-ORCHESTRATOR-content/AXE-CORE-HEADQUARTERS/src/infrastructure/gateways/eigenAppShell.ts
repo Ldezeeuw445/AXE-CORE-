@@ -7,6 +7,11 @@
  *   * Mac (Tauri): een eigen OS-venster per app (`axe-app-<id>`) op de gekozen
  *     monitor, Companion op telefoon- of iPad-maat. Bestaat het venster al, dan
  *     gaat hetzelfde venster naar dat scherm, in plaats van een tweede.
+ *     Remote sites krijgen de bestaande HQ-sessie als hash (eigenAppSessie),
+ *     Safari-UA en een vaste WKWebView-store — anders faalt login in de
+ *     radial: geen Safari-cookies, Google-OAuth weigert WKWebView, Companion
+ *     landde op de www-homepagina. Een al open shell wordt niet herladen
+ *     (er kan werk in staan); sluit hem dan zelf en open opnieuw.
  *   * Web (iPad-PWA, telefoon): een eigen site in een nieuwe tab, een
  *     AXE-pagina door ernaartoe te gaan. Een tweede OS-venster kan daar niet.
  *   * Een andere Mac: een `core_tasks`-rij (`axe_shell`, `pending`) met dat
@@ -14,7 +19,7 @@
  *     op (luisterNaarShellOpdrachten) en opent hem daar. Zelfde transport als
  *     computerRelay: niets luistert op een poort.
  */
-import { sessieClient } from '@/infrastructure/supabase/supabaseClient';
+import { getSupabase, sessieClient } from '@/infrastructure/supabase/supabaseClient';
 import { sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
 import { ditToestel } from '@/infrastructure/gateways/axeDeviceService';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
@@ -31,6 +36,14 @@ import {
   type ShellVorm,
   type ToestelRij,
 } from '@/domain/eigenApps';
+import {
+  sessieBronVan,
+  shellUrl,
+  shellWebviewOpties,
+  urlZonderGeheim,
+  type ShellSessie,
+} from '@/domain/eigenAppSessie';
+import { axonSessieKlaar } from '@/infrastructure/gateways/axonSessie';
 
 const OPDRACHT_POLL_MS = 3_000;
 /** Een opdracht die zo lang niemand oppakte is van een Mac die uit stond: niet alsnog openen. */
@@ -51,9 +64,42 @@ async function urlVoor(app: EigenApp): Promise<string | null> {
   }
 }
 
+async function sessieVoor(app: EigenApp): Promise<ShellSessie | null> {
+  const bron = sessieBronVan(app);
+  if (bron === 'axon') {
+    const s = await axonSessieKlaar();
+    if (!s?.access_token || !s.refresh_token) return null;
+    return { bron, tokens: { access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at } };
+  }
+  if (bron === 'kern') {
+    const sb = getSupabase();
+    if (!sb) return null;
+    const { data } = await sb.auth.getSession();
+    const s = data.session;
+    if (!s?.access_token || !s.refresh_token) return null;
+    return {
+      bron,
+      tokens: {
+        access_token: s.access_token,
+        refresh_token: s.refresh_token,
+        expires_at: s.expires_at ?? 0,
+      },
+    };
+  }
+  return null;
+}
+
+async function doelUrl(app: EigenApp): Promise<string | null> {
+  if (app.pagina) return null;
+  const live = await urlVoor(app);
+  if (!live) return null;
+  const sessie = await sessieVoor(app);
+  return shellUrl(app, live, sessie, Date.now());
+}
+
 async function openHier(app: EigenApp, plek: Plek): Promise<string> {
   const vorm: ShellVorm = plek.vorm ?? app.vorm;
-  const url = app.pagina ? null : await urlVoor(app);
+  const url = app.pagina ? null : await doelUrl(app);
   if (!isTauriRuntime()) {
     if (app.pagina) {
       window.location.hash = `#${routeVanPagina(app.pagina)}`;
@@ -95,10 +141,11 @@ async function openHier(app: EigenApp, plek: Plek): Promise<string> {
     title: app.naam,
     x: r.x, y: r.y, width: r.breedte, height: r.hoogte,
     theme: 'dark', decorations: true, resizable: true, center: false,
+    ...shellWebviewOpties(app),
   });
   await new Promise<void>((resolve, reject) => {
     venster.once('tauri://created', () => resolve());
-    venster.once('tauri://error', e => reject(new Error(String(e.payload))));
+    venster.once('tauri://error', e => reject(new Error(`shell ${app.id}: ${urlZonderGeheim(String(e.payload))}`)));
   });
   return `${app.naam} opened on ${scherm}${vorm === 'bureaublad' ? '' : vorm === 'telefoon' ? ' (phone size)' : ' (iPad size)'}`;
 }

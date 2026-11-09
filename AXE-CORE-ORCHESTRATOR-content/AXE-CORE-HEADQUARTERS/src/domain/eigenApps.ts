@@ -37,7 +37,10 @@ export const EIGEN_APPS: readonly EigenApp[] = [
     vorm: 'bureaublad', trefwoorden: ['trading os', 'tradingos', 'trading-os', 'trading terminal'],
   },
   {
-    id: 'companion', naam: 'AXE Companion', registerNaam: 'AXE Companion', url: 'https://www.axecompanion.com',
+    // /chat is de app (ProductEmbed). De www-homepagina is marketing, en
+    // /chat 307't naar /login zonder cookie — shellBasisUrl landt daarom op
+    // /login, waar de hash van een bestaande Core-sessie blijft hangen.
+    id: 'companion', naam: 'AXE Companion', registerNaam: 'AXE Companion', url: 'https://axecompanion.com/chat',
     vorm: 'telefoon', trefwoorden: ['axe companion', 'companion', 'axecompanion'],
   },
   {

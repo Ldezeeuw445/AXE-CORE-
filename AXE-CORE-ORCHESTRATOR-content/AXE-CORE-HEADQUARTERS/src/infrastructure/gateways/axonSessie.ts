@@ -7,6 +7,8 @@
  *
  * Anon-sleutel is publiek: hij staat in AXON's eigen frontend-bundle.
  */
+import { urlMetSessie } from '@/domain/eigenAppSessie';
+
 export const AXON_SITE = 'https://app.axon-memory.com/';
 export const AXON_SUPABASE_URL = 'https://ktaditgtbubonrahyiig.supabase.co';
 export const AXON_ANON_KEY =
@@ -47,15 +49,9 @@ export function schrijfAxonSessie(sessie: AxonSessie | null): void {
 
 export function axonEmbedUrl(sessie: AxonSessie | null, basis = AXON_SITE): string {
   if (!sessie?.access_token || !sessie.refresh_token) return basis;
-  const q = new URLSearchParams({
-    access_token: sessie.access_token,
-    refresh_token: sessie.refresh_token,
-    expires_in: String(Math.max(60, sessie.expires_at - Math.floor(Date.now() / 1000))),
-    token_type: 'bearer',
-    type: 'recovery',
-  });
   const wortel = basis.endsWith('/') ? basis : `${basis}/`;
-  return `${wortel}#${q.toString()}`;
+  // type=recovery: zo herkent AXON's bundel de hash (gemeten in hun iframe).
+  return urlMetSessie(wortel, sessie, Date.now(), { type: 'recovery' });
 }
 
 function uitTokenAntwoord(body: Record<string, unknown>, email?: string): AxonSessie | null {
