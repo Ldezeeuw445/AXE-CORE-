@@ -8,6 +8,9 @@
 import { useEffect, useState } from 'react';
 import { Kaart, KaartRaster, SectieBlok } from '@/presentation/components/layout/tabMaatstaf';
 import { keysOverview, type KeyRow, type KeysPerApp, type KeyStatus } from '@/infrastructure/gateways/axeCoreApiService';
+import { leesProviderOpslag } from '@/domain/providers';
+import type { ProviderConn } from '@/domain/providerConnections';
+import { metModelTest, type ModelTest } from '@/domain/keysMetModellen';
 
 const STAND: Record<KeyStatus, { kleur: string; tekst: string }> = {
   works: { kleur: 'var(--success)', tekst: 'Works' },
@@ -15,9 +18,24 @@ const STAND: Record<KeyStatus, { kleur: string; tekst: string }> = {
   missing: { kleur: 'var(--warning)', tekst: 'Missing' },
   broken: { kleur: 'var(--error)', tekst: 'Broken' },
   unseen: { kleur: 'var(--text-muted)', tekst: 'Not visible' },
+  optional: { kleur: 'var(--text-muted)', tekst: 'Optional' },
+  unused: { kleur: 'var(--text-muted)', tekst: 'Not used' },
 };
 
-const VOLGORDE: KeyStatus[] = ['broken', 'missing', 'works', 'present', 'unseen'];
+const VOLGORDE: KeyStatus[] = ['broken', 'missing', 'works', 'present', 'unseen', 'optional', 'unused'];
+
+const NODIG: Record<string, string> = { required: 'Required', optional: 'Optional', unused: 'Not needed' };
+
+/** Models & Tests schrijft zijn uitslag in dezelfde opslag als Instellingen. */
+function metModellen(apps: KeysPerApp[]): KeysPerApp[] {
+  let conns: Record<string, ProviderConn> = {};
+  try { conns = leesProviderOpslag() as Record<string, ProviderConn>; } catch { /* niets bekend */ }
+  return apps.map((a) => {
+    const keys = a.keys.map((k) => metModelTest(k, k.provider ? (conns[k.provider]?.lastTest as ModelTest) : undefined));
+    const counts = Object.fromEntries(VOLGORDE.map((s) => [s, keys.filter((k) => k.status === s).length])) as KeysPerApp['counts'];
+    return { ...a, keys, counts };
+  });
+}
 
 function Stand({ status }: { status: KeyStatus }) {
   const s = STAND[status] ?? STAND.unseen;
@@ -35,7 +53,10 @@ function Regel({ k }: { k: KeyRow }) {
         <code className="text-[11.5px] break-all" style={{ color: 'var(--text-primary)' }}>{k.name}</code>
         <Stand status={k.status} />
       </div>
-      <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>{k.purpose}</p>
+      <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+        {k.purpose}
+        {k.need && <span style={{ color: 'var(--text-muted)' }}> · {NODIG[k.need] ?? k.need}</span>}
+      </p>
       <p className="text-[10.5px] mt-0.5" style={{ color: 'var(--text-muted)' }} title={k.detail}>
         {k.where} · {k.detail}
       </p>
@@ -56,7 +77,7 @@ function AppKaart({ app }: { app: KeysPerApp }) {
     <Kaart titel={app.app} actie={<Stand status={kop as KeyStatus} />}>
       <p className="text-[11px] mb-2" style={{ color: 'var(--text-muted)' }}>
         {app.keys.length} keys · {c.works} working · {c.present} set · {c.missing} missing · {c.broken} broken ·{' '}
-        {c.unseen} not visible · reported by {app.manager}
+        {c.unseen} not visible · {c.optional ?? 0} optional · {c.unused ?? 0} not used · reported by {app.manager}
       </p>
       <ul>
         {rijen.map((k) => <Regel key={k.name} k={k} />)}
@@ -73,7 +94,7 @@ export function KeysPerAppSection() {
     let alive = true;
     const laad = () => {
       void keysOverview()
-        .then((d) => { if (alive) { setApps(d.apps); setFout(null); } })
+        .then((d) => { if (alive) { setApps(metModellen(d.apps)); setFout(null); } })
         .catch((e: unknown) => { if (alive) setFout(e instanceof Error ? e.message : String(e)); });
     };
     laad();
@@ -87,6 +108,11 @@ export function KeysPerAppSection() {
       titel="KEYS PER APP"
       extra={<span className="font-mono text-[10.5px]" style={{ color: 'var(--text-muted)' }}>names and status only · never values</span>}
     >
+      <p className="text-[11.5px] mb-3" style={{ color: 'var(--text-secondary)' }}>
+        Works = proven by a feed, a real trade or Models & Tests. Set = on the AXE Core VPS, not proven yet.
+        Missing = required and not on the VPS. Not visible = lives somewhere the VPS cannot look (Companion
+        server, Supabase, Settings → Keys). Optional and Not used never need action.
+      </p>
       {fout && <p className="axe-agentkaart-melding">{fout}</p>}
       {!apps && !fout && <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Checking keys…</p>}
       <KaartRaster ruim>

@@ -29,7 +29,9 @@ def test_vps_sleutel_aanwezig_ontbreekt_en_bewezen():
     over = sl.status(sync, NU, {"EIA_API_KEY": "x", "GROQ_API_KEY": "y"})
     assert _key(over, "Trading OS", "EIA_API_KEY")["status"] == "works"
     assert _key(over, "AXE Core", "GROQ_API_KEY")["status"] == "present"
-    assert _key(over, "AXE Core", "DEEPSEEK_API_KEY")["status"] == "missing"
+    assert _key(over, "AXE Core", "CRON_SECRET")["status"] == "missing"
+    assert _key(over, "AXE Core", "DEEPSEEK_API_KEY")["status"] == "unused"
+    assert _key(over, "AXE Core", "PERPLEXITY_API_KEY")["status"] == "optional"
 
 
 def test_401_in_de_feed_is_kapot_ook_als_hij_aanwezig_is():
@@ -64,8 +66,30 @@ def test_manager_meldt_alleen_kapot_of_ontbrekend_met_feed():
     assert not any("DEEPSEEK" in r for r in p)  # bewust niet gebruikt: geen melding
     p = sl.problemen(over, "Trading OS")
     assert any(r.startswith("EIA_API_KEY missing") for r in p)
+    assert not any("AISSTREAM" in r for r in p)  # optioneel: geen melding
 
 
 def test_manager_regel_leeg_als_alles_goed_is(monkeypatch):
     monkeypatch.setattr(sl, "lees", lambda db, nu=None: sl.status([], NU, {k["naam"]: "x" for k in sl.CATALOGUS}))
     assert sl.manager_regel(None, "NorthSea") == ""
+
+
+def test_openhands_is_geen_ontbrekende_sleutel():
+    k = _key(sl.status([], NU, {}), "AXE Core", "OPENHANDS_API_KEY")
+    assert k["status"] == "unused" and k["provider"] == "openhands"
+
+
+def test_metaapi_bewezen_door_echte_trades():
+    over = sl.status([], NU, {}, tabel_bewijs={"broker_trades": (NU - timedelta(hours=8)).isoformat()})
+    k = _key(over, "AXE Companion", "METAAPI_TOKEN")
+    assert k["status"] == "works" and "broker_trades" in k["detail"]
+
+
+def test_tweede_vps_dax_logins():
+    dax = [{"id": "dax-developer-01", "owner_agent": "developer", "status": "running",
+            "stats": {"engines": {"claude_logged_in": False, "codex_logged_in": False}}},
+           {"id": "dax-trading-01", "owner_agent": "trading", "status": "error", "last_error": "heartbeat exit 1"}]
+    rijen = {k["name"]: k for k in _app(sl.status([], NU, {}, dax=dax), "AXE Core")["keys"]}
+    assert rijen["dax-developer-01 login"]["status"] == "missing"
+    assert rijen["dax-trading-01 login"]["status"] == "broken"
+    assert "STRATO" in rijen["dax-developer-01 login"]["where"]

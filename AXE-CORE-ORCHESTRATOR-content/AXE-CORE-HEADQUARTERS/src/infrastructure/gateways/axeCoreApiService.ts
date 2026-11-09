@@ -1102,7 +1102,7 @@ export async function usageCreditsSnapshot(): Promise<UsageCreditsSnapshot> {
 }
 
 /** Keys per app (GET /keys/overview): naam, doel, plek en status. Nooit een waarde. */
-export type KeyStatus = 'works' | 'present' | 'missing' | 'broken' | 'unseen';
+export type KeyStatus = 'works' | 'present' | 'missing' | 'broken' | 'unseen' | 'optional' | 'unused';
 
 export interface KeyRow {
   name: string;
@@ -1111,6 +1111,9 @@ export interface KeyRow {
   status: KeyStatus;
   detail: string;
   feeds: string[];
+  need?: 'required' | 'optional' | 'unused';
+  /** Id in Models & Tests; de app vult de status daaruit aan. */
+  provider?: string | null;
   warning?: string;
 }
 
