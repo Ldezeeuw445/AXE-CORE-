@@ -545,6 +545,26 @@ class TestStoelKeuze:
         assert r["engine"] == "claude2"
         assert r["seats_tried"][0] == "claude"
 
+    def test_niet_ingelogd_in_json_met_lege_stderr_valt_ook_door(self, monkeypatch):
+        """Zo meldt de echte CLI het (9 nov, Claude 2 op de iMac): JSON op stdout,
+        is_error, exit 1, stderr leeg. Zes planner-runs bleven op die stoel."""
+        def antwoord(cmd, env):
+            cfg = env.get("CLAUDE_CONFIG_DIR", "")
+            if "tweede" in cfg:
+                return subprocess.CompletedProcess(
+                    cmd, 1,
+                    '{"type":"result","subtype":"success","is_error":true,'
+                    '"result":"Not logged in · Please run /login"}', "")
+            return subprocess.CompletedProcess(cmd, 0, '{"result":"ok"}', "")
+        self._nep_cli(monkeypatch, antwoord)
+        a._ACCOUNT_CACHE["claude"] = (time.monotonic(), {"ingelogd": True, "account": "a@b.nl"})
+        a._ACCOUNT_CACHE["claude2"] = (time.monotonic(), {"ingelogd": None, "account": None})
+        a._SEAT_LIMIT.pop("claude2", None)
+        r = a.run_agent("proef", "x", permission_mode="plan", engine="claude2")
+        assert r["status"] == "ok"
+        assert r["seats_tried"][0] == "claude2" and r["engine"] != "claude2"
+        assert a._ACCOUNT_CACHE["claude2"][1]["ingelogd"] is False
+
     def test_limiet_tijdens_run_probeert_volgende(self, monkeypatch):
         def antwoord(cmd, env):
             cfg = env.get("CLAUDE_CONFIG_DIR", "")

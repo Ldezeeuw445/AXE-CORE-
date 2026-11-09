@@ -935,7 +935,11 @@ def run_agent(
             if len(geprobeerd) > 1:
                 laatste["seats_tried"] = geprobeerd
             return laatste
-        fout = str(laatste.get("error") or laatste.get("result") or "")
+        # Beide lezen: de CLI meldt "Not logged in" in result (JSON op stdout)
+        # met een lege stderr, terwijl error dan al "... eindigde met 1" is.
+        # 9 nov: zes planner-runs op een niet-ingelogde Claude 2 zonder
+        # dat de volgende stoel het overnam.
+        fout = " ".join(str(x) for x in (laatste.get("error"), laatste.get("result")) if x)
         if _auth_fout(fout) or _limit_message(fout) or _model_fout(fout):
             if not _model_fout(fout):
                 _onthoud_stoel_fout(huidige, fout)
@@ -1146,10 +1150,14 @@ def _run_agent_stoel(
     tekst = result_text or stdout[:8000]
     if fallback_note:
         tekst = (fallback_note + tekst)[:8000]
+    fout = foutzin()
+    if mislukt and result_text and not _stderr_staart(proc.stderr):
+        # Lege stderr: de reden staat in result ("Not logged in · Please run /login").
+        fout = f"{fout} {result_text[:300]}"
     return finish({**basis, "status": "error" if mislukt else "ok",
             "result": tekst,
             "meta": parsed if isinstance(parsed, dict) else None,
-            **({"error": foutzin()} if mislukt else {})})
+            **({"error": fout} if mislukt else {})})
 
 
 # Een Claude-stoel die dagen niets doet, stond op Subscriptions als "Limit seen ·
