@@ -421,19 +421,50 @@ def run_companionmgr(db: Any, nu: datetime) -> dict[str, Any]:
     }
 
 
+def _vandaag(db: Any, tabel: str, kolommen: str, nu: datetime) -> list[dict[str, Any]]:
+    """Alleen de rijen van vandaag (UTC, zoals de daglimiet telt): licht lezen."""
+    try:
+        dag = nu.strftime("%Y-%m-%dT00:00:00+00:00")
+        return (db.table(tabel).select(kolommen).gte("created_at", dag).limit(500).execute().data) or []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("axon: %s onleesbaar (%s)", tabel, exc)
+        return []
+
+
+def _lokaal_uur(nu: datetime) -> int:
+    try:
+        from zoneinfo import ZoneInfo
+        return nu.astimezone(ZoneInfo("Europe/Amsterdam")).hour
+    except Exception:  # noqa: BLE001
+        return nu.hour
+
+
 def run_axon(db: Any, nu: datetime) -> dict[str, Any]:
-    memories = _rijen(db, "memory", "id,agent,kind", limiet=50)
-    rag = _rijen(db, "rag_memories", "id", limiet=20)
-    stuur_bericht(
-        db, "axon", BAAS, "report",
-        f"AXON pulse. memory seen {len(memories)}, rag {len(rag)}. No HOLD writes.",
-    )
+    """Eigenaar van het geheugen: ziet of de agents vandaag nog kunnen leren en
+    of er ruis langs het hek komt. Roept Luka alleen als hij het niet zelf kan."""
+    import axon_bewaker as ab
+    rag = _vandaag(db, "rag_memories", "id,category,metadata->>source,created_at", nu)
+    # PostgREST geeft metadata->>source terug als "source".
+    rag = [{**r, "metadata": {"source": r["source"]}} if "source" in r else r for r in rag]
+    memory = _vandaag(db, "memory", "id,agent,key,content,created_at", nu)
+    t = ab.tel(rag, memory)
+    bevindingen = ab.beoordeel(rag, memory, _lokaal_uur(nu))
+    voor_luka = [b for b in bevindingen if b.voor == "luka"]
+    for b in voor_luka:
+        _vraag_luka(db, "axon", b.titel, b.detail)
+    overzicht = _dagoverzicht(db, nu, "Geheugen", bevindingen)
+    kop = f"vandaag {t['lessen']} lessen, {t['notities']} notities (limiet {ab.GEHEUGEN_MAG_PER_DAG})"
+    gerapporteerd = _rapporteer_bij_verandering(
+        db, "axon", f"Geheugen: {kop}; " + ("; ".join(b.titel for b in bevindingen) or "hek houdt") + ".")
     return {
         "job": "axon memory owner",
         "repo": "axon-memory",
         "supabase": "ktaditgtbubonrahyiig",
-        "memory_seen": len(memories),
-        "rag_seen": len(rag),
+        **t,
+        "voor_luka": [b.code for b in voor_luka],
+        "bevindingen": [b.code for b in bevindingen],
+        "dagoverzicht": overzicht,
+        "gerapporteerd": gerapporteerd,
         "invented": 0,
     }
 

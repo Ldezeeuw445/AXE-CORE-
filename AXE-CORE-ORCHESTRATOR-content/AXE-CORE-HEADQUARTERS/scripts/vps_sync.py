@@ -142,6 +142,7 @@ MANIFEST = {
     "/opt/axe-core-api/projecten_bewaker.py": ("backend/axe_api/projecten_bewaker.py", "axe-core-api"),
     "/opt/axe-core-api/roosters_bewaker.py": ("backend/axe_api/roosters_bewaker.py", "axe-core-api"),
     "/opt/axe-core-api/intel_bewaker.py": ("backend/axe_api/intel_bewaker.py", "axe-core-api"),
+    "/opt/axe-core-api/axon_bewaker.py": ("backend/axe_api/axon_bewaker.py", "axe-core-api"),
     "/opt/axe-core-api/northsea_mailwachter.py": ("backend/axe_api/northsea_mailwachter.py", "axe-core-api"),
     # 28 okt: de developer-DAX bouwt zoals Grok Bot (task_worker + staande_diensten).
     "/opt/axe-core-api/dax_bouw.py": ("backend/axe_api/dax_bouw.py", "axe-core-api"),
@@ -228,7 +229,8 @@ WORKER_IMPORTS = {
     "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "grok_managers.py", "taak_fout.py", "gezondheid.py", "memory_schrijfhek.py", "geheimen.py", "device_notify.py", "modelbox.py", "northsea_mailwachter.py"),
     "memory_schrijfhek.py": ("geheimen.py",),
     "staande_diensten.py": ("grok_managers.py", "dax_bouw.py", "intel_bewaker.py"),
-    "grok_managers.py": ("northsea_bewaker.py", "projecten_bewaker.py", "roosters_bewaker.py", "intel_bewaker.py", "goedkeuring_melding.py", "northsea_gateway.py"),
+    "grok_managers.py": ("northsea_bewaker.py", "projecten_bewaker.py", "roosters_bewaker.py", "intel_bewaker.py", "axon_bewaker.py", "goedkeuring_melding.py", "northsea_gateway.py"),
+    "axon_bewaker.py": ("memory_schrijfhek.py",),
     "northsea_mailwachter.py": ("goedkeuring_melding.py", "northsea_gateway.py"),
 }
 

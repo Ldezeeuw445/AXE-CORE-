@@ -1993,6 +1993,10 @@ async def insert_row(table_name: str, req: RowData, request: Request):
         try:
             import memory_schrijfhek as hek
             reden, data = hek.filter_rij(sb(), table_name, data)
+            if reden == "vervang" and data is not None:
+                rij_id = data.pop("id")
+                result = sb().table(table_name).update(data).eq("id", rij_id).execute()
+                return result.data
             if reden != "ok" or data is None:
                 return {"skipped": reden}
         except Exception as hek_err:

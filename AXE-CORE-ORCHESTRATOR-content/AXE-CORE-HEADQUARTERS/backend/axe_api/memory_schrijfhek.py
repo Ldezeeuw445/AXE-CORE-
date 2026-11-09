@@ -191,14 +191,50 @@ def _bestaat_rag_hash(sb: Any, hash_: str) -> bool:
         return False
 
 
+def obsidian_pad(tabel: str, data: dict) -> str:
+    """Het notitiepad als dit een spiegel van een Obsidian-notitie is, anders ''."""
+    if tabel != "rag_memories":
+        return ""
+    meta = _meta(data)
+    if meta.get("source") != "obsidian":
+        return ""
+    return str(meta.get("path") or "").strip()
+
+
+def _bestaande_notitie(sb: Any, pad: str) -> Optional[str]:
+    """De nieuwste rij van deze notitie, zodat een nieuwe versie hem vervangt."""
+    result = (
+        sb.table("rag_memories")
+        .select("id")
+        .contains("metadata", {"source": "obsidian", "path": pad})
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    rijen = getattr(result, "data", None) or []
+    return str(rijen[0]["id"]) if rijen else None
+
+
 def filter_rij(sb: Any, tabel: str, data: dict) -> tuple[str, Optional[dict]]:
-    """Bron van waarheid op de VPS. Cron, HOLD en duplicaten komen hier niet voorbij."""
+    """Bron van waarheid op de VPS. Cron, HOLD en duplicaten komen hier niet voorbij.
+
+    "vervang": een Obsidian-notitie die er al staat. De aanroeper werkt rij
+    `uit["id"]` bij in plaats van een nieuwe rij te maken. Tot 9 nov voegde
+    elke sync (elk uur, per apparaat) dezelfde ~80 notities opnieuw toe: 23.110
+    van de 28.084 RAG-rijen waren kopieën van 1.196 notities, en de daglimiet
+    van 120 was elke nacht om 03:18 op, waarna geen agent nog iets kon leren.
+    """
     if tabel not in GEHEUGEN_TABELLEN:
         return "ok", data
     reden, uit = herschrijf(tabel, data)
     if reden != "ok" or uit is None:
         return reden, None
     try:
+        pad = obsidian_pad(tabel, uit)
+        if pad:
+            bestaand = _bestaande_notitie(sb, pad)
+            if bestaand:
+                return "vervang", {**uit, "id": bestaand}
         if tabel == "rag_memories":
             h = (_meta(uit).get("content_hash") or "")
             if h and _bestaat_rag_hash(sb, h):
