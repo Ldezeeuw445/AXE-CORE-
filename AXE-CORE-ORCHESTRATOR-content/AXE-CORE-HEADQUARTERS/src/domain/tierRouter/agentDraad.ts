@@ -15,7 +15,15 @@ export interface DraadBericht {
   rol: DraadRol;
   soort: DraadSoort;
   tekst: string;
+  /** Echte tijd (ms) van dit bericht, voor de volgorde in het gesprek. */
+  at?: number;
 }
+
+/**
+ * Alles hierna is achtergrond voor de manager (eerder gesprek, hoe te
+ * antwoorden), niet iets wat Luka zei. In de chat staat alleen wat ervoor staat.
+ */
+export const GESPREK_CONTEXT = '\n\n[[AXE-GESPREK]]\n';
 
 function kort(s: string, max = 400): string {
   const t = (s || '').trim().replace(/\s+/g, ' ');
@@ -25,12 +33,13 @@ function kort(s: string, max = 400): string {
 /** Eén job als berichten: wat AXE vroeg, wat de agent deed, waar hij wacht. */
 export function draadVanJob(job: AxeJob): DraadBericht[] {
   const uit: DraadBericht[] = [];
-  const opdracht = kort(job.sourceText || job.title);
+  const opdracht = kort((job.sourceText || job.title || '').split(GESPREK_CONTEXT)[0]);
   if (opdracht) {
     uit.push({
       rol: 'axe',
       soort: job.bron === 'followup' ? 'followup' : 'instruction',
       tekst: opdracht,
+      at: job.startedAt,
     });
   }
   for (const stap of stappenUit(job.stappen ?? [], 8)) {
@@ -38,10 +47,10 @@ export function draadVanJob(job: AxeJob): DraadBericht[] {
   }
   const vraag = job.state === 'waiting' ? goedkeuringVanJob(job) : null;
   if (vraag) {
-    uit.push({ rol: 'agent', soort: 'approval', tekst: kort(vraag.tekst, 600) });
+    uit.push({ rol: 'agent', soort: 'approval', tekst: kort(vraag.tekst, 600), at: job.startedAt + 1 });
   }
   if (job.summary) {
-    uit.push({ rol: 'agent', soort: 'result', tekst: kort(job.summary) });
+    uit.push({ rol: 'agent', soort: 'result', tekst: kort(job.summary), at: job.finishedAt ?? job.startedAt + 2 });
   }
   return uit;
 }

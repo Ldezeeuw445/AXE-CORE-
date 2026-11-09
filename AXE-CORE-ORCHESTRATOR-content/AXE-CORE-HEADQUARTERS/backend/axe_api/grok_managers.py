@@ -563,7 +563,7 @@ def run_axon(db: Any, nu: datetime) -> dict[str, Any]:
     kop = f"vandaag {t['lessen']} lessen, {t['notities']} notities (limiet {ab.GEHEUGEN_MAG_PER_DAG})"
     gerapporteerd = _rapporteer_bij_verandering(
         db, "axon", f"Geheugen: {kop}; " + ("; ".join(b.titel for b in bevindingen) or "hek houdt") + ".")
-    chat = _chat_met_luka(db, "axon", bevindingen, rustig=f"Geheugen in orde: {kop}.")
+    chat = _chat_met_luka(db, "axon", bevindingen, rustig="Geheugen is in orde, het hek houdt.")
     return {
         "job": "axon memory owner",
         "repo": "axon-memory",

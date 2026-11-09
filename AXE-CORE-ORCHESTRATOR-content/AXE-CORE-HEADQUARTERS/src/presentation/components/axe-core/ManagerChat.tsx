@@ -34,6 +34,7 @@ import {
   bewaarManagerChat,
   laadManagerChat,
   nieuwMsg,
+  voegChatSamen,
   type ManagerChatMsg,
 } from '@/domain/agents/managerChatOpslag';
 import {
@@ -133,39 +134,21 @@ function veiligeStripSamenvatting(
 }
 
 function draadNaarChat(berichten: DraadBericht[]): ManagerChatMsg[] {
-  return berichten.map((b, i) => {
+  // Stappen zijn intern werk, geen gesprek: de eerste was de afgekorte titel
+  // van Luka's eigen zin, die zo als bericht van de manager in beeld kwam.
+  return berichten.filter((b) => b.soort !== 'step').map((b) => {
     const failed = b.soort === 'result' && /every provider failed|waiting for capacity|429|no credits/i.test(b.tekst);
-    const { text, error } = vriendelijkeTekst(b.tekst, failed || b.soort === 'approval' && false);
-    const role: ManagerChatMsg['role'] =
-      b.rol === 'luka' || b.soort === 'followup' || b.soort === 'instruction' ? 'user' : 'assistant';
-    // Instructions from AXE are shown as assistant context; followups from Luka as user.
-    const finalRole: ManagerChatMsg['role'] =
-      b.soort === 'followup' ? 'user'
-        : b.soort === 'instruction' ? 'user'
-          : role === 'user' ? 'user' : 'assistant';
+    const { text, error } = vriendelijkeTekst(b.tekst, failed);
+    const at = b.at ?? Date.now();
     return {
-      id: `draad-${i}-${b.soort}-${b.tekst.slice(0, 24)}`,
-      role: finalRole,
+      id: `draad-${at}-${b.soort}`,
+      role: b.soort === 'followup' || b.soort === 'instruction' ? 'user' as const : 'assistant' as const,
       text: error ? text : b.tekst,
-      at: i,
+      at,
       error: error || undefined,
     };
   });
 }
-
-function mergeGeschiedenis(lokaal: ManagerChatMsg[], uitJobs: ManagerChatMsg[]): ManagerChatMsg[] {
-  const seen = new Set<string>();
-  const uit: ManagerChatMsg[] = [];
-  const sleutel = (m: ManagerChatMsg) => `${m.role}|${m.text.trim().slice(0, 160)}`;
-  for (const m of [...lokaal, ...uitJobs]) {
-    const k = sleutel(m);
-    if (!m.text.trim() || seen.has(k)) continue;
-    seen.add(k);
-    uit.push(m);
-  }
-  return uit.sort((a, b) => a.at - b.at);
-}
-
 
 const LANG_COLLAPSE = 720;
 
@@ -310,7 +293,7 @@ export function ManagerChat({
     [jobs, job, agent.id],
   );
 
-  const berichten = useMemo(() => mergeGeschiedenis(lokaal, jobBerichten), [lokaal, jobBerichten]);
+  const berichten = useMemo(() => voegChatSamen(lokaal, jobBerichten), [lokaal, jobBerichten]);
 
   useEffect(() => {
     bewaarManagerChat(agent.id, berichten);

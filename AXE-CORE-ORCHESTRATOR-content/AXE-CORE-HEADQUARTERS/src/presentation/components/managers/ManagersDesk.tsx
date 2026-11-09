@@ -32,6 +32,7 @@ import {
 } from '@/domain/agents/bossRoute';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { syncManagerDraad, managerGelezen, MANAGER_DRAAD_EVT } from '@/infrastructure/persistence/managerDraadSync';
+import { GESPREK_CONTEXT } from '@/domain/tierRouter/agentDraad';
 import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { startAxeJobs } from '@/presentation/store/installTierRouter';
@@ -46,6 +47,7 @@ import { agentTierRegel } from '@/domain/agents/agentTiers';
 import {
   bewaarManagerChat,
   laadManagerChat,
+  gesprekContext,
   nieuwMsg,
   nieuwRelayMsg,
 } from '@/domain/agents/managerChatOpslag';
@@ -133,9 +135,10 @@ function previewTekst(agentId: string, srv?: ServerAgent): string {
 function startManagerJob(agentId: AxeAgentId, tekst: string, opts?: { device?: string | null; tab?: string }) {
   const coding = isCodingOpdracht(tekst) && isGrokManager(agentId);
   const repo = coding ? primaireRepoVoor(agentId as GrokManagerId) : null;
-  const goal = coding
+  const basis = coding
     ? `${tekst}\n\n[AXE manager coding] Repo: ${repo}. Produce a branch + PR only. Never merge, never deploy. Wait for Luka's approval.`
     : tekst;
+  const goal = `${basis}${GESPREK_CONTEXT}${gesprekContext(agentById(agentId).name, laadManagerChat(agentId), tekst)}`;
   startAxeJobs([{
     text: goal,
     titel: tekst.slice(0, 60),
