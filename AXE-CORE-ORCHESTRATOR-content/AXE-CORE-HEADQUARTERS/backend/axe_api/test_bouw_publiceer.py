@@ -569,6 +569,16 @@ def test_lint_met_baseline_faalt_alleen_op_de_nieuwe_vondst(tmp_path):
     assert any("baz" in r for r in uit["lint_findings"])
 
 
+def test_lint_kapotte_baseline_json_wordt_niet_stil_groen(tmp_path):
+    (tmp_path / "package.json").write_text('{"scripts":{"lint":"eslint src"}}')
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "eslint-baseline.json").write_text("dit is geen json{")
+    uit = bp.verifieer_bouw(str(tmp_path), run=_lint_run(LINT_STYLISH), zoek=lambda _: "npm")
+    assert uit["passed"] is False
+    assert "Project check failed: lint" in uit["reason"]
+    assert "could not read" in uit["reason"] or "voiceStore" in uit["reason"]
+
+
 def test_lint_zonder_parseerbare_vondsten_wordt_niet_stil_groen(tmp_path):
     (tmp_path / "package.json").write_text('{"scripts":{"lint":"eslint src"}}')
     (tmp_path / "node_modules").mkdir()

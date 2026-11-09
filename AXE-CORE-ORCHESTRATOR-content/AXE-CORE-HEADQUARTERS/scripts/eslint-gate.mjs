@@ -181,30 +181,30 @@ function schrijf(root, findings) {
   }
 }
 
-function main(argv = process.argv.slice(2), root = ROOT) {
+export function main(argv = process.argv.slice(2), root = ROOT) {
   const write = argv.includes('--write');
   const draai = eslintJson(root);
   if (!draai.ok) {
     console.error(`eslint-gate: ${draai.error}`);
-    process.exit(1);
+    return 1;
   }
   const findings = findingsFromEslintJson(draai.results, root);
   const pad = join(root, BASIS_NAAM);
   if (write) {
     schrijf(root, findings);
-    process.exit(0);
+    return 0;
   }
   if (!existsSync(pad)) {
     console.error(`eslint-gate: missing ${BASIS_NAAM}. Run npm run lint:baseline once to record the known backlog, then keep it from growing.`);
     printRegels(findings);
-    process.exit(1);
+    return 1;
   }
   let basis;
   try {
     basis = loadBaseline(JSON.parse(readFileSync(pad, 'utf8')));
   } catch (e) {
     console.error(`eslint-gate: could not read ${BASIS_NAAM}: ${e.message}`);
-    process.exit(1);
+    return 1;
   }
   const nieuw = nieuweVondsten(findings, basis);
   const bekend = findings.length - nieuw.length;
@@ -212,12 +212,12 @@ function main(argv = process.argv.slice(2), root = ROOT) {
   if (nieuw.length) {
     printRegels(nieuw);
     console.error('Fix the new findings. After a real cleanup: npm run lint:baseline (shrinks). Do not grow the baseline to hide new errors.');
-    process.exit(1);
+    return 1;
   }
-  process.exit(0);
+  return 0;
 }
 
 const hier = fileURLToPath(import.meta.url);
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === pathToFileURL(hier).href) {
-  main();
+  process.exit(main());
 }
