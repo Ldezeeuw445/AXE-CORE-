@@ -55,6 +55,17 @@ AUTOMATISCH = re.compile(
     re.I,
 )
 
+# Post van NorthSea's eigen leveranciers over hun eigen rekening: geen handel.
+# 9 nov 07:10 werd "Google Workspace Payment received" (EUR 2,61) een kaart
+# "Belangrijk: betaling of bank" bij Luka, omdat de desk hem als handelsmail
+# classificeerde en "payment" erin stond.
+EIGEN_LEVERANCIER = re.compile(
+    r"\b(google workspace|google payments|google cloud|resend|supabase|cloudflare|ionos|vercel|"
+    r"anthropic|openai|github|stripe receipt)\b", re.I)
+REKENING = re.compile(
+    r"\b(payment (received|confirmation|successful)|receipt|invoice|factuur|billing|your payment|"
+    r"betaling ontvangen|subscription|abonnement)\b", re.I)
+
 
 @dataclass(frozen=True)
 class MailMelding:
@@ -93,6 +104,10 @@ def beoordeel_mail(item: dict[str, Any]) -> MailMelding | None:
     analyse = item.get("analysis") if isinstance(item.get("analysis"), dict) else {}
     tekst = " ".join([onderwerp, str(item.get("preview") or ""), str(analyse.get("summary") or "")])
     if AUTOMATISCH.search(onderwerp) or AUTOMATISCH.search(str(item.get("preview") or "")[:200]):
+        return None
+
+    if not item.get("counterparty") and not item.get("contact") \
+            and EIGEN_LEVERANCIER.search(tekst) and REKENING.search(tekst):
         return None
 
     redenen = [label for patroon, label in BELANGRIJK if patroon.search(tekst)]

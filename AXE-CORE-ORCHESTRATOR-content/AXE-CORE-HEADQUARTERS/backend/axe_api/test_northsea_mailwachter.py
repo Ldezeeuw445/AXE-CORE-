@@ -137,3 +137,16 @@ def test_desk_agent_leest_alleen():
         assert "northsea_read" in tools and "write_file" not in tools
     for actie in g.AGENT_LEESACTIES:
         assert not g.ACTIONS[actie].tool.startswith(("northsea_research", "northsea_prepare", "northsea_send", "northsea_approve"))
+
+
+def test_rekening_van_eigen_leverancier_is_geen_kaart():
+    """9 nov 07:10: het Google-bonnetje van EUR 2,61 werd "Belangrijk: betaling
+    of bank", omdat de desk hem een classificatie gaf (dus niet 'unknown')."""
+    bon = {"communication_id": "c7", "direction": "inbound", "channel": "email",
+           "subject": "Google Workspace  Payment received", "counterparty": None, "contact": None,
+           "analysis": {"classification": "general_inquiry"},
+           "preview": "Your payment of EUR 2.61 was applied to Google Workspace on 8 Nov 2026."}
+    assert mw.beoordeel_mail(bon) is None
+    # Een koper die over een betaling mailt blijft wel belangrijk.
+    koper = mail("c8", "Payment terms for copper", "We can do LC at sight.")
+    assert mw.beoordeel_mail(koper).niveau == "nu"

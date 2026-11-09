@@ -767,10 +767,24 @@ class TaskRepository:
         }).eq("id", approval_id).eq("status", "pending").execute().data
         if not rows:
             raise RuntimeError("approval changed concurrently")
-        self._db().table("core_tasks").update({
+        hervat: dict[str, Any] = {
             "status": "queued" if approved else "rejected",
             "next_attempt_at": datetime.now(timezone.utc).isoformat(),
-        }).eq("id", task_id).eq("status", "waiting_approval").execute()
+        }
+        if approved:
+            # Wachten op Luka is geen mislukte poging. Een taak die op zijn
+            # laatste poging om een ja vroeg, kwam met attempt == max_attempts
+            # terug in de rij, en claim_next_core_task pakt alleen
+            # attempt < max_attempts: "DAX build: next task in axon-memory"
+            # stond zo van 5 tot 9 nov in de wachtrij, goedgekeurd en vergeten.
+            # Zelfde regel als defer_core_task: de poging komt terug.
+            try:
+                rij = (self._db().table("core_tasks").select("attempt").eq("id", task_id)
+                       .limit(1).execute().data) or [{}]
+                hervat["attempt"] = max(0, int(rij[0].get("attempt") or 0) - 1)
+            except Exception:
+                pass
+        self._db().table("core_tasks").update(hervat).eq("id", task_id).eq("status", "waiting_approval").execute()
         try:
             taak = self.get(task_id)
             meta = dict((taak or {}).get("metadata") or {})
