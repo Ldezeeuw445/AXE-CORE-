@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import {
-  weekDagen, datumSleutel, blokjesVoor, banenVoor, urenBereik, type RoosterItem,
+  weekDagen, datumSleutel, urenVanDag, urenBereik, routineNaam, type RoosterItem, type UurCel,
 } from '@/domain/weekRooster';
 
 const DAGNAAM = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -25,6 +25,39 @@ function tijdVak(tijd: string, duurMin: number): string {
   const hh = String(Math.floor(eind / 60) % 24).padStart(2, '0');
   const mm = String(eind % 60).padStart(2, '0');
   return duurMin > 0 ? `${tijd} – ${hh}:${mm}` : tijd;
+}
+
+/** Eén leesbare regel in de week: tijd en titel, op volle breedte. */
+function Regel({ item, opKies }: { item: RoosterItem; opKies?: (item: RoosterItem) => void }) {
+  return (
+    <button
+      type="button"
+      className="axe-week-regel"
+      onClick={() => opKies?.(item)}
+      title={`${tijdVak(item.tijd, item.duurMin)} · ${item.titel}`}
+      style={{ ['--blok' as string]: item.kleur }}
+    >
+      <span className="axe-week-regeltijd">{item.tijd}</span>
+      <span className="axe-week-regeltitel">{item.titel}</span>
+    </button>
+  );
+}
+
+/** Alle routines van dit uur samen; klik voor de dagweergave met alles los. */
+function RoutineRegel({ routines, opKies }: { routines: RoosterItem[]; opKies?: (item: RoosterItem) => void }) {
+  const namen = [...new Set(routines.map(routineNaam))];
+  const tekst = routines.length === 1 ? namen[0] : `${routines.length} routines`;
+  return (
+    <button
+      type="button"
+      className="axe-week-regel axe-week-regel--routine"
+      onClick={() => opKies?.(routines[0])}
+      title={namen.join('\n')}
+      style={{ ['--blok' as string]: routines[0].kleur }}
+    >
+      <span className="axe-week-regeltitel">{tekst}</span>
+    </button>
+  );
 }
 
 function uurLabel(u: number): string {
@@ -56,14 +89,21 @@ export function WeekRooster({
     const t = window.setInterval(() => setNu(new Date()), 60_000);
     return () => window.clearInterval(t);
   }, []);
-  const nuPct = ((nu.getHours() - van) + nu.getMinutes() / 60) / (tot - van) * 100;
+  const nuUur = nu.getHours();
+  const nuInUur = (nu.getMinutes() / 60) * 100;
   const rol = useRef<HTMLDivElement>(null);
+  const nuRij = useRef<HTMLDivElement>(null);
+  const heeftItems = items.length > 0;
+  // Bij openen, en nog één keer als de items binnen zijn: de rijen groeien mee
+  // met wat erin staat, dus "nu" staat pas daarna op zijn echte plek.
   useEffect(() => {
     const el = rol.current;
-    if (!el) return;
-    el.scrollTop = Math.max(0, (el.scrollHeight * (nu.getHours() - van - 1.5)) / (tot - van));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const rij = nuRij.current;
+    if (!el || !rij) return;
+    el.scrollTop += rij.getBoundingClientRect().top - el.getBoundingClientRect().top - 120;
+  }, [heeftItems]);
+
+  const perDag = new Map(sleutels.map((k) => [k, new Map<number, UurCel>(urenVanDag(items, k, van, tot).map((c) => [c.uur, c]))]));
 
   const verschuif = (weken: number) => {
     const d = new Date(anker);
@@ -108,86 +148,39 @@ export function WeekRooster({
             );
           })}
 
-          {uren.map(u => (
-            <div key={`u${u}`} className="axe-week-uur" style={{ gridRow: `${uren.indexOf(u) + 2}` }}>
+          {uren.map((u, rij) => (
+            <div
+              key={`u${u}`}
+              ref={u === nuUur ? nuRij : undefined}
+              className="axe-week-uur"
+              style={{ gridRow: rij + 2 }}
+            >
               {uurLabel(u)}
             </div>
           ))}
 
-          {sleutels.map((sleutel, kolom) => (
-            <div
-              key={`k${sleutel}`}
-              className="axe-week-kolom"
-              data-vandaag={sleutel === vandaag ? 'ja' : undefined}
-              style={{ gridColumn: kolom + 2, gridRow: `2 / span ${uren.length}` }}
-            >
-              {uren.map(u => <div key={u} className="axe-week-cel" />)}
-              {nuPct >= 0 && nuPct <= 100 && (
-                <i className="axe-week-nulijn" data-vandaag={sleutel === vandaag ? 'ja' : undefined} style={{ top: `${nuPct}%` }} />
-              )}
-
-              {(() => {
-                const bl = blokjesVoor(items, sleutel, van, tot);
-                const ba = banenVoor(bl);
-                // Hooguit drie naast elkaar; wat erboven valt komt samen in één
-                // "+N"-blok in de derde baan -- anders worden het streepjes.
-                const MAX = 3;
-                const zicht = ba.map(x => x.banen <= MAX || x.baan < MAX - 1);
-                const meer = new Map<number, { van: number; tot: number; n: number; eerste: number }>();
-                bl.forEach((b, bi) => {
-                  if (zicht[bi]) return;
-                  const g = meer.get(ba[bi].groep) ?? { van: b.vanUur, tot: b.vanUur + b.hoogUur, n: 0, eerste: bi };
-                  g.van = Math.min(g.van, b.vanUur); g.tot = Math.max(g.tot, b.vanUur + b.hoogUur); g.n += 1;
-                  meer.set(ba[bi].groep, g);
-                });
-                const breed = (bi: number) => Math.min(ba[bi].banen, MAX);
-                return (<>
-                {[...meer.values()].map(g => (
-                  <button
-                    key={`meer-${g.eerste}`}
-                    type="button"
-                    className="axe-week-blok axe-week-meer"
-                    onClick={() => opKies?.(bl[g.eerste].item)}
-                    style={{
-                      top: `${(g.van / uren.length) * 100}%`,
-                      height: `calc(${(Math.max(0.5, g.tot - g.van) / uren.length) * 100}% - 3px)`,
-                      left: `calc(${((MAX - 1) / MAX) * 100}% + 3px)`,
-                      width: `calc(${100 / MAX}% - 6px)`,
-                      right: 'auto',
-                    }}
-                  >
-                    <span className="axe-week-bloktijd">+{g.n}</span>
-                    <span className="axe-week-bloksoort">more</span>
+          {uren.flatMap((u, rij) => sleutels.map((sleutel, kolom) => {
+            const cel = perDag.get(sleutel)?.get(u);
+            return (
+              <div
+                key={`${sleutel}-${u}`}
+                className="axe-week-uurcel"
+                data-vandaag={sleutel === vandaag ? 'ja' : undefined}
+                style={{ gridColumn: kolom + 2, gridRow: rij + 2 }}
+              >
+                {u === nuUur && (
+                  <i className="axe-week-nulijn" data-vandaag={sleutel === vandaag ? 'ja' : undefined} style={{ top: `${nuInUur}%` }} />
+                )}
+                {cel?.regels.map((item) => <Regel key={item.id} item={item} opKies={opKies} />)}
+                {cel && cel.meer.length > 0 && (
+                  <button type="button" className="axe-week-regel axe-week-regel--routine" onClick={() => opKies?.(cel.meer[0])}>
+                    <span className="axe-week-regeltitel">+{cel.meer.length} more</span>
                   </button>
-                ))}
-                {bl.map((b, bi) => zicht[bi] && (
-                <button
-                  key={b.item.id}
-                  type="button"
-                  className="axe-week-blok"
-                  onClick={() => opKies?.(b.item)}
-                  title={`${tijdVak(b.item.tijd, b.item.duurMin)} · ${b.item.titel}`}
-                  style={{
-                    /* Percentage van de KOLOM: de kolom is precies het urenbereik
-                       hoog, dus 9:00 staat op 9/24 hoe hoog het rooster ook is. */
-                    top: `${(b.vanUur / uren.length) * 100}%`,
-                    height: `calc(${(b.hoogUur / uren.length) * 100}% - 3px)`,
-                    ['--blok' as string]: b.item.kleur,
-                    // Tegelijk = naast elkaar, elk een eigen baan.
-                    left: `calc(${(ba[bi].baan / breed(bi)) * 100}% + 3px)`,
-                    width: `calc(${100 / breed(bi)}% - 6px)`,
-                    right: 'auto',
-                  }}
-                >
-                  <span className="axe-week-bloktijd">{tijdVak(b.item.tijd, b.item.duurMin)}</span>
-                  <span className="axe-week-bloksoort">{b.item.soort}</span>
-                  <span className="axe-week-bloktitel">{b.item.titel}</span>
-                </button>
-                ))}
-                </>);
-              })()}
-            </div>
-          ))}
+                )}
+                {cel && cel.routines.length > 0 && <RoutineRegel routines={cel.routines} opKies={opKies} />}
+              </div>
+            );
+          }))}
         </div>
       </div>
 

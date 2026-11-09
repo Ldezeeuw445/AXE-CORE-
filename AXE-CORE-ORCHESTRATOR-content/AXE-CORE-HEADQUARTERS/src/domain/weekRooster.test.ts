@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   maandagVan, weekDagen, datumSleutel, minutenVan, blokjesVoor, urenBereik,
   DAG_UREN, type RoosterItem,
+  urenVanDag, routineNaam, isRoutine, MAX_REGELS_PER_UUR,
 } from './weekRooster';
 
 const item = (o: Partial<RoosterItem> & { datum: string; tijd: string }): RoosterItem => ({
@@ -98,5 +99,39 @@ describe('urenBereik', () => {
     // komt -- en dat is precies waarom een rooster een VASTE schaal hoort te
     // hebben.
     expect(urenBereik()).toEqual({ van: 0, tot: 24 });
+  });
+});
+
+describe('urenVanDag: de week als leesbare regels', () => {
+  const item = (id: string, titel: string, tijd: string): RoosterItem => ({
+    id, titel, tijd, datum: '2026-11-09', duurMin: 15, kleur: '#000', soort: 'x',
+  });
+
+  it('zet routines samen en geeft echte items een eigen regel', () => {
+    const cel = urenVanDag([
+      item('a', 'Cron · Task queue upkeep · elke 15 min', '14:00'),
+      item('b', 'Cron · Apps health', '14:15'),
+      item('c', 'Build next step: AXE Companion', '14:19'),
+    ], '2026-11-09', 0, 24);
+    expect(cel).toHaveLength(1);
+    expect(cel[0].uur).toBe(14);
+    expect(cel[0].regels.map((r) => r.id)).toEqual(['c']);
+    expect(cel[0].routines.map(routineNaam)).toEqual(['Task queue upkeep', 'Apps health']);
+  });
+
+  it('meer dan drie echte items in een uur worden +N', () => {
+    const items = ['a', 'b', 'c', 'd', 'e'].map((id, i) => item(id, `Taak ${id}`, `09:0${i}`));
+    const [cel] = urenVanDag(items, '2026-11-09', 0, 24);
+    expect(cel.regels).toHaveLength(MAX_REGELS_PER_UUR);
+    expect(cel.meer.map((r) => r.id)).toEqual(['d', 'e']);
+  });
+
+  it('een andere dag telt niet mee', () => {
+    expect(urenVanDag([item('a', 'Taak', '09:00')], '2026-11-10', 0, 24)).toEqual([]);
+  });
+
+  it('herkent een routine alleen aan het begin van de titel', () => {
+    expect(isRoutine(item('a', 'Cron · X', '09:00'))).toBe(true);
+    expect(isRoutine(item('b', 'Fix: Cron schedules', '09:00'))).toBe(false);
   });
 });

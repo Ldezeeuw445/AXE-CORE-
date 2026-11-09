@@ -136,35 +136,45 @@ export function urenBereik(): { van: number; tot: number } {
 }
 
 /**
- * Blokjes die tegelijk vallen naast elkaar in plaats van op elkaar.
- *
- * Per groep overlappende blokjes krijgt elk een baan (0, 1, 2 ...) en weet de
- * groep hoeveel banen er zijn. Een blokje dat niets overlapt krijgt de hele
- * breedte. Invoer is gesorteerd op vanUur (zoals blokjesVoor teruggeeft).
+ * Automatische jobs (cron). Daarvan staan er zo'n tachtig op een dag; die
+ * horen in de week niet elk een eigen vakje te krijgen.
  */
-export function banenVoor(blokjes: Blokje[]): { baan: number; banen: number; groep: number }[] {
-  const uit: { baan: number; banen: number; groep: number }[] = blokjes.map(() => ({ baan: 0, banen: 1, groep: 0 }));
-  let groepNr = 0;
-  let groep: number[] = [];
-  let groepEind = -Infinity;
-  const sluit = () => {
-    const eindes: number[] = [];
-    for (const i of groep) {
-      const b = blokjes[i];
-      let baan = eindes.findIndex(e => e <= b.vanUur + 1e-9);
-      if (baan === -1) { baan = eindes.length; eindes.push(0); }
-      eindes[baan] = b.vanUur + b.hoogUur;
-      uit[i].baan = baan;
-    }
-    for (const i of groep) { uit[i].banen = Math.max(1, eindes.length); uit[i].groep = groepNr; }
-    groepNr += 1;
-    groep = [];
-  };
-  blokjes.forEach((b, i) => {
-    if (b.vanUur >= groepEind - 1e-9 && groep.length) { sluit(); groepEind = -Infinity; }
-    groep.push(i);
-    groepEind = Math.max(groepEind, b.vanUur + b.hoogUur);
-  });
-  if (groep.length) sluit();
-  return uit;
+export function isRoutine(item: RoosterItem): boolean {
+  return /^cron\b/i.test(item.titel.trim());
+}
+
+/** "Cron · Task queue upkeep · elke 15 min" -> "Task queue upkeep". */
+export function routineNaam(item: RoosterItem): string {
+  return item.titel.replace(/^cron\s*[·:-]\s*/i, '').split(' · ')[0].trim() || item.titel;
+}
+
+export interface UurCel {
+  uur: number;
+  /** Echte afspraken en taken die passen; elk een eigen leesbare regel. */
+  regels: RoosterItem[];
+  /** Echte items die niet meer pasten. */
+  meer: RoosterItem[];
+  routines: RoosterItem[];
+}
+
+export const MAX_REGELS_PER_UUR = 3;
+
+/**
+ * Eén dag als regels per uur.
+ *
+ * 9 nov: drie blokjes naast elkaar, een half uur hoog, met een tijdbalk erin:
+ * je zag alleen "--". Nu krijgt elk echt item de volle breedte, en komen de
+ * routines van dat uur samen op één regel. De dagweergave toont alles los.
+ */
+export function urenVanDag(items: RoosterItem[], dag: string, van: number, tot: number): UurCel[] {
+  const cellen = new Map<number, UurCel>();
+  for (const b of blokjesVoor(items, dag, van, tot)) {
+    const uur = van + Math.floor(b.vanUur);
+    const cel = cellen.get(uur) ?? { uur, regels: [], meer: [], routines: [] };
+    cellen.set(uur, cel);
+    if (isRoutine(b.item)) cel.routines.push(b.item);
+    else if (cel.regels.length < MAX_REGELS_PER_UUR) cel.regels.push(b.item);
+    else cel.meer.push(b.item);
+  }
+  return [...cellen.values()].sort((a, b) => a.uur - b.uur);
 }
