@@ -3498,6 +3498,51 @@ async def keys_overview():
     return await asyncio.to_thread(_sl.lees, sb())
 
 
+class ManagerBericht(BaseModel):
+    agent: str
+    role: str = "user"
+    text: str
+
+
+@app.get("/managers/thread", dependencies=[AUTH])
+async def managers_thread(since: Optional[str] = None, limit: int = 500):
+    """Het gesprek tussen Luka en de managers, op elk apparaat hetzelfde (manager_draad.py)."""
+    import manager_draad as _md
+    return {"messages": await asyncio.to_thread(_md.draad, sb(), since, limit)}
+
+
+@app.post("/managers/thread", dependencies=[AUTH])
+async def managers_thread_write(body: ManagerBericht):
+    import manager_draad as _md
+    try:
+        return await asyncio.to_thread(_md.schrijf, sb(), body.agent, body.role, body.text)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/managers/thread/read", dependencies=[AUTH])
+async def managers_thread_read(body: dict):
+    import manager_draad as _md
+    agent = str(body.get("agent") or "")
+    if agent:
+        await asyncio.to_thread(_md.markeer_gelezen, sb(), agent)
+    return {"ok": True}
+
+
+class VoiceClaim(BaseModel):
+    device_id: str
+    device_name: Optional[str] = None
+    trigger: str = "wake"
+    idle_s: Optional[float] = None
+
+
+@app.post("/voice/claim", dependencies=[AUTH])
+async def voice_claim(body: VoiceClaim):
+    """ADR-01: één apparaat luistert als meerdere "hey AXE" horen (stem_vloer.py)."""
+    import stem_vloer as _sv
+    return await asyncio.to_thread(_sv.claim, sb(), body.device_id, body.device_name, body.trigger, body.idle_s)
+
+
 @app.get("/claude/repos", dependencies=[AUTH])
 async def claude_repos():
     """Which repos this host will let Claude Code touch, and whether each one is

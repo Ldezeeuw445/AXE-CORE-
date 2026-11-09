@@ -394,6 +394,10 @@
       "kind": "migration"
     },
     {
+      "path": "supabase/migrations/20261109190000_core_voice_claims.sql",
+      "kind": "migration"
+    },
+    {
       "path": "supabase/northsea/migrations/20260916150000_p0_a_columns.sql",
       "kind": "migration"
     },
@@ -2416,7 +2420,8 @@
         "supabase/migrations/20261028133000_core_usage_config.sql",
         "supabase/migrations/20261028140000_bouwlus_negeert_gearchiveerde_retries.sql",
         "supabase/migrations/20261029233000_core_trading_team.sql",
-        "supabase/migrations/20261104120000_core_task_attempts.sql"
+        "supabase/migrations/20261104120000_core_task_attempts.sql",
+        "supabase/migrations/20261109190000_core_voice_claims.sql"
       ]
     },
     {
@@ -3309,6 +3314,20 @@
       },
       "sources": [
         "supabase/migrations/20261028133000_core_usage_config.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_voice_claims",
+      "kind": "table",
+      "label": "core_voice_claims",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_voice_claims",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261109190000_core_voice_claims.sql"
       ]
     },
     {
@@ -5147,6 +5166,16 @@
       ]
     },
     {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_voice_claims",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_voice_claims",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261109190000_core_voice_claims.sql"
+      ]
+    },
+    {
       "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_voice_history",
       "source": "supabase:pqnngpcgbdwxavbatbia",
       "target": "table:pqnngpcgbdwxavbatbia:core_voice_history",
@@ -6222,7 +6251,8 @@
         "supabase/migrations/20261028133000_core_usage_config.sql",
         "supabase/migrations/20261028140000_bouwlus_negeert_gearchiveerde_retries.sql",
         "supabase/migrations/20261029233000_core_trading_team.sql",
-        "supabase/migrations/20261104120000_core_task_attempts.sql"
+        "supabase/migrations/20261104120000_core_task_attempts.sql",
+        "supabase/migrations/20261109190000_core_voice_claims.sql"
       ]
     },
     {

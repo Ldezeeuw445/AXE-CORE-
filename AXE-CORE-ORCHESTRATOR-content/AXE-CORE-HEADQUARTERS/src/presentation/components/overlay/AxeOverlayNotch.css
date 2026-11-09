@@ -469,3 +469,22 @@ html[data-axe-notch] {
 .axe-ov__handvat:hover > span,
 .axe-ov__handvat:focus-visible > span { width: 64px; background: rgba(255, 255, 255, 0.85); }
 @media (prefers-reduced-motion: reduce) { .axe-ov__handvat > span { transition: none; } }
+
+/* Tellers op OK en Agents (uit AXE Overlay, 9 nov). */
+.axe-ov__ico--teller { position: relative; }
+.axe-ov__teller {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #111;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  pointer-events: none;
+}

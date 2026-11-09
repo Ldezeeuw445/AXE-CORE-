@@ -306,6 +306,13 @@ def run_axemanager(db: Any, nu: datetime) -> dict[str, Any]:
         gerapporteerd = _schrijf(db, "core_manager_messages", {
             "from_agent": BAAS, "to_agent": BAAS, "kind": "report", "body": aanbeveling[:4000],
         }) is not None
+    chat = _chat_met_luka(
+        db, BAAS, bevindingen,
+        gedaan=[f"Vraag '{v.get('title')}' van je lijst gehaald: de manager die hem stelde meldt het niet meer"
+                for v in gesloten],
+        rustig=(f"Alle managers draaien. Er wachten {len(open_vragen)} vragen van de managers op jou."
+                if open_vragen else "Alle managers draaien. De managers zelf hebben geen open vraag aan jou; "
+                "wat er per app op je wacht (zoals de NorthSea-desk) staat in het gesprek met die manager."))
     return {
         "job": "orchestrate managers",
         "aanbeveling": aanbeveling,
@@ -314,6 +321,7 @@ def run_axemanager(db: Any, nu: datetime) -> dict[str, Any]:
         "voor_luka": [b.code for b in voor_luka],
         "bevindingen": [b.code for b in bevindingen],
         "gerapporteerd": gerapporteerd,
+        "chat": chat,
         "taal": "nl",
     }
 
@@ -360,6 +368,26 @@ def _met_sleutels(db: Any, app: str, body: str) -> str:
     except Exception:  # noqa: BLE001
         regel = ""
     return f"{body} {regel}." if regel else body
+
+
+def _chat_met_luka(db: Any, agent: str, bevindingen: list[Any], gedaan: list[str] | None = None,
+                   app: str | None = None, rustig: str | None = None) -> bool:
+    """Zelfde pulse, nu ook als gewoon chatbericht aan Luka (manager_draad.py).
+
+    Wat Luka moet doen (voor == "luka") staat bovenaan onder "nodig"; de rest
+    onder "zie ik". Kapotte sleutels van de eigen app horen bij "nodig". Alleen
+    als het anders is dan het vorige bericht van deze manager."""
+    try:
+        import manager_draad as md
+        nodig = [f"{b.titel}. {b.detail}".strip() for b in bevindingen if b.voor == "luka"]
+        gezien = [f"{b.titel}. {b.detail}".strip() for b in bevindingen if b.voor != "luka"]
+        if app:
+            import sleutels
+            nodig += [f"Sleutel {r}" for r in sleutels.problemen(sleutels.lees(db), app)]
+        tekst = md.bericht(gedaan or [], gezien, nodig, rustig or "Alles loopt, ik hoef je nergens voor.")
+        return md.vertel_luka(db, agent, tekst)
+    except Exception:  # noqa: BLE001 -- de chat mag de pulse nooit breken
+        return False
 
 
 def _dagoverzicht(db: Any, nu: datetime, naam: str, bevindingen: list[Any]) -> bool:
@@ -418,12 +446,17 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
     gerapporteerd = _rapporteer_bij_verandering(
         db, "projectsmgr", _met_sleutels(
             db, "AXE Core", "Taken: " + ("; ".join(delen) if delen else "niets staat stil") + "."))
+    chat = _chat_met_luka(
+        db, "projectsmgr", bevindingen,
+        gedaan=[f"{len(opgeruimd)} dubbele voorstellen opgeruimd"] if opgeruimd else [], app="AXE Core",
+        rustig="Op de takenlijst staat niets stil.")
     return {
         "job": "projects and tasks",
         "open": len(rijen),
         "voor_luka": [b.code for b in voor_luka],
         "bevindingen": [b.code for b in bevindingen],
         "opgeruimd": len(opgeruimd),
+        "chat": chat,
         "dagoverzicht": overzicht,
         "gerapporteerd": gerapporteerd,
         "directives": len(inbox(db, "projectsmgr")),
@@ -474,6 +507,11 @@ def run_companionmgr(db: Any, nu: datetime) -> dict[str, Any]:
     gerapporteerd = _rapporteer_bij_verandering(
         db, "companionmgr", _met_sleutels(
             db, "AXE Companion", "Vaste jobs: " + ("; ".join(delen) if delen else "alles draait") + "."))
+    chat = _chat_met_luka(
+        db, "companionmgr", bevindingen,
+        gedaan=[f"{r.get('name') or r.get('job_key')} opnieuw gestart, die liep vast op een tijdelijke storing"
+                for r in herkanst], app="AXE Companion",
+        rustig="Alle vaste jobs draaien.")
     aan = [r for r in rijen if r.get("enabled")]
     return {
         "job": "companion and standing jobs owner",
@@ -481,6 +519,7 @@ def run_companionmgr(db: Any, nu: datetime) -> dict[str, Any]:
         "jobs": len(aan),
         "failing": sum(1 for r in aan if r.get("last_status") in ("fail", "timeout")),
         "herkanst": [r.get("job_key") for r in herkanst],
+        "chat": chat,
         "voor_luka": [b.code for b in voor_luka],
         "bevindingen": [b.code for b in bevindingen],
         "dagoverzicht": overzicht,
@@ -524,6 +563,7 @@ def run_axon(db: Any, nu: datetime) -> dict[str, Any]:
     kop = f"vandaag {t['lessen']} lessen, {t['notities']} notities (limiet {ab.GEHEUGEN_MAG_PER_DAG})"
     gerapporteerd = _rapporteer_bij_verandering(
         db, "axon", f"Geheugen: {kop}; " + ("; ".join(b.titel for b in bevindingen) or "hek houdt") + ".")
+    chat = _chat_met_luka(db, "axon", bevindingen, rustig=f"Geheugen in orde: {kop}.")
     return {
         "job": "axon memory owner",
         "repo": "axon-memory",
@@ -534,6 +574,7 @@ def run_axon(db: Any, nu: datetime) -> dict[str, Any]:
         "dagoverzicht": overzicht,
         "gerapporteerd": gerapporteerd,
         "invented": 0,
+        "chat": chat,
     }
 
 
@@ -561,6 +602,9 @@ def run_tradingos(db: Any, nu: datetime) -> dict[str, Any]:
         db, "tradingos", _met_sleutels(db, "Trading OS", f"Trading OS: {kop}; "
         + ("; ".join(b.titel for b in bevindingen if b.code != "signaal_oud") or "feeds vers")
         + ". Orders: 0."))
+    chat = _chat_met_luka(
+        db, "tradingos", bevindingen, app="Trading OS",
+        rustig="Alle marktfeeds zijn vers. Ik plaats geen orders.")
     return {
         "job": "trading os owner",
         "repos": list(REPO_SCOPE["tradingos"]["repos"]),
@@ -570,6 +614,7 @@ def run_tradingos(db: Any, nu: datetime) -> dict[str, Any]:
         "dagoverzicht": overzicht,
         "gerapporteerd": gerapporteerd,
         "orders": 0,
+        "chat": chat,
         "live": False,
     }
 
@@ -663,6 +708,10 @@ def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any
     samenvatting = "; ".join(b.titel for b in bevindingen) or "desk loopt, niets voor Luka"
     # Alleen bij verandering: 8 nov 97 keer per dag hetzelfde rapport.
     _rapporteer_bij_verandering(db, "northseamgr", _met_sleutels(db, "NorthSea", f"NorthSea: {samenvatting}."))
+    chat = _chat_met_luka(
+        db, "northseamgr", bevindingen,
+        gedaan=[f"{duidingen} binnengekomen mails van een korte duiding voorzien"] if duidingen else [],
+        app="NorthSea", rustig="De desk loopt, er wacht niets op jou.")
     return {
         "job": "northsea desk owner",
         "priority": "first deal",
@@ -671,6 +720,7 @@ def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any
         "bevindingen": [b.code for b in bevindingen],
         "dagoverzicht": overzicht,
         "mailduidingen": duidingen,
+        "chat": chat,
         "sent": 0,
         "flags": "untouched",
     }

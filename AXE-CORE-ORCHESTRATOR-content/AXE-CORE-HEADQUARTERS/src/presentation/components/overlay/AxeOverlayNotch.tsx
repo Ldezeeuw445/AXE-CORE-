@@ -5,7 +5,7 @@
  * Icons are wired; body always fills the window when open (no empty glass).
  */
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
-import { ChevronUp, Home, MessageSquare, Plus, Settings, Volume2, Paperclip, X } from 'lucide-react';
+import { CheckCircle2, ChevronUp, Home, MessageSquare, Mic, Plus, Settings, Users, Paperclip, X } from 'lucide-react';
 import { aiProxyUrl, vpsAuthHeaders, isTauriRuntime, VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 import {
   listPendingApprovals,
@@ -53,6 +53,20 @@ async function focusMainShell() {
       await main.setFocus();
     }
   } catch { /* ignore */ }
+}
+
+/** Opent een tab in het hoofdvenster (alleen routes uit de allowlist in installOverlayDeeplink). */
+async function openInShell(route: '/managers') {
+  try {
+    const { emit } = await import('@tauri-apps/api/event');
+    await emit('axe://open-route', route);
+  } catch { /* browser of oude build: alleen het venster naar voren */ }
+  await focusMainShell();
+}
+
+function Teller({ n }: { n: number }) {
+  if (!n) return null;
+  return <span className="axe-ov__teller" aria-hidden>{n > 9 ? '9+' : n}</span>;
 }
 
 async function sendChat(text: string, history: Msg[], managerLabel: string): Promise<string> {
@@ -482,6 +496,34 @@ export function AxeOverlayNotch({
   );
   const iconsRight = (
     <>
+      {/* Uit AXE Overlay (9 nov): goedkeuringen en agents horen in deze ene notch. */}
+      <button
+        type="button"
+        className="axe-ov__ico axe-ov__ico--teller"
+        aria-label={`Approvals${approvals.length ? ` (${approvals.length})` : ''}`}
+        aria-pressed={open && tab === 'approvals'}
+        title="Goedkeuringen"
+        onClick={() => {
+          set(true);
+          setTab('approvals');
+        }}
+      >
+        <CheckCircle2 size={15} strokeWidth={1.7} />
+        <Teller n={approvals.length} />
+      </button>
+      <button
+        type="button"
+        className="axe-ov__ico axe-ov__ico--teller"
+        aria-label={`Agents${activity.length ? ` (${activity.length} busy)` : ''}`}
+        title="Managers en agents"
+        onClick={() => {
+          set(false);
+          void openInShell('/managers');
+        }}
+      >
+        <Users size={15} strokeWidth={1.7} />
+        <Teller n={activity.length} />
+      </button>
       <button
         type="button"
         className="axe-ov__ico"
@@ -498,7 +540,7 @@ export function AxeOverlayNotch({
       <button
         type="button"
         className={`axe-ov__ico ${listening ? 'axe-ov__ico--hot' : ''}`}
-        aria-label="Volume"
+        aria-label="Push-to-talk"
         aria-pressed={listening}
         title={listening ? 'Stop push-to-talk' : 'Push-to-talk'}
         onClick={() => {
@@ -507,7 +549,7 @@ export function AxeOverlayNotch({
           togglePtt();
         }}
       >
-        <Volume2 size={15} strokeWidth={1.7} />
+        <Mic size={15} strokeWidth={1.7} />
       </button>
       {onInklappen && (
         <button

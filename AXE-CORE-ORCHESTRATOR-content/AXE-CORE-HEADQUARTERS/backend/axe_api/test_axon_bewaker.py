@@ -84,5 +84,5 @@ def test_pulse_meldt_luka_eenmaal_en_leest_alleen_vandaag():
     assert "Geheugenlimiet vol door de notitiesync" in [r.get("title") for r in db.rows("core_approvals")]
     gm.run_axon(db, NU)
     assert [r.get("title") for r in db.rows("core_approvals")].count("Geheugenlimiet vol door de notitiesync") == 1
-    rapporten = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "axon"]
+    rapporten = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "axon" and r["to_agent"] != "luka"]
     assert len(rapporten) == 1 and "10 lessen, 118 notities" in rapporten[0]["body"]

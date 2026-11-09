@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 import { isWakeZin, WAKE_SLEUTEL, wakeAanVan } from '@/domain/voice/luisterBeleid';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { magLuisteren } from '@/infrastructure/gateways/stemVloer';
 
 const EVT = 'axe-wake-changed';
 
@@ -54,9 +55,12 @@ export function useWakeWord() {
         tekst += ev.results[i]?.[0]?.transcript ?? '';
       }
       if (!isWakeZin(tekst)) return;
-      const voice = useVoiceStore.getState();
-      if (voice.voiceStatus !== 'idle') return;
-      void voice.startListening();
+      if (useVoiceStore.getState().voiceStatus !== 'idle') return;
+      // ADR-01: hoort een andere Mac het ook, dan luistert er maar één.
+      void magLuisteren('wake').then((b) => {
+        const voice = useVoiceStore.getState();
+        if (b.winner && voice.voiceStatus === 'idle') void voice.startListening();
+      });
     };
     rec.onend = () => {
       if (stop || !aan) return;

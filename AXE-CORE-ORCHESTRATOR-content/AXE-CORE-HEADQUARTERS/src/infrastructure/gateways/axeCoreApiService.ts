@@ -1102,7 +1102,7 @@ export async function usageCreditsSnapshot(): Promise<UsageCreditsSnapshot> {
 }
 
 /** Keys per app (GET /keys/overview): naam, doel, plek en status. Nooit een waarde. */
-export type KeyStatus = 'works' | 'present' | 'missing' | 'broken' | 'unseen';
+export type KeyStatus = 'works' | 'present' | 'missing' | 'broken' | 'unseen' | 'optional' | 'unused';
 
 export interface KeyRow {
   name: string;
@@ -1111,6 +1111,9 @@ export interface KeyRow {
   status: KeyStatus;
   detail: string;
   feeds: string[];
+  need?: 'required' | 'optional' | 'unused';
+  /** Id in Models & Tests; de app vult de status daaruit aan. */
+  provider?: string | null;
   warning?: string;
 }
 
@@ -1997,4 +2000,40 @@ export function pauseMission(id: string, reason?: string): Promise<{ mission: Re
 
 export function resumeMission(id: string, note?: string): Promise<{ mission: Record<string, unknown> }> {
   return call('POST', `/missions/${encodeURIComponent(id)}/resume`, { by: 'luka', note });
+}
+
+/** ADR-01: claim van dit apparaat; de VPS kiest wie luistert (stem_vloer.py). */
+export interface StemVloerBesluit {
+  winner: boolean;
+  winner_device?: string;
+  winner_name?: string | null;
+  reden?: string;
+}
+
+export async function claimStemVloer(body: {
+  device_id: string;
+  device_name?: string | null;
+  trigger: 'wake' | 'clap' | 'button';
+  idle_s?: number | null;
+}): Promise<StemVloerBesluit> {
+  return call('POST', '/voice/claim', body);
+}
+
+/** De gedeelde draad tussen Luka en de managers (backend/axe_api/manager_draad.py). */
+export async function managersDraad(since?: string): Promise<{
+  messages: { id: string; agent: string; role: 'user' | 'assistant'; text: string; at: string; read?: boolean }[];
+}> {
+  return call('GET', `/managers/thread${since ? `?since=${encodeURIComponent(since)}` : ''}`);
+}
+
+export async function schrijfManagerBericht(body: {
+  agent: string;
+  role: 'user' | 'assistant';
+  text: string;
+}): Promise<{ id: string; at: string }> {
+  return call('POST', '/managers/thread', body);
+}
+
+export async function markeerManagerGelezen(agent: string): Promise<{ ok: boolean }> {
+  return call('POST', '/managers/thread/read', { agent });
 }

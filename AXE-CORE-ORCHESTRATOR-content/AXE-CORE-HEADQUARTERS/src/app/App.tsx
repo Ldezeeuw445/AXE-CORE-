@@ -1,4 +1,5 @@
 import { lazy, useEffect, useState } from 'react';
+import { magLuisteren } from '@/infrastructure/gateways/stemVloer';
 import { Routes, Route, Navigate, useNavigate } from 'react-router';
 import { AppShell } from '@/presentation/components/layout/AppShell';
 import { useKeyboardShortcuts } from '@/presentation/hooks/useKeyboardShortcuts';
@@ -211,12 +212,17 @@ export default function App() {
   // 3 claps: stop speaking, show window (if hidden), start listening
   // Alleen als Luka clap zelf aanzet (standaard uit). Geen auto-luisteren.
   useClapDetector(clapEnabled, () => {
-    const voice = useVoiceStore.getState();
-    stopTTS();
-    void showMainWindowQuietly();
-    if (voice.voiceStatus === 'listening' || voice.voiceStatus === 'processing') return;
-    navigate('/');
-    voice.startListening().catch(() => {});
+    if (['listening', 'processing'].includes(useVoiceStore.getState().voiceStatus)) return;
+    // ADR-01: twee Macs horen dezelfde klap; alleen de winnaar reageert.
+    void magLuisteren('clap').then((b) => {
+      if (!b.winner) return;
+      const voice = useVoiceStore.getState();
+      stopTTS();
+      void showMainWindowQuietly();
+      if (voice.voiceStatus === 'listening' || voice.voiceStatus === 'processing') return;
+      navigate('/');
+      voice.startListening().catch(() => {});
+    });
   });
 
   // Playwright/ontwerp: stemstand zetten zonder echte mic, voor mic-aan/uit shots.
