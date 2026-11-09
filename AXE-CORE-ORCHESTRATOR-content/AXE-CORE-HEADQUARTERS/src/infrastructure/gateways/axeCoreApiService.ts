@@ -1998,3 +1998,20 @@ export function pauseMission(id: string, reason?: string): Promise<{ mission: Re
 export function resumeMission(id: string, note?: string): Promise<{ mission: Record<string, unknown> }> {
   return call('POST', `/missions/${encodeURIComponent(id)}/resume`, { by: 'luka', note });
 }
+
+/** ADR-01: claim van dit apparaat; de VPS kiest wie luistert (stem_vloer.py). */
+export interface StemVloerBesluit {
+  winner: boolean;
+  winner_device?: string;
+  winner_name?: string | null;
+  reden?: string;
+}
+
+export async function claimStemVloer(body: {
+  device_id: string;
+  device_name?: string | null;
+  trigger: 'wake' | 'clap' | 'button';
+  idle_s?: number | null;
+}): Promise<StemVloerBesluit> {
+  return call('POST', '/voice/claim', body);
+}

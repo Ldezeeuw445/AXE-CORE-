@@ -3498,6 +3498,20 @@ async def keys_overview():
     return await asyncio.to_thread(_sl.lees, sb())
 
 
+class VoiceClaim(BaseModel):
+    device_id: str
+    device_name: Optional[str] = None
+    trigger: str = "wake"
+    idle_s: Optional[float] = None
+
+
+@app.post("/voice/claim", dependencies=[AUTH])
+async def voice_claim(body: VoiceClaim):
+    """ADR-01: één apparaat luistert als meerdere "hey AXE" horen (stem_vloer.py)."""
+    import stem_vloer as _sv
+    return await asyncio.to_thread(_sv.claim, sb(), body.device_id, body.device_name, body.trigger, body.idle_s)
+
+
 @app.get("/claude/repos", dependencies=[AUTH])
 async def claude_repos():
     """Which repos this host will let Claude Code touch, and whether each one is

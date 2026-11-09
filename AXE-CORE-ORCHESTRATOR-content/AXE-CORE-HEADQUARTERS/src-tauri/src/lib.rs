@@ -148,6 +148,35 @@ fn platform_info() -> serde_json::Value {
     })
 }
 
+/// Seconden sinds de laatste toets of muisbeweging, systeembreed: ook typen in
+/// een andere app telt. ADR-01 (9 nov): het apparaat waar Luka zit, mag
+/// luisteren als meerdere Macs "hey AXE" horen. Leest HIDIdleTime (ns) uit
+/// IOHIDSystem; None als dat niet lukt (dan beslist de vaste volgorde).
+#[tauri::command]
+fn systeem_idle_s() -> Option<f64> {
+    let uit = std::process::Command::new("/usr/sbin/ioreg")
+        .args(["-c", "IOHIDSystem", "-d", "4"])
+        .output()
+        .ok()?;
+    idle_uit_ioreg(&String::from_utf8_lossy(&uit.stdout))
+}
+
+fn idle_uit_ioreg(tekst: &str) -> Option<f64> {
+    let regel = tekst.lines().find(|r| r.contains("\"HIDIdleTime\""))?;
+    let ns: f64 = regel.rsplit('=').next()?.trim().parse().ok()?;
+    Some(ns / 1_000_000_000.0)
+}
+
+#[cfg(test)]
+mod idle_tests {
+    #[test]
+    fn leest_hid_idle_time() {
+        let t = "    | |     \"HIDIdleTime\" = 104560935833\n";
+        assert_eq!(super::idle_uit_ioreg(t).map(|s| s.round()), Some(105.0));
+        assert_eq!(super::idle_uit_ioreg("niets"), None);
+    }
+}
+
 fn hostnaam() -> Option<String> {
     let lees = |programma: &str, args: &[&str]| -> Option<String> {
         let uit = std::process::Command::new(programma).args(args).output().ok()?;
@@ -591,6 +620,7 @@ pub fn run() {
         toon_hoofdvenster_stil,
         consume_overlay_open_route,
         platform_info,
+        systeem_idle_s,
             dock_notch_frame,
         diensten_stand,
         dienst_start,
