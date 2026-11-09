@@ -15,6 +15,10 @@ export type GoedkeuringsRij = {
   taskId: string;
   wat: string;
   waarom: string;
+  /** Welke manager/agent deze vraag stelt (leesbare naam), als bekend. */
+  agent?: string;
+  /** Roster-id van die agent, voor "Ask <agent>" naar /managers?open=. */
+  agentId?: string;
 };
 
 type RuweAgent = ServerAgent & {

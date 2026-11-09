@@ -7,7 +7,7 @@
 import { agentsByTier, AXE_AGENTS, type AxeAgentId } from '@/domain/agents/roster';
 import { daxRegel, eventTijd, missieVoortgang, serverStand, type ServerAgent } from '@/domain/agents/serverStatus';
 import { mensTekst, nextTekst } from '@/domain/tijd';
-import { rijenVoorAgent, type GoedkeuringsRij } from '@/domain/agents/pendingApproval';
+import { rijenVanLijst, rijenVoorAgent, type GoedkeuringsRij } from '@/domain/agents/pendingApproval';
 import { stoelHeartbeatStand, type CodingSeat } from '@/domain/codingSeats';
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
 
@@ -148,7 +148,7 @@ export function homeLiveStand(in_: {
         kleur: stand.kleur,
       });
     }
-    for (const rij of rijenVoorAgent(a, extra)) goedkeuringen.push(rij);
+    for (const rij of rijenVoorAgent(a, extra)) goedkeuringen.push({ ...rij, agent: naamVan(id), agentId: id });
     const dr = daxRegel(a, nu);
     if (dr) dax.push({ agent: naamVan(id), tekst: dr.tekst, wakker: dr.wakker, blokkade: dr.blokkade });
     for (const r of a.routines ?? []) {
@@ -182,6 +182,10 @@ export function homeLiveStand(in_: {
       werkNamen.add(naamVan(job.agent));
     }
   }
+
+  // Open /approvals-rijen die bij geen enkele agent horen vielen eerst weg:
+  // de 'wacht op jou'-inbox toont ze toch, zonder agentnaam te verzinnen.
+  for (const rij of rijenVanLijst(extra)) goedkeuringen.push(rij);
 
   const gezienOk = new Set<string>();
   const uniekeOk = goedkeuringen.filter((g) => {

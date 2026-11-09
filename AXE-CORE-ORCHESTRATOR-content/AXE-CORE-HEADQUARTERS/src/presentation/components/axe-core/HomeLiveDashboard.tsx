@@ -98,6 +98,7 @@ function recentRegel(t: LiveTaak): { tekst: string; actie?: TaakActie } {
 }
 
 export function HomeLiveDashboard() {
+  const navigate = useNavigate();
   const server = useServerAgents();
   const jobs = useAxeJobStore((s) => s.jobs);
   const [stoelen, setStoelen] = useState<CodingSeat[]>([]);
@@ -264,6 +265,7 @@ export function HomeLiveDashboard() {
             <GoedkeuringActie
               rijen={stand.goedkeuringen}
               onBeslis={(rij, akkoord) => { void beslisAgentOk({ akkoord, rij }).then(verversServerAgents); }}
+              onVraag={(rij) => { if (rij.agentId) navigate(`/managers?open=${encodeURIComponent(rij.agentId)}`); }}
             />
           )}
           {lijst === 'seats' && seatsRegels(stand).map((s) => (

@@ -40,8 +40,9 @@ describe('homeLiveStand', () => {
     expect(stand.werkend).toBe(1);
     expect(stand.lopend[0]?.titel).toMatch(/Energy market snapshot|waiting on/);
     expect(stand.goedkeuringen).toEqual([
-      { id: 'ok1', taskId: 't1', wat: 'Run the snapshot', waarom: 'Left the standing plan.' },
+      expect.objectContaining({ id: 'ok1', taskId: 't1', wat: 'Run the snapshot', waarom: 'Left the standing plan.', agentId: 'northsea' }),
     ]);
+    expect(stand.goedkeuringen[0]?.agent).toBeTruthy();
     expect(werkPulseTekst(1)).toBe('1 agent working');
   });
 

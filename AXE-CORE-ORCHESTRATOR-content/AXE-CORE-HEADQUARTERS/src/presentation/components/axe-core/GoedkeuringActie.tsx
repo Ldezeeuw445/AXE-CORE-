@@ -17,9 +17,12 @@ export function GoedkeuringActie({
   compact = false,
   touch = false,
   chip = false,
+  onVraag,
 }: {
   rijen: GoedkeuringsRij[];
   onBeslis: (rij: GoedkeuringsRij, akkoord: boolean) => void;
+  /** Derde knop "Ask <agent>": opent het gesprek met de agent die het vraagt. */
+  onVraag?: (rij: GoedkeuringsRij) => void;
   compact?: boolean;
   touch?: boolean;
   chip?: boolean;
@@ -89,7 +92,15 @@ export function GoedkeuringActie({
           );
         }
         return (
-          <div key={rij.id}>
+          <div key={rij.id} data-axe-ok-agent={rij.agentId || undefined}>
+            {rij.agent && (
+              <p
+                className="mb-0.5 font-mono uppercase tracking-wide"
+                style={{ color: 'var(--text-muted)', fontSize: touch ? 10 : 9 }}
+              >
+                {rij.agent}
+              </p>
+            )}
             {(rij.wat || rij.waarom) && (
               <p
                 className="mb-1 whitespace-pre-wrap leading-snug"
@@ -128,6 +139,21 @@ export function GoedkeuringActie({
               >
                 Decline
               </button>
+              {onVraag && rij.agentId && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onVraag(rij); }}
+                  className={touch ? 'axe-ok-knop flex-1 rounded-lg px-3 text-[13px] font-medium' : 'rounded-lg px-2 py-1 text-[10px]'}
+                  style={{
+                    background: 'var(--tint-line)',
+                    color: 'var(--accent-cyan)',
+                    minHeight: touch ? PHONE_TIKMAAT : undefined,
+                  }}
+                  data-axe-ok-vraag
+                >
+                  {`Ask ${rij.agent ?? 'agent'}`}
+                </button>
+              )}
             </div>
           </div>
         );
