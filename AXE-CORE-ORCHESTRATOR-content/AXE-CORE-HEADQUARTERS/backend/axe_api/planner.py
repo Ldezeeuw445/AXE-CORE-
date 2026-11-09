@@ -127,6 +127,10 @@ def is_planantwoord(tekst: Optional[str]) -> bool:
 # account dat stuk is, is geen taak maar één melding aan Luka.
 ACCOUNT_RUST_S = int(os.environ.get("AXE_PLANNER_ACCOUNT_RUST_S", str(6 * 3600)))
 ZONDER_TERUGVAL = ("axe-algo",)
+# Waar de stoelen ingelogd moeten worden: de Mac waarop deze planner draait,
+# niet altijd de Mac mini (9 nov: Claude 2 op de iMac).
+_DEZE_MAC = os.environ.get("AXE_MAC_NAAM") or (os.uname().nodename.split(".")[0] or "this Mac")
+
 _ACCOUNTFOUT = (
     (re.compile(r"unpaid invoice|payment required|billing|insufficient (credits|balance)", re.I),
      "betaling nodig (onbetaalde factuur of geen tegoed)"),
@@ -935,8 +939,17 @@ class Planner:
         for gebruikt in dict.fromkeys(uit.get("seats_tried") or [uit.get("engine") or motor]):
             tel_gebruik(staat, gebruikt, vandaag)
         staat["laatste_motor"] = uit.get("engine") or motor
+        # Stoelen die onderweg uitvielen: ook als een andere het overnam moet
+        # Luka weten dat die ene opnieuw moet inloggen (9 nov: Claude 2).
+        overgenomen_door = uit.get("engine") if uit.get("status") == "ok" else None
+        for stoel, stoelfout in (uit.get("seat_errors") or {}).items():
+            if markeer_kapot(staat, stoel, str(stoelfout), nu) and overgenomen_door:
+                staat["account_kapot"][stoel]["overgenomen_door"] = overgenomen_door
         if uit.get("status") == "ok":
-            (staat.get("account_kapot") or {}).pop(motor, None)
+            gebruikte = uit.get("engine") or motor
+            (staat.get("account_kapot") or {}).pop(gebruikte, None)
+            if gebruikte == motor:
+                (staat.get("account_kapot") or {}).pop(motor, None)
             # Een echte run ververst het token net zo goed als een check-in.
             staat.setdefault("warm", {})[motor] = {"at": nu.isoformat(), "ok": True, "via": "run"}
             return str(uit.get("result") or ""), ""
@@ -1001,9 +1014,15 @@ class Planner:
                 actie, reden = ("turn subscription access for Claude Code back on in that organisation's "
                                 "settings, or log this slot in with another account"), "blocked by its organisation"
             else:
-                actie, reden = f"log in again on the Mac mini: {e.get('login') or motor + ' login'}", "login expired"
-            tekst = (f"{wie} stopped working for the agents ({reden}). They switch to another logged-in "
-                     f"account where allowed. Fix: {actie}.")
+                actie, reden = (f"log in again on {_DEZE_MAC}: {e.get('login') or motor + ' login'}",
+                                "login expired")
+            door = k.get("overgenomen_door")
+            if door:
+                door_label = (engines.get(door) or {}).get("label") or door
+                overname = f"{door_label} took over its work, nothing stopped."
+            else:
+                overname = "The agents switch to another logged-in account where allowed."
+            tekst = f"{wie} stopped working for the agents ({reden}). {overname} Fix: {actie}."
             try:
                 self.sb().table("core_notifications").insert({"type": "error", "message": tekst[:1900]}).execute()
                 k["gemeld"] = True

@@ -923,6 +923,9 @@ def run_agent(
 
     geprobeerd: list[str] = []
     overslaan: set[str] = set()
+    # Waarom elke overgeslagen stoel uitviel, zodat de planner kan melden
+    # "Claude 2 moet opnieuw inloggen; Claude 3 nam het over".
+    stoelfouten: dict[str, str] = {}
     huidige = kies_vrije_stoel(gevraagd, balanceer=checks) or gevraagd
     laatste: dict | None = None
     while huidige and huidige not in geprobeerd:
@@ -934,6 +937,7 @@ def run_agent(
         if laatste.get("status") == "ok":
             if len(geprobeerd) > 1:
                 laatste["seats_tried"] = geprobeerd
+                laatste["seat_errors"] = stoelfouten
             return laatste
         # Beide lezen: de CLI meldt "Not logged in" in result (JSON op stdout)
         # met een lege stderr, terwijl error dan al "... eindigde met 1" is.
@@ -943,6 +947,7 @@ def run_agent(
         if _auth_fout(fout) or _limit_message(fout) or _model_fout(fout):
             if not _model_fout(fout):
                 _onthoud_stoel_fout(huidige, fout)
+            stoelfouten[huidige] = fout[-300:]
             overslaan.add(huidige)
             volgende = kies_vrije_stoel(gevraagd, overslaan=overslaan, balanceer=checks)
             if volgende:
@@ -953,6 +958,8 @@ def run_agent(
     if laatste is not None:
         if geprobeerd:
             laatste["seats_tried"] = geprobeerd
+        if stoelfouten:
+            laatste["seat_errors"] = stoelfouten
         return laatste
     return {"status": "error", "error": f"Geen vrije stoel voor '{gevraagd}'.", "engine": gevraagd}
 

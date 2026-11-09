@@ -419,6 +419,23 @@ class TestVoerUitEerlijk:
         assert len(pl._meld_accounts(staat, ALLES_INGELOGD)) == 1
         assert pl._meld_accounts(staat, ALLES_INGELOGD) == []  # niet elke ronde opnieuw
 
+    def test_overname_in_de_runner_meldt_toch_de_uitgelogde_stoel(self, monkeypatch):
+        """9 nov: de runner nam het werk over van Claude 2, maar niemand hoorde
+        dat Claude 2 uitgelogd was. Nu: één melding met wie het overnam."""
+        def run(repo, prompt, modus, t, motor):
+            return {"status": "ok", "result": "Echt verslag", "engine": "claude3",
+                    "seats_tried": ["claude2", "claude3"],
+                    "seat_errors": {"claude2": "Claude Code 2 eindigde met 1. stderr: Not logged in · Please run /login"}}
+        pl, rijen = self._pl(monkeypatch, run)
+        staat = {}
+        taak = {"id": "t3", "title": "Fix: Y", "goal": "kijk", "metadata": {"agent": "axe-core", "motor": "claude2", "risico": "lezen"}}
+        uit = pl._voer_uit(staat, taak, MOTOREN_11OKT, ALLES_INGELOGD)
+        assert uit["ok"]
+        assert staat["account_kapot"]["claude2"]["overgenomen_door"] == "claude3"
+        meldingen = pl._meld_accounts(staat, ALLES_INGELOGD)
+        assert len(meldingen) == 1
+        assert "took over" in meldingen[0] and "Mac mini" not in meldingen[0]
+
     def test_zonder_bruikbare_motor_geblokkeerd_zonder_run(self, monkeypatch):
         pl, rijen = self._pl(monkeypatch, lambda *a: (_ for _ in ()).throw(AssertionError("geen run")))
         taak = {"id": "t2", "title": "Kijk", "goal": "g", "metadata": {"agent": "axe-algo", "motor": "sleutels", "risico": "lezen"}}
