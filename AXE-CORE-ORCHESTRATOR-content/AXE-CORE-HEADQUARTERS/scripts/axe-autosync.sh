@@ -188,6 +188,14 @@ if ! SUPABASE_URL="$SBU" SUPABASE_SERVICE_ROLE="$SBK" python3 "$HIER/scripts/and
   log "android-update mislukt — zie ~/Library/Logs/axe-android.log"
 fi
 
+# Trading OS vanzelf live (Luka, 9 nov: "af = live"). Alleen op de Mac die
+# tradingosapp.com serveert, met een schone ~/trading-os-app en als Luka 5 min
+# niets aanraakt: zie tradingos-release.sh. Uit: touch ~/.axe/tradingos-release-uit
+if [[ -x "$HIER/scripts/tradingos-release.sh" ]]; then
+  SUPABASE_URL="$SBU" SUPABASE_SERVICE_ROLE="$SBK" "$HIER/scripts/tradingos-release.sh" \
+    || log "Trading OS-release liep niet — zie ~/Library/Logs/tradingos-release.log"
+fi
+
 DOEL="$(git rev-parse --short HEAD)"
 GEBOUWD="$(cat "$APP_STEMPEL" 2>/dev/null || true)"
 [[ "$GEBOUWD" == "$DOEL" ]] && exit 0
