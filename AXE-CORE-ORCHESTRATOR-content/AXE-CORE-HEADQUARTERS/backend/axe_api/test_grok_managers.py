@@ -54,7 +54,8 @@ def test_toets_actie_blokkeert_vlaggen_orders_geld_deals_en_sends():
     )
 
 
-def test_axemanager_pulse_schrijft_directives_en_geen_verboden():
+def test_axemanager_pulse_stuurt_geen_directives_meer_en_geen_verboden():
+    """Tot 9 nov: 720 berichten per dag "stuur niets" in het managersgesprek."""
     db = FakeDb(core_approvals=[{"id": "a", "status": "pending", "title": "Yes needed"}],
                 core_tasks=[{"id": "t", "status": "queued"}],
                 core_schedules=[], core_manager_messages=[])
@@ -64,9 +65,7 @@ def test_axemanager_pulse_schrijft_directives_en_geen_verboden():
     assert "aanbeveling" in body
     for woord in sd.VERBODEN:
         assert woord not in body
-    berichten = db.db["core_manager_messages"]
-    assert {b["to_agent"] for b in berichten} == set(gm.GROK_IDS) - {gm.BAAS}
-    assert all(b["from_agent"] == gm.BAAS and b["kind"] == "directive" for b in berichten)
+    assert not [b for b in db.db["core_manager_messages"] if b["kind"] == "directive"]
 
 
 def test_andere_managers_rapporteren_terug_zonder_te_verzenden():

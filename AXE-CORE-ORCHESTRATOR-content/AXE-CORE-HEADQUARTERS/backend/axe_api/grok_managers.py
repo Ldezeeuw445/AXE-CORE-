@@ -227,40 +227,93 @@ def _vraag_luka(db: Any, agent: str, wat: str, waarom: str) -> None:
     )
 
 
-def run_axemanager(db: Any, nu: datetime) -> dict[str, Any]:
-    """Baas: leest rapporten, stuurt richting, beveelt eerst, vraagt Luka zelden."""
-    pending = _rijen(db, "core_approvals", "id,title,status", status="pending")
-    taken = _rijen(db, "core_tasks", "id,status,assignee")
-    rapporten = inbox(db, BAAS)
-    roosters = _rijen(db, "core_schedules", "name,job_key,last_status,last_result,enabled")
-    mgr_jobs = [r for r in roosters if str(r.get("job_key") or "").startswith("axe_core:staande-")
-                and any(k in str(r.get("job_key")) for k in GROK_IDS)]
-    for r in rapporten:
+def _laatste_rapporten(db: Any) -> dict[str, dict[str, Any]]:
+    uit: dict[str, dict[str, Any]] = {}
+    for m in GROK_IDS:
+        if m == BAAS:
+            continue
         try:
-            db.table("core_manager_messages").update({
-                "read_at": nu.isoformat(),
-            }).eq("id", r["id"]).execute()
+            rij = (db.table("core_manager_messages").select("body,created_at").eq("from_agent", m)
+                   .eq("to_agent", BAAS).eq("kind", "report").order("created_at", desc=True)
+                   .limit(1).execute().data) or []
+        except Exception:  # noqa: BLE001
+            rij = []
+        if rij:
+            uit[m] = rij[0]
+    return uit
+
+
+def _sluit_opgeloste_vragen(db: Any, vragen: list[dict[str, Any]], rapporten: dict[str, dict[str, Any]],
+                            nu: datetime) -> list[dict[str, Any]]:
+    """Wat de baas zelf mag: een manager-vraag die de manager niet meer meldt
+    van Luka's lijst halen. 9 nov stond "er komt geen mail meer binnen" er
+    nog, drie dagen nadat de mail weer binnenkwam."""
+    import baas_bewaker as bb
+    gesloten = []
+    for v in bb.opgeloste_vragen(vragen, rapporten, nu):
+        reden = f"{v.get('requested_by')} meldt dit niet meer (rapport {rapporten[v['requested_by']].get('created_at')})"
+        meta = v.get("metadata") if isinstance(v.get("metadata"), dict) else {}
+        try:
+            db.table("core_approvals").update({
+                "status": "expired",
+                "metadata": {**meta, "gesloten_door": BAAS, "reden": reden, "gesloten_op": nu.isoformat()},
+            }).eq("id", v["id"]).eq("status", "pending").execute()
+            if v.get("task_id"):
+                db.table("core_tasks").update({"status": "cancelled"}).eq("id", v["task_id"]) \
+                    .eq("status", "waiting_approval").execute()
+            gesloten.append(v)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("axemanager: kon vraag %s niet sluiten (%s)", v.get("id"), exc)
+    return gesloten
+
+
+def run_axemanager(db: Any, nu: datetime) -> dict[str, Any]:
+    """Baas: ziet of de managers zelf draaien, haalt vragen die opgelost zijn
+    van Luka's lijst, en zegt alleen iets als er iets verandert."""
+    import baas_bewaker as bb
+    vragen = _rijen(db, "core_approvals", "id,title,status,kind,requested_by,task_id,metadata,created_at",
+                    status="pending")
+    roosters = _rijen(db, "core_schedules", "name,job_key,enabled,last_status,consecutive_failures,last_run_at",
+                      limiet=500)
+    rapporten = _laatste_rapporten(db)
+    gesloten = _sluit_opgeloste_vragen(db, vragen, rapporten, nu)
+    weg = {v.get("id") for v in gesloten}
+    open_vragen = [v for v in vragen if v.get("id") not in weg]
+
+    bevindingen = bb.beoordeel(roosters, tuple(m for m in GROK_IDS if m != BAAS), nu)
+    voor_luka = [b for b in bevindingen if b.voor == "luka"]
+    for b in voor_luka:
+        _vraag_luka(db, BAAS, b.titel, b.detail)
+
+    # Geen directives meer elke pulse: 720 per dag "stuur niets" was ruis in
+    # het gesprek dat Luka leest. Ongelezen rapporten worden wel gelezen.
+    for r in inbox(db, BAAS):
+        try:
+            db.table("core_manager_messages").update({"read_at": nu.isoformat()}).eq("id", r["id"]).execute()
         except Exception:  # noqa: BLE001
             pass
-    queued = sum(1 for t in taken if t.get("status") in ("queued", "retrying", "pending", "waiting_approval"))
-    aanbeveling = (
-        f"Aanbeveling: {len(pending)} vragen voor jou, {queued} taken open, "
-        f"{len(rapporten)} rapporten van managers."
-        if pending or queued or rapporten else
-        "Aanbeveling: niets buiten het plan; managers lopen, geen ja nodig."
-    )
-    for andere in GROK_IDS:
-        if andere == BAAS:
-            continue
-        stuur_bericht(db, BAAS, andere, "directive",
-                      f"Pulse {nu.strftime('%H:%M')} UTC. Rapporteer blokkades; stuur niets, verhandel niets.")
+
+    delen = [b.titel for b in bevindingen]
+    if gesloten:
+        delen.insert(0, "opgelost en van je lijst gehaald: " + "; ".join(str(v.get("title")) for v in gesloten))
+    aanbeveling = (f"Aanbeveling: {len(open_vragen)} vragen wachten op jou"
+                   + ("; " + "; ".join(delen) if delen else "; alle managers draaien") + ".")
+    gerapporteerd = False
+    if gesloten:
+        # Eén keer per gesloten vraag, zodat Luka in het managersgesprek ziet
+        # waarom een kaart verdween. (Baas -> baas valt buiten mag_peer_bericht.)
+        toets_actie("report", aanbeveling)
+        gerapporteerd = _schrijf(db, "core_manager_messages", {
+            "from_agent": BAAS, "to_agent": BAAS, "kind": "report", "body": aanbeveling[:4000],
+        }) is not None
     return {
         "job": "orchestrate managers",
         "aanbeveling": aanbeveling,
-        "pending_ok": len(pending),
-        "queued": queued,
-        "rapporten": len(rapporten),
-        "manager_jobs": len(mgr_jobs),
+        "pending_ok": len(open_vragen),
+        "gesloten": [v.get("title") for v in gesloten],
+        "voor_luka": [b.code for b in voor_luka],
+        "bevindingen": [b.code for b in bevindingen],
+        "gerapporteerd": gerapporteerd,
         "taal": "nl",
     }
 
@@ -571,8 +624,7 @@ def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any
         health, ops, metrics = bewaker.haal(ophaler)
     except Exception as exc:  # noqa: BLE001
         # Niet stil zijn als hij niet kan kijken: dat was precies het probleem.
-        stuur_bericht(db, "northseamgr", BAAS, "report",
-                      f"NorthSea: kan de desk niet lezen ({str(exc)[:160]}).")
+        _rapporteer_bij_verandering(db, "northseamgr", f"NorthSea: kan de desk niet lezen ({str(exc)[:160]}).")
         return {"job": "northsea desk owner", "priority": "first deal", "gelezen": False, "fout": str(exc)[:300],
                 "sent": 0, "flags": "untouched"}
 
@@ -594,7 +646,8 @@ def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any
             overzicht = False
 
     samenvatting = "; ".join(b.titel for b in bevindingen) or "desk loopt, niets voor Luka"
-    stuur_bericht(db, "northseamgr", BAAS, "report", f"NorthSea: {samenvatting}.")
+    # Alleen bij verandering: 8 nov 97 keer per dag hetzelfde rapport.
+    _rapporteer_bij_verandering(db, "northseamgr", f"NorthSea: {samenvatting}.")
     return {
         "job": "northsea desk owner",
         "priority": "first deal",
