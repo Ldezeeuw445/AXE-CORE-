@@ -400,9 +400,15 @@ try:
 except Exception:  # noqa: BLE001 — net zo
     _INTEL_FEEDS = ()
 
+try:
+    import intel_wereld as _intel_wereld
+    _INTEL_WERELD: tuple[dict[str, Any], ...] = _intel_wereld.diensten()
+except Exception:  # noqa: BLE001 — net zo
+    _INTEL_WERELD = ()
+
 # Bestaande 24/7-jobs plus de zes Grok-managers (27 okt 2026), de bouwende
-# developer-DAX (28 okt) en de intel-feeds voor Trading OS (9 nov), ernaast.
-DIENSTEN = DIENSTEN + _GROK_DIENSTEN + _DAX_BOUW + _INTEL_FEEDS
+# developer-DAX (28 okt) en de intel-feeds voor Trading OS (9 nov: markt, wereld, lucht).
+DIENSTEN = DIENSTEN + _GROK_DIENSTEN + _DAX_BOUW + _INTEL_FEEDS + _INTEL_WERELD
 
 STAANDE_AGENTS = frozenset(str(d["agent"]) for d in DIENSTEN)
 
