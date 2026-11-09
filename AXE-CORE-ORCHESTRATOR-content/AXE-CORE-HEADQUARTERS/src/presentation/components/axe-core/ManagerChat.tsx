@@ -29,6 +29,7 @@ import { GoedkeuringActie } from '@/presentation/components/axe-core/Goedkeuring
 import type { GoedkeuringsRij } from '@/domain/agents/pendingApproval';
 import { followupIsAkkoord, followupIsAfwijzing } from '@/domain/goedkeuringFollowup';
 import { taakFoutVan } from '@/domain/taken/taakFout';
+import { MANAGER_DRAAD_EVT } from '@/infrastructure/persistence/managerDraadSync';
 import {
   bewaarManagerChat,
   laadManagerChat,
@@ -283,6 +284,14 @@ export function ManagerChat({
     setWachtOpAntwoord(false);
     laatsteJobSamenvatting.current = '';
     sluitRef.current?.focus();
+  }, [agent.id]);
+
+  // Nieuwe berichten uit de gedeelde draad (een manager die je zelf schrijft,
+  // of wat je op een ander apparaat zei) direct in beeld.
+  useEffect(() => {
+    const op = () => setLokaal(laadManagerChat(agent.id));
+    window.addEventListener(MANAGER_DRAAD_EVT, op);
+    return () => window.removeEventListener(MANAGER_DRAAD_EVT, op);
   }, [agent.id]);
 
   useEffect(() => {

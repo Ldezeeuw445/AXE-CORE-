@@ -2015,3 +2015,22 @@ export async function claimStemVloer(body: {
 }): Promise<StemVloerBesluit> {
   return call('POST', '/voice/claim', body);
 }
+
+/** De gedeelde draad tussen Luka en de managers (backend/axe_api/manager_draad.py). */
+export async function managersDraad(since?: string): Promise<{
+  messages: { id: string; agent: string; role: 'user' | 'assistant'; text: string; at: string; read?: boolean }[];
+}> {
+  return call('GET', `/managers/thread${since ? `?since=${encodeURIComponent(since)}` : ''}`);
+}
+
+export async function schrijfManagerBericht(body: {
+  agent: string;
+  role: 'user' | 'assistant';
+  text: string;
+}): Promise<{ id: string; at: string }> {
+  return call('POST', '/managers/thread', body);
+}
+
+export async function markeerManagerGelezen(agent: string): Promise<{ ok: boolean }> {
+  return call('POST', '/managers/thread/read', { agent });
+}

@@ -31,6 +31,7 @@ import {
   projectsOrchAgent,
 } from '@/domain/agents/bossRoute';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
+import { syncManagerDraad, managerGelezen, MANAGER_DRAAD_EVT } from '@/infrastructure/persistence/managerDraadSync';
 import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { startAxeJobs } from '@/presentation/store/installTierRouter';
@@ -189,8 +190,21 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
   useEffect(() => {
     if (!gekozen) return;
     schrijfLastRead(gekozen, Date.now());
+    managerGelezen(gekozen);
     tick((n) => n + 1);
   }, [gekozen]);
+
+  // Grok Bot-gesprek: de draad staat op de VPS, zodat elk apparaat hetzelfde
+  // ziet en de managers je zelf in gewone taal kunnen schrijven.
+  useEffect(() => {
+    let alive = true;
+    const ronde = () => { void syncManagerDraad(alleIds).then((n) => { if (alive && n) tick((x) => x + 1); }); };
+    ronde();
+    const timer = window.setInterval(ronde, 20_000);
+    const opNieuw = () => tick((x) => x + 1);
+    window.addEventListener(MANAGER_DRAAD_EVT, opNieuw);
+    return () => { alive = false; window.clearInterval(timer); window.removeEventListener(MANAGER_DRAAD_EVT, opNieuw); };
+  }, [alleIds]);
 
   const agent = gekozen ? agentById(gekozen) : null;
   const agentJobs = agent
@@ -239,6 +253,8 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
 
   const stuurNaarGekozen = (tekst: string) => {
     if (!agent) return;
+    // Wat je typt staat binnen een paar seconden ook op je andere apparaten.
+    window.setTimeout(() => { void syncManagerDraad(alleIds); }, 1500);
     const srv = server.agents[agent.id];
     const akkoord = followupIsAkkoord(tekst);
     const afwijs = followupIsAfwijzing(tekst);
