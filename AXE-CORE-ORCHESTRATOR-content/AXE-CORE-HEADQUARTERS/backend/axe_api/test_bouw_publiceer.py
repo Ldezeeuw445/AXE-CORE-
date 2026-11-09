@@ -1,4 +1,5 @@
 """bouw_publiceer met echte git: een lokale kale repo speelt GitHub, de API is nagebootst."""
+import shutil
 import base64
 import json
 import os
@@ -589,9 +590,21 @@ def test_lint_zonder_parseerbare_vondsten_wordt_niet_stil_groen(tmp_path):
     assert "cannot find config" in uit["reason"]
 
 
+def _node() -> str:
+    """node, ook als de test met een kale PATH draait (vps_sync onder launchd:
+    /usr/bin:/bin, terwijl node in /opt/homebrew/bin staat)."""
+    gevonden = shutil.which("node")
+    if gevonden:
+        return gevonden
+    for kandidaat in ("/opt/homebrew/bin/node", "/usr/local/bin/node", os.path.expanduser("~/.volta/bin/node")):
+        if os.path.exists(kandidaat):
+            return kandidaat
+    raise AssertionError("node niet gevonden in PATH, /opt/homebrew/bin of /usr/local/bin — de lintpoort heeft node nodig")
+
+
 def test_eslint_gate_node_unit():
     hq = Path(__file__).resolve().parents[2]
-    r = subprocess.run(["node", "--test", str(hq / "scripts" / "eslint-gate.test.mjs")],
+    r = subprocess.run([_node(), "--test", str(hq / "scripts" / "eslint-gate.test.mjs")],
                        cwd=str(hq), capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
 
@@ -608,6 +621,19 @@ def test_lint_gate_output_eerste_n_regels_in_reden():
     reden = bp.lint_reden(oordeel)
     assert "f0.ts:1:1" in reden and "+4 more" in reden
     assert "f11.ts" not in reden
+
+
+@pytest.fixture(autouse=True)
+def eigen_werk_map(tmp_path, monkeypatch):
+    """Elke test een eigen ~/.axe/werk. Op de Mac mini staat daar een echte
+    agent-repos.json die `trading-os` naar de checkout van de lus laat wijzen;
+    zonder dit las een test die checkout in plaats van zijn tmp-repo (9 nov:
+    test_trading_os_pr_gaat_naar_snapshot_niet_main rood op de Mac, groen in de
+    cloud), en kon publiceer daar committen en pushen."""
+    werk_map = tmp_path / "axe-werk"
+    werk_map.mkdir(exist_ok=True)
+    monkeypatch.setattr(agent_runner, "WERK_MAP", str(werk_map))
+    monkeypatch.setattr(agent_runner, "WERK_OVERRIDES", str(werk_map / "agent-repos.json"))
 
 
 @pytest.fixture

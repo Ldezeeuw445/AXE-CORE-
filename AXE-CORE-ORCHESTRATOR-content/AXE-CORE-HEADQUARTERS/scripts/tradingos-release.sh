@@ -48,8 +48,11 @@ LIVE="$(curl -fsS -m 5 "$HEALTH_URL" 2>/dev/null \
 # Antwoordt de site even niet, dan niet elke ronde dezelfde commit opnieuw.
 [[ -z "$LIVE" && "$(cat "$GEDAAN" 2>/dev/null)" == "$DOEL" ]] && exit 0
 
-# Een commit die al eens mislukte niet elke 5 minuten opnieuw.
-[[ "$(cat "$MISLUKT" 2>/dev/null)" == "$DOEL" ]] && exit 0
+# Een commit die al eens mislukte niet elke 5 minuten opnieuw. De merker draagt
+# ook de versie van dit script: een reparatie hier probeert dezelfde commit nog één keer.
+ZELF="$(shasum "${BASH_SOURCE[0]}" 2>/dev/null | cut -c1-12 || true)"
+MERKER="$DOEL ${ZELF:-?}"
+[[ "$(cat "$MISLUKT" 2>/dev/null)" == "$MERKER" ]] && exit 0
 
 if [[ -n "$(git -C "$REPO" status --porcelain --untracked-files=no)" ]]; then
   # Er wordt in die checkout gewerkt; release-mac.sh zou toch weigeren.
@@ -64,21 +67,30 @@ if [[ "${TRADINGOS_NU:-0}" != "1" && "${STIL:-0}" -lt 300 ]]; then
 fi
 
 log "live is ${LIVE:-onbekend}, main is $DOEL — release (laagste prioriteit)"
-PRIO=()
-command -v taskpolicy >/dev/null 2>&1 && PRIO=(taskpolicy -b nice -n 19)
+# Alleen nice, geen taskpolicy -b: achtergrond-QoS knijpt de CPU zo hard dat de
+# tests in release-mac.sh op hun tijdslimiet kunnen stuklopen. Luka is toch 5 min weg.
+PRIO=(nice -n 15)
 # Schone omgeving: een oude SUPABASE_ACCESS_TOKEN in een shell wint anders van
 # `supabase login` (zie release-mac.sh).
+RUN="$(mktemp "${TMPDIR:-/tmp}/tradingos-release.XXXXXX")"
 if (cd "$REPO" && ${PRIO[@]+"${PRIO[@]}"} env -i HOME="$HOME" USER="${USER:-}" LOGNAME="${USER:-}" SHELL=/bin/zsh \
       TMPDIR="${TMPDIR:-/tmp}" PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
-      /bin/bash scripts/release-mac.sh) >> "$LOG" 2>&1; then
+      /bin/bash scripts/release-mac.sh) > "$RUN" 2>&1; then
+  cat "$RUN" >> "$LOG"; rm -f "$RUN"
   rm -f "$MISLUKT"
   echo "$DOEL" > "$GEDAAN"
   log "klaar: Trading OS live op $DOEL"
   osascript -e "display notification \"Trading OS staat live op $DOEL.\" with title \"Trading OS\"" 2>/dev/null || true
 else
-  echo "$DOEL" > "$MISLUKT"
+  cat "$RUN" >> "$LOG"
+  # De laatste regels van release-mac.sh zeggen waarom (stap en foutmelding);
+  # die gaan mee in de melding, zodat het ook op afstand te zien is. Het script
+  # print alleen namen van variabelen, nooit waarden.
+  STAART="$(grep -v '^[[:space:]]*$' "$RUN" | tail -n 8 | cut -c1-200 | tr '\n' ' ' )"
+  rm -f "$RUN"
+  echo "$MERKER" > "$MISLUKT"
   log "release van $DOEL MISLUKT — zie hierboven; de vorige versie blijft live"
   osascript -e "display notification \"Release $DOEL mislukte; de vorige versie blijft live.\" with title \"Trading OS\"" 2>/dev/null || true
-  meld warning "Trading OS release of $DOEL failed on $(scutil --get LocalHostName 2>/dev/null || hostname -s); tradingosapp.com stays on ${LIVE:-the previous version}. Log: ~/Library/Logs/tradingos-release.log. It retries on the next commit to main; to retry this one: rm ~/Library/Logs/tradingos-release.mislukt"
+  meld warning "Trading OS release of $DOEL failed on $(scutil --get LocalHostName 2>/dev/null || hostname -s); tradingosapp.com stays on ${LIVE:-the previous version}. Last lines: ${STAART:-?} — Log: ~/Library/Logs/tradingos-release.log. It retries on the next commit to main; to retry this one: rm ~/Library/Logs/tradingos-release.mislukt"
 fi
 exit 0
