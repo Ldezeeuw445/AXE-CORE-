@@ -88,6 +88,14 @@ in de app.
   build-stempel niet de huidige commit is. Handmatig bouwen hoeft niet meer.
 - **Controleren:** Home toont `build <sha>`; op beide Macs hetzelfde. Log:
   `~/Library/Logs/axe-autosync.log`.
+- **Trading OS gaat ook vanzelf live.** Op de Mac die tradingosapp.com
+  serveert (LaunchAgent `com.tradingos.web`) roept autosync
+  `scripts/tradingos-release.sh` aan. Staat er op GitHub een nieuwere `main`
+  van `Ldezeeuw445/trading-os-app` dan `localhost:8080/health.json` zegt, en
+  raakt Luka 5 minuten niets aan, dan draait die de eigen `release-mac.sh` van
+  de repo: site, `engine-proxy` en `intel-proxy`. Een mislukte commit wordt
+  niet herhaald; dan volgt één melding in AXE. Log:
+  `~/Library/Logs/tradingos-release.log`. Uit: `touch ~/.axe/tradingos-release-uit`.
 - Dezelfde app, dezelfde mogelijkheden. De Mac mini blijft het brein (lokale
   API :8001, planner); de iMac-app praat daar via Tailscale mee. Start op de
   iMac geen tweede axe_api.
