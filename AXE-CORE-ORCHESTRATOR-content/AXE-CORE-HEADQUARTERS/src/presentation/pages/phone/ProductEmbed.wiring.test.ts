@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { AXON_SITE } from '@/infrastructure/gateways/axonSessie';
+import { SHELL_VERTROUWEN } from '@/domain/eigenAppSessie';
 
 const bron = readFileSync(join(__dirname, 'ProductEmbed.tsx'), 'utf8');
-const sessie = readFileSync(join(__dirname, '../../../infrastructure/gateways/axonSessie.ts'), 'utf8');
 
 describe('ProductEmbed', () => {
   it('is vol-scherm zonder ‹ More en opent de ingelogde routes in HQ', () => {
@@ -11,7 +12,8 @@ describe('ProductEmbed', () => {
     expect(bron).not.toContain("navigate('/apps')");
     expect(bron).toContain("https://axecompanion.com/chat");
     expect(bron).toContain('AXON_SITE');
-    expect(sessie).toContain("https://app.axon-memory.com/");
+    expect(AXON_SITE).toBe(SHELL_VERTROUWEN.axon.url);
+    expect(AXON_SITE).toBe('https://app.axon-memory.com/');
     expect(bron).not.toContain("https://app.axon-memory.com/home");
     expect(bron).toContain('data-axe-embed-frame');
     expect(bron).toContain('Opening');

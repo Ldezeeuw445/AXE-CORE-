@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  AXON_SITE,
   axonEmbedUrl,
   leesAxonSessie,
   schrijfAxonSessie,
@@ -28,21 +29,26 @@ const SESSIE: AxonSessie = {
   email: 'luka@axecompanion.com',
 };
 
+const GEHEIM = /access_token|refresh_token|id_token|type=recovery|(?:^|[?#&])code=/i;
+
 describe('AXON-sessie in HQ', () => {
-  it('onthoudt de sessie first-party en bouwt een hash die in de iframe blijft', () => {
+  it('onthoudt de sessie first-party; de iframe krijgt geen tokens in de URL', () => {
     schrijfAxonSessie(SESSIE);
     const gelezen = leesAxonSessie();
     expect(gelezen?.access_token).toBe('tok-a');
     expect(gelezen?.email).toBe('luka@axecompanion.com');
     const url = axonEmbedUrl(gelezen, 'https://app.axon-memory.com/');
-    expect(url.startsWith('https://app.axon-memory.com/#')).toBe(true);
-    expect(url).toContain('access_token=tok-a');
-    expect(url).toContain('refresh_token=tok-r');
-    expect(url).toContain('type=recovery');
-    expect(url).not.toContain('allow-top-navigation');
+    expect(url).toBe(AXON_SITE);
+    expect(url).not.toMatch(GEHEIM);
+    expect(url.includes('#')).toBe(false);
   });
 
-  it('zonder sessie blijft de iframe-url de site zelf, geen Custom Tab', () => {
-    expect(axonEmbedUrl(null)).toBe('https://app.axon-memory.com/');
+  it('weiger een vijandige basis: altijd app.axon-memory.com, nooit recovery-hash', () => {
+    schrijfAxonSessie(SESSIE);
+    expect(axonEmbedUrl(SESSIE, 'https://evil.example/')).toBe(AXON_SITE);
+    expect(axonEmbedUrl(SESSIE, 'https://axon-memory.com/')).toBe(AXON_SITE);
+    expect(axonEmbedUrl(SESSIE, 'http://app.axon-memory.com/')).toBe(AXON_SITE);
+    expect(axonEmbedUrl(null)).toBe(AXON_SITE);
+    expect(axonEmbedUrl(SESSIE)).not.toMatch(GEHEIM);
   });
 });

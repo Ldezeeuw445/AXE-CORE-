@@ -2,14 +2,15 @@
  * AXON-login in HQ, first-party. De iframe van app.axon-memory.com kan de
  * Supabase-sessie niet bewaren als de WebView third-party cookies weigert,
  * en een Custom Tab verlaat Device Manager. Daarom één keer inloggen hier,
- * tokens in HQ-localStorage, en de iframe opent daarna met de hash die
- * supabase-js herkent.
+ * tokens in HQ-localStorage. De iframe krijgt die tokens niet in de URL:
+ * AXON's live bundel behandelt `type=recovery` als wachtwoord-reset, en
+ * een hash overleeft origin-grenzen niet veilig.
  *
  * Anon-sleutel is publiek: hij staat in AXON's eigen frontend-bundle.
  */
-import { urlMetSessie } from '@/domain/eigenAppSessie';
+import { SHELL_VERTROUWEN } from '@/domain/eigenAppSessie';
 
-export const AXON_SITE = 'https://app.axon-memory.com/';
+export const AXON_SITE = SHELL_VERTROUWEN.axon.url;
 export const AXON_SUPABASE_URL = 'https://ktaditgtbubonrahyiig.supabase.co';
 export const AXON_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt0YWRpdGd0YnVib25yYWh5aWlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1MDU0NDksImV4cCI6MjEwMTA4MTQ0OX0.0T34yCT9Tgjk37AB6owkfphpmDgl5gRUKmAYgtl2VM0';
@@ -48,10 +49,14 @@ export function schrijfAxonSessie(sessie: AxonSessie | null): void {
 }
 
 export function axonEmbedUrl(sessie: AxonSessie | null, basis = AXON_SITE): string {
-  if (!sessie?.access_token || !sessie.refresh_token) return basis;
-  const wortel = basis.endsWith('/') ? basis : `${basis}/`;
-  // type=recovery: zo herkent AXON's bundel de hash (gemeten in hun iframe).
-  return urlMetSessie(wortel, sessie, Date.now(), { type: 'recovery' });
+  void sessie;
+  try {
+    const u = new URL(basis);
+    if (u.protocol === 'https:' && u.origin === SHELL_VERTROUWEN.axon.origin) {
+      return SHELL_VERTROUWEN.axon.url;
+    }
+  } catch { /* vijandig of onleesbaar: niet die kant op */ }
+  return SHELL_VERTROUWEN.axon.url;
 }
 
 function uitTokenAntwoord(body: Record<string, unknown>, email?: string): AxonSessie | null {

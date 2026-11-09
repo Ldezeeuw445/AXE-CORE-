@@ -1,15 +1,17 @@
 /**
- * Auth voor Luka's eigen apps in de rechter radiale shell.
+ * Auth-grenzen voor Luka's eigen apps in de rechter radiale shell.
  *
  * De radial opent Trading OS, Companion en AXON als een Tauri-WebviewWindow
- * op hun eigen site. Dat is een verse WKWebView: geen Safari-cookies, geen
- * Core-localStorage, en Google-OAuth (`signInWithGoogle` in de AXON-bundel)
- * faalt daar. De telefoon had dit al opgelost voor AXON (first-party login
- * + hash die supabase-js herkent). De radial deed dat niet, en opende
- * Companion bovendien op de www-homepagina in plaats van /chat.
+ * op hun eigen HTTPS-origin. Dat is een verse WKWebView: geen Safari-cookies.
+ * Een eerdere poging plakte access/refresh-tokens in de navigatie-hash. Dat
+ * is onveilig én ongeldig bij de echte clients: Companion's live bundle is
+ * `@supabase/ssr` `createBrowserClient` met `flowType: "pkce"` (implicit
+ * hash wordt geweigerd en niet gewist), AXON opent `type=recovery` als
+ * wachtwoord-reset, en `registered_apps.prod_url` is geen allowlist.
  *
- * Dit bestand weet WELKE sessie bij WELKE app hoort, en hoe de URL eruit
- * ziet. Het plakt geen tokens in logs. Service-role komt hier niet in.
+ * Hier staat daarom alleen: welk origin, welk project, welke WKWebView-store.
+ * Geen tokens in URL, history of window.open. Cross-app restore vereist werk
+ * in de bestemming (PKCE op dát origin). Service-role komt hier niet in.
  */
 import type { EigenApp, EigenAppId } from './eigenApps';
 
@@ -20,23 +22,31 @@ export const AXON_SUPABASE_REF = 'ktaditgtbubonrahyiig';
 
 export type SessieBron = 'kern' | 'axon';
 
-export interface ShellTokens {
-  access_token: string;
-  refresh_token: string;
-  /** Unix-seconden, zoals supabase-js `expires_at`. */
-  expires_at: number;
-}
+export type RemoteShellId = 'trading-os' | 'companion' | 'axon';
 
-export interface ShellSessie {
-  bron: SessieBron;
-  tokens: ShellTokens;
-}
+export const SHELL_VERTROUWEN: Record<RemoteShellId, { url: string; origin: string; project: string }> = {
+  companion: {
+    url: 'https://axecompanion.com/chat',
+    origin: 'https://axecompanion.com',
+    project: KERN_SUPABASE_REF,
+  },
+  'trading-os': {
+    url: 'https://tradingosapp.com/',
+    origin: 'https://tradingosapp.com',
+    project: KERN_SUPABASE_REF,
+  },
+  axon: {
+    url: 'https://app.axon-memory.com/',
+    origin: 'https://app.axon-memory.com',
+    project: AXON_SUPABASE_REF,
+  },
+};
 
 /**
  * WKWebView zet anders "Tauri" in de UA. Google weigert OAuth in embedded
  * webviews, en Cloudflare-challenges (tradingosapp.com, `cf-mitigated:
  * challenge`) gedragen zich daar ook anders dan in Safari. Zelfde WebKit,
- * Safari-UA.
+ * Safari-UA — geen sessie erin smokkelen.
  */
 export const WKWEBVIEW_SAFARI_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15';
@@ -52,79 +62,40 @@ export function supabaseRefVan(bron: SessieBron): string {
   return bron === 'axon' ? AXON_SUPABASE_REF : KERN_SUPABASE_REF;
 }
 
-/**
- * Companion's /chat 307't naar /login zolang de server geen cookie ziet.
- * Een hash overleeft die redirect niet, en supabase-js leest de hash alleen
- * op de pagina die daadwerkelijk start. Dus: de login-pagina, apex-host
- * (niet www), gelijk aan ProductEmbed's site minus het redirect-verlies.
- *
- * Trading OS: de apex is een marketingpagina; de auth-client zit op /login
- * (gemeten: /login bestaat, homepage is de landingspagina).
- */
-export function shellBasisUrl(app: EigenApp, liveUrl: string): string {
-  if (app.id === 'companion') return 'https://axecompanion.com/login';
-  if (app.id === 'trading-os') {
-    try {
-      const u = new URL(liveUrl);
-      return `${u.origin}/login`;
-    } catch {
-      return 'https://tradingosapp.com/login';
-    }
-  }
-  if (app.id === 'axon') {
-    const basis = liveUrl.trim() || 'https://app.axon-memory.com/';
-    return basis.endsWith('/') ? basis : `${basis}/`;
-  }
-  return liveUrl;
-}
-
-/** Hash die supabase-js `detectSessionInUrl` herkent. `nuMs` is Date.now, hier buiten zodat tests vaststaan. */
-function sessieHash(tokens: ShellTokens, nuMs: number, extra: Record<string, string> = {}): string {
-  const q = new URLSearchParams({
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expires_in: String(Math.max(60, tokens.expires_at - Math.floor(nuMs / 1000))),
-    token_type: 'bearer',
-    ...extra,
-  });
-  return q.toString();
-}
-
-export function urlMetSessie(
-  basis: string,
-  tokens: ShellTokens | null,
-  nuMs: number,
-  extra: Record<string, string> = {},
-): string {
-  if (!tokens?.access_token || !tokens.refresh_token) return basis;
-  const wortel = basis.includes('#') ? basis.slice(0, basis.indexOf('#')) : basis;
-  return `${wortel}#${sessieHash(tokens, nuMs, extra)}`;
+function isRemoteShellId(id: EigenAppId): id is RemoteShellId {
+  return id === 'companion' || id === 'trading-os' || id === 'axon';
 }
 
 /**
- * URL voor de shell. Verkeerde project-sessie wordt geweigerd: een AXON-token
- * hoort nooit op Companion, een Core-token nooit op AXON.
- *
- * AXON houdt `type=recovery` (zo herkent hun bundel de hash, zie axonSessie).
- * Kern-apps niet: recovery opent daar het wachtwoord-vergeten-scherm.
+ * Fail-closed: alleen de vastgelegde HTTPS-URL. `liveUrl` (registered_apps)
+ * mag nooit de bestemming kiezen — www is marketing, een vijandige prod_url
+ * zou anders Core-tokens of de sessiecookie-jar naar een ander origin leiden.
  */
-export function shellUrl(
-  app: EigenApp,
-  liveUrl: string,
-  sessie: ShellSessie | null,
-  nuMs: number,
-): string {
-  const basis = shellBasisUrl(app, liveUrl);
-  const bron = sessieBronVan(app);
-  if (!sessie || !bron || sessie.bron !== bron) return basis;
-  const extra: Record<string, string> = bron === 'axon' ? { type: 'recovery' } : {};
-  return urlMetSessie(basis, sessie.tokens, nuMs, extra);
+export function shellUrl(app: EigenApp, liveUrl?: string): string | null {
+  void liveUrl;
+  if (!isRemoteShellId(app.id) || app.pagina) return null;
+  return SHELL_VERTROUWEN[app.id].url;
 }
 
-/** Voor logs en fouten: nooit de hash meenemen. */
+const GEHEIME_QUERY = /^(access_token|refresh_token|id_token|token|token_type|code|password|secret|type|expires_in|expires_at|provider_token|provider_refresh_token)$/i;
+
+/** Voor logs en fouten: nooit hash of auth-query meenemen. */
 export function urlZonderGeheim(url: string): string {
-  const i = url.indexOf('#');
-  return i < 0 ? url : url.slice(0, i);
+  const zonderHash = url.includes('#') ? url.slice(0, url.indexOf('#')) : url;
+  try {
+    const u = new URL(zonderHash);
+    for (const key of [...u.searchParams.keys()]) {
+      if (GEHEIME_QUERY.test(key)) u.searchParams.delete(key);
+    }
+    return u.toString();
+  } catch {
+    const vraag = zonderHash.indexOf('?');
+    return vraag < 0 ? zonderHash : zonderHash.slice(0, vraag);
+  }
+}
+
+export function shellFoutTekst(appId: string, payload: unknown): string {
+  return `shell ${appId}: ${urlZonderGeheim(String(payload))}`;
 }
 
 /**

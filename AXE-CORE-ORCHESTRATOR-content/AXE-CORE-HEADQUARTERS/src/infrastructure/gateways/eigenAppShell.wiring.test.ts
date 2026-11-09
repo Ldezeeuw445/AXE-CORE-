@@ -1,30 +1,53 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { openEigenApp } from './eigenAppShell';
+import { SHELL_VERTROUWEN, shellFoutTekst } from '@/domain/eigenAppSessie';
 
-const bron = readFileSync(join(__dirname, 'eigenAppShell.ts'), 'utf8');
-const dok = readFileSync(join(__dirname, '../../presentation/components/layout/RadiaalDok.tsx'), 'utf8');
+const GEHEIM = /access_token|refresh_token|id_token|type=recovery|(?:^|[?#&])code=/i;
 
-describe('radiale shell gebruikt de sessie-URL, niet een kale site', () => {
-  it('opent remote apps via shellUrl + Safari-UA, en logt de hash niet', () => {
-    expect(bron).toContain("from '@/domain/eigenAppSessie'");
-    expect(bron).toContain('shellUrl(');
-    expect(bron).toContain('shellWebviewOpties(app)');
-    expect(bron).toContain('axonSessieKlaar');
-    expect(bron).toContain('getSession()');
-    expect(bron).toContain('urlZonderGeheim');
-    expect(bron).not.toContain('service_role');
-    expect(bron).not.toContain('SERVICE_ROLE');
-    expect(bron).not.toMatch(/console\.(log|info|debug|error|warn)\([^)]*doel/);
-    expect(bron).not.toMatch(/console\.(log|info|debug)\([^)]*access_token/);
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('radiale shell-navigatie', () => {
+  it('window.open krijgt alleen de vertrouwde HTTPS-URL, zonder tokens', async () => {
+    const open = vi.fn();
+    vi.stubGlobal('window', { open, location: { hash: '' } });
+
+    expect(await openEigenApp('companion')).toContain('opened in a new tab');
+    expect(await openEigenApp('trading-os')).toContain('opened in a new tab');
+    expect(await openEigenApp('axon')).toContain('opened in a new tab');
+
+    const urls = open.mock.calls.map(c => String(c[0]));
+    expect(urls).toEqual([
+      SHELL_VERTROUWEN.companion.url,
+      SHELL_VERTROUWEN['trading-os'].url,
+      SHELL_VERTROUWEN.axon.url,
+    ]);
+    for (const aanroep of open.mock.calls) {
+      expect(aanroep[1]).toBe('_blank');
+      expect(aanroep[2]).toBe('noopener,noreferrer');
+      expect(String(aanroep[0])).not.toMatch(GEHEIM);
+      expect(String(aanroep[0]).includes('#')).toBe(false);
+    }
   });
 
-  it('rechter radial roept openEigenApp aan voor de drie remote apps', () => {
-    expect(dok).toContain("openEigen('developer'");
-    expect(dok).toContain("openEigen('axon'");
-    expect(dok).toContain("openEigen('companion'");
-    expect(dok).toContain("openEigen('trading-os'");
-    expect(dok).toContain("openEigen('northsea'");
-    expect(dok).toContain("from '@/infrastructure/gateways/eigenAppShell'");
+  it('lokale AXE-pagina\'s navigeren intern, niet naar een vijandige liveUrl', async () => {
+    const open = vi.fn();
+    const location = { hash: '' };
+    vi.stubGlobal('window', { open, location });
+    expect(await openEigenApp('developer')).toContain('opened here');
+    expect(open).not.toHaveBeenCalled();
+    expect(location.hash).toMatch(/^#/);
+    expect(location.hash).not.toMatch(GEHEIM);
+  });
+
+  it('redacteert tokens uit Tauri-foutpayloads', () => {
+    const tekst = shellFoutTekst(
+      'companion',
+      'https://axecompanion.com/chat#access_token=kern-a&refresh_token=kern-r',
+    );
+    expect(tekst).not.toMatch(GEHEIM);
+    expect(tekst).not.toContain('kern-a');
+    expect(tekst.startsWith('shell companion: ')).toBe(true);
   });
 });
