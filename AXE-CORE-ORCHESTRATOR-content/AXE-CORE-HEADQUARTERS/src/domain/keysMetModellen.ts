@@ -7,11 +7,23 @@
  * uitslag over: een geslaagde test is "Works", een mislukte "Broken" (of,
  * voor een key die je niet nodig hebt, gewoon "Not used").
  */
-import type { KeyRow } from '@/infrastructure/gateways/axeCoreApiService';
 
 export type ModelTest = 'ok' | 'fail' | 'testing' | 'idle' | undefined;
 
-export function metModelTest(rij: KeyRow, test: ModelTest): KeyRow {
+/**
+ * The fields this rule reads and writes. Structural, so domain/ does not
+ * import the gateway's KeyRow (the innermost layer only knows itself); any
+ * KeyRow fits and comes back as the same type.
+ */
+export type KeyRowShape = {
+  status: string;
+  detail: string;
+  purpose: string;
+  need?: 'required' | 'optional' | 'unused';
+  provider?: string | null;
+};
+
+export function metModelTest<T extends KeyRowShape>(rij: T, test: ModelTest): T {
   if (!rij.provider || (test !== 'ok' && test !== 'fail')) return rij;
   if (test === 'ok') {
     return { ...rij, status: 'works', detail: 'Models & Tests: connected' };
