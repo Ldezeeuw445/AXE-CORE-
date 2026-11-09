@@ -161,8 +161,10 @@ def test_jets_stoppen_bij_429_en_roteren_per_uur():
         if len(gevraagd) == 3:
             return 429, ""
         return 200, json.dumps({"ac": []})
-    rijen, info = w.haal_jets(get, 0, NU.replace(hour=0))
-    assert len(gevraagd) == 3 and info["limiet"] is True and rijen == []
+    import pytest
+    with pytest.raises(RuntimeError, match="429"):
+        w.haal_jets(get, 0, NU.replace(hour=0))
+    assert len(gevraagd) == 3
     eerste_uur = gevraagd[0]
     gevraagd.clear()
     w.haal_jets(lambda u, h=None: (200, json.dumps({"ac": []})) if u.endswith(("/ladd", "/pia"))

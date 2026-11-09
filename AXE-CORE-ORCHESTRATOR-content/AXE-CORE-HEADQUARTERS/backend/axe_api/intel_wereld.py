@@ -285,6 +285,9 @@ def haal_jets(get: Getter, pauze: float, nu: datetime | None = None) -> tuple[li
                 break
         if pauze:
             time.sleep(pauze)
+    if limiet and not per_staart:
+        # Niets gezien én afgekapt: dat is geen "0 jets in de lucht".
+        raise RuntimeError(f"adsb_lol limiet (429) na {gevraagd} losse vragen; niets in beeld")
     if len(bulk_fouten) == 2 and not gevraagd:
         raise RuntimeError("adsb_lol onbereikbaar: " + "; ".join(bulk_fouten) + ("; 429" if limiet else ""))
     per_staart_tail = {r["tail"]: per_staart[r["tail"].upper()] for r in register if r["tail"].upper() in per_staart}
