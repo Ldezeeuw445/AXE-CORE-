@@ -310,8 +310,9 @@ def run_axemanager(db: Any, nu: datetime) -> dict[str, Any]:
         db, BAAS, bevindingen,
         gedaan=[f"Vraag '{v.get('title')}' van je lijst gehaald: de manager die hem stelde meldt het niet meer"
                 for v in gesloten],
-        rustig=(f"Alle managers draaien. Er wachten {len(open_vragen)} vragen op jou in de Managers-chat."
-                if open_vragen else "Alle managers draaien, er wacht niets op jou."))
+        rustig=(f"Alle managers draaien. Er wachten {len(open_vragen)} vragen van de managers op jou."
+                if open_vragen else "Alle managers draaien. De managers zelf hebben geen open vraag aan jou; "
+                "wat er per app op je wacht (zoals de NorthSea-desk) staat in het gesprek met die manager."))
     return {
         "job": "orchestrate managers",
         "aanbeveling": aanbeveling,
