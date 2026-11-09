@@ -394,9 +394,15 @@ try:
 except Exception:  # noqa: BLE001 — net zo: de bouwdienst mag de rest niet kielen
     _DAX_BOUW = ()
 
-# Bestaande 24/7-jobs plus de zes Grok-managers (27 okt 2026), en de bouwende
-# developer-DAX (28 okt), ernaast.
-DIENSTEN = DIENSTEN + _GROK_DIENSTEN + _DAX_BOUW
+try:
+    import intel_feeds as _intel_feeds
+    _INTEL_FEEDS: tuple[dict[str, Any], ...] = _intel_feeds.diensten()
+except Exception:  # noqa: BLE001 — net zo
+    _INTEL_FEEDS = ()
+
+# Bestaande 24/7-jobs plus de zes Grok-managers (27 okt 2026), de bouwende
+# developer-DAX (28 okt) en de intel-feeds voor Trading OS (9 nov), ernaast.
+DIENSTEN = DIENSTEN + _GROK_DIENSTEN + _DAX_BOUW + _INTEL_FEEDS
 
 STAANDE_AGENTS = frozenset(str(d["agent"]) for d in DIENSTEN)
 
