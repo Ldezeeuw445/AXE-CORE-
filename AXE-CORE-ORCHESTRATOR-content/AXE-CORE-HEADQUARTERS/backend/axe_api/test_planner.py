@@ -497,11 +497,11 @@ class TestHandoffAndereManager:
         monkeypatch.setattr(pl, "_werkrepo", lambda *a, **k: "trading-os")
         monkeypatch.setattr(pl, "_canon", lambda repo: {"actie": "geen"})
         monkeypatch.setattr(pl, "_ververs", lambda repo: {
-            "actie": "gemerged", "basis": "origin/snapshot-2026-10-17", "achter": 2,
+            "actie": "gemerged", "basis": "origin/main", "achter": 2,
         })
         monkeypatch.setattr(pl, "_bouwljist", lambda repo: {
             "ok": True,
-            "regels": "Never deploy. Never apply migrations. Never place live orders. Never touch main.",
+            "regels": "Never deploy. Never apply migrations. Never place live orders. Never commit directly on main.",
             "volgende": {"id": "T1", "titel": "persist chart drawings per user", "done": False},
         })
         monkeypatch.setattr(pl, "_bewijs", lambda repo: {
@@ -521,13 +521,13 @@ class TestHandoffAndereManager:
         assert gedraaid[0][2] in p.ABONNEMENTEN and gedraaid[0][2] != "xai"
         tekst = gedraaid[0][1]
         assert "T1" in tekst and "persist chart drawings per user" in tekst
-        assert "trading-os-app" in tekst and "snapshot-2026-10-17" in tekst
+        assert "trading-os-app" in tekst and "Base branch: main" in tekst
         assert "Never deploy" in tekst and "Never apply migrations" in tekst
         assert "Never place live orders" in tekst
         assert "old programme text" in tekst  # original goal stays, BOUWLIJST wins the task
         klaar = [v for t, s, v in rijen if t == "core_tasks" and v.get("status") == "completed"]
         assert klaar and klaar[0]["metadata"]["bewijs"]["bouwljist"]["id"] == "T1"
-        assert klaar[0]["metadata"]["bewijs"]["bouwljist"]["basis"] == "snapshot-2026-10-17"
+        assert klaar[0]["metadata"]["bewijs"]["bouwljist"]["basis"] == "main"
         assert not any(v.get("assignee") == "trading" for t, s, v in rijen if s == "insert")
 
     def test_een_bouwrun_hoort_van_het_archief_van_zijn_werkbranch(self, monkeypatch):

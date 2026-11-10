@@ -78,7 +78,7 @@ export const DEFAULT_REPOS: RepoConfig[] = [
     label: 'Trading OS',
     owner: 'Ldezeeuw445',
     repo: 'trading-os-app',
-    branch: 'snapshot-2026-10-17',
+    branch: 'main',
     srcPrefix: 'src',
     token: '',
   },
@@ -152,9 +152,10 @@ function normalizeRepo(r: Partial<RepoConfig> | null | undefined): RepoConfig {
 }
 
 /**
- * Trading OS moved: Ldezeeuw445/trading-os-app @ snapshot-2026-10-17, not
- * TRADING-AXE-OS-APPS/TRADING-OS @ main. A stored card with the old coordinates
- * (or main) would keep the bouwlus and the editor in the empty repo. Token stays.
+ * Trading OS lives at Ldezeeuw445/trading-os-app @ main, not
+ * TRADING-AXE-OS-APPS/TRADING-OS and not the stale snapshot-2026-10-17 branch.
+ * A stored card with the old coordinates would keep the editor on the empty or
+ * stale repo. Token stays.
  */
 function metTradingOsCanon(def: RepoConfig, existing: RepoConfig): RepoConfig {
   const merged = {
