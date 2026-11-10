@@ -30,6 +30,7 @@ import type { GoedkeuringsRij } from '@/domain/agents/pendingApproval';
 import { followupIsAkkoord, followupIsAfwijzing } from '@/domain/goedkeuringFollowup';
 import { taakFoutVan } from '@/domain/taken/taakFout';
 import { MANAGER_DRAAD_EVT } from '@/infrastructure/persistence/managerDraadSync';
+import { MANAGER_DENKT_EVT } from '@/application/managers/managerAntwoord';
 import {
   bewaarManagerChat,
   laadManagerChat,
@@ -275,6 +276,16 @@ export function ManagerChat({
     const op = () => setLokaal(laadManagerChat(agent.id));
     window.addEventListener(MANAGER_DRAAD_EVT, op);
     return () => window.removeEventListener(MANAGER_DRAAD_EVT, op);
+  }, [agent.id]);
+
+  // De manager denkt na (antwoord via het abonnement): de puntjes, net als bij een taak.
+  useEffect(() => {
+    const op = (e: Event) => {
+      const d = (e as CustomEvent<{ agent: string; aan: boolean }>).detail;
+      if (d?.agent === agent.id) setWachtOpAntwoord(d.aan);
+    };
+    window.addEventListener(MANAGER_DENKT_EVT, op);
+    return () => window.removeEventListener(MANAGER_DENKT_EVT, op);
   }, [agent.id]);
 
   useEffect(() => {

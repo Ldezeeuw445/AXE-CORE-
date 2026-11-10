@@ -33,6 +33,7 @@ import {
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { syncManagerDraad, managerGelezen, MANAGER_DRAAD_EVT } from '@/infrastructure/persistence/managerDraadSync';
 import { GESPREK_CONTEXT } from '@/domain/tierRouter/agentDraad';
+import { laatManagerAntwoorden } from '@/application/managers/managerAntwoord';
 import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { startAxeJobs } from '@/presentation/store/installTierRouter';
@@ -290,7 +291,17 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
       return;
     }
 
-    startManagerJob(agent.id, tekst, { device: job?.device ?? null, tab: job?.tab });
+    // Een coding-opdracht blijft een taak (branch + PR, nooit mergen). Al het
+    // andere: de manager antwoordt zelf, als collega, op het abonnement.
+    if (isCodingOpdracht(tekst)) {
+      startManagerJob(agent.id, tekst, { device: job?.device ?? null, tab: job?.tab });
+      return;
+    }
+    const opties = { device: job?.device ?? null, tab: job?.tab };
+    void laatManagerAntwoorden(agent.id, tekst, (actie) => startManagerJob(agent.id, actie, opties)).then((zelf) => {
+      if (!zelf) startManagerJob(agent.id, tekst, opties);
+      tick((n) => n + 1);
+    });
   };
 
   useEffect(() => {
