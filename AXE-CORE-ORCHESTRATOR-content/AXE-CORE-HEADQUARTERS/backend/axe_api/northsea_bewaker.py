@@ -114,7 +114,11 @@ def _motor_stil(health: dict[str, Any], nu: datetime) -> Bevinding | None:
 def _planner_fout(health: dict[str, Any]) -> Bevinding | None:
     s = health.get("scheduler") or {}
     fouten = int(s.get("consecutive_failures") or 0)
-    if fouten <= 0 and s.get("last_status") in (None, "ok"):
+    # "skipped" is geen storing: de motor haalde zijn tijdsbudget, bewaarde zijn
+    # voortgang en gaat de volgende ronde verder (main.py). Tot 10 nov las de
+    # manager dat als "de planner faalt", 1-5 keer per dag. Zelfde regel als de
+    # roosterbewaking in main.py: alleen een echte fout na een echte fout.
+    if fouten <= 0 or s.get("last_status") in (None, "ok", "success", "skipped"):
         return None
     return Bevinding(
         code="planner_fout",

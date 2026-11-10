@@ -303,3 +303,16 @@ async def test_live_operations_groups_existing_state_by_operational_category(mcp
     assert len(data["failed"]["research_failed_permanently"]) == 1
     assert data["failed"]["research_failed_permanently"][0]["blocker"] == "seller_unqualified"
     assert any(c["reason"] == "dedicated backend not configured" for c in data["failed"]["crew_reviews_skipped_recent"])
+
+
+async def test_dismissed_inbound_wacht_niet_meer_op_luka(mcp_server, repo):
+    """10 nov: 16 van de 72 'wacht op jou' waren al weggezette mails."""
+    weg, open_ = str(uuid.uuid4()), str(uuid.uuid4())
+    repo.t.setdefault("email_intelligence", [])
+    repo.t["email_intelligence"] += [
+        {"id": weg, "requires_human_approval": True, "status": "dismissed", "summary": "TradeWheel nieuwsbrief"},
+        {"id": open_, "requires_human_approval": True, "status": "analyzed", "summary": "Echte vraag van een koper"},
+    ]
+    data = await ok(mcp_server, "northsea_list_pending_approvals", {"limit": 100})
+    ids = {r["approval_id"] for r in data["items"]}
+    assert open_ in ids and weg not in ids

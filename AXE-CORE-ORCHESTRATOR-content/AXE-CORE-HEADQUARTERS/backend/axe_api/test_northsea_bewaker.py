@@ -149,3 +149,14 @@ def test_kan_hij_niet_lezen_dan_zegt_hij_dat():
     uit = gm.run_northseamgr(db, NU, ophaler=kapot)
     assert uit["gelezen"] is False
     assert any("kan de desk niet lezen" in (r.get("body") or "") for r in db.rows("core_manager_messages"))
+
+
+def test_tijdsbudget_gehaald_is_geen_falende_planner():
+    """10 nov: 'hit its time budget; progress is saved' kwam als 'skipped' binnen
+    en de manager meldde 'de planner faalt'. Overgeslagen is geen storing."""
+    h = {"database": {"reachable": True},
+         "scheduler": {"last_status": "skipped", "consecutive_failures": 2,
+                       "last_run_at": NU.isoformat()}}
+    assert "planner_fout" not in codes(nb.beoordeel(h, {}, {}, NU))
+    h["scheduler"]["last_status"] = "fail"
+    assert "planner_fout" in codes(nb.beoordeel(h, {}, {}, NU))

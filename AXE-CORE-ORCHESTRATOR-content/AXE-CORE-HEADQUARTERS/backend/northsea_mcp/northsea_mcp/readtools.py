@@ -35,6 +35,10 @@ def _metric(metric: str, value: Any, definition: str, source: list[str], ids: li
     return uit
 
 
+# Een ingekomen mail die zo heet, wacht niet meer op Luka.
+INBOUND_GESLOTEN = ("resolved", "done", "closed", "approved", "rejected", "dismissed")
+
+
 class ReadTools:
     def __init__(self, inspect: InspectService, *, store: Any = None):
         self.i = inspect
@@ -659,6 +663,8 @@ class ReadTools:
                     "source": ["opportunities", "deal_evidence", "companies"]}
 
     # ── APPROVALS ────────────────────────────────────────────────────────────
+    # 10 nov 2026: 16 van de 72 "wacht op Luka" waren mails die hij al had
+    # weggezet (status 'dismissed': TradeWheel, verificatiecodes, bounces).
     def _approval_rows(self, v: View) -> list[dict]:
         rows = []
         for d in v.s.rows("reply_drafts"):
@@ -679,7 +685,7 @@ class ReadTools:
                                  "subject": v.red(t.get("title")), "gate": "Completing needs northsea.admin.",
                                  "created_at": t.get("created_at"), "updated_at": t.get("updated_at")})
         for e in v.s.rows("email_intelligence"):
-            if e.get("requires_human_approval") and _lower(e.get("status")) not in ("resolved", "done", "closed", "approved", "rejected"):
+            if e.get("requires_human_approval") and _lower(e.get("status")) not in INBOUND_GESLOTEN:
                 rows.append({"approval_id": e.get("id"), "kind": "inbound_needs_human_review", "communication_id": e.get("communication_id"),
                              "deal_id": e.get("opportunity_id"), "subject": v.red(e.get("summary"))[:200],
                              "status": e.get("status"), "gate": "Human review of an inbound message flagged by email intelligence.",
