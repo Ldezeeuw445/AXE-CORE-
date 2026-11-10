@@ -4,12 +4,16 @@
  * Default: propose-only. Set AXE_TRADING_TEAM_AUTO_EXECUTE=1 to place on the allowlisted demo via MetaAPI.
  */
 import { getAccounts } from '@/infrastructure/persistence/tradingAccountsService';
-import type { MetaApiConfig } from '@/infrastructure/gateways/metaApiService';
+import { metaApiAccountInfoFor, type MetaApiConfig } from '@/infrastructure/gateways/metaApiService';
 import { brokerPlaceOrder } from '@/infrastructure/gateways/brokerConnector';
 import { assessPreTrade } from '@/application/tradingIntel/preTradeGateService';
+import { sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
 import {
   candidatesFromTradingAccounts,
   resolveAllowedAccount,
+  demoTradeModeGuard,
+  indexCompanionBrokersByMetaApiId,
+  type BrokerIndexEntry,
   type CandidateAccount,
 } from './accountAllowlist';
 import { runScout } from './agents/scout';
@@ -29,6 +33,30 @@ function autoExecuteEnabled(): boolean {
   return process.env.AXE_TRADING_TEAM_AUTO_EXECUTE === '1';
 }
 
+async function loadCompanionBrokerIndex(accountIds: string[]): Promise<Map<string, BrokerIndexEntry>> {
+  const map = new Map<string, BrokerIndexEntry>();
+  const ids = [...new Set(accountIds.map(id => id.trim()).filter(Boolean))];
+  for (const accountId of ids) {
+    try {
+      const rows = await sbGetRows<{
+        id?: string;
+        external_connection_id?: string;
+        mt5_server?: string;
+      }>('user_broker_accounts', {
+        limit: 5,
+        filterCol: 'external_connection_id',
+        filterVal: accountId,
+      });
+      for (const [k, v] of indexCompanionBrokersByMetaApiId(rows ?? [])) {
+        if (!map.has(k)) map.set(k, v);
+      }
+    } catch {
+      // Env 1:1 binding and row-level companionBrokerAccountId still apply.
+    }
+  }
+  return map;
+}
+
 export async function runTradingTeamCycle(opts?: {
   extraCandidates?: CandidateAccount[];
   watchlist?: string[];
@@ -45,8 +73,9 @@ export async function runTradingTeamCycle(opts?: {
 
   try {
     const state = await getAccounts().catch(() => ({ accounts: [], activeId: null }));
+    const brokerIndex = await loadCompanionBrokerIndex(state.accounts.map(a => a.accountId));
     const candidates = [
-      ...candidatesFromTradingAccounts(state.accounts),
+      ...candidatesFromTradingAccounts(state.accounts, brokerIndex),
       ...(opts?.extraCandidates ?? []),
     ];
     const guard = resolveAllowedAccount(candidates);
@@ -67,6 +96,62 @@ export async function runTradingTeamCycle(opts?: {
           proposal: null,
           summary: guard.reason,
           notes: ['allowlist'],
+        },
+        execution: { attempted: false },
+        runRowId: rowId,
+      };
+      await finalizeCycleRow(rowId, result);
+      return result;
+    }
+
+    const acctForMode = state.accounts.find(a => a.accountId === guard.accountId);
+    if (!acctForMode?.token) {
+      const result: TradingTeamCycleResult = {
+        cycleId: id,
+        status: 'blocked',
+        guard: { ...guard, status: 'rejected', reason: 'allowlisted account has no MetaAPI token in Core accounts store' },
+        scout: emptyScout,
+        news: null,
+        sentiment: null,
+        charts: null,
+        risk: null,
+        decision: {
+          verdict: 'BLOCKED',
+          confidence: 0,
+          proposal: null,
+          summary: 'allowlisted account has no MetaAPI token in Core accounts store',
+          notes: ['tradeMode'],
+        },
+        execution: { attempted: false },
+        runRowId: rowId,
+      };
+      await finalizeCycleRow(rowId, result);
+      return result;
+    }
+    const info = await metaApiAccountInfoFor({
+      token: acctForMode.token,
+      accountId: acctForMode.accountId,
+      region: acctForMode.region,
+      enabled: true,
+      updatedAt: acctForMode.addedAt,
+    }).catch((e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+    const mode = info.ok ? demoTradeModeGuard(info.info.tradeMode) : { ok: false as const, reason: `MetaAPI account-information failed: ${'error' in info ? info.error : 'unknown'}` };
+    if (!mode.ok) {
+      const result: TradingTeamCycleResult = {
+        cycleId: id,
+        status: 'blocked',
+        guard: { ...guard, status: 'rejected', reason: mode.reason },
+        scout: emptyScout,
+        news: null,
+        sentiment: null,
+        charts: null,
+        risk: null,
+        decision: {
+          verdict: 'BLOCKED',
+          confidence: 0,
+          proposal: null,
+          summary: mode.reason,
+          notes: ['tradeMode'],
         },
         execution: { attempted: false },
         runRowId: rowId,

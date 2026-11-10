@@ -13,6 +13,7 @@
  */
 
 import type { TradingAccount } from '@/infrastructure/persistence/tradingAccountsService';
+import { environmentFromBrokerTradeMode } from '@/domain/tradingIntel/evidence';
 import type { AccountGuardSnapshot } from './types';
 
 const FORBIDDEN_RE =
@@ -182,14 +183,92 @@ export function resolveAllowedAccount(
   };
 }
 
-/** Map Core TradingAccount rows into allowlist candidates. */
-export function candidatesFromTradingAccounts(accounts: TradingAccount[]): CandidateAccount[] {
-  return accounts.map(a => ({
-    accountId: a.accountId,
-    label: a.label,
-    environment: a.environment ?? null,
-    region: a.region,
-    companionBrokerAccountId: null,
-    serverOrProvider: null,
-  }));
+/**
+ * Live MetaAPI tradeMode must resolve to demo (or contest) before any order.
+ * ACCOUNT_TRADE_MODE_REAL / unknown values fail closed. This is a separate
+ * guard from the allowlist — run it on a fresh account-information call each cycle.
+ */
+export function demoTradeModeGuard(
+  tradeMode: string | null | undefined,
+): { ok: true; env: 'demo' } | { ok: false; reason: string } {
+  const env = environmentFromBrokerTradeMode(tradeMode);
+  const raw = String(tradeMode ?? '').trim();
+  if (env === 'live' || raw.toUpperCase().includes('REAL')) {
+    return { ok: false, reason: `MetaAPI tradeMode=${raw || 'unknown'} is not demo — refuse` };
+  }
+  if (env !== 'demo') {
+    return { ok: false, reason: `MetaAPI tradeMode=${raw || 'unknown'} could not be confirmed as demo — refuse` };
+  }
+  return { ok: true, env: 'demo' };
+}
+
+export type BrokerIndexEntry = {
+  companionBrokerAccountId: string;
+  serverOrProvider?: string | null;
+};
+
+/**
+ * When both allowlists contain exactly one id, bind that Companion row to the
+ * allowlisted MetaAPI account. No guessing when either list is empty or has many ids.
+ */
+export function brokerBindingFromAllowlistEnv(accountId: string): BrokerIndexEntry | null {
+  const metaApiIds = parseIdList(process.env.AXE_TRADING_TEAM_ALLOWED_METAAPI_ACCOUNT_IDS);
+  const brokerIds = parseIdList(process.env.AXE_TRADING_TEAM_ALLOWED_BROKER_ACCOUNT_IDS);
+  if (metaApiIds.length === 1 && brokerIds.length === 1 && accountId === metaApiIds[0]) {
+    return { companionBrokerAccountId: brokerIds[0] };
+  }
+  return null;
+}
+
+/** Index Companion `user_broker_accounts` rows by MetaAPI `external_connection_id`. */
+export function indexCompanionBrokersByMetaApiId(
+  rows: Array<{
+    id?: string | null;
+    external_connection_id?: string | null;
+    mt5_server?: string | null;
+    server?: string | null;
+  }>,
+): Map<string, BrokerIndexEntry> {
+  const map = new Map<string, BrokerIndexEntry>();
+  for (const row of rows) {
+    const metaId = row.external_connection_id?.trim();
+    const id = row.id?.trim();
+    if (!metaId || !id) continue;
+    if (map.has(metaId)) continue;
+    map.set(metaId, {
+      companionBrokerAccountId: id,
+      serverOrProvider: row.mt5_server ?? row.server ?? null,
+    });
+  }
+  return map;
+}
+
+/**
+ * Map Core TradingAccount rows into allowlist candidates.
+ * companionBrokerAccountId comes from (1) the account row, (2) a Companion
+ * index keyed by MetaAPI id, (3) the 1:1 env allowlist binding — never guessed.
+ */
+export function candidatesFromTradingAccounts(
+  accounts: TradingAccount[],
+  brokerByMetaApiId?: ReadonlyMap<string, BrokerIndexEntry>,
+): CandidateAccount[] {
+  return accounts.map(a => {
+    const fromAccount = a.companionBrokerAccountId?.trim()
+      ? {
+          companionBrokerAccountId: a.companionBrokerAccountId.trim(),
+          serverOrProvider: a.serverOrProvider ?? null,
+        }
+      : null;
+    const fromIndex = brokerByMetaApiId?.get(a.accountId) ?? null;
+    const fromEnv = brokerBindingFromAllowlistEnv(a.accountId);
+    const bind = fromAccount ?? fromIndex ?? fromEnv;
+    return {
+      accountId: a.accountId,
+      label: a.label,
+      environment: a.environment ?? null,
+      region: a.region,
+      companionBrokerAccountId: bind?.companionBrokerAccountId ?? null,
+      serverOrProvider: bind?.serverOrProvider ?? a.serverOrProvider ?? null,
+    };
+  });
 }
