@@ -368,7 +368,7 @@ REPO_ALIAS = {"cloudflare-migration-2": "axe-companion", "companion": "axe-compa
 
 # Repos die AXE CORE's code-agent niet mag bouwen: ze horen bij een andere
 # manager. Trading OS zelf bouwt de Mac mini-bouwlus wél, in trading-os-app
-# op snapshot-2026-10-17, op Luka's CLI-stoelen. axe-trading-core blijft van
+# op main, op Luka's CLI-stoelen. axe-trading-core blijft van
 # `trading` — dat in de AXE-CORE-checkout zetten was 25-28 okt het gat.
 ANDERE_MANAGER_REPOS = {
     "axe-trading-core": "trading",
@@ -1290,7 +1290,7 @@ class Planner:
                 "id": (bouwljist.get("volgende") or {}).get("id"),
                 "titel": (bouwljist.get("volgende") or {}).get("titel"),
                 "bestand": "docs/BOUWLIJST.md",
-                "basis": "snapshot-2026-10-17",
+                "basis": bouw_publiceer.TRADING_OS_BASIS,
                 "repo": "Ldezeeuw445/trading-os-app",
             }
         if is_bouw_next_step(taak) and bewijs and bewijs.get("veranderd"):
@@ -1323,7 +1323,7 @@ class Planner:
         """Sluit de bouwlus-taak en zet een nieuwe klaar voor de eigenaar-manager.
 
         Niet bouwen in AXE CORE: axe-trading-core hoort bij `trading`. Trading OS
-        zelf blijft in deze lus (trading-os-app, snapshot-2026-10-17).
+        zelf blijft in deze lus (trading-os-app, main).
         """
         if not self._claim(taak["id"]):
             return {"taak": taak["id"], "overgeslagen": "al opgepakt"}

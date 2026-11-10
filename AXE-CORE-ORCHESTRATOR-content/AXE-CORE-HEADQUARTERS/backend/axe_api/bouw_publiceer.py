@@ -30,7 +30,7 @@ Twee gaten, gemeten op de Mac mini:
 ## Trading OS (28 okt, ná de drie gaten hierboven)
 
 Niet TRADING-AXE-OS / TRADING-OS / main. Canon: Ldezeeuw445/trading-os-app,
-basis snapshot-2026-10-17 (pull vóór elke run, PR daarheen, nooit main).
+basis main (pull vóór elke run, draft-PR daarheen; nooit direct op main committen).
 Taken uit docs/BOUWLIJST.md op die tak, in volgorde, wat [x] is overslaan.
 Nooit uitrollen, nooit migraties, nooit live orders. Draait op Luka's
 CLI-stoelen (Claude / ChatGPT / Cursor op mini en iMac), niet op Grok Bot.
@@ -177,15 +177,15 @@ def github_token(env: dict | None = None, run: Callable[..., subprocess.Complete
 
 BESCHERMD = {"main", "master"}
 TRADING_OS = "trading-os"
-TRADING_OS_BASIS = "snapshot-2026-10-17"
+TRADING_OS_BASIS = "main"
 TRADING_OS_REPO = "Ldezeeuw445/trading-os-app"
 TRADING_OS_TAKEN = "docs/BOUWLIJST.md"
 # Hardcoded naast de regels bovenaan BOUWLIJST.md: de lus mag dit niet "vergeten"
 # als het bestand ontbreekt of de kop verandert.
 TRADING_OS_GRENZEN = (
-    "HARD LIMITS (enforced by the build loop, not optional): never touch main or master; "
-    "never deploy; never apply migrations; never place live orders; never call a broker "
-    "or MetaAPI to execute. Work on the work branch. Open PRs into snapshot-2026-10-17."
+    "HARD LIMITS (enforced by the build loop, not optional): never commit directly on "
+    "main or master; never deploy; never apply migrations; never place live orders; "
+    "never call a broker or MetaAPI to execute. Work on the work branch. Open PRs into main."
 )
 CHECKBOX = re.compile(r"^\s*(?:[-*]|\d+[.)])\s+\[([ xX])\]\s+(.*)$")
 TAAK_ID = re.compile(
@@ -243,8 +243,8 @@ def ververs_werkbranch(git: Git, pad: str, branch: str, nu: datetime | None = No
     """Haal de basisbranch binnen voordat de lus verder bouwt. Gooit nooit.
 
     {"actie": "geen" | "gemerged" | "opnieuw", ...}; "opnieuw" noemt het archief.
-    `basis_naam` (bijv. snapshot-2026-10-17) wint van origin/HEAD. Trading OS mag
-    nooit main mergen, ook niet als GitHub die als default voert.
+    `basis_naam` (bijv. main) wint van origin/HEAD. Trading OS volgt nu main,
+    net als Companion en AXON: mergen van de basis, draft-PR daarheen.
     """
     verboden = set() if verboden is None else set(verboden)
     nooit_werk = BESCHERMD | {TRADING_OS_BASIS} | verboden
@@ -293,8 +293,8 @@ def ververs_werkbranch(git: Git, pad: str, branch: str, nu: datetime | None = No
 # sleutel; de checkout erachter kan verouderd zijn. 28 okt: "axon-memory" wees
 # naar een kloon van axon-memory-app, terwijl AXON sinds 17 okt in axon-memory
 # wordt gebouwd. 21 bouwruns gingen zo naar een repo waar niemand meer kijkt.
-# Trading OS: niet TRADING-AXE-OS / TRADING-OS / main — Ldezeeuw445/trading-os-app
-# op snapshot-2026-10-17, taken uit docs/BOUWLIJST.md.
+# Trading OS: niet TRADING-AXE-OS / TRADING-OS — Ldezeeuw445/trading-os-app
+# op main (niet meer de achterstallige snapshot-2026-10-17), taken uit docs/BOUWLIJST.md.
 # Alleen wat hier staat wordt afgedwongen; een onbekende naam blijft zoals hij is.
 # Waarde is "owner/repo" of {"repo", "basis", "taken"}.
 CANON = {
@@ -305,7 +305,6 @@ CANON = {
         "repo": TRADING_OS_REPO,
         "basis": TRADING_OS_BASIS,
         "taken": TRADING_OS_TAKEN,
-        "verboden": ("main", "master"),
     },
 }
 WERKBRANCH = "axe-agent"
@@ -325,13 +324,11 @@ def basis_voor(naam: str, canon: dict | None = None) -> str | None:
 
 
 def verboden_basis(naam: str, canon: dict | None = None) -> set[str]:
-    """Branches this app must never receive a PR. Empty for Companion/AXON (their
-    base is main). Trading OS: never main/master, only snapshot-2026-10-17."""
+    """Branches this app must never receive a PR. Empty for Companion, AXON and
+    Trading OS (their base is main). Direct commits on main/master stay blocked
+    by BESCHERMD in the work-branch helpers."""
     info = canon_info(naam, canon)
-    extra = set(info.get("verboden") or ())
-    if naam == TRADING_OS or (info.get("repo") or "") == TRADING_OS_REPO:
-        return set(BESCHERMD) | extra
-    return extra
+    return set(info.get("verboden") or ())
 
 
 def zorg_voor_canon(git: Git, naam: str, pad: str | None, *, werk_map: str, overrides_pad: str,
@@ -448,7 +445,7 @@ def zorg_voor_werkbranch(git: Git, pad: str, branch: str = WERKBRANCH,
     """Zet de checkout op de werkbranch, vanaf de basis. Nooit main.
 
     Staat hij al op de werkbranch, dan niets. Staat hij op main/master of op de
-    basis zelf (snapshot-2026-10-17), dan checkout -B vanaf origin/<basis>.
+    basis zelf, dan checkout -B vanaf origin/<basis>. De werkbranch is nooit main.
     Gooit nooit.
     """
     huidig = (git(pad, "rev-parse", "--abbrev-ref", "HEAD").stdout or "").strip()
@@ -459,9 +456,9 @@ def zorg_voor_werkbranch(git: Git, pad: str, branch: str = WERKBRANCH,
         beschermd.add(basis_naam)
     if huidig not in beschermd and huidig not in ("HEAD", "", "DETACHED"):
         return {"actie": "geen", "branch": huidig, "reden": "already on a work branch"}
+    if branch in BESCHERMD:
+        return {"actie": "geen", "reden": f"refusing to use {branch} as a work branch"}
     if basis_naam:
-        if basis_naam in BESCHERMD:
-            return {"actie": "geen", "reden": f"refusing to base work on {basis_naam}"}
         if git(pad, "fetch", "--quiet", "origin", basis_naam, timeout=180).returncode != 0:
             return {"actie": "geen", "reden": f"fetch {basis_naam} failed"}
         bron = f"origin/{basis_naam}"
@@ -529,11 +526,11 @@ def volgende_bouwljist_in(pad: str, rel: str = TRADING_OS_TAKEN) -> dict:
 
 
 def trading_os_prompt(bouwljist: dict | None) -> str:
-    """Opdracht voor één Trading OS-bouwrun: canon-repo, snapshot, BOUWLIJST, grenzen."""
+    """Opdracht voor één Trading OS-bouwrun: canon-repo, basis main, BOUWLIJST, grenzen."""
     delen = [
         f"Repo: {TRADING_OS_REPO} (not TRADING-AXE-OS / TRADING-OS).",
         f"Base branch: {TRADING_OS_BASIS}. Pull it before you start. Open the PR into that "
-        "branch, never into main.",
+        "branch. Never commit directly on main or master.",
         TRADING_OS_GRENZEN,
     ]
     if bouwljist and bouwljist.get("regels"):
