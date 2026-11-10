@@ -37,6 +37,25 @@ meld() {
         -H @- -H "Content-Type: application/json" -H "Prefer: return=minimal" -d "$body" || true
 }
 
+# Wacht hij langer dan een uur om dezelfde reden, dan één melding in AXE, zodat
+# het ook op afstand te zien is (10 nov: een release bleef stil hangen).
+WACHT="$HOME/.axe/tradingos-release-wacht"
+meld_wacht() {  # $1 = reden
+  mkdir -p "$WACHT"
+  local nu sinds
+  nu="$(date +%s)"
+  if [[ "$(cat "$WACHT/reden" 2>/dev/null)" != "$1" ]]; then
+    printf '%s' "$1" > "$WACHT/reden"; printf '%s' "$nu" > "$WACHT/sinds"; rm -f "$WACHT/gemeld"
+    return
+  fi
+  sinds="$(cat "$WACHT/sinds" 2>/dev/null || echo "$nu")"
+  if (( nu - sinds >= 3600 )) && [[ "$(cat "$WACHT/gemeld" 2>/dev/null)" != "$1" ]]; then
+    meld warning "Trading OS release waits for $(( (nu - sinds) / 3600 ))h on $(scutil --get LocalHostName 2>/dev/null || hostname -s): $1. tradingosapp.com stays on ${LIVE:-the previous version}."
+    printf '%s' "$1" > "$WACHT/gemeld"
+  fi
+}
+niet_meer_wacht() { rm -rf "$WACHT"; }
+
 [[ -f "$HOME/.axe/tradingos-release-uit" ]] && exit 0
 [[ -f "$PLIST" && -d "$REPO/.git" && -f "$REPO/scripts/release-mac.sh" ]] || exit 0
 
@@ -57,6 +76,7 @@ MERKER="$DOEL ${ZELF:-?}"
 if [[ -n "$(git -C "$REPO" status --porcelain --untracked-files=no)" ]]; then
   # Er wordt in die checkout gewerkt; release-mac.sh zou toch weigeren.
   log "main is $DOEL, live is ${LIVE:-?}, maar $REPO heeft open wijzigingen — gewacht"
+  meld_wacht "uncommitted changes in $REPO ($(git -C "$REPO" status --porcelain --untracked-files=no | head -3 | awk '{print $2}' | tr '\n' ' ')). Fix: git -C $REPO status, then commit, stash or git checkout -- ."
   exit 0
 fi
 
@@ -66,6 +86,7 @@ if [[ "${TRADINGOS_NU:-0}" != "1" && "${STIL:-0}" -lt 300 ]]; then
   exit 0
 fi
 
+niet_meer_wacht
 log "live is ${LIVE:-onbekend}, main is $DOEL — release (laagste prioriteit)"
 # Alleen nice, geen taskpolicy -b: achtergrond-QoS knijpt de CPU zo hard dat de
 # tests in release-mac.sh op hun tijdslimiet kunnen stuklopen. Luka is toch 5 min weg.
@@ -75,6 +96,7 @@ PRIO=(nice -n 15)
 RUN="$(mktemp "${TMPDIR:-/tmp}/tradingos-release.XXXXXX")"
 if (cd "$REPO" && ${PRIO[@]+"${PRIO[@]}"} env -i HOME="$HOME" USER="${USER:-}" LOGNAME="${USER:-}" SHELL=/bin/zsh \
       TMPDIR="${TMPDIR:-/tmp}" PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+      /usr/bin/perl -e 'alarm shift @ARGV; exec @ARGV or die "exec: $!"' "${TRADINGOS_RELEASE_MAX_S:-2700}" \
       /bin/bash scripts/release-mac.sh) > "$RUN" 2>&1; then
   cat "$RUN" >> "$LOG"; rm -f "$RUN"
   rm -f "$MISLUKT"
@@ -87,6 +109,9 @@ else
   # die gaan mee in de melding, zodat het ook op afstand te zien is. Het script
   # print alleen namen van variabelen, nooit waarden.
   STAART="$(grep -v '^[[:space:]]*$' "$RUN" | tail -n 8 | cut -c1-200 | tr '\n' ' ' )"
+  # Een stap die blijft hangen (bijv. een keychain-vraag die niemand ziet) wordt
+  # na 45 min afgebroken; de laatste regels laten zien welke stap het was.
+  [[ "$(wc -c < "$RUN" 2>/dev/null || echo 0)" -gt 0 ]] || STAART="(no output; stopped after ${TRADINGOS_RELEASE_MAX_S:-2700}s or died at start)"
   rm -f "$RUN"
   echo "$MERKER" > "$MISLUKT"
   log "release van $DOEL MISLUKT — zie hierboven; de vorige versie blijft live"
