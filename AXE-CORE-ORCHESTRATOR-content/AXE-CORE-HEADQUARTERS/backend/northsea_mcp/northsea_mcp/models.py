@@ -316,6 +316,17 @@ class TaskResult(BaseModel):
     updated_at: str | None = None
 
 
+class DeskTidyResult(BaseModel):
+    """northsea_tidy_desk: wat vanzelf kon, welke voorstellen er liggen, en wat er nu gebeurde."""
+    dry_run: bool
+    automatic: list[dict[str, Any]]
+    proposals: list[dict[str, Any]]
+    applied: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    never: str = ("Never sends, approves, accepts prices/terms/contracts or introduces parties; "
+                  "only dismisses inbound reviews, rejects unsent drafts and cancels queue items, each audited with its previous value.")
+
+
 class DraftApprovalResult(BaseModel):
     draft_id: str
     approval_status: str

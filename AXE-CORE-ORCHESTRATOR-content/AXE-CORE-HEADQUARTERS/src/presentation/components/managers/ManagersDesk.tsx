@@ -34,6 +34,7 @@ import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar'
 import { syncManagerDraad, managerGelezen, MANAGER_DRAAD_EVT } from '@/infrastructure/persistence/managerDraadSync';
 import { GESPREK_CONTEXT } from '@/domain/tierRouter/agentDraad';
 import { laatManagerAntwoorden } from '@/application/managers/managerAntwoord';
+import { northseaOpruimenOk } from '@/infrastructure/gateways/axeCoreApiService';
 import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { startAxeJobs } from '@/presentation/store/installTierRouter';
@@ -288,6 +289,23 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
         return;
       }
       handoff(agent.id, target, tekst);
+      return;
+    }
+
+    // NorthSea: "ok V1" / "ok alles" voert dat opruimvoorstel uit. Alleen
+    // wegzetten; versturen en goedkeuren kan deze weg niet. Herkent de server
+    // het niet, dan gewoon het gesprek.
+    if (agent.id === 'northseamgr' && /^\s*(ok|oke|oké|okay|ja|yes|akkoord|doe maar)\b/i.test(tekst)
+        && /\b(v\s*\d{1,2}|alles|allemaal|all)\b/i.test(tekst)) {
+      void northseaOpruimenOk(tekst).then((r) => {
+        if (r.herkend) {
+          void syncManagerDraad(alleIds).then(() => tick((n) => n + 1));
+          return;
+        }
+        void laatManagerAntwoorden(agent.id, tekst, (actie) => startManagerJob(agent.id, actie, { device: job?.device ?? null, tab: job?.tab }));
+      }).catch(() => {
+        void laatManagerAntwoorden(agent.id, tekst, (actie) => startManagerJob(agent.id, actie, { device: job?.device ?? null, tab: job?.tab }));
+      });
       return;
     }
 

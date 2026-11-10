@@ -2037,3 +2037,8 @@ export async function schrijfManagerBericht(body: {
 export async function markeerManagerGelezen(agent: string): Promise<{ ok: boolean }> {
   return call('POST', '/managers/thread/read', { agent });
 }
+
+/** "ok V1" bij de NorthSea Manager: dat opruimvoorstel uitvoeren (backend/axe_api/northsea_opruimen.py). */
+export async function northseaOpruimenOk(tekst: string): Promise<{ herkend: boolean; uitgevoerd?: string[]; tekst?: string }> {
+  return call('POST', '/northsea/opruimen', { tekst });
+}

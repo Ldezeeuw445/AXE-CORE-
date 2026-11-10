@@ -3529,6 +3529,22 @@ async def managers_thread_read(body: dict):
     return {"ok": True}
 
 
+class NorthSeaOpruimen(BaseModel):
+    tekst: str
+
+
+@app.post("/northsea/opruimen", dependencies=[AUTH])
+async def northsea_opruimen_ok(body: NorthSeaOpruimen):
+    """Luka zei in de chat "ok V1": precies dat opruimvoorstel uitvoeren (northsea_opruimen.py).
+
+    Alleen wegzetten; versturen en goedkeuren kan deze weg niet."""
+    import northsea_opruimen as _no
+    codes = _no.codes_uit(body.tekst)
+    if not codes:
+        return {"herkend": False}
+    return {"herkend": True, **await asyncio.to_thread(_no.voer_uit, sb(), codes)}
+
+
 class VoiceClaim(BaseModel):
     device_id: str
     device_name: Optional[str] = None

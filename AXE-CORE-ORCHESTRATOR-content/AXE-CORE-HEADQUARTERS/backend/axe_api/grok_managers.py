@@ -693,6 +693,15 @@ def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any
     for b in voor_luka:
         _vraag_luka(db, "northseamgr", b.titel, b.detail)
 
+    # Opruimen + voorstellen (10 nov): één keer per dag, na het dagoverzichtsuur.
+    opruimen: dict[str, Any] = {}
+    if _dagoverzicht_tijd(nu):
+        try:
+            import northsea_opruimen
+            opruimen = northsea_opruimen.dagelijks(db, nu)
+        except Exception as exc:  # noqa: BLE001 -- opruimen mag de pulse nooit breken
+            opruimen = {"fout": str(exc)[:200]}
+
     overzicht = False
     if _dagoverzicht_tijd(nu):
         try:
@@ -721,6 +730,7 @@ def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any
         "dagoverzicht": overzicht,
         "mailduidingen": duidingen,
         "chat": chat,
+        "opruimen": opruimen,
         "sent": 0,
         "flags": "untouched",
     }

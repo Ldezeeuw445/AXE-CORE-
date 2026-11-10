@@ -57,19 +57,26 @@ def bericht(gedaan: Iterable[str] = (), gezien: Iterable[str] = (), nodig: Itera
     return "\n\n".join(delen) if delen else _zin(rustig)
 
 
-def _laatste_aan_luka(db: Any, agent: str) -> str | None:
+RECENT = 4
+
+
+def _recent_aan_luka(db: Any, agent: str) -> list[str]:
     try:
         rijen = (db.table("core_manager_messages").select("body").eq("from_agent", agent).eq("to_agent", LUKA)
-                 .order("created_at", desc=True).limit(1).execute().data) or []
+                 .order("created_at", desc=True).limit(RECENT).execute().data) or []
     except Exception:  # noqa: BLE001
-        return None
-    return (rijen[0].get("body") or "").strip() if rijen else None
+        return []
+    return [(r.get("body") or "").strip() for r in rijen]
 
 
 def vertel_luka(db: Any, agent: str, tekst: str) -> bool:
-    """Eén chatbericht van de manager aan Luka, alleen als het iets nieuws zegt."""
+    """Eén chatbericht van de manager aan Luka, alleen als het iets nieuws zegt.
+
+    Tegen zijn laatste paar berichten, niet alleen het laatste: anders stuurt hij
+    zijn stand opnieuw zodra er een ander bericht (zoals het dagelijkse
+    opruimen) tussen kwam."""
     tekst = (tekst or "").strip()[:MAX_LENGTE]
-    if not tekst or _laatste_aan_luka(db, agent) == tekst:
+    if not tekst or tekst in _recent_aan_luka(db, agent):
         return False
     try:
         db.table("core_manager_messages").insert({

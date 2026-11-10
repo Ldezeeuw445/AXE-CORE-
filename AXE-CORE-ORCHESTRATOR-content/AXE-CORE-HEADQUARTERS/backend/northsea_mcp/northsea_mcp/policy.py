@@ -81,6 +81,8 @@ TOOLS: dict[str, ToolPolicy] = {p.name: p for p in (
     ToolPolicy("northsea_prepare_legal_document", Risk.DRAFT, ("northsea.communications.draft", "northsea.identity")),
     ToolPolicy("northsea_create_task", Risk.LOW_RISK_WRITE, ("northsea.deal.write",), needs_idempotency_key=True),
     ToolPolicy("northsea_update_task", Risk.LOW_RISK_WRITE, ("northsea.deal.write",), needs_idempotency_key=True),
+    # Opruimen (10 nov): alleen wegzetten, nooit versturen of goedkeuren (opruimen.py).
+    ToolPolicy("northsea_tidy_desk", Risk.LOW_RISK_WRITE, ("northsea.deal.write",), needs_idempotency_key=True),
     ToolPolicy("northsea_approve_draft", Risk.HIGH_IMPACT_WRITE, ("northsea.admin",), needs_idempotency_key=True),
     ToolPolicy("northsea_send_approved_communication", Risk.HIGH_IMPACT_WRITE,
                ("northsea.communications.send",), needs_idempotency_key=True),

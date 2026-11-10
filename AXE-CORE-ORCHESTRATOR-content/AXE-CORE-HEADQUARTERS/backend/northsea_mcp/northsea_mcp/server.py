@@ -44,7 +44,7 @@ from .crew import CrewGateway, StudioRoute
 from .discovery import DiscoveryService
 from .engine import EngineService
 from .models import (
-    BlockerInvestigation, CandidateSearch, CounterpartyResearch, DealReview, DraftApprovalResult, LegalDocumentDraft,
+    BlockerInvestigation, CandidateSearch, CounterpartyResearch, DealReview, DeskTidyResult, DraftApprovalResult, LegalDocumentDraft,
     MatchAssessmentResult, NextActions, OutreachDraft, QualificationResult, ReplyAnalysis, SendResult, TaskResult,
 )
 from .oauth import NorthSeaTokenVerifier, OAuthServer, client_ip
@@ -272,6 +272,13 @@ DESCRIPTIONS = {
     "northsea_update_task": (
         "Update status, due date, priority or result note of an existing NorthSea deal task. Requires task_id and idempotency_key. "
         "Closed tasks cannot be reopened; completing an approval-required task needs northsea.admin. Low-risk write."),
+    "northsea_tidy_desk": (
+        "Tidy the Deal Desk. dry_run=true (default) only returns the plan: 'automatic' (noise inbound reviews, exact duplicate "
+        "unsent drafts, queue items that duplicate a desk task) and numbered 'proposals' (V1 inbound reviews older than 30 days "
+        "not tied to a deal awaiting Luka's decision, V2 unsent drafts older than 21 days, V3 research stuck on budget). "
+        "dry_run=false applies 'auto' and/or the proposal codes in `apply` (proposals only after Luka said ok). Only dismisses "
+        "inbound reviews, rejects unsent drafts and cancels queue items, each audited with its previous value. NEVER sends, "
+        "approves, accepts prices/terms/contracts or introduces parties. Low-risk write."),
     "northsea_approve_draft": (
         "Record a HUMAN approval for a pending reply draft. Only call this when the user explicitly says they reviewed and approve "
         "that exact draft. Requires draft_id and idempotency_key and the northsea.admin scope. Sensitive drafts (identity, "
@@ -454,6 +461,16 @@ def register_tools(mcp: MCPServer, service: NorthSeaService, guard: Guard) -> No
                     due_at=due_at, requires_approval=requires_approval, owner=owner)
         return await guard.run("northsea_create_task", {"opportunity_id": opportunity_id},
                                lambda c: service.create_task(c, **args), TaskResult, idempotency_key=idempotency_key, args=args)
+
+    @mcp.tool(name="northsea_tidy_desk", title="Tidy deal desk", description=DESCRIPTIONS["northsea_tidy_desk"],
+              annotations=_ann("Tidy deal desk", Risk.LOW_RISK_WRITE, False), structured_output=True)
+    async def tidy_desk(idempotency_key: Key,
+                        dry_run: bool = True,
+                        apply: Annotated[list[Annotated[str, Field(pattern=r"^(?i:auto|V[0-9]{1,2})$")]] | None,
+                                         Field(max_length=10)] = None) -> DeskTidyResult:
+        args = dict(dry_run=dry_run, apply=apply or [])
+        return await guard.run("northsea_tidy_desk", {},
+                               lambda c: service.tidy_desk(c, **args), DeskTidyResult, idempotency_key=idempotency_key, args=args)
 
     @mcp.tool(name="northsea_update_task", title="Update deal task", description=DESCRIPTIONS["northsea_update_task"],
               annotations=_ann("Update deal task", Risk.LOW_RISK_WRITE, False), structured_output=True)

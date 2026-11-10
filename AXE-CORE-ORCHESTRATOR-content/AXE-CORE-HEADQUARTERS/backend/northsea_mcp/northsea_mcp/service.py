@@ -37,7 +37,7 @@ from . import orchestration
 from .crew import PROHIBITED, CrewGateway
 from .models import (
     Blocker, BlockerInvestigation, CandidateSearch, CandidateView, Claim, CounterpartyResearch, CrewRunInfo,
-    DealReview, DedupeSummary, DraftApprovalResult, GateState, LegalDocumentDraft, MatchAssessmentResult, NextActions,
+    DealReview, DedupeSummary, DeskTidyResult, DraftApprovalResult, GateState, LegalDocumentDraft, MatchAssessmentResult, NextActions,
     OutreachDraft, PartyView, QualificationResult, RankedAction, ReplyAnalysis, ResearchRun, SendResult, SourceRef, TaskResult,
 )
 from .policy import PolicyDenied, check_sensitive_draft, is_sensitive_text, may_see_identity
@@ -1635,6 +1635,43 @@ class NorthSeaService:
                                                "metadata": {"task_id": taak["id"], "status": patch.get("status")}})
         return TaskResult(task_id=rij["id"], opportunity_id=rij.get("opportunity_id"), status=rij.get("status") or "", title=rij.get("title") or "",
                           created=False, updated_at=rij.get("updated_at"))
+
+    async def tidy_desk(self, caller: Caller, *, apply: list[str] | None = None, dry_run: bool = True) -> DeskTidyResult:
+        """Opruimen + voorstellen (opruimen.py). apply: "auto" en/of voorstelcodes ("V1")."""
+        from .opruimen import maak_plan, plan_als_dict
+        tabellen = {}
+        for t in ("email_intelligence", "reply_drafts", "action_queue", "deal_tasks", "opportunities"):
+            tabellen[t], _ = await self.repo.fetch_all(t)
+        plan = maak_plan(tabellen, now())
+        uit = plan_als_dict(plan)
+        if dry_run:
+            return DeskTidyResult(dry_run=True, **uit)
+        kies = {c.strip().upper() for c in (apply or [])}
+        stappen = [("auto", s) for s in plan.automatisch] if "AUTO" in kies else []
+        stappen += [(v.code, s) for v in plan.voorstellen if v.code in kies for s in v.stappen]
+        gedaan, overgeslagen = [], []
+        for bron, stap in stappen:
+            body: dict[str, Any] = {stap.veld: stap.nieuw, "updated_at": now().isoformat()}
+            if stap.tabel == "reply_drafts":
+                body["lifecycle_state"] = "rejected"
+            try:
+                rijen = await self.repo.engine_patch(stap.tabel, {"id": f"eq.{stap.id}"}, body)
+            except Exception as e:  # noqa: BLE001 -- een rij die niet lukt stopt de rest niet
+                overgeslagen.append({"id": stap.id, "table": stap.tabel, "reason": str(e)[:160]})
+                continue
+            if not rijen:
+                overgeslagen.append({"id": stap.id, "table": stap.tabel, "reason": "not found"})
+                continue
+            gedaan.append({"id": stap.id, "table": stap.tabel, "set": {stap.veld: stap.nieuw}, "was": stap.oud,
+                           "source": bron, "label": stap.label})
+            try:
+                await self.repo.engine_insert("northsea_audit_events", {
+                    "actor_type": "automation", "actor": f"mcp:{caller.client_id}"[:100], "action": "desk_tidy",
+                    "details": {"table": stap.tabel, "id": stap.id, "field": stap.veld, "from": stap.oud, "to": stap.nieuw,
+                                "reason": stap.reden, "source": bron, "principal": caller.principal}})
+            except Exception:  # noqa: BLE001 -- audit mag het opruimen niet tegenhouden
+                pass
+        return DeskTidyResult(dry_run=False, applied=gedaan, skipped=overgeslagen, **uit)
 
     async def approve_draft(self, caller: Caller, *, draft_id: str, expected_updated_at: str | None = None) -> DraftApprovalResult:
         d = await self.repo.get_draft(draft_id)
