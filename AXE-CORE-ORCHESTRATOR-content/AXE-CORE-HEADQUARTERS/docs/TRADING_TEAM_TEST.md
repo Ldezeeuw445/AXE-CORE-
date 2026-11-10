@@ -41,7 +41,7 @@ Each cycle re-checks MetaAPI `account-information.tradeMode` and refuses anythin
 /Users/luka/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/scripts/trading-team-cycle.sh
 ```
 
-If the checkout moves, update `core_schedules.action_payload.command` for `axe_core:trading-team-test-15m-mac` to the new path. Logs: `~/Library/Logs/axe-trading-team-cycle.log`. The runner refuses to start unless both allowlist ids resolve to the 500k demo and a live MetaAPI tradeMode check returns DEMO.
+If the checkout moves, update `core_schedules.action_payload.command` for `axe_core:trading-team-test-15m-mac` to the new path. Logs: `~/Library/Logs/axe-trading-team-cycle.log`. The shell exports `AXE_TRADING_TEAM_*` from Headquarters `.env` so values inherited from a long-running API process cannot pin `AUTO_EXECUTE=0`. The runner refuses to start unless both allowlist ids resolve to the 500k demo and a live MetaAPI tradeMode check returns DEMO.
 
 Headless entry: `scripts/trading-team-cycle.sh` → `scripts/trading-team-cycle.mts` (`vite-node`, cwd = Headquarters). Inspect only: `vite-node scripts/trading-team-cycle.mts` (no `--run`).
 

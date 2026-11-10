@@ -8,6 +8,13 @@ export PORT="${PORT:-5000}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LOG="${AXE_TRADING_TEAM_CYCLE_LOG:-$HOME/Library/Logs/axe-trading-team-cycle.log}"
 cd "$ROOT"
+# The Mac API process may have been started with an older AUTO_EXECUTE value
+# in its environment. Vite does not override existing process.env from .env,
+# so an inherited 0 would silently skip demo orders. Export only the Trading
+# Team keys from Headquarters .env (values are never printed).
+if [[ -f "$ROOT/.env" ]]; then
+  eval "$(python3 "$ROOT/scripts/_trading-team-export-env.py")"
+fi
 mkdir -p "$(dirname "$LOG")"
 {
   echo "==== $(date '+%Y-%m-%d %H:%M:%S %Z') ===="
