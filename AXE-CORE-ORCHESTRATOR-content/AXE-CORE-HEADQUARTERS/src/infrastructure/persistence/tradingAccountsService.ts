@@ -50,6 +50,10 @@ export interface TradingAccount {
   token: string;
   accountId: string;
   region: MetaApiRegion;
+  /** Companion `user_broker_accounts.id` when this MetaAPI account is linked there. */
+  companionBrokerAccountId?: string | null;
+  /** Broker server / provider label, e.g. MetaQuotes-Demo. */
+  serverOrProvider?: string | null;
   /** Marked for trading. Every enabled account gets its own full decision. */
   enabled: boolean;
   /**

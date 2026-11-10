@@ -25,14 +25,25 @@ Without env IDs, the module accepts exactly one Core account whose label matches
 
 ## Switch on
 
-1. Apply migration `supabase/migrations/20261029233000_core_trading_team.sql` (creates `core_trading_team_runs` + disabled cron `axe_core:trading-team-test-15m`).
-2. Set allowlist env on the Core/desktop host that runs cycles.
-3. Open Trading Intel → **Team** tab → **Run cycle** (or enable the `core_schedules` row once a webhook path exists).
+1. Apply migrations `supabase/migrations/20261029233000_core_trading_team.sql` (creates `core_trading_team_runs` + disabled VPS webhook `axe_core:trading-team-test-15m`) and `supabase/migrations/20261110144500_trading_team_mac_schedule.sql` (Mac exec job `axe_core:trading-team-test-15m-mac`, inserted enabled if missing).
+2. Set allowlist env on the Core/desktop host that runs cycles (exactly the 500k demo MetaAPI + Companion broker ids). `AXE_TRADING_TEAM_AUTO_EXECUTE=1` only for demo fills.
+3. Open Trading Intel → **Team** tab → **Run cycle**, or let the Mac 15-minute job run the in-repo script.
 4. Watch rows in Core Team tab and Companion `/trading-team`. Demo fills appear on the 500k account after MT5 sync.
+
+Each cycle re-checks MetaAPI `account-information.tradeMode` and refuses anything that is not DEMO (the allowlist alone is not enough). `candidatesFromTradingAccounts()` maps `user_broker_accounts.id` via the account row, a Companion index, or the 1:1 env binding so the desktop tab passes the broker allowlist.
 
 ## Cron
 
-Schedule row is inserted **disabled**. Enable only after allowlist env is set. Action type `webhook` / job_key `axe_core:trading-team-test-15m`.
+- **Do not enable** `axe_core:trading-team-test-15m` (VPS webhook). It has no `url` and Core has no `/trading-team/run` handler.
+- **Use** `axe_core:trading-team-test-15m-mac`: executor `mac`, action `exec`, cron `*/15 * * * *` `Europe/Amsterdam`. The command must be the in-repo script on the canonical Mac checkout:
+
+```
+/Users/luka/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/scripts/trading-team-cycle.sh
+```
+
+If the checkout moves, update `core_schedules.action_payload.command` for `axe_core:trading-team-test-15m-mac` to the new path. Logs: `~/Library/Logs/axe-trading-team-cycle.log`. The shell exports `AXE_TRADING_TEAM_*` from Headquarters `.env` so values inherited from a long-running API process cannot pin `AUTO_EXECUTE=0`. The runner refuses to start unless both allowlist ids resolve to the 500k demo and a live MetaAPI tradeMode check returns DEMO.
+
+Headless entry: `scripts/trading-team-cycle.sh` → `scripts/trading-team-cycle.mts` (`vite-node`, cwd = Headquarters). Inspect only: `vite-node scripts/trading-team-cycle.mts` (no `--run`).
 
 ## Strategy: Gold ORB 1AM NY
 
