@@ -23,6 +23,12 @@ export default defineConfig({
   test: {
     environment: 'node',
     // supabase/functions/: draait niet in de app, maar hoort getest.
-    include: ['src/**/*.{test,spec}.{ts,tsx}', 'supabase/functions/**/*.test.ts'],
+    include: [
+      'src/**/*.{test,spec}.{ts,tsx}',
+      'supabase/functions/**/*.test.ts',
+      // Guard-scripts leven buiten src/; zonder deze regel draait hun test
+      // niet in `npx vitest run` en kan Pages weer stuk zonder dat de suite het ziet.
+      'scripts/check-web-supabase-env.test.ts',
+    ],
   },
 });
