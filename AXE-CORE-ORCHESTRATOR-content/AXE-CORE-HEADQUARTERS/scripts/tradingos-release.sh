@@ -73,6 +73,10 @@ ZELF="$(shasum "${BASH_SOURCE[0]}" 2>/dev/null | cut -c1-12 || true)"
 MERKER="$DOEL ${ZELF:-?}"
 [[ "$(cat "$MISLUKT" 2>/dev/null)" == "$MERKER" ]] && exit 0
 
+# De Supabase CLI herschrijft supabase/.temp/* bij elke run. Tot 10 nov stonden
+# die in git, en dan leek de checkout 'vuil' en weigerde release-mac.sh. Terugzetten
+# is veilig: het zijn geen bestanden van iemand.
+git -C "$REPO" checkout -q -- supabase/.temp 2>/dev/null || true
 if [[ -n "$(git -C "$REPO" status --porcelain --untracked-files=no)" ]]; then
   # Er wordt in die checkout gewerkt; release-mac.sh zou toch weigeren.
   log "main is $DOEL, live is ${LIVE:-?}, maar $REPO heeft open wijzigingen — gewacht"
@@ -87,6 +91,10 @@ if [[ "${TRADINGOS_NU:-0}" != "1" && "${STIL:-0}" -lt 300 ]]; then
 fi
 
 niet_meer_wacht
+# Eerst bijwerken, zodat de release-mac.sh die draait die van main is en niet
+# een oudere die nog op schijf staat (10 nov: de oude deployde intel-proxy niet).
+git -C "$REPO" checkout -q main 2>/dev/null && git -C "$REPO" merge -q --ff-only origin/main 2>/dev/null \
+  || log "kon $REPO niet naar origin/main brengen; release-mac.sh probeert het zelf"
 log "live is ${LIVE:-onbekend}, main is $DOEL — release (laagste prioriteit)"
 # Alleen nice, geen taskpolicy -b: achtergrond-QoS knijpt de CPU zo hard dat de
 # tests in release-mac.sh op hun tijdslimiet kunnen stuklopen. Luka is toch 5 min weg.
