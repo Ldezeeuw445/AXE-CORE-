@@ -4758,12 +4758,14 @@ async def run_always_awake_jobs() -> None:
             await _ingest_unusual_whales()
     except Exception as e:
         logging.warning(f"[always_awake] intel ingest failed: {e}")
-    # NorthSea-mail: elke tik, niet elk kwartier. Een getekende NCNDA hoort binnen
-    # een minuut op Luka's slotscherm (6 nov); de pushronde hierna in dezelfde tik
-    # stuurt hem meteen door. Begrensd, zodat een trage gateway de tik niet ophoudt.
+    # NorthSea-mail: eens per NORTHSEA_MAILWACHTER_INTERVAL_MIN (standaard 5).
+    # Elke tik (6 nov) hamerde de zeven inbound-tabellen; 10 nov lag Commodities.
+    # Vijf minuten, niet vijftien: een getekende NCNDA hoort snel op het slotscherm.
     try:
         import northsea_mailwachter
-        await asyncio.wait_for(northsea_mailwachter.ronde(sb(), _claim_job_run), timeout=25)
+        nu = datetime.now(timezone.utc)
+        if northsea_mailwachter.mag_ronde(_claim_job_run, nu):
+            await asyncio.wait_for(northsea_mailwachter.ronde(sb(), _claim_job_run, nu), timeout=25)
     except Exception as e:
         logging.warning(f"[always_awake] northsea mail failed: {e}")
     try:

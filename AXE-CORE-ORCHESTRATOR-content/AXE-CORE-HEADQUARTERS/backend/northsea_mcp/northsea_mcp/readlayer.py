@@ -15,8 +15,11 @@ Deze module geeft lijsten, details, rapporten en de canonieke dashboardcijfers.
   Center leest (backend/axe_api/northsea.py). Er is geen MCP-eigen staat.
 - Tellen, "actief", "geblokkeerd", routes en AXE Chase gaan via canon.py, een
   port van de TypeScript-regels met gedeelde pariteitstests.
-- De dataset is klein (honderden rijen), dus de tabellen worden in hun geheel
-  geladen en 30 seconden bewaard, net als het dashboard. Filteren en pagineren
+- De dataset is klein (honderden rijen), dus de tabellen worden één keer
+  geladen en daarna incrementeel bijgewerkt (cursor op updated_at). De
+  samengestelde snapshot blijft 10 minuten staan; 30 seconden was te kort:
+  system_health(fresh=True) plus de mailwachter vroegen de hele desk elke
+  minuut op, en 10 nov lag AXE Commodities plat. Filteren en pagineren
   gebeurt daarna in Python. Zo kan een gefilterde lijst nooit een andere
   definitie hanteren dan het totaal. Een tabel boven 5000 rijen wordt gemeld als
   afgekapt, nooit stil.
@@ -32,6 +35,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 import time
 from collections import Counter
@@ -39,10 +43,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterable
 
 from . import canon
+from .leescache import GELIJKTIJDIG as GELIJKTIJDIG, haal_tabellen
 from .repository import SNAPSHOT_SELECT, RepositoryError, SupabaseRepository, UUID
 from .service import Caller, NotFound, Redactor, ServiceError
 
-CACHE_S = 30.0
+CACHE_S = 600.0  # 10 min; 30 s was te kort (10 nov: volle desk elke tik)
 MAX_LIMIT = 100
 GATES = ("buyer", "seller", "commercial", "evidence", "protection", "introduction", "transaction", "fulfilment", "settlement")
 GATE_CODES = {g: f"G{i}" for i, g in enumerate(GATES, 1)}
@@ -50,15 +55,10 @@ log = logging.getLogger("northsea_mcp.readlayer")
 
 CORE_TABLES = ("opportunities", "companies", "buyer_requirements", "supplier_offers")
 
-# Zoveel tabellen tegelijk, niet meer. 8 nov: elke snapshot vuurde ruim 30
-# verzoeken tegelijk af (23 tabellen, de grote in pagina's) en de mailwachter
-# vroeg er elke minuut één. De PostgREST-pool van AXE Commodities telt maar een
-# handvol verbindingen; de rest wachtte, liep tegen de statement-timeout en de
-# hele database leek urenlang plat (13:25-14:30 en eerder in golven).
-GELIJKTIJDIG = 4
-
 # Wat een lijst met inkomende mail echt nodig heeft (communication_summary).
 # Niet deal_events of het auditlog: die twee waren samen 10 van de 31 verzoeken.
+# fetch_all is daarna incrementeel; de mailwachter zelf draait hooguit eens per
+# NORTHSEA_MAILWACHTER_INTERVAL_MIN (standaard 5).
 INBOUND_TABLES = ("communications", "email_intelligence", "call_intelligence", "reply_drafts",
                   "companies", "contacts", "opportunities")
 OPEN_TASK = ("open", "waiting", "in_progress")
@@ -95,6 +95,16 @@ def _lower(v: Any) -> str:
     return v.strip().lower() if isinstance(v, str) else ""
 
 
+def snapshot_ttl_s(env: dict[str, str] | None = None) -> float:
+    """5–15 min; buiten dat bereik klemmen we, geen tweede default-pad."""
+    raw = (env or os.environ).get("NORTHSEA_SNAPSHOT_TTL_S", str(int(CACHE_S)))
+    try:
+        n = float(raw)
+    except (TypeError, ValueError):
+        n = CACHE_S
+    return max(300.0, min(n, 900.0))
+
+
 def _since(v: str | None) -> float | None:
     if not v:
         return None
@@ -122,12 +132,12 @@ class Snapshot:
 
 class InspectService:
     def __init__(self, repo: SupabaseRepository, *, crew: Any = None, research: Any = None, auditor: Any = None,
-                 cache_s: float = CACHE_S):
+                 cache_s: float | None = None):
         self.repo = repo
         self.crew = crew
         self.research = research
         self.auditor = auditor  # optioneel: alleen voor observability (scheduler-status lezen), zie system_health()
-        self.cache_s = cache_s
+        self.cache_s = CACHE_S if cache_s is None else cache_s
         self._snap: Snapshot | None = None
         self._t = 0.0
         self._lock = asyncio.Lock()
@@ -135,12 +145,25 @@ class InspectService:
 
     # ── Laden ────────────────────────────────────────────────────────────────
     async def _lees(self, namen: list[str]) -> list[Any]:
-        rem = asyncio.Semaphore(GELIJKTIJDIG)
+        return await haal_tabellen(self.repo, namen, return_exceptions=True)
 
-        async def een(naam: str):
-            async with rem:
-                return await self.repo.fetch_all(naam)
-        return await asyncio.gather(*(een(n) for n in namen), return_exceptions=True)
+    def laatste_snapshot(self) -> Snapshot | None:
+        """Wat er al in het geheugen zit. Nooit een fetch — system_health mag dit alleen."""
+        return self._snap
+
+    async def database_ping(self) -> dict[str, Any]:
+        """Eén limit=1. Geen 23 tabellen, ook niet als de snapshot-cache koud is."""
+        t0 = time.monotonic()
+        ping = getattr(self.repo, "ping", None)
+        try:
+            if ping is None:
+                return {"reachable": False, "ping_ms": 0, "error": "no_ping"}
+            await ping()
+            return {"reachable": True, "ping_ms": int((time.monotonic() - t0) * 1000), "error": None}
+        except RepositoryError as e:
+            return {"reachable": False, "ping_ms": int((time.monotonic() - t0) * 1000), "error": str(e)}
+        except Exception as e:  # noqa: BLE001 -- health mag nooit omvallen
+            return {"reachable": False, "ping_ms": int((time.monotonic() - t0) * 1000), "error": type(e).__name__}
 
     async def snapshot(self, fresh: bool = False, tabellen: Iterable[str] | None = None) -> Snapshot:
         """De hele desk, of alleen `tabellen` (een deel-snapshot, apart bewaard).

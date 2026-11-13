@@ -28,15 +28,22 @@ etmaal via de NorthSea-gateway. Elke mail wordt precies één keer gemeld.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Mapping
 
 # Ouder dan dit melden we niet meer: na een storing van een paar uur wil je niet
 # dat er twintig oude mails tegelijk afgaan. De desk zelf heeft ze dan al.
 VENSTER = timedelta(hours=6)
 JOB = "northsea_mail"
+# Claim-job voor de ronde zelf (niet per mail). Luka wil een getekend document
+# snel zien, dus 5 minuten, niet het kwartier van intel_ingest. Was elke minuut:
+# 10 nov was dat 7 volle inbound-scans per tik.
+RONDE_JOB = "northsea_mailwachter"
+INTERVAL_ENV = "NORTHSEA_MAILWACHTER_INTERVAL_MIN"
+INTERVAL_MIN_DEFAULT = 5
 # Een belangrijke mail krijgt ook een leesbeurt van de NorthSea-manager in zijn
 # werklus (agent_loop, tool northsea_read): wat staat er, bij welke deal, wat
 # moet Luka beslissen. Gratis modellen, alleen lezen, hooguit zoveel per dag.
@@ -151,6 +158,29 @@ def nieuwe(items: list[dict[str, Any]], nu: datetime) -> list[MailMelding]:
 
 
 Claim = Callable[[str, str], bool]
+
+
+def interval_minuten(env: Mapping[str, str] | None = None) -> int:
+    raw = (env or os.environ).get(INTERVAL_ENV, str(INTERVAL_MIN_DEFAULT))
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        n = INTERVAL_MIN_DEFAULT
+    return max(1, min(n, 60))
+
+
+def ronde_sleutel(nu: datetime, interval: int | None = None) -> str:
+    """Zelfde vorm als intel_ingest in main.py: YYYY-MM-DDTHH:<slot>."""
+    stap = INTERVAL_MIN_DEFAULT if interval is None else interval
+    stap = max(1, min(int(stap), 60))
+    return nu.strftime("%Y-%m-%dT%H:") + str(nu.minute // stap)
+
+
+def mag_ronde(claim: Claim, nu: datetime | None = None, *, interval: int | None = None,
+              env: Mapping[str, str] | None = None) -> bool:
+    nu = nu or datetime.now(timezone.utc)
+    stap = interval_minuten(env) if interval is None else interval
+    return claim(RONDE_JOB, ronde_sleutel(nu, stap))
 
 
 def analyse_opdracht(m: MailMelding) -> str:

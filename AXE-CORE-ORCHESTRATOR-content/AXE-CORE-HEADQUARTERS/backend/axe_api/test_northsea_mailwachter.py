@@ -129,6 +129,32 @@ def test_afgeronde_duiding_bereikt_luka_een_keer():
     assert gm.meld_mailduidingen(db) == 0
 
 
+def test_mailwachter_interval_uit_env():
+    assert mw.interval_minuten({}) == 5
+    assert mw.interval_minuten({mw.INTERVAL_ENV: "7"}) == 7
+    assert mw.interval_minuten({mw.INTERVAL_ENV: "nope"}) == 5
+    assert mw.interval_minuten({mw.INTERVAL_ENV: "99"}) == 60
+    assert mw.interval_minuten({mw.INTERVAL_ENV: "0"}) == 1
+
+
+def test_mailwachter_ronde_eens_per_vijf_minuten():
+    """Zelfde claim-patroon als intel_ingest: één slot per interval, niet elke tik."""
+    nu = datetime(2026, 11, 13, 12, 4, tzinfo=timezone.utc)
+    assert mw.ronde_sleutel(nu, 5) == "2026-11-13T12:0"
+    assert mw.ronde_sleutel(nu.replace(minute=5), 5) == "2026-11-13T12:1"
+    gezien = []
+
+    def claim(job, sleutel):
+        gezien.append((job, sleutel))
+        return len([x for x in gezien if x == (job, sleutel)]) == 1
+
+    assert mw.mag_ronde(claim, nu, interval=5) is True
+    assert mw.mag_ronde(claim, nu.replace(minute=1), interval=5) is False
+    assert mw.mag_ronde(claim, nu.replace(minute=5), interval=5) is True
+    assert gezien[0][0] == mw.RONDE_JOB
+    assert gezien[0][1] == gezien[1][1] == "2026-11-13T12:0"
+
+
 def test_desk_agent_leest_alleen():
     import northsea_gateway as g
     from agent_workspace import AGENT_WORKSPACES

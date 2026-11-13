@@ -144,7 +144,7 @@ def test_inkomende_mail_leest_alleen_de_mailtabellen():
     uit, eerste = asyncio.run(run())
     assert sorted(eerste) == sorted(INBOUND_TABLES)
     assert "deal_events" not in eerste and "northsea_audit_events" not in eerste
-    assert Repo.gelezen == eerste  # tweede keer binnen 30 s: uit de cache
+    assert Repo.gelezen == eerste  # tweede keer binnen de snapshot-TTL: uit de cache
     assert uit["items"] == []
 
     # Een volledige snapshot daarna krijgt wél alle tabellen, niet de deel-snapshot.

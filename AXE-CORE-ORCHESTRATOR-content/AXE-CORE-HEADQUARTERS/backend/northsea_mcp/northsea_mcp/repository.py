@@ -15,10 +15,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
+from pathlib import Path
 from typing import Any
 
 import httpx
+
+from .leescache import (
+    MAX_RIJEN,
+    PAGINA,
+    LeesBackoff,
+    TabelVoorraad,
+    cursor_kolom,
+    pgrst_code,
+    postgrest_ts,
+    supabase_overbelast,
+)
 
 log = logging.getLogger("northsea_mcp.repository")
 
@@ -87,7 +100,8 @@ def _like(value: str) -> str:
 
 
 class SupabaseRepository:
-    def __init__(self, url: str, key: str, timeout: float = 20.0, client: httpx.AsyncClient | None = None):
+    def __init__(self, url: str, key: str, timeout: float = 20.0, client: httpx.AsyncClient | None = None,
+                 *, cache_dir: str | Path | None = None, backoff: LeesBackoff | None = None):
         self._url = url.rstrip("/")
         self._headers = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
         self._timeout = timeout
@@ -96,6 +110,12 @@ class SupabaseRepository:
         self._eigen_client = client is None
         self._client = client or self._maak_client()
         self._oud: set[asyncio.Task] = set()
+        # Schijfcache alleen als de map is gezet: op de VPS
+        # NORTHSEA_TABLE_CACHE_DIR=/opt/northsea-mcp/state/tabelcache (ProtectSystem).
+        pad = cache_dir if cache_dir is not None else os.environ.get("NORTHSEA_TABLE_CACHE_DIR")
+        self._voorraad = TabelVoorraad(pad)
+        self._backoff = backoff or LeesBackoff()
+        self._table_locks: dict[str, asyncio.Lock] = {}
 
     def _maak_client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(timeout=self._timeout,
@@ -125,9 +145,29 @@ class SupabaseRepository:
         self._oud.add(taak)
         taak.add_done_callback(self._oud.discard)
 
-    async def _get(self, table: str, params: dict[str, str]) -> list[dict]:
+    def _slot(self, table: str) -> asyncio.Lock:
+        lock = self._table_locks.get(table)
+        if lock is None:
+            lock = self._table_locks[table] = asyncio.Lock()
+        return lock
+
+    def _overbelast(self, status: int, body: str, table: str, *, schrijven: bool) -> RepositoryError:
+        delay = self._backoff.faal()
+        code = pgrst_code(body)
+        log.warning("supabase %s %s: HTTP %s%s, backoff %.0fs",
+                    "schrijven" if schrijven else "lezen", table, status,
+                    f" {code}" if code else "", delay)
+        wat = "write" if schrijven else "read"
+        extra = f": {code}" if code else ""
+        return RepositoryError(f"database {wat} failed for {table} ({status}){extra}")
+
+    async def _get(self, table: str, params: dict[str, str], *, negeer_backoff: bool = False) -> list[dict]:
         # Lezen is idempotent: na een timeout één keer opnieuw, op een verse pool.
         # Schrijven doet dat bewust niet (dan zou een insert dubbel kunnen landen).
+        # 5xx/521/PGRST002: niet elke tik opnieuw — 10 nov hameren de lezers de
+        # Micro-database plat terwijl hij al 503 gaf.
+        if not negeer_backoff and self._backoff.actief():
+            raise RepositoryError(f"database backing off after 5xx ({self._backoff.rest_s():.0f}s)")
         for poging in (1, 2):
             client = self._client
             try:
@@ -136,13 +176,18 @@ class SupabaseRepository:
             except httpx.TimeoutException as e:
                 log.warning("lezen %s: %s (poging %d)", table, type(e).__name__, poging)
                 if poging == 2:
+                    self._backoff.faal()
                     raise RepositoryError(f"database unreachable ({type(e).__name__})") from e
                 self._vervang_client(client)
             except httpx.HTTPError as e:
                 log.warning("lezen %s: %s", table, type(e).__name__)
+                self._backoff.faal()
                 raise RepositoryError(f"database unreachable ({type(e).__name__})") from e
         if r.status_code >= 400:
+            if supabase_overbelast(r.status_code, r.text or ""):
+                raise self._overbelast(r.status_code, r.text or "", table, schrijven=False)
             raise RepositoryError(f"database read failed for {table} ({r.status_code})")
+        self._backoff.herstel()
         data = r.json()
         return data if isinstance(data, list) else []
 
@@ -157,10 +202,13 @@ class SupabaseRepository:
         except httpx.HTTPError as e:
             raise RepositoryError(f"database unreachable ({type(e).__name__})") from e
         if r.status_code >= 400:
+            if supabase_overbelast(r.status_code, r.text or ""):
+                raise self._overbelast(r.status_code, r.text or "", table, schrijven=True)
             # De P0/P1-guards melden zich met een vaste code; die mag door (geen query, geen sleutel).
             code = GUARD_CODE.search(r.text or "")
             raise RepositoryError(f"database write failed for {table} ({r.status_code})"
                                   + (f": {code.group(0)}" if code else "") + (": duplicate" if "23505" in (r.text or "") else ""))
+        self._backoff.herstel()
         data = r.json() if r.content else []
         return data if isinstance(data, list) else [data]
 
@@ -233,7 +281,8 @@ class SupabaseRepository:
 
     # ── Gezondheid ────────────────────────────────────────────────────────────
     async def ping(self) -> bool:
-        await self._get("opportunities", {"select": "id", "limit": "1"})
+        """Eén limit=1, ook tijdens backoff: zo merken we herstel zonder 23 tabellen."""
+        await self._get("opportunities", {"select": "id", "limit": "1"}, negeer_backoff=True)
         return True
 
     # ── Lezen ─────────────────────────────────────────────────────────────────
@@ -346,23 +395,41 @@ class SupabaseRepository:
         return await self._one("reply_drafts", {"id": f"eq.{uid(draft_id, 'draft_id')}", "select": "*"})
 
     # ── Hele tabellen, voor de leeslaag (inspect.py) ──────────────────────────
-    async def fetch_all(self, table: str, max_rows: int = 5000) -> tuple[list[dict], bool]:
-        """Een tabel in pagina's van 1000, met vaste kolommen per tabel.
-
-        Alleen tabellen uit SNAPSHOT_SELECT; een tool-argument kiest nooit een
-        tabel of kolom. Geeft (rijen, afgekapt) terug zodat een antwoord kan
-        zeggen dat het niet alles zag, in plaats van stil te tellen op een deel.
-        """
-        select = SNAPSHOT_SELECT[table]
+    async def _paginas(self, table: str, select: str, kolom: str, max_rows: int,
+                      sinds: str | None) -> tuple[list[dict], bool]:
         rows: list[dict] = []
         offset = 0
         while offset < max_rows:
-            page = await self._get(table, {"select": select, "order": "id.asc", "limit": "1000", "offset": str(offset)})
+            lim = min(PAGINA, max_rows - offset)
+            params = {"select": select, "order": f"{kolom}.asc", "limit": str(lim), "offset": str(offset)}
+            if sinds:
+                params[kolom] = f"gte.{postgrest_ts(sinds)}"
+            page = await self._get(table, params)
             rows += page
-            if len(page) < 1000:
+            if len(page) < lim:
                 return rows, False
-            offset += 1000
+            offset += lim
         return rows[:max_rows], True
+
+    async def fetch_all(self, table: str, max_rows: int = MAX_RIJEN) -> tuple[list[dict], bool]:
+        """Een tabel in kleine pagina's, daarna alleen rijen na de cursor.
+
+        Eerste keer: volledige lading, plafond 5000, `truncated` als het meer is.
+        Daarna: `updated_at` (of created_at/occurred_at bij append-only) > cursor,
+        samenvoegen op id. 10 nov: zonder cursor was élke snapshot een volle scan.
+        """
+        select = SNAPSHOT_SELECT[table]
+        kolom = cursor_kolom(table, select)
+        async with self._slot(table):
+            voorraad = self._voorraad
+            if voorraad.heeft_volle_lading(table):
+                cursor = voorraad.cursor(table) or None
+                rijen, afgekapt = await self._paginas(table, select, kolom, max_rows, cursor)
+                voorraad.merge(table, rijen, kolom, truncated=afgekapt, vol=False)
+                return voorraad.rijen(table), voorraad.truncated(table)
+            rijen, afgekapt = await self._paginas(table, select, kolom, max_rows, None)
+            voorraad.merge(table, rijen, kolom, truncated=afgekapt, vol=True)
+            return voorraad.rijen(table), afgekapt
 
     # ── Schrijven (alleen wat de write-tools nodig hebben) ────────────────────
     async def insert_deal_task(self, row: dict) -> dict:

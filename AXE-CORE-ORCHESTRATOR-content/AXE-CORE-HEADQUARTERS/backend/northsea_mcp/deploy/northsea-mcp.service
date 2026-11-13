@@ -13,6 +13,9 @@ Group=northsea-mcp
 WorkingDirectory=/opt/northsea-mcp/app
 EnvironmentFile=/opt/northsea-mcp/.env
 Environment=PYTHONUNBUFFERED=1
+# Alleen deze map is schrijfbaar (ProtectSystem=strict). Zonder dit pad blijft
+# de tabelcache in het geheugen en doet een herstart weer 23 volle scans.
+Environment=NORTHSEA_TABLE_CACHE_DIR=/opt/northsea-mcp/state/tabelcache
 ExecStart=/opt/northsea-mcp/venv/bin/uvicorn --factory northsea_mcp.app:create --host 127.0.0.1 --port 8040 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1 --timeout-graceful-shutdown 20
 Restart=always
 RestartSec=3
