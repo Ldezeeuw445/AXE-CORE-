@@ -13,6 +13,7 @@ alleen rijen na de cursor haalt, en stopt met hameren als Supabase 5xx teruggeef
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import os
@@ -50,16 +51,20 @@ async def haal_tabellen(repo: Any, namen: list[str], *, return_exceptions: bool 
 
 
 def cursor_kolom(table: str, select: str = "") -> str:
-    """updated_at, behalve append-only tabellen die die kolom niet hebben.
+    """updated_at, behalve append-only of een select zonder die kolom.
 
-    `select` blijft in de signature omdat repository.py hem doorgeeft; de keuze
-    hangt alleen van de tabel af. PostgREST mag filteren op een kolom die niet
-    in de projectie zit. communications zit niet in APPEND_CURSOR —
-    delivery_status wijzigt op bestaande rijen, en de engine moet die bounce zien.
+    Filteren op een kolom die niet in de projectie zit werkt in PostgREST, maar
+    de cursor wordt uit de teruggegeven rijen gelezen. Zonder updated_at in
+    SNAPSHOT_SELECT bleef de cursor leeg en deed élke volgende leesbeurt een
+    volle scan (communications, review op PR 312).
     """
-    _ = select
     if table in APPEND_CURSOR:
         return APPEND_CURSOR[table]
+    if select and select != "*" and "updated_at" not in select:
+        if "created_at" in select:
+            return "created_at"
+        if "occurred_at" in select:
+            return "occurred_at"
     return "updated_at"
 
 
@@ -170,7 +175,10 @@ class TabelVoorraad:
 
     def rijen(self, table: str) -> list[dict]:
         self._uit_disk(table)
-        return list(self._rijen.get(table, {}).values())
+        # Kopie: engine.tick(dry_run=True) zet velden op de geretourneerde dicts
+        # (o.a. action_queue.status). Zonder kopie slaat de volgende echte tick
+        # die rijen over omdat de cache al "klaar" lijkt.
+        return [copy.deepcopy(r) for r in self._rijen.get(table, {}).values()]
 
     def merge(self, table: str, rijen: list[dict], kolom: str, *, truncated: bool, vol: bool) -> None:
         self._uit_disk(table)

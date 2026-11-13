@@ -43,6 +43,11 @@ def test_cursor_kolom_append_only_zonder_updated_at():
     assert cursor_kolom("inbound_email_attachments", SNAPSHOT_SELECT["inbound_email_attachments"]) == "created_at"
     assert cursor_kolom("opportunities", "*") == "updated_at"
     assert APPEND_CURSOR["northsea_audit_events"] == "occurred_at"
+    # communications wijzigt (delivery_status); zonder updated_at in de select
+    # bleef de cursor leeg en was élke volgende leesbeurt een volle scan.
+    assert "updated_at" in SNAPSHOT_SELECT["communications"]
+    assert cursor_kolom("communications", SNAPSHOT_SELECT["communications"]) == "updated_at"
+    assert cursor_kolom("communications", "id,created_at,occurred_at") == "created_at"
 
 
 def test_postgrest_ts_zet_offset_om_naar_z():
@@ -130,7 +135,7 @@ def test_fetch_all_tweede_keer_alleen_delta(monkeypatch):
     assert by_id["2"]["n"] == 20 and by_id["3"]["n"] == 3 and "1" in by_id
     assert "updated_at" not in gezien[0]
     assert gezien[1]["updated_at"].startswith("gte.")
-    assert "order" in gezien[0] and gezien[0]["order"].startswith("updated_at.")
+    assert gezien[0]["order"] == "updated_at.asc,id.asc"
 
 
 def test_fetch_all_houdt_5000_plafond_bij_eerste_lading(monkeypatch):
@@ -150,6 +155,44 @@ def test_fetch_all_houdt_5000_plafond_bij_eerste_lading(monkeypatch):
 
     rows, af = asyncio.run(run())
     assert af is True and len(rows) == 400
+
+
+def test_fetch_all_koppelt_aanroeper_niet_aan_de_cache(monkeypatch):
+    """dry_run van de engine mag de voorraad niet 'klaar' zetten."""
+
+    def gedrag(req):
+        return httpx.Response(200, json=[{"id": "1", "updated_at": "2026-01-01T00:00:00Z", "n": 1}])
+
+    async def run():
+        r, _ = _repo(gedrag, monkeypatch)
+        eerste, _ = await r.fetch_all("opportunities")
+        eerste[0]["n"] = 999
+        eerste[0]["engine_version"] = "ns-engine-1.1"
+        tweede, _ = await r.fetch_all("opportunities")
+        await r.aclose()
+        return tweede
+
+    tweede = asyncio.run(run())
+    assert tweede[0]["n"] == 1 and "engine_version" not in tweede[0]
+
+
+def test_fetch_all_communications_zet_cursor_op_updated_at(monkeypatch):
+    gezien = []
+
+    def gedrag(req):
+        q = _qs(req)
+        gezien.append(q)
+        return httpx.Response(200, json=[{"id": "c1", "updated_at": "2026-11-13T08:00:00Z", "created_at": "2026-11-01T00:00:00Z"}])
+
+    async def run():
+        r, _ = _repo(gedrag, monkeypatch)
+        await r.fetch_all("communications")
+        await r.fetch_all("communications")
+        await r.aclose()
+
+    asyncio.run(run())
+    assert gezien[0]["order"] == "updated_at.asc,id.asc"
+    assert gezien[1]["updated_at"].startswith("gte.2026-11-13T08:00:00")
 
 
 def test_tabelvoorraad_op_schijf_overleeft_herstart(tmp_path):
