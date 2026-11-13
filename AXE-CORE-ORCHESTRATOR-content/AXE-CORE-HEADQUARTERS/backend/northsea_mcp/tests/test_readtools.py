@@ -257,6 +257,9 @@ async def test_system_health_reports_scheduler_crew_and_research_gate(mcp_server
         {"id": str(uuid.uuid4()), "action_type": "research_approval", "status": "completed",
          "metadata": {"executed_at": ts(0), "execution_result": "not_wired", "kind": "research_approval", "approved_via": "policy"}},
     ]
+    # Health itself doet geen verse snapshot meer (10 nov); research-cijfers komen
+    # uit de laatst geladen desk.
+    await ok(mcp_server, "northsea_get_trade_center_overview")
     data = await ok(mcp_server, "northsea_get_system_health")
     assert data["scheduler"]["next_run_at"] == "2026-09-19T13:00:00+00:00" and data["scheduler"]["last_status"] == "ok"
     assert data["crewai"]["fallback"]["backend"] == "axe_general_crew" and data["crewai"]["studio_optional"] is True

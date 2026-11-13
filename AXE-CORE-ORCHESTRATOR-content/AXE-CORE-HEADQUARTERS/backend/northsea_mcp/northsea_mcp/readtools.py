@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import __version__, canon
@@ -93,16 +93,26 @@ class ReadTools:
         }
 
     async def system_health(self, caller: Caller) -> dict:
-        s = await self.i.snapshot(fresh=True)
+        # 10 nov: fresh=True was elke health-check een volle 23-tabel-scan, bovenop
+        # de mailwachter. Alleen een limit=1-ping; cijfers komen uit de laatste
+        # snapshot als die er al is, nooit een verse lading.
+        ping = await self.i.database_ping()
+        s = self.i.laatste_snapshot()
         crew = getattr(self.i.crew, "available", None)
         crew_status = self.i.crew.status() if self.i.crew else None
         schema = await self.i.auditor.get_schedule("northsea") if self.i.auditor else None
-        beleid = (s.rows("deal_automation_policy") or [{}])[0]
-        onderzoek = [q for q in s.rows("action_queue") if q.get("action_type") == "research_approval"]
+        beleid = ((s.rows("deal_automation_policy") if s else None) or [{}])[0]
+        onderzoek = [q for q in (s.rows("action_queue") if s else []) if q.get("action_type") == "research_approval"]
+        nu = s.loaded_at if s else datetime.now(timezone.utc)
         return {
-            "generated_at": iso(s.loaded_at), "mcp_version": __version__,
-            "database": {"reachable": True, "tables_loaded": len(s.t) - len(s.errors), "load_ms": s.load_ms,
-                         "table_errors": s.errors, "truncated_tables": sorted(s.truncated)},
+            "generated_at": iso(nu), "mcp_version": __version__,
+            "database": {"reachable": bool(ping["reachable"]), "ping_ms": ping["ping_ms"],
+                         "ping_error": ping["error"],
+                         "tables_loaded": (len(s.t) - len(s.errors)) if s else 0,
+                         "load_ms": s.load_ms if s else ping["ping_ms"],
+                         "table_errors": s.errors if s else {},
+                         "truncated_tables": sorted(s.truncated) if s else [],
+                         "snapshot_cached": s is not None},
             "scheduler": ({"next_run_at": schema.get("next_run_at"), "last_run_at": schema.get("last_run_at"),
                           "last_status": schema.get("last_status"), "enabled": schema.get("enabled"),
                           "consecutive_failures": schema.get("consecutive_failures"),
@@ -479,8 +489,8 @@ class ReadTools:
 
     async def recent_inbound(self, caller: Caller, *, days=7, limit=25, offset=0) -> dict:
         since = iso(_now_minus(days))
-        # De mailwachter vraagt dit elke minuut: alleen de mailtabellen, niet de
-        # hele desk (8 nov liep de database daardoor vast, zie GELIJKTIJDIG).
+        # Alleen de zeven inbound-tabellen, incrementeel via fetch_all. De
+        # mailwachter zelf draait hooguit eens per vijf minuten (zie main.py).
         v = await self.i.view(caller, tabellen=INBOUND_TABLES)
         uit = await self.list_communications(caller, direction="inbound", since=since, limit=limit, offset=offset, _view=v)
         uit["filters"] = {"direction": "inbound", "days": days}

@@ -50,7 +50,8 @@ from .models import (
 from .oauth import NorthSeaTokenVerifier, OAuthServer, client_ip
 from .policy import SCOPES, TOOLS, PolicyDenied, Risk, require_scopes
 from .repository import InvalidId, RepositoryError, SupabaseRepository, uid
-from .readlayer import InspectService
+from .leescache import haal_tabellen
+from .readlayer import InspectService, snapshot_ttl_s
 from .readtools import ReadTools
 from .research import ResearchError, ResearchGateway
 from .service import Caller, NorthSeaService, NotFound, ServiceError
@@ -587,7 +588,8 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
                           required_scopes=None, validate_token_resource=True),
     )
     register_tools(mcp, service, guard)
-    register_read_tools(mcp, ReadTools(InspectService(repo, crew=crew, research=research, auditor=auditor), store=store), guard)
+    register_read_tools(mcp, ReadTools(InspectService(repo, crew=crew, research=research, auditor=auditor,
+                                                     cache_s=snapshot_ttl_s()), store=store), guard)
     register_resources(mcp)
 
     route = mcp.custom_route
@@ -669,17 +671,10 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
 
         async with operations_lock:
             try:
+                namen = ["opportunities", "northsea_audit_events", "deal_tasks", "action_queue",
+                         "communications", "companies", "buyer_requirements", "supplier_offers"]
                 (opportunities, _), (audits, _), (tasks, _), (queue, _), (comms, _), (companies, _), (reqs, _), (offers, _) = (
-                    await asyncio.gather(
-                        repo.fetch_all("opportunities"),
-                        repo.fetch_all("northsea_audit_events"),
-                        repo.fetch_all("deal_tasks"),
-                        repo.fetch_all("action_queue"),
-                        repo.fetch_all("communications"),
-                        repo.fetch_all("companies"),
-                        repo.fetch_all("buyer_requirements"),
-                        repo.fetch_all("supplier_offers"),
-                    )
+                    await haal_tabellen(repo, namen, return_exceptions=False)
                 )
             except RepositoryError:
                 return JSONResponse({"error": "upstream_error"}, status_code=502)

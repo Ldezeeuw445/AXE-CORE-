@@ -96,8 +96,8 @@ ACTIONS: dict[str, ActionSpec] = {
     # of accepteert hij iets. Elke wijziging staat met de vorige waarde in de audit.
     "tidy_desk": ActionSpec("northsea_tidy_desk", ("idempotency_key",), ("dry_run", "apply")),
     "get_communications_metrics": ActionSpec("northsea_get_communications_metrics", (), ("weeks",)),
-    # De mailwachter (northsea_mailwachter.py) kijkt elke minuut wat er binnenkwam,
-    # zodat een getekend document Luka direct bereikt. Alleen lezen.
+    # De mailwachter (northsea_mailwachter.py) kijkt eens per vijf minuten wat er
+    # binnenkwam, zodat een getekend document Luka snel bereikt. Alleen lezen.
     "list_recent_inbound": ActionSpec("northsea_list_recent_inbound", (), ("days", "limit")),
     # Wat de NorthSea-manager in zijn werklus (agent_loop, tool northsea_read)
     # nodig heeft om een binnengekomen mail echt te begrijpen: de deal, wat hem

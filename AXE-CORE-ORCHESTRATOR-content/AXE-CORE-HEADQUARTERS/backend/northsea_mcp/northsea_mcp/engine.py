@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from . import engine_rules as rules
+from .leescache import haal_tabellen
 from .repository import RepositoryError
 from .research import ResearchError
 from .service import RESEARCH_INSTRUCTIONS
@@ -99,7 +100,7 @@ class EngineService:
     async def _load(self) -> dict[str, list[dict]]:
         namen = ["communications", "email_intelligence", "opportunities", "buyer_requirements", "supplier_offers", "companies",
                  "contacts", "reply_drafts", "northsea_followups", "deal_automation_policy", "action_queue", "deal_tasks", "deal_evidence"]
-        rijen = await asyncio.gather(*(self.repo.fetch_all(n) for n in namen))
+        rijen = await haal_tabellen(self.repo, namen, return_exceptions=False)
         return {n: r[0] for n, r in zip(namen, rijen)}
 
     async def tick(self, *, dry_run: bool = False) -> dict[str, Any]:
