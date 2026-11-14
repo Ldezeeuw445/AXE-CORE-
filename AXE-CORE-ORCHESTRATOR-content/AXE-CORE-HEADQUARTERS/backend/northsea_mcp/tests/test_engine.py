@@ -622,3 +622,29 @@ async def test_no_followup_on_lost_or_automation_disabled_deal(patch):
     uit = await eng(repo).tick()
     assert uit["summary"]["followups"] == 0 and repo.t["northsea_followups"] == []
     assert uit["plan"]["followups_skipped"][0]["reason"] == "opportunity_closed_or_automation_disabled"
+
+
+async def test_desk_tidy_route_met_engine_token(client, store, repo):
+    """10-14 nov: AXE's gateway-sleutel heeft geen schrijfrecht; het opruimen loopt
+    via de engine-sleutel, die al in dezelfde tabellen schrijft."""
+    import uuid
+    r = await client.post("/internal/desk/tidy", json={})
+    assert r.status_code == 401
+    lees = store.issue(kind="service", client_id="service:x", subject="service:x", scopes=["northsea.read", "northsea.deal.write"],
+                       resource="https://mcp.northsea.test/mcp", ttl_s=600, label="x")
+    r = await client.post("/internal/desk/tidy", json={}, headers={"Authorization": f"Bearer {lees}"})
+    assert r.status_code == 403
+    ok = store.issue(kind="service", client_id="service:engine", subject="service:engine", scopes=["northsea.engine"],
+                     resource="https://mcp.northsea.test/mcp", ttl_s=600, label="engine")
+    h = {"Authorization": f"Bearer {ok}"}
+    opp, a = str(uuid.uuid4()), str(uuid.uuid4())
+    repo.t.setdefault("action_queue", []).append({"id": a, "status": "open", "opportunity_id": opp, "title": "Yes needed: X"})
+    repo.t.setdefault("deal_tasks", []).append({"id": str(uuid.uuid4()), "status": "open", "opportunity_id": opp, "title": "Yes needed: X"})
+    r = await client.post("/internal/desk/tidy", json={"apply": ["drop table"]}, headers=h)
+    assert r.status_code == 400
+    r = await client.post("/internal/desk/tidy", json={}, headers=h)
+    assert r.status_code == 200 and r.json()["dry_run"] is True
+    assert next(x for x in repo.t["action_queue"] if x["id"] == a)["status"] == "open"
+    r = await client.post("/internal/desk/tidy", json={"dry_run": False, "apply": ["auto"]}, headers=h)
+    assert r.status_code == 200 and any(s["id"] == a for s in r.json()["applied"])
+    assert next(x for x in repo.t["action_queue"] if x["id"] == a)["status"] == "cancelled"

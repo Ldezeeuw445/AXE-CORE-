@@ -90,11 +90,6 @@ ACTIONS: dict[str, ActionSpec] = {
     # volume. Same no-parameters/no-side-effects shape as get_live_operations above.
     "get_pipeline_summary": ActionSpec("northsea_get_pipeline_summary", ()),
     "get_system_health": ActionSpec("northsea_get_system_health", ()),
-    # De enige schrijfactie hier (10 nov, Luka: "opruimen + voorstellen"). Hij zet
-    # alleen weg -- ruis-mails, dubbele concepten, dubbele wachtrij-items, en de
-    # voorstellen die Luka met "ok V1" goedkeurde -- en NOOIT verstuurt, keurt goed
-    # of accepteert hij iets. Elke wijziging staat met de vorige waarde in de audit.
-    "tidy_desk": ActionSpec("northsea_tidy_desk", ("idempotency_key",), ("dry_run", "apply")),
     "get_communications_metrics": ActionSpec("northsea_get_communications_metrics", (), ("weeks",)),
     # De mailwachter (northsea_mailwachter.py) kijkt eens per vijf minuten wat er
     # binnenkwam, zodat een getekend document Luka snel bereikt. Alleen lezen.

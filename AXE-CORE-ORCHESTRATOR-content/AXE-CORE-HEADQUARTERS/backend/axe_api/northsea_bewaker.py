@@ -124,7 +124,9 @@ def _planner_fout(health: dict[str, Any]) -> Bevinding | None:
         code="planner_fout",
         voor="luka",
         titel="NorthSea: de planner faalt",
-        detail=f"Laatste status {s.get('last_status')!r}, {fouten} keer achter elkaar mislukt.",
+        # Zonder het oplopende getal: anders is elk kwartier een "nieuw" bericht
+        # (14 nov: 61, 62, 63 keer... in Luka's chat).
+        detail=f"Laatste status {s.get('last_status')!r}; hij lukt al meerdere rondes achter elkaar niet.",
     )
 
 

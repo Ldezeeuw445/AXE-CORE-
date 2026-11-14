@@ -26,11 +26,26 @@ _MARKER = os.path.join(tempfile.gettempdir(), "axe_northsea_opruimen.json")
 AGENT = "northseamgr"
 
 
+TIDY_URL = os.environ.get("NORTHSEA_TIDY_URL", "http://127.0.0.1:8040/internal/desk/tidy")
+
+
+async def _intern(actie: str, params: dict[str, Any]) -> dict[str, Any]:
+    """Via de interne route met de engine-sleutel (14 nov): AXE's gateway-sleutel
+    heeft alleen leesrecht, de engine-sleutel schrijft al in deze tabellen."""
+    import httpx
+    token = os.environ.get("NORTHSEA_ENGINE_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("NORTHSEA_ENGINE_TOKEN ontbreekt op deze host")
+    async with httpx.AsyncClient(timeout=120) as c:
+        r = await c.post(TIDY_URL, json={"dry_run": params.get("dry_run", True), "apply": params.get("apply") or []},
+                         headers={"Authorization": f"Bearer {token}"})
+    if r.status_code >= 400:
+        raise RuntimeError(f"northsea desk tidy {r.status_code}: {r.text[:160]}")
+    return r.json()
+
+
 def _ophaler(ophaler: Ophaler | None) -> Ophaler:
-    if ophaler is not None:
-        return ophaler
-    import northsea_gateway
-    return northsea_gateway.call_action
+    return ophaler if ophaler is not None else _intern
 
 
 def codes_uit(tekst: str) -> list[str]:

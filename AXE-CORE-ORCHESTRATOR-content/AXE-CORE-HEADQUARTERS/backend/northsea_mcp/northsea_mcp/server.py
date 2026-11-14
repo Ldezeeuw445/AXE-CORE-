@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re
 import logging
 import time
 import uuid
@@ -642,6 +643,37 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
             except Exception:
                 log.exception("engine tick desk loop failed")
         return JSONResponse(uit, headers={"Cache-Control": "no-store"})
+
+    @route("/internal/desk/tidy", methods=["POST"])
+    async def desk_tidy(request: Request) -> Response:
+        """Opruimen + voorstellen voor de NorthSea Manager (opruimen.py).
+
+        Zelfde service-token en scope als de engine-tick (northsea.engine): AXE
+        heeft die al, en de engine schrijft al in dezelfde tabellen. Body:
+        {"dry_run": bool (default true), "apply": ["auto" | "V1".."V99"]}. Alleen
+        wegzetten (dismissed/rejected/cancelled, met audit); nooit versturen,
+        goedkeuren of iets accepteren."""
+        auth = request.headers.get("authorization", "")
+        rec = store.lookup(auth[7:], ("service",)) if auth.lower().startswith("bearer ") else None
+        if rec is None:
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers={"Cache-Control": "no-store"})
+        if "northsea.engine" not in rec.scopes:
+            return JSONResponse({"error": "insufficient_scope"}, status_code=403, headers={"Cache-Control": "no-store"})
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            body = {}
+        body = body if isinstance(body, dict) else {}
+        apply = [str(x).strip() for x in (body.get("apply") or [])][:10]
+        if any(not re.fullmatch(r"(?i)auto|V[0-9]{1,2}", a) for a in apply):
+            return JSONResponse({"error": "invalid_apply"}, status_code=400, headers={"Cache-Control": "no-store"})
+        caller = Caller(principal="service:northseamgr", client_id=f"engine:{rec.client_id}",
+                        scopes=frozenset({"northsea.deal.write"}))
+        try:
+            uit = await service.tidy_desk(caller, apply=apply, dry_run=body.get("dry_run", True) is not False)
+        except RepositoryError:
+            return JSONResponse({"error": "upstream_error"}, status_code=502)
+        return JSONResponse(uit.model_dump(), headers={"Cache-Control": "no-store"})
 
     operations_lock = asyncio.Lock()
 
