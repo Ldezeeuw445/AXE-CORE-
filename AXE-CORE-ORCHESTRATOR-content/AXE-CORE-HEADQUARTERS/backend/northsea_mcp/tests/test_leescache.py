@@ -43,10 +43,9 @@ def test_cursor_kolom_append_only_zonder_updated_at():
     assert cursor_kolom("inbound_email_attachments", SNAPSHOT_SELECT["inbound_email_attachments"]) == "created_at"
     assert cursor_kolom("opportunities", "*") == "updated_at"
     assert APPEND_CURSOR["northsea_audit_events"] == "occurred_at"
-    # communications wijzigt (delivery_status); zonder updated_at in de select
-    # bleef de cursor leeg en was élke volgende leesbeurt een volle scan.
-    assert "updated_at" in SNAPSHOT_SELECT["communications"]
-    assert cursor_kolom("communications", SNAPSHOT_SELECT["communications"]) == "updated_at"
+    # communications heeft GEEN updated_at (gemeten 14 nov): cursor op created_at,
+    # plus periodiek volledig herladen voor delivery_status (VOLLEDIG_HERLADEN_NA_S).
+    assert cursor_kolom("communications", SNAPSHOT_SELECT["communications"]) == "created_at"
     assert cursor_kolom("communications", "id,created_at,occurred_at") == "created_at"
 
 
@@ -176,23 +175,30 @@ def test_fetch_all_koppelt_aanroeper_niet_aan_de_cache(monkeypatch):
     assert tweede[0]["n"] == 1 and "engine_version" not in tweede[0]
 
 
-def test_fetch_all_communications_zet_cursor_op_updated_at(monkeypatch):
+def test_fetch_all_communications_cursor_op_created_at_en_periodiek_vol(monkeypatch):
+    import northsea_mcp.leescache as lc
     gezien = []
 
     def gedrag(req):
         q = _qs(req)
         gezien.append(q)
-        return httpx.Response(200, json=[{"id": "c1", "updated_at": "2026-11-13T08:00:00Z", "created_at": "2026-11-01T00:00:00Z"}])
+        return httpx.Response(200, json=[{"id": "c1", "created_at": "2026-11-13T08:00:00Z"}])
+
+    klok = [1000.0]
+    monkeypatch.setattr(lc.time, "monotonic", lambda: klok[0])
 
     async def run():
         r, _ = _repo(gedrag, monkeypatch)
         await r.fetch_all("communications")
         await r.fetch_all("communications")
+        klok[0] += 31 * 60
+        await r.fetch_all("communications")
         await r.aclose()
 
     asyncio.run(run())
-    assert gezien[0]["order"] == "updated_at.asc,id.asc"
-    assert gezien[1]["updated_at"].startswith("gte.2026-11-13T08:00:00")
+    assert gezien[0]["order"] == "created_at.asc,id.asc" and "updated_at" not in gezien[0]["select"].split(",")
+    assert gezien[1]["created_at"].startswith("gte.2026-11-13T08:00:00")
+    assert "created_at" not in gezien[2]  # na 30 minuten weer een volle lading
 
 
 def test_tabelvoorraad_op_schijf_overleeft_herstart(tmp_path):
@@ -312,3 +318,12 @@ def test_engine_vuurt_hooguit_vier_tabellen_tegelijk():
 
     asyncio.run(EngineService(Repo())._load())
     assert GELIJKTIJDIG == 4 and Repo.piek == 4
+
+
+
+def test_tabellen_zonder_updated_at_lezen_op_created_at():
+    """14 nov: communications (select met een niet-bestaande updated_at) en
+    deal_evidence (filter op updated_at) gaven 400 -> engine 502, 63x op rij."""
+    for t in ("communications", "deal_evidence", "match_assessments", "verification_checks"):
+        assert cursor_kolom(t, SNAPSHOT_SELECT[t]) == "created_at", t
+    assert "updated_at" not in SNAPSHOT_SELECT["communications"].split(",")

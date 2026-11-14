@@ -33,10 +33,22 @@ TABELNAAM = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 
 # Tabellen zonder updated_at: alleen append, cursor op het tijdstip van invoegen.
 # northsea_audit_events heeft occurred_at, geen created_at/updated_at (P0.4).
+# Tabellen die NA aanmaak nog veranderen maar geen updated_at hebben: de cursor
+# op created_at ziet die wijziging niet (communications.delivery_status bij een
+# bounce). Die laden we daarom ook periodiek helemaal opnieuw.
+VOLLEDIG_HERLADEN_NA_S: dict[str, int] = {"communications": 30 * 60}
+
+# Tabellen ZONDER updated_at (gemeten in de database, 14 nov). Een filter of
+# sortering op een kolom die niet bestaat geeft PostgREST 400; dat legde van
+# 10 tot 14 nov de engine, operations en discovery plat (502, 63x op rij).
 APPEND_CURSOR: dict[str, str] = {
     "deal_events": "created_at",
     "northsea_audit_events": "occurred_at",
     "inbound_email_attachments": "created_at",
+    "communications": "created_at",
+    "deal_evidence": "created_at",
+    "match_assessments": "created_at",
+    "verification_checks": "created_at",
 }
 
 
@@ -154,6 +166,7 @@ class TabelVoorraad:
         self._cursor: dict[str, str] = {}
         self._truncated: dict[str, bool] = {}
         self._vol: set[str] = set()
+        self._vol_op: dict[str, float] = {}
         self._disk_gelezen: set[str] = set()
         if self._pad:
             try:
@@ -163,7 +176,13 @@ class TabelVoorraad:
 
     def heeft_volle_lading(self, table: str) -> bool:
         self._uit_disk(table)
-        return table in self._vol
+        if table not in self._vol:
+            return False
+        maxleeftijd = VOLLEDIG_HERLADEN_NA_S.get(table)
+        # Na een herstart (lading van schijf, zonder tijd) of te oud: opnieuw vol.
+        if maxleeftijd and time.monotonic() - self._vol_op.get(table, float("-inf")) > maxleeftijd:
+            return False
+        return True
 
     def cursor(self, table: str) -> str:
         self._uit_disk(table)
@@ -189,6 +208,7 @@ class TabelVoorraad:
             self._cursor[table] = boven
         if vol:
             self._vol.add(table)
+            self._vol_op[table] = time.monotonic()
         if truncated:
             self._truncated[table] = True
         elif vol or table in self._vol:
