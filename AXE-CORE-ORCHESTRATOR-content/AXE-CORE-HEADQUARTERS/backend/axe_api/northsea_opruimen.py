@@ -99,7 +99,14 @@ def dagelijks(db: Any, nu: datetime, ophaler: Ophaler | None = None) -> dict[str
         plan = await _tidy(o, dry_run=True, apply=[])
         return gedaan, plan
 
-    gedaan, plan = asyncio.run(ronde())
+    try:
+        gedaan, plan = asyncio.run(ronde())
+    except Exception as exc:
+        # Geen schrijfrecht is geen storing die over een kwartier weg is: dan
+        # vandaag niet nog 40 keer proberen (14 nov: elk kwartier dezelfde fout).
+        if "insufficient_scope" in str(exc):
+            _zet_marker(nu)
+        raise
     _zet_marker(nu)
     tekst = bericht_na_opruimen(gedaan, plan)
     import manager_draad

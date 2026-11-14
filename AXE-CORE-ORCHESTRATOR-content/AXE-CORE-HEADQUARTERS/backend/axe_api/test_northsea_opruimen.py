@@ -62,3 +62,14 @@ def test_onbekend_voorstel_zegt_wat_er_wel_is():
     uit = no.voer_uit(db, ["V7"], nep)
     assert uit["uitgevoerd"] == [] and "V1, V3" in uit["tekst"]
     assert all(c["dry_run"] for c in nep.calls)  # niets uitgevoerd
+
+
+def test_zonder_schrijfrecht_een_keer_per_dag(tmp_path, monkeypatch):
+    monkeypatch.setattr(no, "_MARKER", str(tmp_path / "m.json"))
+
+    async def geen_recht(actie, params):
+        raise RuntimeError("Error executing tool northsea_tidy_desk: insufficient_scope: northsea.deal.write")
+    import pytest
+    with pytest.raises(RuntimeError):
+        no.dagelijks(_Db(), NU, geen_recht)
+    assert no.dagelijks(_Db(), NU, geen_recht) == {"overgeslagen": "vandaag al gedaan"}
