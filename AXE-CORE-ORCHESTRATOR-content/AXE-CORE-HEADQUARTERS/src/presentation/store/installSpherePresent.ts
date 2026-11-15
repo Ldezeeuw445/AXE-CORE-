@@ -9,6 +9,31 @@ import {
 } from '@/application/sphere/presentOnSphere';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { stripToolMarkers } from '@/domain/tools/toolCatalog';
+import { homeCommando, type HomeCommando } from '@/domain/overlay/homeCommando';
+import { useCoreViewStore } from '@/presentation/store/coreViewStore';
+
+const WEERGAVE_NAAM = { axe: 'de bol', neural: 'Neural', terrain: 'Terrain', runtime: 'Runtime' } as const;
+
+/**
+ * 15 nov: knoppen die al bestaan, nu ook met je stem -- meteen, zonder AI-ronde.
+ * Geeft het antwoord terug, of null als het niet lukte (dan gaat de zin
+ * gewoon naar AXE zelf).
+ */
+async function voerHomeCommandoUit(c: HomeCommando): Promise<string | null> {
+  if (c.soort === 'weergave') {
+    useCoreViewStore.getState().setCoreView(c.weergave);
+    return `Staat op ${WEERGAVE_NAAM[c.weergave]}.`;
+  }
+  try {
+    const { isTauriRuntime } = await import('@/infrastructure/config/apiUrl');
+    if (!isTauriRuntime()) return null;
+    const { openZwevend, sluitZwevend } = await import('@/infrastructure/gateways/zwevendeVensters');
+    await (c.open ? openZwevend('axe') : sluitZwevend('axe'));
+    return c.open ? 'Notch staat open.' : 'Notch is dicht.';
+  } catch {
+    return null;
+  }
+}
 
 /**
  * installStableChat's send path never runs the tool-call/marker resolution
@@ -51,6 +76,20 @@ export function installSpherePresent(): void {
     sendMessage: async (text: string) => {
       const trimmed = (text || '').trim();
       let userDid = false;
+
+      const commando = trimmed ? homeCommando(trimmed) : null;
+      if (commando) {
+        const antwoord = await voerHomeCommandoUit(commando);
+        if (antwoord) {
+          const nu = Date.now();
+          useVoiceStore.setState(s => ({
+            conversation: [...s.conversation,
+              { role: 'user', text: trimmed, timestamp: nu },
+              { role: 'axe', text: antwoord, timestamp: nu + 1 }],
+          }));
+          return;
+        }
+      }
 
       if (trimmed) {
         try {
