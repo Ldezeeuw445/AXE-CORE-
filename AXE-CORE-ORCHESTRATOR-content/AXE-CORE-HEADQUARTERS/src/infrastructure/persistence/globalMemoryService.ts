@@ -105,6 +105,28 @@ export async function loadMemoriesByCategory(userId: string, category: string): 
  * Routes through the durable brain (GraphRAG / RAG / global) and appends
  * income ledger when relevant — single source of truth for "what AXE knows".
  */
+const AXON_TIJD_MS = 2500;
+
+async function axonContext(query: string, max: number): Promise<string> {
+  if (max < 120 || !query.trim()) return '';
+  try {
+    const { leesProviderOpslag } = await import('@/domain/providers');
+    const key = String((leesProviderOpslag() as Record<string, { key?: string }>).axon?.key || '').trim();
+    if (!key) return '';
+    const { axonContextPack } = await import('@/infrastructure/gateways/axonMemoryService');
+    const { axonPackTekst } = await import('@/domain/axonPack');
+    const pack = await Promise.race([
+      axonContextPack({ key, query, limitTokens: Math.ceil(max / 4) }),
+      new Promise<null>((klaar) => setTimeout(() => klaar(null), AXON_TIJD_MS)),
+    ]);
+    if (!pack || !pack.ok) return '';
+    const tekst = axonPackTekst(pack.data, max);
+    return tekst ? `From AXON Memory (Luka's memory across his AIs):\n${tekst}` : '';
+  } catch {
+    return '';
+  }
+}
+
 export async function buildGlobalMemoryContext(
   userId: string,
   query: string,
@@ -118,15 +140,22 @@ export async function buildGlobalMemoryContext(
 
   // Dynamic import avoids circular dependency with buildDurableMemoryContext
   // (which imports loadGlobalMemories from this module).
-  let brainBlock = '';
-  try {
-    const { buildDurableMemoryContext } = await import(
-      '@/infrastructure/persistence/buildDurableMemoryContext'
-    );
-    brainBlock = await buildDurableMemoryContext(userId, query, brainBudget, { owner });
-  } catch (err) {
-    console.warn('[GlobalMemory] durable brain failed, empty context:', err);
-  }
+  // 15 nov: AXON (Luka's geheugen over al zijn AI's heen) ook TERUGLEZEN, niet
+  // alleen naartoe schrijven. Tegelijk met het eigen brein en met een eigen
+  // tijdslimiet: een traag AXON maakt AXE nooit trager.
+  const axonBudget = Math.min(600, Math.floor(maxChars * 0.3));
+  const brainPromise = (async () => {
+    try {
+      const { buildDurableMemoryContext } = await import(
+        '@/infrastructure/persistence/buildDurableMemoryContext'
+      );
+      return await buildDurableMemoryContext(userId, query, brainBudget, { owner });
+    } catch (err) {
+      console.warn('[GlobalMemory] durable brain failed, empty context:', err);
+      return '';
+    }
+  })();
+  const [brainBlock, axonBlock] = await Promise.all([brainPromise, axonContext(query, axonBudget)]);
 
   let incomeBlock = '';
   if (incomeBudget > 0) {
@@ -136,7 +165,7 @@ export async function buildGlobalMemoryContext(
     } catch { /* */ }
   }
 
-  const parts = [brainBlock, incomeBlock].filter(Boolean);
+  const parts = [brainBlock, axonBlock, incomeBlock].filter(Boolean);
   if (!parts.length) return '';
   return parts.join('\n\n').slice(0, maxChars);
 }

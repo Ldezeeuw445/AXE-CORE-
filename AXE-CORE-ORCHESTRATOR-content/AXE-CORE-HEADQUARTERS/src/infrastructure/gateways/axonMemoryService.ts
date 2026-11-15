@@ -26,6 +26,8 @@
  * for a key rather than the OAuth flow the MCP connector uses.
  */
 
+import { axonProxyUrl, vpsAuthHeaders } from '@/infrastructure/config/apiUrl';
+
 const AXON_FUNCTIONS = 'https://ktaditgtbubonrahyiig.supabase.co/functions/v1';
 
 /**
@@ -82,6 +84,26 @@ function describeFetchFailure(e: unknown): string {
   return msg || 'AXON unreachable';
 }
 
+/**
+ * 15 nov: in de gebouwde app via de VPS (/proxy/axon). AXON's functies laten
+ * alleen app.axon-memory.com toe, dus elke rechtstreekse aanroep -- schrijven
+ * én lezen -- strandde op CORS en AXON stond op "Failed". Server-naar-server
+ * heeft dat niet. In dev blijft het rechtstreeks (daar is er geen VPS-sleutel).
+ */
+function viaVps(path: string, token: string, init: RequestInit): Promise<Response> {
+  const [pad, qs] = path.replace(/^\//, '').split('?');
+  const query = Object.fromEntries(new URLSearchParams(qs || ''));
+  let payload: unknown;
+  try { payload = init.body ? JSON.parse(String(init.body)) : undefined; } catch { payload = undefined; }
+  const url = axonProxyUrl();
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...vpsAuthHeaders(url) },
+    body: JSON.stringify({ path: pad, key: token, query, payload }),
+    signal: AbortSignal.timeout(25_000),
+  });
+}
+
 async function call<T>(
   path: string,
   key: string,
@@ -90,7 +112,7 @@ async function call<T>(
   const token = key.trim();
   if (!token) return { ok: false, error: 'No AXON key set.' };
   try {
-    const res = await fetch(`${AXON_FUNCTIONS}${path}`, {
+    const res = import.meta.env.PROD ? await viaVps(path, token, init) : await fetch(`${AXON_FUNCTIONS}${path}`, {
       ...init,
       headers: {
         Authorization: `Bearer ${token}`,

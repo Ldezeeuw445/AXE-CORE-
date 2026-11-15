@@ -1217,6 +1217,39 @@ async def proxy_exa(body: dict = Body(...)):
         raise HTTPException(502, str(e)[:300])
 
 
+_AXON_FUNCTIES = "https://ktaditgtbubonrahyiig.supabase.co/functions/v1"
+# Alleen deze twee: schrijven wat AXE wil onthouden en terughalen wat relevant is.
+_AXON_PADEN = {"remember": "POST", "context-pack": "GET"}
+
+
+@app.post("/proxy/axon", dependencies=[AUTH])
+async def proxy_axon(body: dict = Body(...)):
+    """AXON Memory via de VPS. 15 nov: AXON's functies staan alleen
+    app.axon-memory.com toe (CORS), dus vanuit de app faalde élke aanroep --
+    schrijven én lezen -- en stond AXON op 'Failed'. Server-naar-server heeft
+    geen CORS. De sleutel komt uit de app (Luka kiest welk AXON-account) of
+    AXON_API_KEY; hij wordt niet bewaard of gelogd."""
+    pad = str(body.get("path") or "")
+    methode = _AXON_PADEN.get(pad)
+    if not methode:
+        raise HTTPException(400, f"path must be one of {', '.join(_AXON_PADEN)}")
+    key = (str(body.get("key") or "") or os.environ.get("AXON_API_KEY", "")).strip()
+    if not key:
+        raise HTTPException(503, "No AXON key: save it in Settings, or set AXON_API_KEY on the server.")
+    kop = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            if methode == "GET":
+                params = {k: str(v) for k, v in (body.get("query") or {}).items() if v is not None}
+                r = await client.get(f"{_AXON_FUNCTIES}/{pad}", headers=kop, params=params)
+            else:
+                r = await client.post(f"{_AXON_FUNCTIES}/{pad}", headers=kop, json=body.get("payload") or {})
+        return Response(content=r.content, status_code=r.status_code,
+                        media_type=r.headers.get("content-type", "application/json"))
+    except httpx.HTTPError as e:
+        raise HTTPException(502, str(e)[:300])
+
+
 @app.post("/proxy/fish-tts", dependencies=[AUTH])
 async def proxy_fish_tts(body: dict = Body(...)):
     # Fish Audio's API doesn't answer CORS preflight (OPTIONS) requests

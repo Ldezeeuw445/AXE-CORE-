@@ -142,6 +142,13 @@ export function aiProxyUrl(): string {
   return apiUrl('/api/proxy/ai');
 }
 
+/** AXON Memory via de VPS: AXON zelf staat alleen app.axon-memory.com toe (CORS). */
+export function axonProxyUrl(): string {
+  if (import.meta.env.PROD && isPackagedShell()) return `${VPS_API_ORIGIN}/proxy/axon`;
+  if (viaWebProxy()) return `${WEB_AXE_PROXY}/proxy/axon`;
+  return apiUrl('/api/proxy/axon');
+}
+
 /** Resolves the Exa search proxy the same way. */
 export function exaProxyUrl(): string {
   if (import.meta.env.PROD && isPackagedShell()) return `${VPS_API_ORIGIN}/proxy/exa`;
