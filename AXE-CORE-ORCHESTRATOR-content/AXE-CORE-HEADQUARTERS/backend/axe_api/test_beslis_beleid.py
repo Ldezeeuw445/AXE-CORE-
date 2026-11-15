@@ -136,3 +136,16 @@ def test_pas_beleid_keurt_inspectie_goed_en_ontdubbelt_deals():
     assert n1["status"] == "pending"
     assert n2["status"] in ("superseded", "cancelled")
     assert bestaande_deal_vraag(db, deal_code="DEAL-002")["id"] == "n1"
+
+
+def test_systemctl_kijken_mag_vanzelf_starten_niet():
+    """15 nov: Luka moest steeds 'systemctl status northsea-desk-manager' goedkeuren."""
+    from beslis_beleid import shell_auto_reden
+    for vrij in ("systemctl status northsea-desk-manager", "systemctl status axe-core-api --no-pager -n 50",
+                 "systemctl is-active northsea-mcp", "systemctl show northsea-mcp -p ActiveState",
+                 "journalctl -u northsea-mcp --no-pager -n 100", "journalctl -u axe-core-api --since '1 hour ago' --no-pager"):
+        assert shell_auto_reden(vrij) == "in-plan: read-only inspection", vrij
+    for gevraagd in ("systemctl restart northsea-mcp", "systemctl stop axe-core-api", "systemctl status x; rm -rf /tmp/y",
+                     "systemctl status x && systemctl restart x", "systemctl status $(cat /etc/passwd)",
+                     "journalctl -u x | sh", "systemctl enable foo"):
+        assert shell_auto_reden(gevraagd) is None, gevraagd

@@ -539,6 +539,17 @@ use the Mac tools directly or claude_code.run/codex.run/cursor.run. Verify on
 that same device. The installed AXE app is updated only from orchestrator, so
 do not claim a feature is live until the canonical update has actually landed.
 
+Where AXE itself lives on this VPS (do not guess unit names):
+  - systemd units that exist: axe-core-api, axe-task-worker, northsea-mcp.
+  - The managers (axemanager, projectsmgr, companionmgr, axon, tradingos,
+    northseamgr) are NOT systemd services. They are standing schedules: rows in
+    the core_schedules table with job_key 'axe_core:staande-<id>', every run in
+    core_job_runs, and what they told Luka in core_manager_messages. To check
+    whether they run and what they found, read those (GET /cron/schedules on the
+    local API, or the database), not systemctl.
+  - Reading status or logs (systemctl status, journalctl) is free; starting,
+    stopping or restarting a service needs Luka's approval.
+
 You have {MAX_STEPS} steps. Use them."""
 
 

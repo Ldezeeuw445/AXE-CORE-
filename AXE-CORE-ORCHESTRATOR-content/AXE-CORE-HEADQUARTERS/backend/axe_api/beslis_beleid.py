@@ -59,7 +59,14 @@ INSPECTIE_RE = re.compile(
     r"^\s*(apt list(?: --installed)?|apt-cache (?:policy|show)|dpkg -l|"
     r"dpkg-query\b|uname(?: -\w+)?|whoami|id(?: -\w+)?|df(?: -\w+)*|"
     r"free(?: -\w+)?|cat /etc/os-release|hostnamectl|systemd-detect-virt|"
-    r"which \S+|command -v \S+|type \S+|ps aux|uptime|cat /proc/version)"
+    r"which \S+|command -v \S+|type \S+|ps aux|uptime|cat /proc/version|"
+    # 15 nov: Luka moest elke keer "systemctl status northsea-desk-manager"
+    # goedkeuren. Kijken naar een dienst of zijn logs verandert niets; starten,
+    # stoppen en herstarten blijven gevraagd (SCHADELIJK_RE). Geen ; | & $ ` in
+    # de argumenten, zodat er niets mee kan liften.
+    r"systemctl (?:status|is-active|is-enabled|is-failed|show|list-units|list-timers|list-unit-files)"
+    r"(?: [\w@.:+=/,-]+)*|"
+    r"journalctl(?: [\w@.:+=/,-]+| '[\w :.+-]+'| \"[\w :.+-]+\")*)"
     r"(?:\s*(?:2>&1|2>/dev/null|>/dev/null|&>/dev/null))*\s*$",
     re.I,
 )
