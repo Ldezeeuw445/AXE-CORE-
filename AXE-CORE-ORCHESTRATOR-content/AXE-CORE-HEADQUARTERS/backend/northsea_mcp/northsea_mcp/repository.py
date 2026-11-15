@@ -25,11 +25,15 @@ import httpx
 from .leescache import (
     MAX_RIJEN,
     PAGINA,
+    TOEGESTANE_CURSOR,
     LeesBackoff,
     TabelVoorraad,
+    cursor_kandidaten,
     cursor_kolom,
+    onbekende_kolom,
     pgrst_code,
     postgrest_ts,
+    select_zonder_kolom,
     supabase_overbelast,
 )
 
@@ -81,6 +85,16 @@ GUARD_CODE = re.compile(r"NS_(?:CONTACT_POLICY|APPROVAL_INTEGRITY|OUTBOUND_PROVE
 
 class RepositoryError(RuntimeError):
     """Een databasefout. De tekst is veilig: geen sleutels, geen query."""
+
+
+class OnbekendeKolom(RepositoryError):
+    """PostgREST 400: de cursor-kolom bestaat niet op deze tabel."""
+
+    def __init__(self, table: str, kolom: str, code: str | None = None):
+        self.table = table
+        self.kolom = kolom
+        extra = f": {code}" if code else ""
+        super().__init__(f"database read failed for {table} (400){extra}")
 
 
 class InvalidId(ValueError):
@@ -186,6 +200,11 @@ class SupabaseRepository:
         if r.status_code >= 400:
             if supabase_overbelast(r.status_code, r.text or ""):
                 raise self._overbelast(r.status_code, r.text or "", table, schrijven=False)
+            if onbekende_kolom(r.status_code, r.text or ""):
+                order = (params.get("order") or "updated_at").split(",")[0].split(".")[0]
+                if order not in TOEGESTANE_CURSOR:
+                    order = "updated_at"
+                raise OnbekendeKolom(table, order, pgrst_code(r.text or ""))
             raise RepositoryError(f"database read failed for {table} ({r.status_code})")
         self._backoff.herstel()
         data = r.json()
@@ -397,14 +416,17 @@ class SupabaseRepository:
     # ── Hele tabellen, voor de leeslaag (inspect.py) ──────────────────────────
     async def _paginas(self, table: str, select: str, kolom: str, max_rows: int,
                       sinds: str | None) -> tuple[list[dict], bool]:
+        if kolom not in TOEGESTANE_CURSOR:
+            raise RepositoryError(f"database read failed for {table} (400)")
         rows: list[dict] = []
         offset = 0
         while offset < max_rows:
             lim = min(PAGINA, max_rows - offset)
             # id als tweede sleutel: gelijke timestamps rond een paginagrens
             # zouden anders rijen kunnen overslaan (PostgREST-volgorde is dan niet stabiel).
-            params = {"select": select, "order": f"{kolom}.asc,id.asc", "limit": str(lim), "offset": str(offset)}
-            if sinds:
+            volgorde = "id.asc" if kolom == "id" else f"{kolom}.asc,id.asc"
+            params = {"select": select, "order": volgorde, "limit": str(lim), "offset": str(offset)}
+            if sinds and kolom != "id":
                 params[kolom] = f"gte.{postgrest_ts(sinds)}"
             page = await self._get(table, params)
             rows += page
@@ -417,21 +439,34 @@ class SupabaseRepository:
         """Een tabel in kleine pagina's, daarna alleen rijen na de cursor.
 
         Eerste keer: volledige lading, plafond 5000, `truncated` als het meer is.
-        Daarna: `updated_at` (of created_at/occurred_at bij append-only) > cursor,
-        samenvoegen op id. 10 nov: zonder cursor was élke snapshot een volle scan.
+        Daarna: cursor-kolom >= cursor, samenvoegen op id. 10 nov: zonder cursor
+        was élke snapshot een volle scan. 15 nov: bij 400 (onbekende kolom) één
+        keer created_at, daarna een volle lading op id — en die keuze onthouden.
         """
         select = SNAPSHOT_SELECT[table]
-        kolom = cursor_kolom(table, select)
         async with self._slot(table):
             voorraad = self._voorraad
-            if voorraad.heeft_volle_lading(table):
-                cursor = voorraad.cursor(table) or None
-                rijen, afgekapt = await self._paginas(table, select, kolom, max_rows, cursor)
-                voorraad.merge(table, rijen, kolom, truncated=afgekapt, vol=False)
+            eerste = voorraad.kolom(table) or cursor_kolom(table, select)
+            kandidaten = cursor_kandidaten(eerste)
+            laatste: OnbekendeKolom | None = None
+            for i, kolom in enumerate(kandidaten):
+                if i:
+                    select = select_zonder_kolom(select, kandidaten[i - 1])
+                    # Andere kolom: oude cursor is een timestamp van de foute
+                    # kolom en mag niet als filter mee.
+                    herladen = True
+                else:
+                    herladen = kolom == "id" or not voorraad.heeft_volle_lading(table)
+                sinds = None if herladen else (voorraad.cursor(table) or None)
+                try:
+                    rijen, afgekapt = await self._paginas(table, select, kolom, max_rows, sinds)
+                except OnbekendeKolom as e:
+                    laatste = e
+                    log.warning("tabel %s: geen kolom %s, volgende cursor", table, kolom)
+                    continue
+                voorraad.merge(table, rijen, kolom, truncated=afgekapt, vol=herladen)
                 return voorraad.rijen(table), voorraad.truncated(table)
-            rijen, afgekapt = await self._paginas(table, select, kolom, max_rows, None)
-            voorraad.merge(table, rijen, kolom, truncated=afgekapt, vol=True)
-            return voorraad.rijen(table), afgekapt
+            raise laatste or RepositoryError(f"database read failed for {table} (400)")
 
     # ── Schrijven (alleen wat de write-tools nodig hebben) ────────────────────
     async def insert_deal_task(self, row: dict) -> dict:

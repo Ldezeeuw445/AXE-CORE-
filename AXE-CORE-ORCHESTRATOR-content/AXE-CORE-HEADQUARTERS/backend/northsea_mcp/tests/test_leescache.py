@@ -10,10 +10,13 @@ import pytest
 from northsea_mcp.leescache import (
     APPEND_CURSOR,
     BACKOFF_MAX_S,
+    CURSOR_KOLOM,
     LeesBackoff,
     TabelVoorraad,
+    cursor_kandidaten,
     cursor_kolom,
     hoogste_cursor,
+    onbekende_kolom,
     pgrst_code,
     postgrest_ts,
     supabase_overbelast,
@@ -57,7 +60,11 @@ def test_supabase_overbelast_herkent_521_en_pgrst002():
     assert supabase_overbelast(521) and supabase_overbelast(503, '{"code":"PGRST002"}')
     assert supabase_overbelast(500) and not supabase_overbelast(400)
     assert pgrst_code('{"code":"PGRST002","message":"schema"}') == "PGRST002"
+    assert pgrst_code('{"code":"PGRST204"}') == "PGRST204"
+    assert pgrst_code('{"code":"42703"}') == "42703"
     assert pgrst_code("nope") is None
+    assert onbekende_kolom(400, '{"code":"PGRST204"}') and onbekende_kolom(400, '{"code":"42703"}')
+    assert not onbekende_kolom(400, '{"code":"PGRST116"}') and not onbekende_kolom(503, '{"code":"PGRST002"}')
 
 
 def test_backoff_exponentieel_tot_tien_minuten():
@@ -327,3 +334,107 @@ def test_tabellen_zonder_updated_at_lezen_op_created_at():
     for t in ("communications", "deal_evidence", "match_assessments", "verification_checks"):
         assert cursor_kolom(t, SNAPSHOT_SELECT[t]) == "created_at", t
     assert "updated_at" not in SNAPSHOT_SELECT["communications"].split(",")
+    assert set(SNAPSHOT_SELECT) <= set(CURSOR_KOLOM)
+    assert cursor_kandidaten("updated_at") == ["updated_at", "created_at", "id"]
+    assert cursor_kandidaten("created_at") == ["created_at", "id"]
+    assert cursor_kandidaten("id") == ["id"]
+
+
+def test_fetch_all_vier_tabellen_zonder_updated_at_en_schijf(monkeypatch, tmp_path):
+    gezien: list[tuple[str, dict]] = []
+
+    def gedrag(req):
+        q = _qs(req)
+        naam = str(req.url).split("/rest/v1/")[-1].split("?")[0]
+        gezien.append((naam, q))
+        return httpx.Response(200, json=[{"id": f"{naam}-1", "created_at": "2026-11-13T08:00:00Z"}])
+
+    vier = ("communications", "deal_evidence", "verification_checks", "match_assessments")
+
+    async def run():
+        r, _ = _repo(gedrag, monkeypatch, tmp_path)
+        for t in vier:
+            rows, af = await r.fetch_all(t)
+            assert af is False and rows[0]["id"] == f"{t}-1"
+        await r.aclose()
+        r2, _ = _repo(gedrag, monkeypatch, tmp_path)
+        tweede, _ = await r2.fetch_all("deal_evidence")
+        await r2.aclose()
+        return tweede
+
+    tweede = asyncio.run(run())
+    assert tweede[0]["id"] == "deal_evidence-1"
+    for naam, q in gezien:
+        if naam in vier:
+            assert q["order"] == "created_at.asc,id.asc", (naam, q)
+            assert "updated_at" not in q
+    assert (tmp_path / "deal_evidence.json").is_file()
+    disk = TabelVoorraad(tmp_path)
+    assert disk.kolom("deal_evidence") == "created_at"
+    assert disk.cursor("deal_evidence") == "2026-11-13T08:00:00Z"
+    # tweede process: volle lading van schijf, daarna alleen delta
+    delta = [q for naam, q in gezien if naam == "deal_evidence"]
+    assert "created_at" not in delta[0]
+    assert delta[1]["created_at"].startswith("gte.2026-11-13T08:00:00")
+
+
+def test_fetch_all_onbekende_kolom_probeert_created_at(monkeypatch, tmp_path, caplog):
+    import logging
+    caplog.set_level(logging.WARNING)
+    gezien = []
+
+    def gedrag(req):
+        q = _qs(req)
+        gezien.append(q)
+        if q.get("order", "").startswith("updated_at"):
+            return httpx.Response(400, json={"code": "PGRST204", "message": "column not in schema cache"})
+        return httpx.Response(200, json=[{"id": "1", "created_at": "2026-01-01T00:00:00Z"}])
+
+    async def run():
+        r, _ = _repo(gedrag, monkeypatch, tmp_path)
+        eerste, _ = await r.fetch_all("opportunities")
+        tweede, _ = await r.fetch_all("opportunities")
+        await r.aclose()
+        return eerste, tweede
+
+    eerste, tweede = asyncio.run(run())
+    assert eerste[0]["id"] == "1" and tweede[0]["id"] == "1"
+    assert gezien[0]["order"].startswith("updated_at")
+    assert gezien[1]["order"] == "created_at.asc,id.asc"
+    # keuze gecached: geen tweede 400
+    assert all(not q["order"].startswith("updated_at") for q in gezien[1:])
+    assert gezien[2]["created_at"].startswith("gte.")
+    assert "Traceback" not in caplog.text
+    assert "geen kolom updated_at" in caplog.text
+    assert TabelVoorraad(tmp_path).kolom("opportunities") == "created_at"
+
+
+def test_fetch_all_onbekende_kolom_valt_terug_op_id(monkeypatch, caplog):
+    import logging
+    caplog.set_level(logging.WARNING)
+    gezien = []
+
+    def gedrag(req):
+        q = _qs(req)
+        gezien.append(q)
+        if q.get("order", "").startswith(("updated_at", "created_at")):
+            return httpx.Response(400, json={"code": "42703", "message": "column does not exist"})
+        return httpx.Response(200, json=[{"id": "aaa"}])
+
+    async def run():
+        r, _ = _repo(gedrag, monkeypatch)
+        rows, af = await r.fetch_all("opportunities")
+        opnieuw, _ = await r.fetch_all("opportunities")
+        await r.aclose()
+        return rows, af, opnieuw
+
+    rows, af, opnieuw = asyncio.run(run())
+    assert rows[0]["id"] == "aaa" and af is False and opnieuw[0]["id"] == "aaa"
+    assert gezien[0]["order"].startswith("updated_at")
+    assert gezien[1]["order"].startswith("created_at")
+    assert gezien[2]["order"] == "id.asc"
+    assert "updated_at" not in gezien[2] and "created_at" not in gezien[2]
+    # gecached als id: volgende keer geen timestamp-filter, weer id
+    assert gezien[3]["order"] == "id.asc"
+    assert "Traceback" not in caplog.text
+    assert any("geen kolom" in r.message for r in caplog.records)

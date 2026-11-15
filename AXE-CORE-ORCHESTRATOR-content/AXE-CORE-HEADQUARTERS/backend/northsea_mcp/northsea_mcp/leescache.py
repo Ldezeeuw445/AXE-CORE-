@@ -31,25 +31,46 @@ BACKOFF_START_S = 8.0
 BACKOFF_MAX_S = 600.0  # 10 min: daarna is nóg een volle scan zinloos tot de pool herstelt
 TABELNAAM = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 
-# Tabellen zonder updated_at: alleen append, cursor op het tijdstip van invoegen.
-# northsea_audit_events heeft occurred_at, geen created_at/updated_at (P0.4).
 # Tabellen die NA aanmaak nog veranderen maar geen updated_at hebben: de cursor
 # op created_at ziet die wijziging niet (communications.delivery_status bij een
 # bounce). Die laden we daarom ook periodiek helemaal opnieuw.
 VOLLEDIG_HERLADEN_NA_S: dict[str, int] = {"communications": 30 * 60}
 
-# Tabellen ZONDER updated_at (gemeten in de database, 14 nov). Een filter of
-# sortering op een kolom die niet bestaat geeft PostgREST 400; dat legde van
-# 10 tot 14 nov de engine, operations en discovery plat (502, 63x op rij).
-APPEND_CURSOR: dict[str, str] = {
-    "deal_events": "created_at",
-    "northsea_audit_events": "occurred_at",
-    "inbound_email_attachments": "created_at",
+TOEGESTANE_CURSOR = frozenset({"updated_at", "created_at", "occurred_at", "id"})
+
+# Per snapshot-tabel, gemeten 15 nov in kbimnuepbecbyezedvih. Zonder deze kaart
+# koos fetch_all updated_at voor select=* (deal_evidence, verification_checks,
+# match_assessments) en communications na de review-fix van #312 — PostgREST
+# 400, engine/operations 502. Volgorde: updated_at, anders created_at, anders
+# occurred_at. Runtime-fallback in repository.py vangt een verkeerde kaart op.
+CURSOR_KOLOM: dict[str, str] = {
+    "opportunities": "updated_at",
+    "buyer_requirements": "updated_at",
+    "supplier_offers": "updated_at",
+    "companies": "updated_at",
+    "contacts": "updated_at",
     "communications": "created_at",
+    "email_intelligence": "updated_at",
+    "northsea_followups": "updated_at",
+    "northsea_audit_events": "occurred_at",
+    "call_intelligence": "updated_at",
+    "reply_drafts": "updated_at",
+    "deal_tasks": "updated_at",
+    "action_queue": "updated_at",
+    "deal_events": "created_at",
     "deal_evidence": "created_at",
-    "match_assessments": "created_at",
+    "deal_documents": "updated_at",
+    "inbound_email_attachments": "created_at",
     "verification_checks": "created_at",
+    "match_assessments": "created_at",
+    "sourcing_campaigns": "updated_at",
+    "sourcing_candidates": "updated_at",
+    "deal_automation_policy": "updated_at",
+    "commissions": "updated_at",
 }
+
+# Alias: tabellen zonder updated_at. Tests en commentaar gebruiken deze naam.
+APPEND_CURSOR: dict[str, str] = {t: k for t, k in CURSOR_KOLOM.items() if k != "updated_at"}
 
 
 async def haal_tabellen(repo: Any, namen: list[str], *, return_exceptions: bool = True) -> list[Any]:
@@ -63,21 +84,42 @@ async def haal_tabellen(repo: Any, namen: list[str], *, return_exceptions: bool 
 
 
 def cursor_kolom(table: str, select: str = "") -> str:
-    """updated_at, behalve append-only of een select zonder die kolom.
+    """updated_at als hij bestaat, anders created_at, anders occurred_at.
 
-    Filteren op een kolom die niet in de projectie zit werkt in PostgREST, maar
-    de cursor wordt uit de teruggegeven rijen gelezen. Zonder updated_at in
-    SNAPSHOT_SELECT bleef de cursor leeg en deed élke volgende leesbeurt een
-    volle scan (communications, review op PR 312).
+    De kaart is de bron. select is alleen voor tabellen die we nog niet kennen:
+    PostgREST mag filteren op een kolom buiten de projectie, maar de cursor
+    wordt uit de rijen gelezen, dus een ontbrekende kolom in de select gaf
+    een lege cursor en weer een volle scan (#312). Een kolom die in de select
+    staat maar niet in de tabel geeft 400 — daarom de kaart, niet de select.
     """
-    if table in APPEND_CURSOR:
-        return APPEND_CURSOR[table]
-    if select and select != "*" and "updated_at" not in select:
-        if "created_at" in select:
-            return "created_at"
-        if "occurred_at" in select:
-            return "occurred_at"
+    if table in CURSOR_KOLOM:
+        return CURSOR_KOLOM[table]
+    kolommen = {p.strip() for p in select.split(",") if p.strip()} if select and select != "*" else set()
+    for kandidaat in ("updated_at", "created_at", "occurred_at"):
+        if kandidaat in kolommen:
+            return kandidaat
     return "updated_at"
+
+
+def cursor_kandidaten(eerste: str) -> list[str]:
+    """Eerst de kaart, bij 400 één keer created_at, daarna id (geen timestamp)."""
+    if eerste not in TOEGESTANE_CURSOR:
+        eerste = "updated_at"
+    if eerste == "id":
+        return ["id"]
+    out: list[str] = []
+    for k in (eerste, "created_at", "id"):
+        if k not in out:
+            out.append(k)
+    return out
+
+
+def select_zonder_kolom(select: str, kolom: str) -> str:
+    """Haal een onbestaande kolom uit de projectie; `*` blijft `*`."""
+    if not select or select == "*" or kolom not in TOEGESTANE_CURSOR:
+        return select
+    delen = [p for p in select.split(",") if p.strip() != kolom]
+    return ",".join(delen) if delen else "id"
 
 
 def postgrest_ts(waarde: str) -> str:
@@ -116,9 +158,17 @@ def supabase_overbelast(status: int, body: str = "") -> bool:
 
 def pgrst_code(body: str) -> str | None:
     """Alleen de stabiele code, nooit de body (daarin kan een query of rij staan)."""
-    if "PGRST002" in (body or ""):
-        return "PGRST002"
+    for code in ("PGRST002", "PGRST204", "42703"):
+        if code in (body or ""):
+            return code
     return None
+
+
+def onbekende_kolom(status: int, body: str = "") -> bool:
+    """PostgREST 400: de gevraagde kolom zit niet in het schema (PGRST204 / 42703)."""
+    if status != 400:
+        return False
+    return pgrst_code(body) in {"PGRST204", "42703"}
 
 
 class LeesBackoff:
@@ -155,9 +205,11 @@ class LeesBackoff:
 class TabelVoorraad:
     """Per-tabel rijen + cursor, in geheugen, en op schijf als de map schrijfbaar is.
 
-    Schijf is goedkoop en overleeft een herstart, zodat deploy 1.5.1 niet meteen
+    Schijf is goedkoop en overleeft een herstart, zodat deploy 1.5.2 niet meteen
     weer 23 volle scans doet. Alleen onder NORTHSEA_TABLE_CACHE_DIR (op de VPS
-    /opt/northsea-mcp/state — ProtectSystem weigert /var/tmp).
+    /opt/northsea-mcp/state — ProtectSystem weigert /var/tmp). De gekozen
+    cursor-kolom gaat mee: anders probeert een herstart opnieuw updated_at
+    op tabellen waar die 400 gaf.
     """
 
     def __init__(self, pad: str | Path | None = None):
@@ -165,6 +217,7 @@ class TabelVoorraad:
         self._rijen: dict[str, dict[str, dict]] = {}
         self._cursor: dict[str, str] = {}
         self._truncated: dict[str, bool] = {}
+        self._kolom: dict[str, str] = {}
         self._vol: set[str] = set()
         self._vol_op: dict[str, float] = {}
         self._disk_gelezen: set[str] = set()
@@ -192,6 +245,11 @@ class TabelVoorraad:
         self._uit_disk(table)
         return bool(self._truncated.get(table))
 
+    def kolom(self, table: str) -> str:
+        self._uit_disk(table)
+        k = self._kolom.get(table, "")
+        return k if k in TOEGESTANE_CURSOR else ""
+
     def rijen(self, table: str) -> list[dict]:
         self._uit_disk(table)
         # Kopie: engine.tick(dry_run=True) zet velden op de geretourneerde dicts
@@ -203,6 +261,8 @@ class TabelVoorraad:
         self._uit_disk(table)
         bak = self._rijen.setdefault(table, {})
         voeg_samen(bak, rijen)
+        if kolom in TOEGESTANE_CURSOR:
+            self._kolom[table] = kolom
         boven = hoogste_cursor(bak.values(), kolom)
         if boven:
             self._cursor[table] = boven
@@ -244,6 +304,9 @@ class TabelVoorraad:
         cur = data.get("cursor")
         if isinstance(cur, str) and cur:
             self._cursor[table] = cur
+        gekozen = data.get("kolom")
+        if isinstance(gekozen, str) and gekozen in TOEGESTANE_CURSOR:
+            self._kolom[table] = gekozen
         self._truncated[table] = bool(data.get("truncated"))
         self._vol.add(table)
 
@@ -254,6 +317,7 @@ class TabelVoorraad:
         tmp = pad.with_suffix(".json.tmp")
         payload = {
             "cursor": self._cursor.get(table, ""),
+            "kolom": self._kolom.get(table, ""),
             "truncated": bool(self._truncated.get(table)),
             "rows": list(self._rijen.get(table, {}).values()),
         }
