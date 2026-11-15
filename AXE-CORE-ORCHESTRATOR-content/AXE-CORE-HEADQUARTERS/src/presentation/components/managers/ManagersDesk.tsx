@@ -260,6 +260,25 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
     if (!agent) return;
     // Wat je typt staat binnen een paar seconden ook op je andere apparaten.
     window.setTimeout(() => { void syncManagerDraad(alleIds); }, 1500);
+    // 15 nov: dit moet VÓÓR 'ok = keur de wachtende stap goed', anders at die
+    // regel 'ok V1' op en gebeurde er stil niets.
+    // NorthSea: "ok V1" / "ok alles" voert dat opruimvoorstel uit. Alleen
+    // wegzetten; versturen en goedkeuren kan deze weg niet. Herkent de server
+    // het niet, dan gewoon het gesprek.
+    if (agent.id === 'northseamgr' && /^\s*(ok|oke|oké|okay|ja|yes|akkoord|doe maar)\b/i.test(tekst)
+        && /\b(v\s*\d{1,2}|alles|allemaal|all)\b/i.test(tekst)) {
+      void northseaOpruimenOk(tekst).then((r) => {
+        if (r.herkend) {
+          void syncManagerDraad(alleIds).then(() => tick((n) => n + 1));
+          return;
+        }
+        void laatManagerAntwoorden(agent.id, tekst, (actie) => startManagerJob(agent.id, actie, { device: job?.device ?? null, tab: job?.tab }));
+      }).catch(() => {
+        void laatManagerAntwoorden(agent.id, tekst, (actie) => startManagerJob(agent.id, actie, { device: job?.device ?? null, tab: job?.tab }));
+      });
+      return;
+    }
+
     const srv = server.agents[agent.id];
     const akkoord = followupIsAkkoord(tekst);
     const afwijs = followupIsAfwijzing(tekst);
@@ -274,6 +293,8 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
           useAxeJobStore.getState().patch(job.id, { state: akkoord ? 'running' : 'failed' });
         }
         verversServerAgents();
+        // Niets om goed te keuren: dan is het gewoon een bericht, geen stilte.
+        if (!ok) void laatManagerAntwoorden(agent.id, tekst, (actie) => startManagerJob(agent.id, actie, { device: job?.device ?? null, tab: job?.tab }));
       });
       return;
     }
@@ -289,23 +310,6 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
         return;
       }
       handoff(agent.id, target, tekst);
-      return;
-    }
-
-    // NorthSea: "ok V1" / "ok alles" voert dat opruimvoorstel uit. Alleen
-    // wegzetten; versturen en goedkeuren kan deze weg niet. Herkent de server
-    // het niet, dan gewoon het gesprek.
-    if (agent.id === 'northseamgr' && /^\s*(ok|oke|oké|okay|ja|yes|akkoord|doe maar)\b/i.test(tekst)
-        && /\b(v\s*\d{1,2}|alles|allemaal|all)\b/i.test(tekst)) {
-      void northseaOpruimenOk(tekst).then((r) => {
-        if (r.herkend) {
-          void syncManagerDraad(alleIds).then(() => tick((n) => n + 1));
-          return;
-        }
-        void laatManagerAntwoorden(agent.id, tekst, (actie) => startManagerJob(agent.id, actie, { device: job?.device ?? null, tab: job?.tab }));
-      }).catch(() => {
-        void laatManagerAntwoorden(agent.id, tekst, (actie) => startManagerJob(agent.id, actie, { device: job?.device ?? null, tab: job?.tab }));
-      });
       return;
     }
 
