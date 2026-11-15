@@ -106,3 +106,19 @@ def test_gewone_namen():
     assert device_actions.resolve_device("Mac mini") == "mac-mini-van-luka-5"
     assert device_actions.resolve_device("iMac") == "main-imac-luka"
     assert device_actions.approval_key("iMac", "pointer.click", {}) == "device:main-imac-luka pointer.click"
+
+
+def test_mac_mini_gaat_naar_de_worker_die_nu_leeft():
+    """15 nov: 'Mac mini' ging naar mac-mini-van-luka-5, dood sinds 13 nov."""
+    apparaten = [
+        {"device": "mac-mini-van-luka-5", "online": False, "seconds_since_heartbeat": 160000},
+        {"device": "mini-van-luka-6", "online": True, "seconds_since_heartbeat": 12},
+        {"device": "mac-mini-van-luka-6", "online": False, "seconds_since_heartbeat": 66000},
+        {"device": "main-imac-luka", "online": False, "seconds_since_heartbeat": 160000},
+        {"device": "imac", "online": True, "seconds_since_heartbeat": 8},
+    ]
+    assert device_actions.resolve_device("Mac mini", apparaten) == "mini-van-luka-6"
+    assert device_actions.resolve_device("iMac", apparaten) == "imac"
+    assert device_actions.resolve_device("mac-mini-van-luka-5", apparaten) == "mini-van-luka-6"
+    # Niemand online: de vaste naam, zodat de foutmelding 'offline' eerlijk blijft.
+    assert device_actions.resolve_device("Mac mini", [a for a in apparaten if "mini" not in a["device"]]) == "mac-mini-van-luka-5"

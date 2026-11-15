@@ -14,6 +14,7 @@ The model never picks the tier; an unknown tool is refused.
 from __future__ import annotations
 
 import json
+import re
 import os
 import time
 from datetime import datetime, timezone
@@ -89,10 +90,30 @@ ALIASES = {
 }
 
 
-def resolve_device(name: str) -> str:
-    """'Mac mini' and 'iMac' are how Luka (and the model) say it."""
+# Welke worker-ids bij welke Mac horen. 15 nov: de Mac mini heette eerst
+# mac-mini-van-luka-5 en nu mini-van-luka-6, de iMac main-imac-luka en nu imac;
+# de vaste alias stuurde elke actie naar een worker die sinds 13 nov dood was.
+FAMILIE = {"mac-mini-van-luka-5": re.compile(r"mini", re.I), "main-imac-luka": re.compile(r"imac", re.I)}
+
+
+def levende_van(vast: str, apparaten: list[dict[str, Any]]) -> str:
+    """De online worker van dezelfde Mac met de verste hartslag; anders de vaste naam."""
+    familie = FAMILIE.get(vast)
+    if not familie:
+        return vast
+    online = [d for d in apparaten if d.get("online") and familie.search(str(d.get("device") or ""))]
+    if not online:
+        return vast
+    return min(online, key=lambda d: d.get("seconds_since_heartbeat") or 0)["device"]
+
+
+def resolve_device(name: str, apparaten: list[dict[str, Any]] | None = None) -> str:
+    """'Mac mini' and 'iMac' are how Luka (and the model) say it.
+
+    Met de lijst van apparaten erbij wordt het de worker die nu echt leeft."""
     n = " ".join(str(name).replace("-", " ").lower().split())
-    return ALIASES.get(n, str(name))
+    vast = ALIASES.get(n, str(name))
+    return levende_van(vast, apparaten) if apparaten is not None else vast
 
 
 def approval_key(device: str, tool: str, args: dict[str, Any]) -> str | None:
@@ -137,7 +158,8 @@ def list_devices(db=None, now: Callable[[], float] = time.time) -> list[dict[str
             ws = [w for w in ws.split(",") if w]
         out.append({
             "device": r["device_id"],
-            "label": LABELS.get(r["device_id"], r.get("host") or r["device_id"]),
+            "label": LABELS.get(r["device_id"]) or (
+                "Mac mini" if "mini" in r["device_id"] else "iMac" if "imac" in r["device_id"] else r.get("host") or r["device_id"]),
             "online": age < HEARTBEAT_STALE_S,
             "seconds_since_heartbeat": int(age),
             "workspaces": ws,
@@ -181,7 +203,10 @@ def run_on_device(
         return {"error": f"unknown workspace {workspace!r}. Use one of {', '.join(WORKSPACES)}."}
 
     db = db or _client()
-    known = {d["device"]: d for d in list_devices(db)}
+    apparaten = list_devices(db)
+    known = {d["device"]: d for d in apparaten}
+    # "Mac mini" / de oude naam -> de worker van die Mac die nu leeft.
+    device = levende_van(device, apparaten)
     if device not in known:
         return {"error": f"no such device {device!r}. Call list_devices."}
     if not known[device]["online"]:
