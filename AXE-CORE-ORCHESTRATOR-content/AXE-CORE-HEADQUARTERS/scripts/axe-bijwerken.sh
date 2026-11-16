@@ -100,7 +100,16 @@ else
 fi
 
 zeg "Pakketten (exact uit package-lock)"
-npm ci --no-audit --no-fund
+# Eigen npm-cache voor AXE. De gedeelde ~/.npm wordt tegelijk gebruikt door de
+# npx-MCP-servers van Claude e.d.; op 15/16-11 gaf dat drie keer EEXIST/ENOENT
+# in ~/.npm/_cacache midden in npm ci. npm ci had node_modules dan al leeg
+# gemaakt, dus de Trading Team-job (vite-node) faalde daarna elke run.
+AXE_NPM_CACHE="${AXE_NPM_CACHE:-$HOME/.npm-axe-cache}"
+if ! npm ci --no-audit --no-fund --cache "$AXE_NPM_CACHE"; then
+  zeg "npm ci mislukt — cache nakijken en één keer opnieuw"
+  npm cache verify --cache "$AXE_NPM_CACHE" || true
+  npm ci --no-audit --no-fund --cache "$AXE_NPM_CACHE"
+fi
 
 # ── 2. Oude rommel weg vóór de bouw ──────────────────────────────────────────
 # De tijdelijke images van afgebroken dmg-stappen. Die zijn 40 MB per stuk en
