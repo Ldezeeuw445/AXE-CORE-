@@ -395,7 +395,20 @@ def _chat_met_luka(db: Any, agent: str, bevindingen: list[Any], gedaan: list[str
         gezien = [f"{b.titel}. {b.detail}".strip() for b in bevindingen if b.voor != "luka"]
         if app:
             import sleutels
-            nodig += [f"Sleutel {r}" for r in sleutels.problemen(sleutels.lees(db), app)]
+            for r in sleutels.problemen(sleutels.lees(db), app):
+                if _sleutel_technisch(r):
+                    # 16 nov: "dax-developer-01 login broken (DAX is in error: installing
+                    # dax-routine failed: ssh ...)" is geen login van Luka maar een kapotte
+                    # installatie. Eerst zelf; pas als dat niet lukt een vraag.
+                    import northsea_bewaker as nb
+                    naam = r.split(" ", 1)[0]
+                    b = nb.Bevinding(code="sleutel_technisch", voor="luka", titel=f"Sleutel {naam} werkt niet", detail=r)
+                    if _eerst_zelf(db, agent, b, datetime.now(timezone.utc)) == "luka":
+                        nodig.append(f"{b.titel}. {open_vragen.get(b.titel) or r}")
+                    else:
+                        gedaan.append(_zelf_regel(db, agent, b))
+                else:
+                    nodig.append(f"Sleutel {r}")
         tekst = md.bericht(gedaan or [], gezien, nodig, rustig or "Alles loopt, ik hoef je nergens voor.")
         return md.vertel_luka(db, agent, tekst)
     except Exception:  # noqa: BLE001 -- de chat mag de pulse nooit breken
@@ -412,11 +425,18 @@ ZELF_PROBEREN = frozenset({
     # Niet inbound_stil: daarvoor is Luka's testmail nodig (de mailroute-stap).
     "planner_fout", "motor_stil", "manager_stil", "manager_faalt",
     "jobs_falen", "jobs_achter", "wachtrij_vast", "actief_vast",
-    "limiet_vol_door_notities", "ruis_in_geheugen",
+    "limiet_vol_door_notities", "ruis_in_geheugen", "sleutel_technisch",
 })
 ZELF_OPNIEUW_NA = timedelta(hours=6)
 ZELF_MAX_PER_DAG = 2
 _ZELF_KLAAR_MIS = ("failed", "blocked", "cancelled")
+
+
+def _sleutel_technisch(regel: str) -> bool:
+    laag = regel.lower()
+    if any(w in laag for w in ("logged out", "not logged in", "login required", "missing (")):
+        return False
+    return any(w in laag for w in ("error", "failed", "exited", "timeout", "time-out"))
 
 
 def _zelf_titel(b: Any) -> str:
@@ -533,6 +553,24 @@ def _ruim_dubbele_voorstellen_op(db: Any, rijen: list[dict[str, Any]], nu: datet
     return opgeruimd
 
 
+def _archiveer_verouderde_voorstellen(db: Any, rijen: list[dict[str, Any]], nu: datetime) -> list[dict[str, Any]]:
+    """Planner-voorstellen die een maand niemand oppakte: zelf archiveren (16 nov)."""
+    import projecten_bewaker as pb
+    gedaan = []
+    for r in pb.verouderde_voorstellen(rijen, nu)[:20]:
+        meta = r.get("metadata") if isinstance(r.get("metadata"), dict) else {}
+        try:
+            db.table("core_tasks").update({
+                "status": "cancelled",
+                "metadata": {**meta, "opgeruimd_door": "projectsmgr", "reden": "verouderd voorstel: een maand niemand opgepakt",
+                             "opgeruimd_op": nu.isoformat(), "terugzetten": "status weer op pending"},
+            }).eq("id", r["id"]).eq("status", "pending").execute()
+            gedaan.append(r)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("projectsmgr: kon voorstel %s niet archiveren (%s)", r.get("id"), exc)
+    return gedaan
+
+
 def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
     """Eigenaar van de takenlijst: ziet wat stilstaat, ruimt dubbels op, roept
     Luka alleen voor wat hij zelf niet kan oplossen."""
@@ -540,6 +578,9 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
     rijen = _open_taken(db)
     opgeruimd = _ruim_dubbele_voorstellen_op(db, rijen, nu)
     weg = {r.get("id") for r in opgeruimd}
+    rijen = [r for r in rijen if r.get("id") not in weg]
+    gearchiveerd = _archiveer_verouderde_voorstellen(db, rijen, nu)
+    weg = {r.get("id") for r in gearchiveerd}
     rijen = [r for r in rijen if r.get("id") not in weg]
 
     bevindingen = pb.beoordeel(rijen, nu)
@@ -556,7 +597,9 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
             db, "AXE Core", "Taken: " + ("; ".join(delen) if delen else "niets staat stil") + "."))
     chat = _chat_met_luka(
         db, "projectsmgr", bevindingen,
-        gedaan=[f"{len(opgeruimd)} dubbele voorstellen opgeruimd"] if opgeruimd else [], app="AXE Core",
+        gedaan=([f"{len(opgeruimd)} dubbele voorstellen opgeruimd"] if opgeruimd else []) + (
+            [f"{len(gearchiveerd)} verouderde voorstellen gearchiveerd (een maand niemand opgepakt, terug te zetten): "
+             + "; ".join(str(r.get('title'))[:60] for r in gearchiveerd[:3])] if gearchiveerd else []), app="AXE Core",
         rustig="Op de takenlijst staat niets stil.")
     return {
         "job": "projects and tasks",
@@ -564,6 +607,7 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
         "voor_luka": [b.code for b in voor_luka],
         "bevindingen": [b.code for b in bevindingen],
         "opgeruimd": len(opgeruimd),
+        "gearchiveerd": len(gearchiveerd),
         "chat": chat,
         "dagoverzicht": overzicht,
         "gerapporteerd": gerapporteerd,

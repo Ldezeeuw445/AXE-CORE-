@@ -324,3 +324,13 @@ async def test_update_task_rejects_stale_write(service):
 
 async def test_unused_buyer_company_constant_is_valid():
     assert BUYER_CO.count("-") == 4
+
+
+def test_deal_id_wordt_geen_telefoonnummer():
+    """16 nov: 'Yes needed: [phone]c37-babc-7c90205251ea' in Luka's chat."""
+    from northsea_mcp.service import UUID_RE, PHONE
+    tekst = "Yes needed: 17077486-5605-4c37-babc-7c90205251ea — Copper Cathode, bel +31 6 1234 5678"
+    ids: list[str] = []
+    gemaskeerd = UUID_RE.sub(lambda m: ids.append(m.group(0)) or f"\x00{len(ids) - 1}\x00", tekst)
+    assert "17077486" not in PHONE.sub("[phone]", gemaskeerd).replace("\x000\x00", "")
+    assert "[phone]" in PHONE.sub("[phone]", gemaskeerd)

@@ -129,3 +129,28 @@ def test_lege_lijst_zegt_dat_niets_stilstaat():
     uit = gm.run_projectsmgr(db, NU)
     assert uit["bevindingen"] == [] and uit["opgeruimd"] == 0
     assert "niets staat stil" in db.rows("core_manager_messages")[0]["body"]
+
+
+def test_verouderde_plannervoorstellen_archiveert_hij_zelf_beveiliging_blijft():
+    """16 nov: '16 voorstellen liggen al meer dan een maand stil ... schrappen of inplannen' -- nu doet hij het zelf."""
+    db = FakeDb()
+    oud = "2026-09-14T09:00:00+00:00"
+    db.db["core_tasks"] = [
+        {"id": "o1", "status": "pending", "title": "VPS en repo weer synchroniseren", "requested_by": "planner",
+         "assignee": "code-agent", "updated_at": oud, "metadata": {}},
+        {"id": "o2", "status": "pending", "title": "Beveiligingslekken in cloudflare-migration-2 dichten", "requested_by": "planner",
+         "assignee": "code-agent", "updated_at": oud, "metadata": {}},
+        {"id": "o3", "status": "pending", "title": "Eigen idee van Luka", "requested_by": "luka",
+         "assignee": "code-agent", "updated_at": oud, "metadata": {}},
+    ]
+    uit = gm.run_projectsmgr(db, NU)
+    status = {r["id"]: r["status"] for r in db.rows("core_tasks") if r["id"] in ("o1", "o2", "o3")}
+    assert uit["gearchiveerd"] == 1 and status == {"o1": "cancelled", "o2": "pending", "o3": "pending"}
+    chat = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "projectsmgr" and r["to_agent"] == "luka"]
+    assert "1 verouderde voorstellen gearchiveerd" in chat[-1]["body"]
+
+
+def test_technische_sleutelfout_is_eerst_zelf():
+    assert gm._sleutel_technisch("dax-developer-01 login broken (DAX is in error: installing dax-routine failed: command exited)")
+    assert not gm._sleutel_technisch("claude2 login broken (logged out)")
+    assert not gm._sleutel_technisch("AISSTREAM_API_KEY missing (required)")

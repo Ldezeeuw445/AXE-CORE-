@@ -135,6 +135,7 @@ def parse_ts(value: Any) -> datetime | None:
 DEAL_CODE = re.compile(r"^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*-\d{2,}[A-Z0-9-]*$")
 EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 PHONE = re.compile(r"(?<!\w)\+?\d[\d ().\-]{7,}\d")
+UUID_RE = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
 ROLE_WORD = {"buyer": "Buyer", "supplier": "Supplier", "counterparty": "Counterparty"}
 # Woorden die in bedrijfsnamen staan maar niemand identificeren. Wie hier een
 # woord toevoegt, maakt maskering zwakker: alleen echt generieke termen.
@@ -363,7 +364,17 @@ class Redactor:
         # "chanda@mopani.com" eerst "chanda@[domain]", en dan herkent het
         # e-mailpatroon het adres niet meer en blijft de voornaam staan
         # (gevonden door test_service).
+        # 16 nov: een deal-id als "17077486-5605-4c37-babc-…" leek op een
+        # telefoonnummer en werd "[phone]c37-…" in Luka's chat. Ids eerst opzij.
+        ids: list[str] = []
+
+        def _bewaar(m: re.Match) -> str:
+            ids.append(m.group(0))
+            return f"\x00{len(ids) - 1}\x00"
+
+        s = UUID_RE.sub(_bewaar, s)
         s = PHONE.sub("[phone]", EMAIL.sub("[email]", s))
+        s = re.sub(r"\x00(\d+)\x00", lambda m: ids[int(m.group(1))], s)
         for waarde, label in sorted(self._pairs, key=lambda p: -len(p[0])):
             s = re.sub(re.escape(waarde), label, s, flags=re.I)
         return s

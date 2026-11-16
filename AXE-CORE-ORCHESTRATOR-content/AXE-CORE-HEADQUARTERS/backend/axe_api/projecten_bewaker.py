@@ -77,6 +77,18 @@ def _sleutel(rij: dict[str, Any]) -> tuple[str, str]:
     return str(rij.get("assignee") or ""), titel
 
 
+# 16 nov, Luka: managers moeten doen, niet melden. Een planner-voorstel dat
+# een maand niemand oppakte is verouderd (de helft was al op een andere manier
+# gedaan). De manager archiveert het zelf, terug te zetten; beveiliging blijft
+# altijd staan tot iemand ernaar kijkt.
+NIET_VANZELF_WEG = re.compile(r"beveilig|security|lek|vuln|secret|sleutel|privacy", re.I)
+
+
+def verouderde_voorstellen(rijen: list[dict[str, Any]], nu: datetime) -> list[dict[str, Any]]:
+    return [r for r in rijen if r.get("status") == "pending" and r.get("requested_by") == "planner"
+            and _leeftijd(r, nu) >= VOORSTEL_OUD_NA and not NIET_VANZELF_WEG.search(str(r.get("title") or ""))]
+
+
 def dubbele_voorstellen(rijen: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """De `pending`-rijen die een nieuwere tweeling hebben. Nieuwste blijft."""
     groepen: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
