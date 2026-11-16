@@ -82,7 +82,9 @@ def test_pulse_herkanst_vraagt_luka_en_zwijgt_als_er_niets_verandert():
     engine = next(r for r in db.rows("core_schedules") if r["job_key"] == "northsea:engine")
     assert engine["next_run_at"] == NU.isoformat()
     assert engine["metadata"]["vroeg_herkanst_door"] == "companionmgr"
-    assert "Vaste jobs falen achter elkaar" in [r.get("title") for r in db.rows("core_approvals")]
+    # 16 nov: eerst zelf proberen; geen vraag aan Luka zolang die poging loopt.
+    assert "Zelf oplossen: Vaste jobs falen achter elkaar" in [r.get("title") for r in db.rows("core_tasks")]
+    assert "Vaste jobs falen achter elkaar" not in [r.get("title") for r in db.rows("core_approvals")]
     rapporten = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "companionmgr" and r["to_agent"] != "luka"]
     assert len(rapporten) == 1 and "nu opnieuw gestart: northsea:engine" in rapporten[0]["body"]
 
@@ -92,7 +94,7 @@ def test_pulse_herkanst_vraagt_luka_en_zwijgt_als_er_niets_verandert():
     gm.run_companionmgr(db, NU)
     rapporten = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "companionmgr" and r["to_agent"] != "luka"]
     assert len(rapporten) == 2
-    assert [r.get("title") for r in db.rows("core_approvals")].count("Vaste jobs falen achter elkaar") == 1
+    assert [r.get("title") for r in db.rows("core_tasks")].count("Zelf oplossen: Vaste jobs falen achter elkaar") == 1
 
 
 def test_alles_groen_zegt_alles_draait():

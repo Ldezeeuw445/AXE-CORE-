@@ -81,7 +81,16 @@ def test_pulse_meldt_luka_eenmaal_en_leest_alleen_vandaag():
     uit = gm.run_axon(db, NU)
     assert uit["rag"] == 120 and uit["notities"] == 118 and uit["lessen"] == 10
     assert uit["voor_luka"] == ["limiet_vol_door_notities"]
-    assert "Geheugenlimiet vol door de notitiesync" in [r.get("title") for r in db.rows("core_approvals")]
+    # 16 nov: eerst zelf proberen; Luka hoort het pas als dat niet lukt.
+    zelf = [r for r in db.rows("core_tasks") if r.get("title") == "Zelf oplossen: Geheugenlimiet vol door de notitiesync"]
+    assert len(zelf) == 1 and zelf[0]["capability"] == "agentic" and zelf[0]["assignee"] == "axon"
+    assert "Geheugenlimiet vol door de notitiesync" not in [r.get("title") for r in db.rows("core_approvals")]
+    gm.run_axon(db, NU)  # poging loopt nog: geen tweede taak, geen vraag
+    assert len([r for r in db.rows("core_tasks") if r.get("title", "").startswith("Zelf oplossen:")]) == 1
+    zelf[0]["status"] = "failed"
+    gm.run_axon(db, NU)  # poging mislukt: nu wél Luka, met wat er geprobeerd is
+    vragen = [r for r in db.rows("core_approvals") if r.get("title") == "Geheugenlimiet vol door de notitiesync"]
+    assert len(vragen) == 1
     gm.run_axon(db, NU)
     assert [r.get("title") for r in db.rows("core_approvals")].count("Geheugenlimiet vol door de notitiesync") == 1
     rapporten = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "axon" and r["to_agent"] != "luka"]

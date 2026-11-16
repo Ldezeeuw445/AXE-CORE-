@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 log = logging.getLogger("axe_grok_managers")
@@ -283,7 +283,7 @@ def run_axemanager(db: Any, nu: datetime) -> dict[str, Any]:
     bevindingen = bb.beoordeel(roosters, tuple(m for m in GROK_IDS if m != BAAS), nu)
     voor_luka = [b for b in bevindingen if b.voor == "luka"]
     for b in voor_luka:
-        _vraag_luka(db, BAAS, b.titel, b.detail)
+        _eerst_zelf(db, BAAS, b, nu)
 
     # Geen directives meer elke pulse: 720 per dag "stuur niets" was ruis in
     # het gesprek dat Luka leest. Ongelezen rapporten worden wel gelezen.
@@ -379,7 +379,16 @@ def _chat_met_luka(db: Any, agent: str, bevindingen: list[Any], gedaan: list[str
     als het anders is dan het vorige bericht van deze manager."""
     try:
         import manager_draad as md
-        nodig = [f"{b.titel}. {b.detail}".strip() for b in bevindingen if b.voor == "luka"]
+        # Wat de manager eerst zelf probeert, is (nog) niet iets voor Luka: dat
+        # staat onder "gedaan" tot de poging mislukt en er een vraag bij Luka ligt.
+        try:
+            open_vragen = {str(r.get("title") or "") for r in _rijen(db, "core_approvals", "title,status", status="pending")}
+        except Exception:  # noqa: BLE001
+            open_vragen = set()
+        zelf = [b for b in bevindingen if b.voor == "luka" and b.code in ZELF_PROBEREN and b.titel not in open_vragen]
+        nodig = [f"{b.titel}. {b.detail}".strip() for b in bevindingen if b.voor == "luka" and b not in zelf]
+        gedaan = list(gedaan or []) + [f"Ik ben zelf bezig met: {b.titel.rstrip('.')}; lukt het niet, dan vraag ik het je"
+                                       for b in zelf]
         gezien = [f"{b.titel}. {b.detail}".strip() for b in bevindingen if b.voor != "luka"]
         if app:
             import sleutels
@@ -388,6 +397,73 @@ def _chat_met_luka(db: Any, agent: str, bevindingen: list[Any], gedaan: list[str
         return md.vertel_luka(db, agent, tekst)
     except Exception:  # noqa: BLE001 -- de chat mag de pulse nooit breken
         return False
+
+
+# ── Eerst zelf proberen (16 nov) ──────────────────────────────────────────
+# Luka: AXE moet "dingen uit zichzelf kunnen ... zonder dat ik alles moet
+# approven". Een manager die een technisch probleem ziet, zet eerst een taak
+# voor zichzelf uit (logs lezen, oorzaak zoeken, binnen de regels repareren,
+# verslag doen). Pas als dat niet lukt -- de poging faalde, of twee pogingen
+# op een dag hielpen niet -- vraagt hij Luka, met erbij wat hij probeerde.
+ZELF_PROBEREN = frozenset({
+    # Niet inbound_stil: daarvoor is Luka's testmail nodig (de mailroute-stap).
+    "planner_fout", "motor_stil", "manager_stil", "manager_faalt",
+    "jobs_falen", "jobs_achter", "wachtrij_vast", "actief_vast",
+    "limiet_vol_door_notities", "ruis_in_geheugen",
+})
+ZELF_OPNIEUW_NA = timedelta(hours=6)
+ZELF_MAX_PER_DAG = 2
+_ZELF_KLAAR_MIS = ("failed", "blocked", "cancelled")
+
+
+def _zelf_titel(b: Any) -> str:
+    return f"Zelf oplossen: {b.titel}"[:200]
+
+
+def _eerst_zelf(db: Any, agent: str, b: Any, nu: datetime) -> str:
+    """'zelf' (taak uitgezet), 'bezig', 'wacht' (net geprobeerd) of 'luka' (gevraagd)."""
+    if b.code not in ZELF_PROBEREN:
+        _vraag_luka(db, agent, b.titel, b.detail)
+        return "luka"
+    try:
+        pogingen = (db.table("core_tasks").select("id,status,created_at,result,error")
+                    .eq("assignee", agent).eq("title", _zelf_titel(b))
+                    .order("created_at", desc=True).limit(5).execute().data) or []
+    except Exception:  # noqa: BLE001 -- niet kunnen kijken = liever Luka dan stil
+        pogingen = []
+    if any(p.get("status") in OPEN_TAAK for p in pogingen):
+        return "bezig"
+
+    def _tijd(p: dict[str, Any]) -> datetime | None:
+        try:
+            t = datetime.fromisoformat(str(p.get("created_at")).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+    vandaag = [p for p in pogingen if (t := _tijd(p)) and nu - t < timedelta(hours=24)]
+    laatste = vandaag[0] if vandaag else None
+    if laatste and (laatste.get("status") in _ZELF_KLAAR_MIS or len(vandaag) >= ZELF_MAX_PER_DAG):
+        wat = str((laatste.get("result") or {}).get("summary") if isinstance(laatste.get("result"), dict) else "")
+        wat = wat or str((laatste.get("error") or {}).get("message") if isinstance(laatste.get("error"), dict) else "")
+        _vraag_luka(db, agent, b.titel, (f"{b.detail} Ik heb het {len(vandaag)}x zelf geprobeerd; "
+                                         f"het lukte niet. Laatste poging: {wat[:300] or laatste.get('status')}.").strip())
+        return "luka"
+    if laatste and (t := _tijd(laatste)) and nu - t < ZELF_OPNIEUW_NA:
+        return "wacht"
+    _schrijf(db, "core_tasks", {
+        "title": _zelf_titel(b),
+        "goal": (f"You are {agent}, one of the AXE managers. Your 24/7 round found a problem: {b.titel}. {b.detail}\n"
+                 "Fix it yourself if you can: read the relevant logs and state, find the root cause, and apply a fix "
+                 "that stays inside your normal tools and limits (no mail, no money, no orders, no approvals on "
+                 "Luka's behalf, no deploys to production). If a fix needs Luka (a login, a decision, a payment), "
+                 "say exactly what he must do. End with what you found, what you changed, and whether it is solved."),
+        "status": "queued", "priority": "high", "source_app": "axe_core",
+        "requested_by": agent, "capability": "agentic", "assignee": agent,
+        "metadata": {"agent": agent, "manager": True, "zelf_fix": b.code, "app": "axe_core"},
+        "created_at": nu.isoformat(),
+    })
+    return "zelf"
 
 
 def _dagoverzicht(db: Any, nu: datetime, naam: str, bevindingen: list[Any]) -> bool:
@@ -437,7 +513,7 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
     bevindingen = pb.beoordeel(rijen, nu)
     voor_luka = [b for b in bevindingen if b.voor == "luka"]
     for b in voor_luka:
-        _vraag_luka(db, "projectsmgr", b.titel, b.detail)
+        _eerst_zelf(db, "projectsmgr", b, nu)
     overzicht = _dagoverzicht(db, nu, "Taken", bevindingen)
 
     delen = [b.titel for b in bevindingen]
@@ -498,7 +574,7 @@ def run_companionmgr(db: Any, nu: datetime) -> dict[str, Any]:
     bevindingen = rb.beoordeel(rijen, nu)
     voor_luka = [b for b in bevindingen if b.voor == "luka"]
     for b in voor_luka:
-        _vraag_luka(db, "companionmgr", b.titel, b.detail)
+        _eerst_zelf(db, "companionmgr", b, nu)
     overzicht = _dagoverzicht(db, nu, "Vaste jobs", bevindingen)
 
     delen = [b.titel for b in bevindingen]
@@ -558,7 +634,7 @@ def run_axon(db: Any, nu: datetime) -> dict[str, Any]:
     bevindingen = ab.beoordeel(rag, memory, _lokaal_uur(nu))
     voor_luka = [b for b in bevindingen if b.voor == "luka"]
     for b in voor_luka:
-        _vraag_luka(db, "axon", b.titel, b.detail)
+        _eerst_zelf(db, "axon", b, nu)
     overzicht = _dagoverzicht(db, nu, "Geheugen", bevindingen)
     kop = f"vandaag {t['lessen']} lessen, {t['notities']} notities (limiet {ab.GEHEUGEN_MAG_PER_DAG})"
     gerapporteerd = _rapporteer_bij_verandering(
@@ -691,7 +767,7 @@ def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any
     bevindingen = bewaker.beoordeel(health, ops, metrics, nu)
     voor_luka = [b for b in bevindingen if b.voor == "luka"]
     for b in voor_luka:
-        _vraag_luka(db, "northseamgr", b.titel, b.detail)
+        _eerst_zelf(db, "northseamgr", b, nu)
 
     # Opruimen + voorstellen (10 nov): één keer per dag, na het dagoverzichtsuur.
     opruimen: dict[str, Any] = {}

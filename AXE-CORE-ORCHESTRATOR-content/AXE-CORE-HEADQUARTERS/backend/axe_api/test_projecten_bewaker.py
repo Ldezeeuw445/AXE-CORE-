@@ -107,9 +107,13 @@ def test_pulse_ruimt_op_vraagt_luka_en_zwijgt_als_er_niets_verandert():
     assert status["p1"] == status["p3"] == "cancelled"
     assert status["p2"] == "pending" and status["c1"] == "completed" and status["q1"] == "queued"
     assert db.rows("core_tasks")[1]["metadata"]["reden"] == "dubbel voorstel"
-    assert "Taken staan vast in de wachtrij" in [r.get("title") for r in db.rows("core_approvals")]
+    # 16 nov: eerst zelf proberen in plaats van meteen Luka.
+    assert "Zelf oplossen: Taken staan vast in de wachtrij" in [r.get("title") for r in db.rows("core_tasks")]
+    assert "Taken staan vast in de wachtrij" not in [r.get("title") for r in db.rows("core_approvals")]
     rapporten = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "projectsmgr" and r["to_agent"] != "luka"]
     assert len(rapporten) == 1 and "2 dubbele voorstellen opgeruimd" in rapporten[0]["body"]
+    chat = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "projectsmgr" and r["to_agent"] == "luka"]
+    assert "Ik ben zelf bezig met: Taken staan vast in de wachtrij" in chat[0]["body"]
 
     # Tweede pulse: niets nieuws opgeruimd, maar de stand verschilt (geen
     # "opgeruimd" meer) -> één rapport. Derde pulse: zelfde stand -> stil.
@@ -117,7 +121,7 @@ def test_pulse_ruimt_op_vraagt_luka_en_zwijgt_als_er_niets_verandert():
     gm.run_projectsmgr(db, NU)
     rapporten = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "projectsmgr" and r["to_agent"] != "luka"]
     assert len(rapporten) == 2
-    assert [r.get("title") for r in db.rows("core_approvals")].count("Taken staan vast in de wachtrij") == 1
+    assert [r.get("title") for r in db.rows("core_tasks")].count("Zelf oplossen: Taken staan vast in de wachtrij") == 1
 
 
 def test_lege_lijst_zegt_dat_niets_stilstaat():
