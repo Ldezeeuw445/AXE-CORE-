@@ -11,6 +11,10 @@ import type {
   TradeProposal,
 } from '../types';
 import { GOLD_ORB_STRATEGY_ID } from '../strategies';
+import { rrAtLeast } from './riskReward';
+
+/** R:R that earns the +0.10 confidence bonus. Compared float-safe: Charts' 2.2R TP measures back as 2.1999999. */
+export const RR_BONUS_MIN = 2.2;
 
 export function runDecision(input: {
   scout: ScoutResult;
@@ -37,6 +41,18 @@ export function runDecision(input: {
       proposal: null,
       summary: 'Scout returned no candidates',
       notes: ['empty scout'],
+    };
+  }
+
+  // Charts could not look (key, quota, empty answer). That is not a market verdict.
+  const noData = input.charts?.noData;
+  if (noData) {
+    return {
+      verdict: 'NO-DATA',
+      confidence: 0,
+      proposal: null,
+      summary: `Geen koersdata (${noData.code}): ${noData.detail}`,
+      notes: ['no_data', noData.code, ...(input.risk?.blockedReasons.filter(r => r !== 'no_data') ?? [])],
     };
   }
 
@@ -75,7 +91,7 @@ export function runDecision(input: {
   if (isOrb) {
     confidence += 0.1; // concrete strategy setup
     if (top.strategySignal?.filterSummary?.includes('volatility:ok')) confidence += 0.05;
-  } else if ((charts.riskReward ?? 0) >= 2.2) {
+  } else if (rrAtLeast(charts.riskReward, RR_BONUS_MIN)) {
     confidence += 0.1;
   }
   if ((sentiment?.score ?? 50) >= 65 || (sentiment?.score ?? 50) <= 35) confidence += 0.05;

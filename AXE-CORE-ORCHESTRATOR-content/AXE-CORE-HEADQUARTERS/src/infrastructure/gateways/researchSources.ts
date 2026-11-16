@@ -652,32 +652,103 @@ export async function fetchPairNews(pair: string, limit = 5): Promise<NewsItem[]
   }
 }
 
-/** Daily end-of-day bars, for backtests that want more history than the broker gives. */
-export async function fetchEodHistory(
-  pair: string,
-  from: string,
-): Promise<Array<{ date: string; open: number; high: number; low: number; close: number }>> {
+export interface EodBar { date: string; open: number; high: number; low: number; close: number }
+
+/** Why a daily-bar request came back without bars. Never a secret, never a URL. */
+export type EodProblemCode =
+  | 'no_key' | 'no_ticker' | 'budget_spent' | 'quota' | 'auth' | 'http' | 'bad_payload' | 'network' | 'empty';
+export interface EodProblem { code: EodProblemCode; detail: string }
+export interface EodResult { bars: EodBar[]; fromCache: boolean; problem: EodProblem | null }
+
+/** Daily bars already fetched today, keyed by ticker. They change once a day. */
+const KEY_EODHD_EOD_CACHE = 'eodhd_eod_today';
+interface EodCacheRow { date: string; bars: EodBar[] }
+
+/** What an EODHD HTTP status means for the desk. 402/429 is the daily allowance, 401/403 is the key. */
+export function classifyEodHttp(status: number): EodProblem {
+  if (status === 402 || status === 429) {
+    return { code: 'quota', detail: `EODHD daily allowance spent or plan limit (HTTP ${status})` };
+  }
+  if (status === 401 || status === 403) {
+    return { code: 'auth', detail: `EODHD refused the key (HTTP ${status})` };
+  }
+  return { code: 'http', detail: `EODHD answered HTTP ${status}` };
+}
+
+/**
+ * Daily end-of-day bars with the reason when there are none.
+ *
+ * `fetchEodHistory` used to return [] for every failure, so a missing key, a spent
+ * daily allowance and a real empty answer all looked the same to the Trading Team,
+ * which then reported a chart-structure NO-GO. Measured 2026-11-16 on
+ * core_trading_team_runs: exactly the first five cycles of each UTC day had bars
+ * (WAIT) and every later one had none (NO-GO). This call is cached per ticker for the
+ * calendar day, counts against the shared EODHD daily budget, and says why it is empty.
+ */
+export async function fetchEodHistoryChecked(pair: string, from: string): Promise<EodResult> {
   const { eodhd } = await getResearchSourceKeys();
   const ticker = eodhdTickerFor(pair);
-  if (!eodhd || !ticker) return [];
+  if (!ticker) return { bars: [], fromCache: false, problem: { code: 'no_ticker', detail: `no EODHD ticker for ${pair}` } };
+  if (!eodhd) return { bars: [], fromCache: false, problem: { code: 'no_key', detail: 'no EODHD key in the research sources' } };
+
+  const cache = await loadDurableConfig<Record<string, EodCacheRow>>(KEY_EODHD_EOD_CACHE, {});
+  const hit = cache[ticker];
+  if (hit && hit.date === today() && hit.bars.length) return { bars: hit.bars, fromCache: true, problem: null };
+
+  if (!(await reserveDailyCall('eodhd', EODHD_DAILY_CAP))) {
+    const problem: EodProblem = {
+      code: 'budget_spent', detail: `EODHD daily budget spent (${EODHD_DAILY_CAP}/${EODHD_DAILY_CAP}) — resumes at midnight UTC`,
+    };
+    await recordHealth('eodhd', { at: new Date().toISOString(), ok: true, ms: 0, detail: problem.detail });
+    return { bars: [], fromCache: false, problem };
+  }
+
+  const started = Date.now();
+  let problem: EodProblem | null = null;
+  let bars: EodBar[] = [];
   try {
     const url = `https://eodhd.com/api/eod/${encodeURIComponent(ticker)}`
       + `?api_token=${encodeURIComponent(eodhd)}&period=d&fmt=json&from=${encodeURIComponent(from)}`;
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const raw: unknown = await res.json();
-    if (!Array.isArray(raw)) return [];
-    return raw
-      .map(r => r as Record<string, unknown>)
-      .filter(o => Number.isFinite(Number(o.close)))
-      .map(o => ({
-        date: String(o.date ?? ''),
-        open: Number(o.open), high: Number(o.high),
-        low: Number(o.low), close: Number(o.close),
-      }));
-  } catch {
-    return [];
+    if (!res.ok) {
+      problem = classifyEodHttp(res.status);
+    } else {
+      const raw: unknown = await res.json();
+      if (!Array.isArray(raw)) {
+        problem = { code: 'bad_payload', detail: 'EODHD returned something that is not a list of bars' };
+      } else {
+        bars = raw
+          .map(r => r as Record<string, unknown>)
+          .filter(o => Number.isFinite(Number(o.close)))
+          .map(o => ({
+            date: String(o.date ?? ''),
+            open: Number(o.open), high: Number(o.high),
+            low: Number(o.low), close: Number(o.close),
+          }));
+        if (!bars.length) problem = { code: 'empty', detail: `EODHD returned no bars for ${ticker}` };
+      }
+    }
+  } catch (e) {
+    // The message of a failed fetch can carry the URL, and the URL carries the key.
+    const kind = e instanceof Error ? e.name : 'Error';
+    problem = { code: 'network', detail: `EODHD request failed (${kind})` };
   }
+
+  await recordHealth('eodhd', {
+    at: new Date().toISOString(), ok: !problem, ms: Date.now() - started,
+    detail: problem ? `eod history ${ticker}: ${problem.detail}`.slice(0, 120) : `${bars.length} daily bar(s) for ${ticker}`,
+  });
+  if (!problem) {
+    await saveDurableConfig(KEY_EODHD_EOD_CACHE, { ...cache, [ticker]: { date: today(), bars } });
+  }
+  return { bars, fromCache: false, problem };
+}
+
+/** Daily end-of-day bars, for backtests that want more history than the broker gives. */
+export async function fetchEodHistory(pair: string, from: string): Promise<EodBar[]> {
+  const r = await fetchEodHistoryChecked(pair, from);
+  if (r.problem) console.warn(`[researchSources] eod history ${pair}: ${r.problem.code} — ${r.problem.detail}`);
+  return r.bars;
 }
 
 type MacroCache = { at: number; brief: string };
