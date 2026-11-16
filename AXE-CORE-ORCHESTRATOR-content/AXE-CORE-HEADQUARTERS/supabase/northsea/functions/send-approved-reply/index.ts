@@ -1,16 +1,14 @@
-// send-approved-reply v8 (P0.4, P0.5, P0.8; 16 nov: Luka's vaste regel).
-// Verstuurt ÉÉN door een MENS goedgekeurde draft, of (v8) één vrijblijvende
-// eerste kwalificatiemail die de deskloop volgens Luka's vaste regel van 16 nov
-// mag sturen: approval_status=not_required, policy_decision.allowed, niet gevoelig,
-// alleen de drie first-touch-sjablonen, en alleen zolang deal_automation_policy
-// het toestaat (northsea_policy_allows). Zo'n mail heet nooit "human approved". Nieuw t.o.v. v6:
-// - approval_actor_type=human + approved_by + approval_channel zijn verplicht (geen herkomst = geen verzending);
-// - contactbeleid vóór verzending (do_not_contact / synthetic weigeren);
-// - gevoelige draft ook hier: getekende commissiebescherming op de deal;
-// - de uitgaande communicatie krijgt volledige herkomst (canonieke afzender, transport, actor, basis, draft).
+// send-approved-reply v8 (op live v7.1: auth accepteert de door de gateway geverifieerde service_role-JWT).
+// Verstuurt ÉÉN door een MENS goedgekeurde draft, of (v8, 16 nov) één vrijblijvende
+// eerste kwalificatiemail die de deskloop volgens Luka's vaste regel mag sturen:
+// approval_status=not_required, policy_decision.allowed, niet gevoelig, alleen de
+// drie first-touch-sjablonen, en alleen zolang deal_automation_policy het toestaat
+// (northsea_policy_allows). Zo'n mail heet nooit "human approved".
+//
+// Let op: v7.1 stond sinds 17 okt alleen op de server; deze file is weer de bron.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { inferMailMode, mailReferenceFromKnown, renderNorthSeaMail } from "../_shared/mail.ts";
+import { brandedHtml, withPlainSignature } from "./branded_v7.ts";
 import { guardCode, outboundProvenance, resendPayload } from "../_shared/canonical.ts";
 import { audit, outboundBlockReason } from "../_shared/db.ts";
 import { blocksHumanSend } from "../_shared/policy.ts";
@@ -24,10 +22,37 @@ const POLICY_PURPOSES = new Set([
 
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "content-type": "application/json" } });
 
+function jwtClaim(token: string, claim: string): string {
+  try {
+    const part = token.split(".")[1] ?? "";
+    const norm = part.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = norm + "=".repeat((4 - norm.length % 4) % 4);
+    const payload = JSON.parse(atob(pad));
+    return typeof payload?.[claim] === "string" ? payload[claim] : "";
+  } catch {
+    return "";
+  }
+}
+
+function authorize(req: Request): boolean {
+  const expected = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const auth = req.headers.get("authorization") ?? "";
+  if (expected && auth === "Bearer " + expected) return true;
+  // verify_jwt=true: gateway already validated signature; require service_role for this project.
+  const token = auth.replace(/^Bearer\s+/i, "").trim();
+  if (!token) return false;
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const projectRef = (url.match(/https:\/\/([^.]+)\./) ?? [])[1] ?? "";
+  if (jwtClaim(token, "role") !== "service_role") return false;
+  const ref = jwtClaim(token, "ref");
+  if (projectRef && ref && ref !== projectRef) return false;
+  return true;
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
   try {
-    if (req.headers.get("authorization") !== "Bearer " + Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) return json({ ok: false, error: "forbidden" }, 403);
+    if (!authorize(req)) return json({ ok: false, error: "forbidden" }, 403);
     const key = Deno.env.get("RESEND_API_KEY");
     if (!key) return json({ ok: false, error: "resend_not_configured" }, 503);
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
@@ -39,6 +64,7 @@ Deno.serve(async (req) => {
     if (e) throw e;
     if (!d) return json({ ok: false, error: "draft_not_found" }, 404);
     if (d.sent_at || d.resend_email_id) return json({ ok: true, duplicate: true, resend_email_id: d.resend_email_id });
+
     const policyPad = d.approval_status === "not_required";
     if (policyPad) {
       const pd = (d.policy_decision ?? {}) as Record<string, unknown>;
@@ -81,29 +107,9 @@ Deno.serve(async (req) => {
     }
     const hdr: Record<string, string> = {};
     if (mid) { hdr["In-Reply-To"] = mid; hdr["References"] = mid; }
-    let reference = null as ReturnType<typeof mailReferenceFromKnown>;
-    if (d.opportunity_id) {
-      const { data: opp } = await sb.from("opportunities").select("deal_priority, buyer_requirements(commodity,product,quantity_mt,destination,incoterm), supplier_offers(commodity,product,quantity_mt,incoterm)").eq("id", d.opportunity_id).maybeSingle();
-      const row = opp && typeof opp === "object" ? opp as Record<string, unknown> : null;
-      const asRec = (v: unknown): Record<string, unknown> | null => {
-        if (!v) return null;
-        if (Array.isArray(v)) return v[0] && typeof v[0] === "object" ? v[0] as Record<string, unknown> : null;
-        return typeof v === "object" ? v as Record<string, unknown> : null;
-      };
-      const br = asRec(row?.buyer_requirements);
-      const so = asRec(row?.supplier_offers);
-      const qty = br?.quantity_mt ?? so?.quantity_mt;
-      reference = mailReferenceFromKnown({
-        deal: typeof row?.deal_priority === "string" ? row.deal_priority : null,
-        commodity: String(br?.product || so?.product || br?.commodity || so?.commodity || "").trim() || null,
-        quantity: typeof qty === "number" || typeof qty === "string" ? qty : null,
-        destination: typeof br?.destination === "string" ? br.destination : null,
-        incoterm: String(br?.incoterm || so?.incoterm || "").trim() || null,
-      });
-    }
-    const mail = renderNorthSeaMail({ body: String(d.body), mode: inferMailMode(String(d.purpose ?? d.subject ?? "")), reference });
+    if (policyPad) hdr["X-NorthSea-Automation"] = "standing-rule-qualification";
     const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json",
-      "Idempotency-Key": `northsea-draft-${d.id}` }, body: JSON.stringify(resendPayload(d.to_email, d.subject, mail.text, mail.html, hdr)) });
+      "Idempotency-Key": `northsea-draft-${d.id}` }, body: JSON.stringify(resendPayload(d.to_email, d.subject, withPlainSignature(d.body), brandedHtml(d.body), hdr)) });
     const tx = await r.text();
     // deno-lint-ignore no-explicit-any
     let sent: any = null;
@@ -127,15 +133,17 @@ Deno.serve(async (req) => {
         opportunity_id: d.opportunity_id, company_id: d.company_id, details: { resend_email_id: sent.id, error: guardCode(ce.message) ?? "insert_failed" } });
       return json({ ok: true, draft_id: d.id, communication_id: null, resend_email_id: sent.id, record_warning: "communication_insert_failed" });
     }
-    if (d.opportunity_id) await sb.from("opportunities").update({ next_action: "Await counterparty response to approved NorthSea email.", next_action_at: now, waiting_since: now }).eq("id", d.opportunity_id);
+    if (d.opportunity_id) {
+      await sb.from("opportunities").update({ next_action: "Await counterparty response to NorthSea email.", next_action_at: now, waiting_since: now }).eq("id", d.opportunity_id);
+    }
     if (policyPad && d.opportunity_id) {
       await sb.from("deal_events").insert({ opportunity_id: d.opportunity_id, event_type: "policy_allowed_qualification_email_sent", actor: "send-approved-reply",
         summary: "Non-binding first qualification email sent by the Desk under Luka's standing rule (16 Nov); no price, identity or commitment.",
         metadata: { resend_email_id: sent.id, draft_id: d.id, requested_by: requestedBy } });
     }
-    await audit(sb, { actor_type: policyPad ? "automation" : "service", actor: "send-approved-reply", action: policyPad ? "policy_email_sent" : "email_sent", approval_identity: d.approved_by, draft_id: d.id,
-      communication_id: o.id, opportunity_id: d.opportunity_id, company_id: d.company_id, contact_id: d.contact_id,
-      details: { resend_email_id: sent.id, approval_channel: d.approval_channel, requested_by: requestedBy, threaded: Boolean(mid) } });
+    await audit(sb, { actor_type: policyPad ? "automation" : "service", actor: "send-approved-reply", action: policyPad ? "policy_email_sent" : "email_sent",
+      approval_identity: d.approved_by, draft_id: d.id, communication_id: o.id, opportunity_id: d.opportunity_id, company_id: d.company_id, contact_id: d.contact_id,
+      details: { resend_email_id: sent.id, approval_channel: d.approval_channel, requested_by: requestedBy, threaded: Boolean(mid), standing_rule: policyPad } });
     return json({ ok: true, draft_id: d.id, communication_id: o.id, resend_email_id: sent.id, threaded: Boolean(mid), branded_html: true, legal_footer: true });
   } catch (err) {
     console.error("send-approved-reply error", err instanceof Error ? err.message : "error");
