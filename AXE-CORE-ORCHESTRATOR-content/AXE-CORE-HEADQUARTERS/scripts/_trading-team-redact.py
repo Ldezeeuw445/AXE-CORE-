@@ -4,7 +4,7 @@ stdin  : the raw tail of the cycle log
 stdout : at most MAX_CHARS characters, secrets replaced by [hidden]
 
 Why: the Mac job writes everything to ~/Library/Logs/axe-trading-team-cycle.log, so a failing
-run reached core_job_runs.error as just "exit=1" (22 runs on 2026-11-16). The job runner stores
+run reached core_job_runs.error as just "exit=1" (consecutive_failures 23 on 2026-11-16). The job runner stores
 what the script prints, so the script now prints this tail on failure.
 
 Fail closed: if the shared redactor (backend/axe_api/geheimen.py) cannot be loaded nothing of the

@@ -19,7 +19,7 @@ mkdir -p "$(dirname "$LOG")"
 
 # Everything still goes to the log. But when the cycle fails, a short redacted tail also goes to
 # stderr, because the job runner stores stderr in core_job_runs.error. Until 2026-11-16 that
-# field only said "exit=1": 22 failed runs and nobody could see why.
+# field only said "exit=1": dozens of failed runs (consecutive_failures 23) and nobody could see why.
 RUN_OUT="$(mktemp "${TMPDIR:-/tmp}/axe-trading-team-cycle.XXXXXX")"
 trap 'rm -f "$RUN_OUT"' EXIT
 set +e
