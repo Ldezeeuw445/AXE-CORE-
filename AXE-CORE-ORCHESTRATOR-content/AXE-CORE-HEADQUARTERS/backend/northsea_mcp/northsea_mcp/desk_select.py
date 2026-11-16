@@ -306,7 +306,9 @@ def select_operations_deals(
         -int(o.get("readiness_score") or 0),
         str(o.get("updated_at") or ""),
     ))
-    gekozen = [o for o in eligible if str(o.get("id")) not in recent][:limit]
+    # Rustend = de crewronde eindigt toch in "draft already prepared"; 16 nov om
+    # 16:07 koos de sweep er nog drie toen de rest al een 12-uursronde had gehad.
+    gekozen = [o for o in eligible if str(o.get("id")) not in recent and str(o.get("id")) not in resting][:limit]
     return {
         "chosen": gekozen,
         "active": pool,

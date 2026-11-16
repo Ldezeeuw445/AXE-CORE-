@@ -271,6 +271,10 @@ def test_rustende_deal_gaat_achteraan_tot_er_antwoord_is():
                                   companies=[], requirements=[], offers=[], now=NU, drafts=drafts, limit=1)
     assert [o["id"] for o in uit["chosen"]] == [b]
     assert uit["resting"] == {a}
+    # Ook als er verder niets is: een rustende deal wordt niet gekozen.
+    alleen_a = select_operations_deals(opps[:1], audits=[], tasks=[], queue=[], communications=[],
+                                       companies=[], requirements=[], offers=[], now=NU, drafts=drafts)
+    assert alleen_a["chosen"] == []
     # Een antwoord van de tegenpartij na het concept: weer levend.
     antwoord = [{"opportunity_id": a, "direction": "inbound", "occurred_at": NU.isoformat()}]
     assert resting_opportunity_ids(drafts, antwoord, now=NU) == set()
