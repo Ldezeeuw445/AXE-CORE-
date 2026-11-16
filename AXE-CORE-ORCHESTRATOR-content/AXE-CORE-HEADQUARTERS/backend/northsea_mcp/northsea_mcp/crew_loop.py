@@ -55,6 +55,10 @@ SAFE_TEMPLATES = frozenset({
     "document_request",
 })
 
+# De sjablonen die onder Luka's vaste regel (16 nov) zonder hem de deur uit mogen:
+# alleen een eerste vrijblijvende vraag om bedrijfsgegevens en documenten.
+VASTE_REGEL_SJABLONEN = frozenset({"supplier_qualification", "buyer_qualification", "document_request"})
+
 AXE_ACTIONS = frozenset({
     "qualify_seller",
     "qualify_buyer",
@@ -396,7 +400,8 @@ async def _eigen_recent_concept(repo: Any, opp_id: str) -> dict[str, Any] | None
     grens = _now() - EIGEN_CONCEPT_RUST
     eigen = []
     for d in alle:
-        if d.get("opportunity_id") != opp_id or d.get("generated_by") != EIGEN_MAKER or d.get("sent_at"):
+        # Ook een verstuurde telt: daarna wacht de deal op antwoord, niet op een tweede mail.
+        if d.get("opportunity_id") != opp_id or d.get("generated_by") != EIGEN_MAKER:
             continue
         t = parse_ts(d.get("created_at"))
         if t and t >= grens:
@@ -446,10 +451,13 @@ async def _axe_stap(service: Any, opp: dict[str, Any], eval_: rules.DealEvaluati
         description=notice_body(kaart, what_yes_does="No yes. The crews do this step.", extra=doel),
         owner="axe", requires_approval=False, task_type="follow_up", priority=60,
     )
+    vlaggen = _auto_send_flags(await _policy(service.repo))
+    vaste_regel = (vlaggen["auto_send_qualification"] and vlaggen["auto_reply_nonbinding"]
+                   and template in VASTE_REGEL_SJABLONEN)
     try:
         draft = await service.prepare_outreach(
             desk_manager_caller(), objective=doel[:500], opportunity_id=opp["id"],
-            template=template, save_as_pending_draft=True,
+            template=template, save_as_pending_draft=True, policy_allowed=vaste_regel,
         )
     except PolicyDenied as e:
         return await _ja_vraag(service, opp, eval_, extra=f"Outreach blocked ({e.code}).")
@@ -480,6 +488,30 @@ async def _axe_stap(service: Any, opp: dict[str, Any], eval_: rules.DealEvaluati
             "missing": "inbound_email_thread", "draft_subject": draft.subject,
             "draft_body": draft.body, "deal_id": opp["id"],
         }
+
+    if draft.saved_status == "not_required" and draft.saved_draft_id:
+        # Luka's vaste regel (16 nov): deze eerste vrijblijvende mail gaat zonder hem.
+        try:
+            uit = await service.send_policy_allowed(desk_manager_caller(), draft_id=draft.saved_draft_id)
+        except (PolicyDenied, ServiceError, NotFound) as e:
+            return await _lege_run(
+                service.repo, kind=f"regel-mislukt:{opp['id']}",
+                title=f"Desk run: standing-rule mail not sent — {kaart.get('deal_code')}",
+                description=notice_body(kaart, what_yes_does="No yes. Nothing was sent; the draft stays in the Desk.",
+                                        extra=f"{getattr(e, 'code', type(e).__name__)}: {getattr(e, 'message', str(e))[:300]}"),
+                extra={"deal_id": opp["id"], "draft_id": draft.saved_draft_id},
+            )
+        await _schrijf_taak(
+            service, opportunity_id=opp["id"],
+            title=f"Sent {draft.template} (standing rule) — {kaart.get('deal_code')}"[:200],
+            description=notice_body(
+                kaart, what_yes_does="Sent by the Desk under Luka's standing rule of 16 Nov: non-binding, no price, no identity.",
+                extra=f"To {draft.to_email or 'the counterparty'}: {draft.subject}",
+            ),
+            owner="axe", requires_approval=False, task_type="follow_up", priority=40,
+        )
+        return {"notice": None, "sent": 1 if uit.submitted else 0, "approved": 0, "owner": "axe",
+                "standing_rule": True, "draft_id": draft.saved_draft_id, "template": draft.template, "deal_id": opp["id"]}
 
     if draft.sensitive or draft.template not in SAFE_TEMPLATES:
         return await _ja_vraag(

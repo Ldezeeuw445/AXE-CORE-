@@ -206,3 +206,59 @@ async def test_eigen_concept_van_vorige_ronde_geeft_geen_nieuw_en_geen_ja(repo, 
     assert [t for t in repo.t["deal_tasks"] if t.get("requires_approval")] == ja_voor
     assert uit["notice"]["akkoord_nodig"] is False and "is rejected" in uit["notice"]["tekst"]
     assert repo.sends == []
+
+
+def _vaste_regel_aan(repo):
+    p = repo.t["deal_automation_policy"][0]
+    p["auto_send_qualification"] = True
+    p["auto_reply_nonbinding"] = True
+
+
+def _eerste_contact(repo):
+    for d in repo.t["reply_drafts"]:
+        if d["approval_status"] == "pending":
+            d["approval_status"] = "rejected"
+    repo.t["communications"].clear()
+
+
+async def test_vaste_regel_uit_dan_gaat_er_niets_zonder_luka(repo, research, crew):
+    """Zonder de twee vlaggen blijft alles zoals voor 16 nov: niets de deur uit."""
+    _eerste_contact(repo)
+    service = NorthSeaService(repo, research, crew)
+    uit = await finish_after_event(service, _event(), _ok())
+    assert uit["sent"] == 0 and repo.sends == []
+    assert not [d for d in repo.t["reply_drafts"] if d.get("approval_status") == "not_required"]
+
+
+async def test_vaste_regel_aan_stuurt_de_eerste_vrijblijvende_mail_zelf(repo, research, crew):
+    """Luka, 16 nov: 'ja punt 3 mag'."""
+    _eerste_contact(repo)
+    _vaste_regel_aan(repo)
+    service = NorthSeaService(repo, research, crew)
+    uit = await finish_after_event(service, _event(), _ok())
+    assert uit["sent"] == 1 and uit.get("standing_rule") is True and len(repo.sends) == 1
+    d = next(d for d in repo.t["reply_drafts"] if d["id"] == repo.sends[0])
+    assert d["approval_status"] == "not_required" and d["policy_decision"]["allowed"] is True
+    assert d["policy_decision"]["rule"] == "luka_standing_rule_2026_11_16"
+    assert d.get("approval_actor_type") is None and d.get("approved_by") is None  # nooit "door Luka goedgekeurd"
+    assert not d["sensitive_action"]
+    # Volgende ronde: deze deal wacht op antwoord, geen tweede mail.
+    uit2 = await finish_after_event(service, _event(event_id="auto-qualify-2"), _ok())
+    assert uit2["sent"] == 0 and len(repo.sends) == 1
+
+
+async def test_vaste_regel_houdt_zich_aan_daglimiet_en_rust_per_adres(repo, research, crew):
+    from northsea_mcp import service as svc
+    _eerste_contact(repo)
+    _vaste_regel_aan(repo)
+    service = NorthSeaService(repo, research, crew)
+    nu = svc.now().isoformat()
+    repo.t["reply_drafts"].extend({"id": f"x{i}", "approval_status": "not_required", "generated_by": "northsea-mcp",
+                                   "created_at": nu, "to_email": f"iemand{i}@elders.com", "sent_at": nu}
+                                  for i in range(svc.POLICY_PER_DAG))
+    uit = await finish_after_event(service, _event(), _ok())
+    assert uit["sent"] == 0 and repo.sends == []
+    eigen = [d for d in repo.t["reply_drafts"] if d.get("generated_by") == "northsea-mcp" and not str(d["id"]).startswith("x")]
+    assert eigen and eigen[-1]["approval_status"] == "pending"  # boven de limiet: gewoon naar Luka
+    regel = await service._policy_ruimte("iemand0@elders.com")
+    assert regel["allowed"] is False

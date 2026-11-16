@@ -426,9 +426,15 @@ class FakeRepo:
         """Gedraagt zich als de echte edge function send-approved-reply (v7)."""
         for r in self.t["reply_drafts"]:
             if r["id"] == uid(draft_id):
-                if r["approval_status"] != "approved":
+                if r["approval_status"] == "not_required":  # v8: Luka's vaste regel
+                    p = (self.t.get("deal_automation_policy") or [{}])[0]
+                    mag = bool(p.get("auto_send_qualification") and p.get("auto_reply_nonbinding"))
+                    if not (mag and (r.get("policy_decision") or {}).get("allowed") and not r.get("sensitive_action")
+                            and r.get("generated_by") == "northsea-mcp"):
+                        return {"ok": False, "error": "policy_send_not_allowed", "_status": 409}
+                elif r["approval_status"] != "approved":
                     return {"ok": False, "error": "draft_not_approved", "_status": 409}
-                if r.get("approval_actor_type") != "human" or not r.get("approved_by"):
+                elif r.get("approval_actor_type") != "human" or not r.get("approved_by"):
                     return {"ok": False, "error": "human_approval_provenance_missing", "_status": 409}
                 if r["sent_at"] or r["resend_email_id"]:
                     return {"ok": True, "duplicate": True, "resend_email_id": r["resend_email_id"], "_status": 200}

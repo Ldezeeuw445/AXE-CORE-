@@ -1,5 +1,9 @@
-// send-approved-reply v7 (P0.4, P0.5, P0.8).
-// Verstuurt ÉÉN door een MENS goedgekeurde draft. Nieuw t.o.v. v6:
+// send-approved-reply v8 (P0.4, P0.5, P0.8; 16 nov: Luka's vaste regel).
+// Verstuurt ÉÉN door een MENS goedgekeurde draft, of (v8) één vrijblijvende
+// eerste kwalificatiemail die de deskloop volgens Luka's vaste regel van 16 nov
+// mag sturen: approval_status=not_required, policy_decision.allowed, niet gevoelig,
+// alleen de drie first-touch-sjablonen, en alleen zolang deal_automation_policy
+// het toestaat (northsea_policy_allows). Zo'n mail heet nooit "human approved". Nieuw t.o.v. v6:
 // - approval_actor_type=human + approved_by + approval_channel zijn verplicht (geen herkomst = geen verzending);
 // - contactbeleid vóór verzending (do_not_contact / synthetic weigeren);
 // - gevoelige draft ook hier: getekende commissiebescherming op de deal;
@@ -10,6 +14,13 @@ import { inferMailMode, mailReferenceFromKnown, renderNorthSeaMail } from "../_s
 import { guardCode, outboundProvenance, resendPayload } from "../_shared/canonical.ts";
 import { audit, outboundBlockReason } from "../_shared/db.ts";
 import { blocksHumanSend } from "../_shared/policy.ts";
+
+// De enige sjablonen die zonder mens mogen: geen prijs, geen identiteit, geen toezegging.
+const POLICY_PURPOSES = new Set([
+  "NorthSea MCP outreach: supplier_qualification",
+  "NorthSea MCP outreach: buyer_qualification",
+  "NorthSea MCP outreach: document_request",
+]);
 
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "content-type": "application/json" } });
 
@@ -28,14 +39,27 @@ Deno.serve(async (req) => {
     if (e) throw e;
     if (!d) return json({ ok: false, error: "draft_not_found" }, 404);
     if (d.sent_at || d.resend_email_id) return json({ ok: true, duplicate: true, resend_email_id: d.resend_email_id });
-    if (d.approval_status !== "approved") return json({ ok: false, error: "draft_not_approved", status: d.approval_status }, 409);
-    if (d.approval_actor_type !== "human" || !String(d.approved_by ?? "").trim() || !d.approval_channel) {
-      return json({ ok: false, error: "human_approval_provenance_missing" }, 409);
+    const policyPad = d.approval_status === "not_required";
+    if (policyPad) {
+      const pd = (d.policy_decision ?? {}) as Record<string, unknown>;
+      const { data: mag } = await sb.rpc("northsea_policy_allows", { p_action: "auto_qualification_reply" });
+      if (pd.allowed !== true || d.sensitive_action || d.generated_by !== "northsea-mcp" || !POLICY_PURPOSES.has(String(d.purpose ?? ""))
+          || d.approval_actor_type || d.approved_by || mag !== true) {
+        await audit(sb, { actor_type: "service", actor: "send-approved-reply", action: "policy_send_refused", draft_id: d.id,
+          opportunity_id: d.opportunity_id, company_id: d.company_id, details: { requested_by: requestedBy, policy_on: mag === true, purpose: d.purpose } });
+        return json({ ok: false, error: "policy_send_not_allowed" }, 409);
+      }
+    } else {
+      if (d.approval_status !== "approved") return json({ ok: false, error: "draft_not_approved", status: d.approval_status }, 409);
+      if (d.approval_actor_type !== "human" || !String(d.approved_by ?? "").trim() || !d.approval_channel) {
+        return json({ ok: false, error: "human_approval_provenance_missing" }, 409);
+      }
     }
     if (!d.to_email || !d.subject || !d.body) return json({ ok: false, error: "draft_incomplete" }, 422);
 
     const reden = await outboundBlockReason(sb, { companyId: d.company_id, contactId: d.contact_id, email: d.to_email, opportunityId: d.opportunity_id });
-    if (blocksHumanSend(reden)) {
+    // Zonder mens ook niet naar wie eerst beoordeeld moet worden.
+    if (blocksHumanSend(reden) || (policyPad && reden === "review_required")) {
       await audit(sb, { actor_type: "service", actor: "send-approved-reply", action: "send_blocked_contact_policy", approval_identity: d.approved_by,
         draft_id: d.id, communication_id: d.communication_id, opportunity_id: d.opportunity_id, company_id: d.company_id, details: { contact_policy: reden, requested_by: requestedBy } });
       return json({ ok: false, error: "contact_policy_blocked", contact_policy: reden }, 409);
@@ -94,7 +118,8 @@ Deno.serve(async (req) => {
     if (ue) throw ue;
     const { data: o, error: ce } = await sb.from("communications").insert({ company_id: d.company_id, contact_id: d.contact_id, opportunity_id: d.opportunity_id,
       direction: "outbound", channel: "email", subject: d.subject, body: d.body, occurred_at: now,
-      ...outboundProvenance({ providerMessageId: sent.id, actor: "send-approved-reply", actorType: "service", approvalBasis: "human_approved_draft", replyDraftId: d.id }),
+      ...outboundProvenance({ providerMessageId: sent.id, actor: "send-approved-reply", actorType: policyPad ? "automation" : "service",
+        approvalBasis: policyPad ? "policy_allowed" : "human_approved_draft", replyDraftId: d.id }),
     }).select("id").single();
     if (ce) {
       console.error("send-approved-reply: sent but communication insert failed", guardCode(ce.message) ?? ce.code ?? "");
@@ -102,8 +127,13 @@ Deno.serve(async (req) => {
         opportunity_id: d.opportunity_id, company_id: d.company_id, details: { resend_email_id: sent.id, error: guardCode(ce.message) ?? "insert_failed" } });
       return json({ ok: true, draft_id: d.id, communication_id: null, resend_email_id: sent.id, record_warning: "communication_insert_failed" });
     }
-    if (d.opportunity_id) await sb.from("opportunities").update({ next_action: "Await counterparty response to approved NorthSea email.", next_action_at: now }).eq("id", d.opportunity_id);
-    await audit(sb, { actor_type: "service", actor: "send-approved-reply", action: "email_sent", approval_identity: d.approved_by, draft_id: d.id,
+    if (d.opportunity_id) await sb.from("opportunities").update({ next_action: "Await counterparty response to approved NorthSea email.", next_action_at: now, waiting_since: now }).eq("id", d.opportunity_id);
+    if (policyPad && d.opportunity_id) {
+      await sb.from("deal_events").insert({ opportunity_id: d.opportunity_id, event_type: "policy_allowed_qualification_email_sent", actor: "send-approved-reply",
+        summary: "Non-binding first qualification email sent by the Desk under Luka's standing rule (16 Nov); no price, identity or commitment.",
+        metadata: { resend_email_id: sent.id, draft_id: d.id, requested_by: requestedBy } });
+    }
+    await audit(sb, { actor_type: policyPad ? "automation" : "service", actor: "send-approved-reply", action: policyPad ? "policy_email_sent" : "email_sent", approval_identity: d.approved_by, draft_id: d.id,
       communication_id: o.id, opportunity_id: d.opportunity_id, company_id: d.company_id, contact_id: d.contact_id,
       details: { resend_email_id: sent.id, approval_channel: d.approval_channel, requested_by: requestedBy, threaded: Boolean(mid) } });
     return json({ ok: true, draft_id: d.id, communication_id: o.id, resend_email_id: sent.id, threaded: Boolean(mid), branded_html: true, legal_footer: true });

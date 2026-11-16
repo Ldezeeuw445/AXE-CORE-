@@ -106,6 +106,18 @@ class Caller:
 REVIEW_TASK_TYPES = frozenset({"dnc_review", "manual_review", "close_out", "contact_policy_review"})
 
 
+# Luka, 16 nov: "ja punt 3 mag" -- vrijblijvende eerste kwalificatiemails mogen
+# zonder hem. Grenzen: alleen deze drie sjablonen, niet gevoelig, hooguit
+# POLICY_PER_DAG per dag, niemand twee keer binnen twee weken, en alleen zolang
+# deal_automation_policy aan staat (de noodknop: die vlaggen uit).
+POLICY_REGEL = "luka_standing_rule_2026_11_16"
+POLICY_PER_DAG = 5
+POLICY_RUST = timedelta(days=14)
+POLICY_DOELEN = frozenset({"NorthSea MCP outreach: supplier_qualification",
+                           "NorthSea MCP outreach: buyer_qualification",
+                           "NorthSea MCP outreach: document_request"})
+
+
 def now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -1195,7 +1207,7 @@ class NorthSeaService:
     # ── 7. prepare_outreach ──────────────────────────────────────────────────
     async def prepare_outreach(self, caller: Caller, *, objective: str, opportunity_id: str | None = None,
                                counterparty_id: str | None = None, channel: str = "email", template: str | None = None,
-                               save_as_pending_draft: bool = False) -> OutreachDraft:
+                               save_as_pending_draft: bool = False, policy_allowed: bool = False) -> OutreachDraft:
         if not opportunity_id and not counterparty_id:
             raise ServiceError("invalid_input", "Provide opportunity_id or counterparty_id.")
         opp = req = off = None
@@ -1364,13 +1376,24 @@ class NorthSeaService:
             else:
                 if eerste_contact:
                     onderwerp = onderwerp.removeprefix("Re: ")
+                # Luka's vaste regel (16 nov): een vrijblijvende eerste kwalificatiemail
+                # mag zonder hem, binnen de grenzen hieronder. Anders: pending, zoals altijd.
+                regel = None
+                if policy_allowed and eerste_contact and beleid not in ("review_required",):
+                    regel = await self._policy_ruimte(primair["email"])
                 rij = await self.repo.insert_reply_draft({
                     "communication_id": draad["id"] if draad else None, "company_id": company["id"], "contact_id": primair.get("id"),
                     "opportunity_id": (opp or {}).get("id"), "to_email": primair["email"], "subject": onderwerp[:300],
-                    "body": tekst[:10000], "purpose": f"NorthSea MCP outreach: {template}", "approval_status": "pending",
-                    "sensitive_action": gevoelig, "generated_by": "northsea-mcp"})
+                    "body": tekst[:10000], "purpose": f"NorthSea MCP outreach: {template}",
+                    "sensitive_action": gevoelig, "generated_by": "northsea-mcp",
+                    **({"approval_status": "not_required", "lifecycle_state": "policy_allowed", "policy_decision": regel}
+                       if regel and regel.get("allowed") else {"approval_status": "pending"})})
                 saved_id, saved_status = rij.get("id"), rij.get("approval_status")
-                notes.append("Saved as a pending first-contact draft in the Deal Desk." if eerste_contact
+                if regel and not regel.get("allowed"):
+                    notes.append(f"Standing rule did not allow sending without Luka: {regel.get('reason')}.")
+                notes.append("Saved as a policy-allowed first-contact draft (Luka's standing rule); not sent yet."
+                             if saved_status == "not_required" else
+                             "Saved as a pending first-contact draft in the Deal Desk." if eerste_contact
                              else "Saved as a pending draft in the Deal Desk, anchored to an existing email.")
         return OutreachDraft(objective=objective, channel=channel if channel in ("email", "phone", "linkedin", "whatsapp") else "email",
                              template=template, recipient=party_view(company, kant, caller, contacts),
@@ -1378,6 +1401,47 @@ class NorthSeaService:
                              subject=onderwerp, body=tekst, facts_used=feiten, unknowns=[o.replace("_", " ") for o in onbekend] or list(gaps[:3]),
                              sensitive=gevoelig, approval_required=True, sent=False, saved_draft_id=saved_id,
                              saved_status=saved_status, notes=notes)
+
+    async def _policy_ruimte(self, to_email: str) -> dict[str, Any]:
+        """Mag deze eerste mail zonder Luka? Hooguit POLICY_PER_DAG per dag, niemand
+        twee keer binnen POLICY_RUST, en alleen zolang deal_automation_policy het toelaat."""
+        regel = {"allowed": False, "rule": POLICY_REGEL, "action": "auto_qualification_reply"}
+        fetch = getattr(self.repo, "fetch_all", None)
+        if not fetch:
+            return {**regel, "reason": "cannot read previous mails"}
+        alle, _ = await fetch("reply_drafts")
+        nu_ = now()
+        adres = (to_email or "").strip().lower()
+        vandaag = [d for d in alle if d.get("approval_status") == "not_required" and d.get("generated_by") == "northsea-mcp"
+                   and (t := parse_ts(d.get("created_at"))) and t.date() == nu_.date()]
+        if len(vandaag) >= POLICY_PER_DAG:
+            return {**regel, "reason": f"daily limit of {POLICY_PER_DAG} automatic first mails reached"}
+        recent = [d for d in alle if (d.get("to_email") or "").strip().lower() == adres and d.get("sent_at")
+                  and (t := parse_ts(d.get("sent_at"))) and nu_ - t < POLICY_RUST]
+        if recent:
+            return {**regel, "reason": f"this address was mailed in the last {POLICY_RUST.days} days"}
+        return {**regel, "allowed": True, "reason": "first non-binding qualification, within daily limit",
+                "limit_per_day": POLICY_PER_DAG, "decided_at": nu_.isoformat()}
+
+    async def send_policy_allowed(self, caller: Caller, *, draft_id: str) -> SendResult:
+        """Verstuurt één concept dat volgens Luka's vaste regel zonder hem mag.
+        De verstuurfunctie en de database controleren hetzelfde nog eens."""
+        d = await self.repo.get_draft(draft_id)
+        if not d:
+            raise NotFound("draft")
+        if d.get("sent_at") or d.get("resend_email_id"):
+            return SendResult(draft_id=d["id"], submitted=False, duplicate=True, communication_id=None,
+                              provider_message_id=d.get("resend_email_id"), message="Already sent; nothing was sent again.")
+        regel = d.get("policy_decision") if isinstance(d.get("policy_decision"), dict) else {}
+        if (d.get("approval_status") != "not_required" or not regel.get("allowed") or d.get("sensitive_action")
+                or d.get("generated_by") != "northsea-mcp" or d.get("purpose") not in POLICY_DOELEN):
+            raise PolicyDenied("policy_send_not_allowed", "This draft is not a policy-allowed first qualification mail.")
+        res = await self.repo.send_approved_reply(d["id"], requested_by=caller.principal)
+        if res.get("ok"):
+            return SendResult(draft_id=d["id"], submitted=not res.get("duplicate"), duplicate=bool(res.get("duplicate")),
+                              communication_id=res.get("communication_id"), provider_message_id=res.get("resend_email_id"),
+                              message="Email submitted to the provider under Luka's standing rule.")
+        raise ServiceError(str(res.get("error") or "send_failed")[:60], "Sending under the standing rule did not go through; nothing more was tried.")
 
     # ── 7b. prepare_legal_document ──────────────────────────────────────────
     async def prepare_legal_document(self, caller: Caller, *, opportunity_id: str, document_type: str,
