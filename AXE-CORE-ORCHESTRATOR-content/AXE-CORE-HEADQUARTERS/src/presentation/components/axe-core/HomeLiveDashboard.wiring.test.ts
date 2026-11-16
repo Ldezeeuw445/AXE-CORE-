@@ -57,6 +57,8 @@ describe('Home live dashboard is aangesloten', () => {
     expect(css).not.toMatch(/grid-template-rows: 1fr 1fr/);
     expect(css).not.toMatch(/\.axe-home-rail-regel \{[^}]*overflow-wrap: anywhere/);
     expect(css).not.toMatch(/\.axe-home-live-regel \{[^}]*overflow-wrap: anywhere/);
+    // 16 nov: in de volle lijst groeit een regel mee, anders ligt regel 2 over de volgende.
+    expect(css).toMatch(/\.axe-home-live-lijst \.axe-home-live-regel,[^}]*height: auto/);
   });
 
   it('de strip leest echte polls en Approve/Decline', () => {

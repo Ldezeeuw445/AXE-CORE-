@@ -536,12 +536,22 @@
   pointer-events: auto;
 }
 
+/* 16 nov (Luka, screenshot): in de volle lijst liep een lange DAX-regel door
+   naar een tweede regel, maar hield de vaste hoogte van één regel -- dan lag
+   die tweede regel óver de volgende. Hier mag een regel echt groeien. */
 .axe-home-live-lijst .axe-home-live-regel,
 .axe-home-live-lijst .axe-home-live-meer {
   white-space: normal;
+  height: auto;
+  min-height: 1.25em;
   max-height: none;
+  flex: none;
   overflow: visible;
   text-overflow: clip;
+}
+
+.axe-home-live-lijst .axe-home-live-regel + .axe-home-live-regel {
+  margin-top: 6px;
 }
 
 .axe-home-live-lijst-kop {

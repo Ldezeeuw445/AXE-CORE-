@@ -110,7 +110,7 @@ def test_poging_die_luka_nodig_heeft_gaat_meteen_naar_luka():
     vragen = [r for r in db.rows("core_approvals") if r.get("title") == "Geheugenlimiet vol door de notitiesync"]
     assert len(vragen) == 1 and "add credits" in vragen[0]["detail"]
     chat = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "axon" and r["to_agent"] == "luka"]
-    assert "Ik ben zelf bezig" not in chat[-1]["body"]
+    assert "Ik ben zelf bezig" not in chat[-1]["body"] and "add credits" in chat[-1]["body"]
 
 
 def test_geslaagde_poging_staat_als_bevinding_in_de_chat():

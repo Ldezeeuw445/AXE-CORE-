@@ -382,11 +382,15 @@ def _chat_met_luka(db: Any, agent: str, bevindingen: list[Any], gedaan: list[str
         # Wat de manager eerst zelf probeert, is (nog) niet iets voor Luka: dat
         # staat onder "gedaan" tot de poging mislukt en er een vraag bij Luka ligt.
         try:
-            open_vragen = {str(r.get("title") or "") for r in _rijen(db, "core_approvals", "title,status", status="pending")}
+            open_vragen = {str(r.get("title") or ""): str(r.get("detail") or "")
+                           for r in _rijen(db, "core_approvals", "title,detail,status", status="pending")}
         except Exception:  # noqa: BLE001
-            open_vragen = set()
+            open_vragen = {}
         zelf = [b for b in bevindingen if b.voor == "luka" and b.code in ZELF_PROBEREN and b.titel not in open_vragen]
-        nodig = [f"{b.titel}. {b.detail}".strip() for b in bevindingen if b.voor == "luka" and b not in zelf]
+        # 16 nov: de vraag na een eigen poging zegt wát hij vond ("tegoed op");
+        # in de chat stond alleen de kale bevinding. Dan de tekst van de vraag.
+        nodig = [f"{b.titel}. {open_vragen.get(b.titel) or b.detail}".strip()
+                 for b in bevindingen if b.voor == "luka" and b not in zelf]
         gedaan = list(gedaan or []) + [_zelf_regel(db, agent, b) for b in zelf]
         gezien = [f"{b.titel}. {b.detail}".strip() for b in bevindingen if b.voor != "luka"]
         if app:
