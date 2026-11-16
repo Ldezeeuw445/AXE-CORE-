@@ -89,6 +89,17 @@ def verouderde_voorstellen(rijen: list[dict[str, Any]], nu: datetime) -> list[di
             and _leeftijd(r, nu) >= VOORSTEL_OUD_NA and not NIET_VANZELF_WEG.search(str(r.get("title") or ""))]
 
 
+def wees_wachters(rijen: list[dict[str, Any]], met_kaart: set[str], nu: datetime) -> list[dict[str, Any]]:
+    """Taken op waiting_approval zonder open goedkeuringskaart (16 nov).
+
+    Luka kon daar nergens ja op zeggen: de kaart verliep of werd nooit gemaakt.
+    Toch telde de manager ze als "wacht al een dag op jouw ja". Na een dag
+    sluit de manager ze zelf, behalve beveiliging/sleutels: die blijven staan.
+    """
+    return [r for r in rijen if r.get("status") == "waiting_approval" and str(r.get("id")) not in met_kaart
+            and _leeftijd(r, nu) >= LUKA_WACHT_LANG_NA and not NIET_VANZELF_WEG.search(str(r.get("title") or ""))]
+
+
 def dubbele_voorstellen(rijen: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """De `pending`-rijen die een nieuwere tweeling hebben. Nieuwste blijft."""
     groepen: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)

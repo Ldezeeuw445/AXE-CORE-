@@ -62,11 +62,14 @@ export default function NorthseaDesk() {
   const [data, setData] = useState<NorthseaOverzicht | null>(null);
   const [fout, setFout] = useState<string | null>(null);
   const [bezig, setBezig] = useState(false);
+  // ?deal=<id>: "Wacht op jou" opent zo direct de deal waar de vraag over gaat.
+  const linkDeal = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('deal') : null;
   const [tab, setTab] = useState<Tab>(() =>
-    typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches ? 'chase' : 'live',
+    linkDeal ? 'deals'
+      : typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches ? 'chase' : 'live',
   );
   /** De deal die Active Deals opent, als je er vanuit Pipeline of Chase naartoe gaat. */
-  const [dealStart, setDealStart] = useState<string | null>(null);
+  const [dealStart, setDealStart] = useState<string | null>(linkDeal);
   const [commStart, setCommStart] = useState<CommStart | null>(null);
   const [compact, setCompact] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches,

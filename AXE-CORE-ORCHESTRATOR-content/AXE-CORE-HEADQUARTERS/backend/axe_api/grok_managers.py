@@ -571,6 +571,37 @@ def _archiveer_verouderde_voorstellen(db: Any, rijen: list[dict[str, Any]], nu: 
     return gedaan
 
 
+def _taken_met_open_kaart(db: Any) -> set[str] | None:
+    try:
+        res = db.table("core_approvals").select("task_id").eq("status", "pending").limit(500).execute()
+    except Exception as exc:  # noqa: BLE001 -- niet kunnen kijken = niets sluiten
+        log.warning("projectsmgr: core_approvals niet leesbaar (%s)", exc)
+        return None
+    return {str(r.get("task_id")) for r in (res.data or []) if r.get("task_id")}
+
+
+def _sluit_wees_wachters(db: Any, rijen: list[dict[str, Any]], nu: datetime) -> list[dict[str, Any]]:
+    """waiting_approval zonder kaart: niemand kan ja zeggen, dus zelf sluiten (16 nov)."""
+    import projecten_bewaker as pb
+    met_kaart = _taken_met_open_kaart(db)
+    if met_kaart is None:
+        return []
+    gedaan = []
+    for r in pb.wees_wachters(rijen, met_kaart, nu)[:20]:
+        meta = r.get("metadata") if isinstance(r.get("metadata"), dict) else {}
+        try:
+            db.table("core_tasks").update({
+                "status": "cancelled",
+                "metadata": {**meta, "opgeruimd_door": "projectsmgr",
+                             "reden": "wachtte op een ja, maar de goedkeuringskaart ontbrak of was verlopen",
+                             "opgeruimd_op": nu.isoformat(), "terugzetten": "status weer op waiting_approval en een nieuwe kaart vragen"},
+            }).eq("id", r["id"]).eq("status", "waiting_approval").execute()
+            gedaan.append(r)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("projectsmgr: kon wees-taak %s niet sluiten (%s)", r.get("id"), exc)
+    return gedaan
+
+
 def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
     """Eigenaar van de takenlijst: ziet wat stilstaat, ruimt dubbels op, roept
     Luka alleen voor wat hij zelf niet kan oplossen."""
@@ -580,7 +611,8 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
     weg = {r.get("id") for r in opgeruimd}
     rijen = [r for r in rijen if r.get("id") not in weg]
     gearchiveerd = _archiveer_verouderde_voorstellen(db, rijen, nu)
-    weg = {r.get("id") for r in gearchiveerd}
+    wees = _sluit_wees_wachters(db, rijen, nu)
+    weg = {r.get("id") for r in gearchiveerd} | {r.get("id") for r in wees}
     rijen = [r for r in rijen if r.get("id") not in weg]
 
     bevindingen = pb.beoordeel(rijen, nu)
@@ -599,7 +631,9 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
         db, "projectsmgr", bevindingen,
         gedaan=([f"{len(opgeruimd)} dubbele voorstellen opgeruimd"] if opgeruimd else []) + (
             [f"{len(gearchiveerd)} verouderde voorstellen gearchiveerd (een maand niemand opgepakt, terug te zetten): "
-             + "; ".join(str(r.get('title'))[:60] for r in gearchiveerd[:3])] if gearchiveerd else []), app="AXE Core",
+             + "; ".join(str(r.get('title'))[:60] for r in gearchiveerd[:3])] if gearchiveerd else []) + (
+            [f"{len(wees)} taken gesloten die op jouw ja wachtten zonder dat er een kaart was (je kon ze nergens goedkeuren): "
+             + "; ".join(str(r.get('title'))[:60] for r in wees[:3])] if wees else []), app="AXE Core",
         rustig="Op de takenlijst staat niets stil.")
     return {
         "job": "projects and tasks",
@@ -608,6 +642,7 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
         "bevindingen": [b.code for b in bevindingen],
         "opgeruimd": len(opgeruimd),
         "gearchiveerd": len(gearchiveerd),
+        "wees_gesloten": len(wees),
         "chat": chat,
         "dagoverzicht": overzicht,
         "gerapporteerd": gerapporteerd,

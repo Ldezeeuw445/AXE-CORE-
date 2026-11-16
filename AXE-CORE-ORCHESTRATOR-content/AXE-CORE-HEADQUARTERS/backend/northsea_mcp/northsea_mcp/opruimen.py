@@ -145,6 +145,30 @@ def maak_plan(tabellen: dict[str, list[dict]], nu: datetime) -> Plan:
                              "staat al als taak in de desk", _kort(a.get("title"))))
             weg.add(str(a["id"]))
 
+    # 4. (16 nov) "Yes needed"-taak waarvan de vraag al beantwoord is: elk concept
+    # dat de desk sindsdien voor die deal maakte is afgewezen of verstuurd, en er
+    # staat er geen meer open. 22 van de 27 kaarten van 15 nov waren zo; Luka zag
+    # ze als "wacht op jou" terwijl hij al nee had gezegd.
+    alle_concepten = tabellen.get("reply_drafts") or []
+    for t in tabellen.get("deal_tasks") or []:
+        if t.get("status") not in OPEN_WACHTRIJ or not t.get("requires_approval"):
+            continue
+        if not str(t.get("title") or "").lower().startswith("yes needed") or not t.get("opportunity_id"):
+            continue
+        sinds = _tijd(t.get("created_at"))
+        if not sinds:
+            continue
+        erna = [d for d in alle_concepten if d.get("opportunity_id") == t.get("opportunity_id")
+                and (dt := _tijd(d.get("created_at"))) and dt >= sinds - timedelta(hours=1)]
+        if not erna:
+            continue
+        nog_open = any(d.get("approval_status") == "pending" and not d.get("sent_at") for d in erna)
+        beantwoord = all(d.get("approval_status") in ("rejected", "sent") or d.get("sent_at") for d in erna)
+        if beantwoord and not nog_open:
+            auto.append(Stap("deal_tasks", str(t["id"]), "status", "cancelled", t.get("status"),
+                             "al beantwoord: het concept is afgewezen of verstuurd", _kort(t.get("title"))))
+            weg.add(str(t["id"]))
+
     voorstellen: list[Voorstel] = []
 
     # Mails van een deal waar nog een beslissing van Luka op ligt (DEAL-002)

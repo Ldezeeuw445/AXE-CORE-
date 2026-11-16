@@ -53,6 +53,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/crewai', label: 'CrewAI', keywords: ['crewai', 'crew ai', 'crew'] },
   { path: '/calendar', label: 'Calendar', keywords: ['calendar', 'agenda'] },
   { path: '/ledger', label: 'Ledger', keywords: ['ledger', 'grootboek', 'runs', 'job runs', 'logboek', 'alle taken', 'wat draaide er'] },
+  { path: '/wacht', label: 'Wacht op jou', keywords: ['wacht op jou', 'goedkeuringen', 'approvals', 'approval', 'waiting for me', 'wat wacht op mij', 'ja nodig', 'yes needed'] },
   { path: '/tasks', label: 'Tasks', keywords: ['tasks', 'todo', 'to-do', 'task'], recordType: 'task' },
   { path: '/brief', label: 'Daily Brief', keywords: ['daily brief', 'dagbrief', 'brief', 'briefing', 'wat is er gebeurd', 'what happened'] },
   { path: '/finance', label: 'Finance', keywords: ['finance', 'financien', 'budget', 'money'] },

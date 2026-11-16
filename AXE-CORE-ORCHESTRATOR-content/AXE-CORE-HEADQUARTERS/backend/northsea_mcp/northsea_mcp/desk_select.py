@@ -215,6 +215,42 @@ def recent_crew_opportunity_ids(audits: list[dict], *, now: datetime, window: ti
     return recent
 
 
+# 16 nov: de sweep koos drie keer achter elkaar een Denel-koperdeal met een
+# concept van gisteren. Zo'n deal rust 14 dagen (crew_loop.EIGEN_CONCEPT_RUST),
+# dus elke ronde eindigde in "draft already prepared" en de ~400 deals mét een
+# leveranciersadres kwamen nooit aan de beurt. Rustende deals gaan achteraan;
+# een antwoord van de tegenpartij na het concept maakt de deal weer levend.
+CONCEPT_RUST = timedelta(days=14)
+EIGEN_MAKER = "northsea-mcp"
+
+
+def _ts(v: Any) -> datetime | None:
+    try:
+        t = datetime.fromisoformat(str(v or "").replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
+def resting_opportunity_ids(drafts: list[dict], communications: list[dict], *, now: datetime,
+                            window: timedelta = CONCEPT_RUST) -> set[str]:
+    laatste: dict[str, datetime] = {}
+    for d in drafts:
+        oid = d.get("opportunity_id")
+        t = _ts(d.get("created_at"))
+        if not oid or d.get("generated_by") != EIGEN_MAKER or not t or t < now - window:
+            continue
+        if t > laatste.get(str(oid), t - timedelta(seconds=1)):
+            laatste[str(oid)] = t
+    for c in communications:
+        oid = str(c.get("opportunity_id") or "")
+        if oid in laatste and c.get("direction") == "inbound":
+            t = _ts(c.get("occurred_at") or c.get("created_at"))
+            if t and t > laatste[oid]:
+                laatste.pop(oid)
+    return set(laatste)
+
+
 def _open_pool(opportunities: list[dict]) -> list[dict]:
     return [
         o for o in opportunities
@@ -235,6 +271,7 @@ def select_operations_deals(
     offers: list[dict],
     now: datetime,
     limit: int = OPERATIONS_BATCH,
+    drafts: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Kies tot `limit` deals voor de operations-sweep.
 
@@ -247,6 +284,7 @@ def select_operations_deals(
     req_by_id = {r["id"]: r for r in requirements if r.get("id")}
     off_by_id = {o["id"]: o for o in offers if o.get("id")}
     recent = recent_crew_opportunity_ids(audits, now=now)
+    resting = resting_opportunity_ids(drafts or [], communications, now=now)
 
     pool = _open_pool(opportunities)
     skipped = {"parked": 0, "stale_marketplace_paper": 0}
@@ -263,6 +301,7 @@ def select_operations_deals(
 
     eligible.sort(key=lambda o: (
         str(o.get("id")) in recent,
+        str(o.get("id")) in resting,
         _PRIORITY_RANK.get(_s(o.get("deal_priority")).upper(), 2),
         -int(o.get("readiness_score") or 0),
         str(o.get("updated_at") or ""),
@@ -273,6 +312,7 @@ def select_operations_deals(
         "active": pool,
         "eligible": eligible,
         "recent": recent,
+        "resting": resting,
         "skipped": skipped,
         "parked_ids": parked_ids,
         "engaged_ids": engaged_ids,

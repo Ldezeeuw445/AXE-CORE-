@@ -704,8 +704,8 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
         async with operations_lock:
             try:
                 namen = ["opportunities", "northsea_audit_events", "deal_tasks", "action_queue",
-                         "communications", "companies", "buyer_requirements", "supplier_offers"]
-                (opportunities, _), (audits, _), (tasks, _), (queue, _), (comms, _), (companies, _), (reqs, _), (offers, _) = (
+                         "communications", "companies", "buyer_requirements", "supplier_offers", "reply_drafts"]
+                (opportunities, _), (audits, _), (tasks, _), (queue, _), (comms, _), (companies, _), (reqs, _), (offers, _), (drafts, _) = (
                     await haal_tabellen(repo, namen, return_exceptions=False)
                 )
             except RepositoryError:
@@ -715,7 +715,7 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
                 opportunities,
                 audits=audits, tasks=tasks, queue=queue, communications=comms,
                 companies=companies, requirements=reqs, offers=offers,
-                now=datetime.now(timezone.utc),
+                now=datetime.now(timezone.utc), drafts=drafts,
             )
             chosen = selectie["chosen"]
             active = selectie["active"]

@@ -154,3 +154,16 @@ def test_technische_sleutelfout_is_eerst_zelf():
     assert gm._sleutel_technisch("dax-developer-01 login broken (DAX is in error: installing dax-routine failed: command exited)")
     assert not gm._sleutel_technisch("claude2 login broken (logged out)")
     assert not gm._sleutel_technisch("AISSTREAM_API_KEY missing (required)")
+
+
+def test_wees_wachter_zonder_kaart_wordt_gesloten_met_kaart_niet():
+    from datetime import timedelta
+    oud = (NU - timedelta(days=3)).isoformat()
+    rijen = [
+        {"id": "a", "status": "waiting_approval", "title": "NorthSea: er komt geen mail meer binnen", "created_at": oud, "updated_at": oud},
+        {"id": "b", "status": "waiting_approval", "title": "Mail versturen", "created_at": oud, "updated_at": oud},
+        {"id": "c", "status": "waiting_approval", "title": "Sleutel roteren", "created_at": oud, "updated_at": oud},
+        {"id": "d", "status": "waiting_approval", "title": "Net gevraagd", "created_at": NU.isoformat(), "updated_at": NU.isoformat()},
+    ]
+    # b heeft een open kaart; c is een sleutel (blijft); d is te vers.
+    assert [r["id"] for r in pb.wees_wachters(rijen, {"b"}, NU)] == ["a"]

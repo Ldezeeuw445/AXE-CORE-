@@ -38,6 +38,7 @@ const MemoryHub = lazy(() => import('@/presentation/pages/MemoryHub'));
 const ObsidianMemory = lazy(() => import('@/presentation/pages/ObsidianMemory'));
 const TradingMemory = lazy(() => import('@/presentation/pages/TradingMemory'));
 const StatusPage = lazy(() => import('@/presentation/pages/StatusPage'));
+const WachtOpJou = lazy(() => import('@/presentation/pages/WachtOpJou'));
 const KnowledgeBase = lazy(() => import('@/presentation/pages/KnowledgeBase'));
 const Trading = lazy(() => import('@/presentation/pages/Trading'));
 const TradingIntel = lazy(() => import('@/presentation/pages/TradingIntel'));
@@ -280,6 +281,8 @@ export default function App() {
             <Route index element={<HomeEntry />} />
             {/* The page that answers "what actually works". */}
             <Route path="status" element={<StatusPage />} />
+            {/* Eén plek met alles wat op Luka's ja/nee wacht (16 nov). */}
+            <Route path="wacht" element={<WachtOpJou />} />
             <Route path="apps" element={<AppsPage />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="brief" element={<DailyBrief />} />

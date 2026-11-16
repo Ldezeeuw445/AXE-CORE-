@@ -101,3 +101,26 @@ async def test_tidy_desk_tool_droog_en_dan_echt(mcp_server, repo):
     assert next(r for r in repo.t["action_queue"] if r["id"] == a)["status"] == "cancelled"
     assert next(r for r in repo.t["deal_tasks"] if r["id"] == t)["status"] == "open"
     assert "sends" in json.dumps(echt["never"])
+
+
+def test_beantwoorde_yes_kaart_gaat_vanzelf_dicht():
+    t0 = "2026-11-15T16:00:00+00:00"
+    tabellen = {
+        "deal_tasks": [
+            {"id": "t1", "status": "open", "requires_approval": True, "opportunity_id": "o1",
+             "title": "Yes needed: o1 — Copper Cathode", "created_at": t0},
+            {"id": "t2", "status": "open", "requires_approval": True, "opportunity_id": "o2",
+             "title": "Yes needed: o2 — Copper Cathode", "created_at": t0},
+            {"id": "t3", "status": "open", "requires_approval": True, "opportunity_id": "o3",
+             "title": "Yes needed: o3 — Copper Cathode", "created_at": t0},
+        ],
+        "reply_drafts": [
+            {"id": "d1", "opportunity_id": "o1", "approval_status": "rejected", "created_at": t0},
+            {"id": "d2", "opportunity_id": "o2", "approval_status": "pending", "created_at": t0},
+        ],
+    }
+    from datetime import datetime, timezone
+    plan = maak_plan(tabellen, datetime(2026, 11, 16, tzinfo=timezone.utc))
+    dicht = {s.id for s in plan.automatisch if s.tabel == "deal_tasks"}
+    # o1 is beantwoord (nee); o2 wacht echt nog; o3 heeft geen concept om op te leunen.
+    assert dicht == {"t1"}

@@ -36,6 +36,7 @@ import { GESPREK_CONTEXT } from '@/domain/tierRouter/agentDraad';
 import { laatManagerAntwoorden } from '@/application/managers/managerAntwoord';
 import { northseaOpruimenOk } from '@/infrastructure/gateways/axeCoreApiService';
 import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
+import { haalWachtOpJou } from '@/application/approvals/wachtOpJou';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { startAxeJobs } from '@/presentation/store/installTierRouter';
 import { managerChatRoute } from '@/domain/agents/managersComposerDoel';
@@ -167,6 +168,18 @@ type Props = { weergaveKnoppen?: ReactNode };
 
 export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
   const boss = useMemo(() => bossAgent(), []);
+  // Aantal in "Wacht op jou" (alle managers en apps samen), elke minuut ververst.
+  const [wachtAantal, setWachtAantal] = useState<number | null>(null);
+  useEffect(() => {
+    let levend = true;
+    const tel = () => {
+      if (document.hidden) return;
+      void haalWachtOpJou().then((r) => { if (levend && r.fouten.length === 0) setWachtAantal(r.items.length); });
+    };
+    const eerste = setTimeout(tel, 0);
+    const t = window.setInterval(tel, 60_000);
+    return () => { levend = false; clearTimeout(eerste); window.clearInterval(t); };
+  }, []);
   const projects = useMemo(() => projectsOrchAgent(), []);
   const onderProjects = useMemo(() => managersOnderProjects(), []);
   const alleIds = useMemo(
@@ -424,6 +437,16 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
               {weergaveKnoppen}
             </div>
           )}
+          <button
+            type="button"
+            className="axe-managers-room-daxlink"
+            onClick={() => navigate('/wacht')}
+            title="Alles wat op jouw ja of nee wacht, uit alle managers en apps"
+            data-axe-wacht-knop=""
+            style={wachtAantal ? { color: 'rgb(251,146,60)' } : undefined}
+          >
+            Wacht op jou{wachtAantal != null ? ` · ${wachtAantal}` : ''}
+          </button>
           <button
             type="button"
             className="axe-managers-room-daxlink"

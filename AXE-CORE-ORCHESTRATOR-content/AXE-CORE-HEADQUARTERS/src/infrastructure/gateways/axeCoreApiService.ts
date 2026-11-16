@@ -1305,7 +1305,7 @@ export function northseaTab<T extends TabNaam>(naam: T, vers = false): Promise<T
 export type NorthseaActie =
   | 'get_next_actions' | 'review_deal' | 'qualify_opportunity' | 'investigate_blockers'
   | 'assess_match' | 'process_reply' | 'research_counterparty' | 'prepare_outreach'
-  | 'get_live_operations';
+  | 'get_live_operations' | 'list_pending_approvals';
 
 export async function northseaActie(actie: NorthseaActie, params: Record<string, unknown>): Promise<{
   action: string; tool: string; result: Record<string, unknown>;

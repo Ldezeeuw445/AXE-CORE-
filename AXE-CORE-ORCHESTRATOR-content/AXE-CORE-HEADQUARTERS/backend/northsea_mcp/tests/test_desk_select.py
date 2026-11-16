@@ -1,7 +1,7 @@
 """Desk-run selectie: geparkeerde en stale marketplace-papier blijven liggen."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fakes import OPP, FakeRepo, ts
 from northsea_mcp.crew_loop import finish_after_event, finish_engine_tick
@@ -256,3 +256,26 @@ async def test_operations_dry_run_selecteert_geen_geparkeerd_papier(app, store, 
     assert MARKET_OPP not in ids
     assert body["skipped"]["parked"] >= 1
     assert repo.engine_writes == []
+
+
+def test_rustende_deal_gaat_achteraan_tot_er_antwoord_is():
+    from northsea_mcp.desk_select import resting_opportunity_ids
+    a, b = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    opps = [
+        {"id": a, "stage": "qualifying", "deal_priority": "P0", "readiness_score": 90},
+        {"id": b, "stage": "qualifying", "deal_priority": "P2", "readiness_score": 10},
+    ]
+    gisteren = (NU - timedelta(days=1)).isoformat()
+    drafts = [{"opportunity_id": a, "generated_by": "northsea-mcp", "created_at": gisteren}]
+    uit = select_operations_deals(opps, audits=[], tasks=[], queue=[], communications=[],
+                                  companies=[], requirements=[], offers=[], now=NU, drafts=drafts, limit=1)
+    assert [o["id"] for o in uit["chosen"]] == [b]
+    assert uit["resting"] == {a}
+    # Een antwoord van de tegenpartij na het concept: weer levend.
+    antwoord = [{"opportunity_id": a, "direction": "inbound", "occurred_at": NU.isoformat()}]
+    assert resting_opportunity_ids(drafts, antwoord, now=NU) == set()
+    # Ouder dan 14 dagen of door een mens gemaakt: rust niet.
+    oud = [{"opportunity_id": a, "generated_by": "northsea-mcp", "created_at": (NU - timedelta(days=15)).isoformat()}]
+    mens = [{"opportunity_id": a, "generated_by": "northsea-desk", "created_at": gisteren}]
+    assert resting_opportunity_ids(oud, [], now=NU) == set()
+    assert resting_opportunity_ids(mens, [], now=NU) == set()
