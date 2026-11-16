@@ -34,7 +34,10 @@ TABELNAAM = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 # Tabellen die NA aanmaak nog veranderen maar geen updated_at hebben: de cursor
 # op created_at ziet die wijziging niet (communications.delivery_status bij een
 # bounce). Die laden we daarom ook periodiek helemaal opnieuw.
-VOLLEDIG_HERLADEN_NA_S: dict[str, int] = {"communications": 30 * 60}
+# 16 nov: reply_drafts en deal_tasks hebben wel updated_at, maar een afwijzing
+# buiten de MCP om (een UPDATE zonder updated_at) bleef zo dagen "pending" in
+# de lijst voor Luka. Ook die twee elk half uur vol; het zijn kleine tabellen.
+VOLLEDIG_HERLADEN_NA_S: dict[str, int] = {"communications": 30 * 60, "reply_drafts": 30 * 60, "deal_tasks": 30 * 60}
 
 TOEGESTANE_CURSOR = frozenset({"updated_at", "created_at", "occurred_at", "id"})
 

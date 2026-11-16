@@ -186,3 +186,23 @@ async def test_send_weigert_mcp_goedkeuring_door_agent(repo, research, crew):
     with pytest.raises(PolicyDenied):
         await service.send_approved_communication(desk_manager_caller(), draft_id=d["id"], confirm=True)
     assert repo.sends == voor
+
+
+async def test_eigen_concept_van_vorige_ronde_geeft_geen_nieuw_en_geen_ja(repo, research, crew):
+    """15-16 nov: elke ronde een nieuwe 'supply qualification' naar Mopani (11x),
+    ook na afwijzen, en telkens een 'Yes needed' voor Luka erbij."""
+    for d in repo.t["reply_drafts"]:
+        if d["approval_status"] == "pending":
+            d["approval_status"] = "rejected"
+    repo.t["communications"].clear()
+    service = NorthSeaService(repo, research, crew)
+    await finish_after_event(service, _event(), _ok())
+    eigen = [d for d in repo.t["reply_drafts"] if d.get("generated_by") == "northsea-mcp"]
+    assert len(eigen) == 1
+    eigen[0]["approval_status"] = "rejected"
+    ja_voor = [t for t in repo.t["deal_tasks"] if t.get("requires_approval")]
+    uit = await finish_after_event(service, _event(event_id="auto-qualify-2"), _ok())
+    assert len([d for d in repo.t["reply_drafts"] if d.get("generated_by") == "northsea-mcp"]) == 1
+    assert [t for t in repo.t["deal_tasks"] if t.get("requires_approval")] == ja_voor
+    assert uit["notice"]["akkoord_nodig"] is False and "is rejected" in uit["notice"]["tekst"]
+    assert repo.sends == []

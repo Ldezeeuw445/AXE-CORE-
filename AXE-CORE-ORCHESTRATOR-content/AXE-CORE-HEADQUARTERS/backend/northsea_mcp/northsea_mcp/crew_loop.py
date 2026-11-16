@@ -14,7 +14,7 @@ vindt schrijft dat op dezelfde plek als een ja-vraag.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from . import engine_rules as rules
@@ -32,6 +32,7 @@ from .service import (
     ServiceError,
     company_of,
     offer_of,
+    parse_ts,
     req_of,
 )
 
@@ -375,6 +376,34 @@ async def _vrijgeven(service: Any, draft_id: str) -> dict[str, Any]:
     }
 
 
+# 15-16 nov: de deskloop maakte bij elke ronde voor dezelfde deal een nieuwe
+# "supply qualification"-mail plus een "Yes needed" voor Luka, ook als de vorige
+# net was afgewezen. Naar Mopani stonden er zo 11, en Luka's lijst liep op tot 87.
+# Een eigen concept van de laatste 14 dagen -- open of afgewezen -- is genoeg:
+# open wacht al op Luka, afgewezen is een antwoord. Dan geen nieuw concept.
+EIGEN_CONCEPT_RUST = timedelta(days=14)
+EIGEN_MAKER = "northsea-mcp"
+
+
+async def _eigen_recent_concept(repo: Any, opp_id: str) -> dict[str, Any] | None:
+    fetch = getattr(repo, "fetch_all", None)
+    if not fetch:
+        return None
+    try:
+        alle, _ = await fetch("reply_drafts")
+    except Exception:  # noqa: BLE001 -- niet kunnen kijken = de oude weg
+        return None
+    grens = _now() - EIGEN_CONCEPT_RUST
+    eigen = []
+    for d in alle:
+        if d.get("opportunity_id") != opp_id or d.get("generated_by") != EIGEN_MAKER or d.get("sent_at"):
+            continue
+        t = parse_ts(d.get("created_at"))
+        if t and t >= grens:
+            eigen.append(d)
+    return max(eigen, key=lambda d: str(d.get("created_at") or ""), default=None)
+
+
 async def _axe_stap(service: Any, opp: dict[str, Any], eval_: rules.DealEvaluation,
                     event: dict[str, Any]) -> dict[str, Any]:
     kaart = deal_card(opp)
@@ -391,6 +420,23 @@ async def _axe_stap(service: Any, opp: dict[str, Any], eval_: rules.DealEvaluati
         )
         return {"notice": None, "sent": 0, "approved": 0, "owner": "axe",
                 "missing": "verified_channel", "deal_id": opp["id"]}
+
+    vorig = await _eigen_recent_concept(service.repo, opp["id"])
+    if vorig:
+        status = vorig.get("approval_status") or "pending"
+        gemaakt = parse_ts(vorig.get("created_at"))
+        weer = (gemaakt + EIGEN_CONCEPT_RUST).date().isoformat() if gemaakt else "later"
+        return await _lege_run(
+            service.repo, kind=f"concept-ligt-er:{opp['id']}",
+            title=f"Desk run: draft already prepared — {kaart.get('deal_code')}",
+            description=notice_body(
+                kaart, what_yes_does="No new draft and no new yes. One is already there.",
+                extra=(f"Draft '{vorig.get('subject')}' to {vorig.get('to_email') or 'the counterparty'} of "
+                       f"{(gemaakt.date().isoformat() if gemaakt else '?')} is {status}. "
+                       f"The crews do not draft this deal again before {weer}."),
+            ),
+            extra={"deal_id": opp["id"], "draft_id": vorig.get("id"), "draft_status": status},
+        )
 
     template = _template_voor(eval_)
     doel = eval_.next_action
