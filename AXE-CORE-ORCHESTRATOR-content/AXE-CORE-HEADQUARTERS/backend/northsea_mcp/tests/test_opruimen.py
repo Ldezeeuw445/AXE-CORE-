@@ -103,6 +103,22 @@ async def test_tidy_desk_tool_droog_en_dan_echt(mcp_server, repo):
     assert "sends" in json.dumps(echt["never"])
 
 
+async def test_tidy_sluit_beantwoorde_yes_taak_via_de_taakroute(mcp_server, repo):
+    import uuid
+    from tests.test_readtools import ALL, call
+    opp, t = str(uuid.uuid4()), str(uuid.uuid4())
+    repo.t.setdefault("deal_tasks", []).append({"id": t, "status": "open", "requires_approval": True, "opportunity_id": opp,
+                                                "title": "Yes needed: X — Copper", "created_at": "2026-11-15T16:00:00+00:00",
+                                                "updated_at": "2026-11-15T16:00:00+00:00"})
+    repo.t.setdefault("reply_drafts", []).append({"id": str(uuid.uuid4()), "opportunity_id": opp, "approval_status": "rejected",
+                                                  "created_at": "2026-11-15T16:00:00+00:00"})
+    res = await call(mcp_server, "northsea_tidy_desk", {"idempotency_key": "tidy-test-3", "dry_run": False, "apply": ["auto"]}, ALL)
+    assert not res.is_error, res.content[0].text
+    uit = res.structured_content
+    assert not uit["skipped"], uit["skipped"]
+    assert next(r for r in repo.t["deal_tasks"] if r["id"] == t)["status"] == "cancelled"
+
+
 def test_beantwoorde_yes_kaart_gaat_vanzelf_dicht():
     t0 = "2026-11-15T16:00:00+00:00"
     tabellen = {

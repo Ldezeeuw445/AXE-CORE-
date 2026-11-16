@@ -1730,7 +1730,12 @@ class NorthSeaService:
             if stap.tabel == "reply_drafts":
                 body["lifecycle_state"] = "rejected"
             try:
-                rijen = await self.repo.engine_patch(stap.tabel, {"id": f"eq.{stap.id}"}, body)
+                if stap.tabel == "deal_tasks":
+                    # engine_patch mag deal_tasks niet; de eigen taakroute wel (16 nov).
+                    rij = await self.repo.update_deal_task(stap.id, None, body)
+                    rijen = [rij] if rij else []
+                else:
+                    rijen = await self.repo.engine_patch(stap.tabel, {"id": f"eq.{stap.id}"}, body)
             except Exception as e:  # noqa: BLE001 -- een rij die niet lukt stopt de rest niet
                 overgeslagen.append({"id": stap.id, "table": stap.tabel, "reason": str(e)[:160]})
                 continue

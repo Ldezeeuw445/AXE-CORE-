@@ -167,7 +167,11 @@ class FakeRepo:
         return [copy.deepcopy(nieuw)]
 
     async def engine_patch(self, table, filters, body):
-        from northsea_mcp.repository import RepositoryError
+        from northsea_mcp.repository import RepositoryError, SupabaseRepository
+        # Zelfde vangrail als de echte repository (16 nov: zonder dit slaagde een
+        # test die live "engine may not patch deal_tasks" gaf).
+        if table not in SupabaseRepository.ENGINE_TABLES or not filters:
+            raise RepositoryError(f"engine may not patch {table}")
         if self.fail_engine_insert_action_queue and table == "action_queue":
             raise RepositoryError("database write failed for action_queue (400): simulated persist failure")
         rows = self.t.setdefault(table, [])
