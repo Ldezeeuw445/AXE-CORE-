@@ -144,27 +144,3 @@ def test_reden_blijft_kort_en_alleen_voor_shell_jobs():
     assert "—" not in rb.beoordeel([json_job], NU)[0].detail
     kaal = job("z", "fail", 7, resultaat="exit=1")
     assert "—" not in rb.beoordeel([kaal], NU)[0].detail
-
-
-
-def test_ernstige_falende_job_noemt_de_reden_uit_zijn_uitvoer():
-    r = job(TRADING_TEAM[0], "fail", 22,
-            resultaat="exit=1\ntrading-team-cycle failed (exit 1), log tail:\nEODHD: quota (HTTP 402)")
-    b = rb.beoordeel([r], NU)
-    assert b[0].code == "jobs_falen"
-    assert "22x" in b[0].detail and "EODHD: quota (HTTP 402)" in b[0].detail
-
-
-def test_reden_bevat_nooit_een_sleutel():
-    r = job("x", "fail", 7, resultaat="exit=1\nfetch failed ghp_" + "a" * 36)
-    detail = rb.beoordeel([r], NU)[0].detail
-    assert "ghp_" not in detail and "[hidden]" in detail
-
-
-def test_reden_blijft_kort_en_alleen_voor_shell_jobs():
-    lang = job("x", "fail", 7, resultaat="exit=1\n" + "boem " * 200)
-    assert len(rb.beoordeel([lang], NU)[0].detail) < 260
-    json_job = job("y", "fail", 7, resultaat='{"http": 400, "error": "slecht"}')
-    assert "—" not in rb.beoordeel([json_job], NU)[0].detail
-    kaal = job("z", "fail", 7, resultaat="exit=1")
-    assert "—" not in rb.beoordeel([kaal], NU)[0].detail
