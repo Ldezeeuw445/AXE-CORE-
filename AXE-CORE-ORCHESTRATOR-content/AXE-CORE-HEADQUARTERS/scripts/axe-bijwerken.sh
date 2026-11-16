@@ -181,11 +181,29 @@ codesign --verify --deep --strict "$APP" || stop "Gebouwde AXE CORE signature-ve
 # ── 4. De oude afsluiten ─────────────────────────────────────────────────────
 # Tauri laat geen tweede instantie toe: draait de oude nog, dan lijkt de nieuwe
 # gewoon niet te openen en zie je nergens waarom.
-if pgrep -f "AXE CORE.app" > /dev/null 2>&1; then
+#
+# En WACHTEN tot hij echt weg is (16 nov, Mac mini). Eerst stond hier `sleep 1`.
+# Op de drukke 8 GB-Mac mini leefde de oude na die seconde nog; dan haalde stap 5
+# zijn bundel onder hem weg (wit venster), en `open` zag de nieuwe bundel als
+# een andere app en startte een tweede AXE CORE ernaast. Daarom: tot 20 s
+# netjes laten afsluiten, dan hard, en niet verder zolang er één draait.
+oude_axe_weg() {
+  pgrep -f "AXE CORE.app/Contents/MacOS/" > /dev/null 2>&1 || return 0
   zeg "De draaiende AXE CORE afsluiten"
-  pkill -f "AXE CORE.app" || true
-  sleep 1
-fi
+  pkill -f "AXE CORE.app/Contents/MacOS/" || true
+  for _ in $(seq 1 40); do
+    pgrep -f "AXE CORE.app/Contents/MacOS/" > /dev/null 2>&1 || return 0
+    sleep 0.5
+  done
+  zeg "AXE CORE sloot niet binnen 20 s af — hard stoppen"
+  pkill -9 -f "AXE CORE.app/Contents/MacOS/" || true
+  for _ in $(seq 1 10); do
+    pgrep -f "AXE CORE.app/Contents/MacOS/" > /dev/null 2>&1 || return 0
+    sleep 0.5
+  done
+  stop "De oude AXE CORE blijft draaien (pid $(pgrep -f 'AXE CORE.app/Contents/MacOS/' | tr '\n' ' ')); niet vervangen, anders staan er twee."
+}
+oude_axe_weg
 
 # ── 4b. En de diensten die hij achterliet ────────────────────────────────────
 #
@@ -277,6 +295,9 @@ rm -rf "$APP"
 APP="$CANONICAL_APP"
 
 zeg "Starten — $(date '+%H:%M') · gebouwd uit $(git rev-parse --short HEAD)"
+# Startte iemand tijdens de workers-stap toch de oude (Dock, Spotlight), dan
+# eerst die weg: anders opent `open` er een tweede naast.
+oude_axe_weg
 open "$APP"
 
 # Dezelfde commit staat boven in beeld op Home. Klopt die niet met wat hier
