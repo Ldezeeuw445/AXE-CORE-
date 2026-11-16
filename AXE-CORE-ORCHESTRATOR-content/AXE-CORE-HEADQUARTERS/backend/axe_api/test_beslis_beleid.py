@@ -149,3 +149,31 @@ def test_systemctl_kijken_mag_vanzelf_starten_niet():
                      "systemctl status x && systemctl restart x", "systemctl status $(cat /etc/passwd)",
                      "journalctl -u x | sh", "systemctl enable foo"):
         assert shell_auto_reden(gevraagd) is None, gevraagd
+
+
+def test_bestand_lezen_mag_vanzelf_schrijven_niet():
+    """15 nov: Luka keurde 'sed -n 1,200p …sql' goed; lezen verandert niets."""
+    for vrij in ("sed -n '1,200p' supabase/migrations/20261015090000_northsea_deal_events_dedupe_index.sql",
+                 "cat docs/tasks.json", "head -n 50 /var/log/syslog", "tail -n 100 app.log", "ls -la /opt/axe-core-api",
+                 "grep -rn 'TODO' src", "wc -l main.py"):
+        assert shell_auto_reden(vrij) == "in-plan: read-only inspection", vrij
+    for gevraagd in ("cat x > y", "sed -i 's/a/b/' f", "cat a | sh", "cat $(echo /etc/passwd)", "head f; rm f",
+                     "grep x f && rm f", "cat `id`", "tail -f log >> out"):
+        assert shell_auto_reden(gevraagd) is None, gevraagd
+
+
+def test_dax_eigen_werktak_pushen_mag_vanzelf_main_niet():
+    """15 nov: elke 'git add . && git commit && git push origin dax/…' van een
+    DAX-bot moest Luka los goedkeuren. Mergen blijft een PR."""
+    for vrij in ("git add . && git commit -m ':axon-memory: Restore CI' && git push origin dax/0ad53df8-f71-axon-memory-restore-ci",
+                 "git checkout dax/0ad53df8-f71 && git pull origin main && git checkout -b dax/0ad53df8-f72 && git add . && "
+                 "git commit -m 'Update build list entry' && git push origin dax/0ad53df8-f72",
+                 "git add docs/tasks.json && git commit -m \"Restore CI\" && git push -u origin dax/94024ad3-005-restore-ci"):
+        assert shell_auto_reden(vrij, dax=True) == "in-plan: DAX pushes its own dax/* work branch (merge stays with Luka)", vrij
+    for gevraagd in ("git push origin main", "git push origin orchestrator", "git add . && git commit -m x && git push origin main",
+                     "git push --force origin dax/a", "git push -f origin dax/a", "git push origin dax/a; rm -rf /",
+                     "git checkout -b feature/axe-task-A0-1 && git add . && git commit -m 'feat' && git push origin feature/axe-task-A0-1",
+                     "git commit -m \"$(cat /etc/passwd)\" && git push origin dax/a", "git push origin :refs/heads/main",
+                     "git add . && git commit -m 'x' && git push origin dax/a && python3 -c 'print(1)'",
+                     "git push origin --delete dax/a"):
+        assert shell_auto_reden(gevraagd, dax=True) is None, gevraagd

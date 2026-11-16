@@ -136,8 +136,41 @@ def is_routine_in_plan(tekst: str) -> bool:
     return bool(ROUTINE_RE.search(tekst or ""))
 
 
+# Een bestand bekijken (15 nov: Luka keurde "sed -n '1,200p' …sql" goed). Alleen
+# lezen: geen > of >>, geen pipe, geen ; & $ ` in de argumenten, geen sed -i.
+LEES_RE = re.compile(
+    r"^\s*(?:cat|head|tail|wc|ls|stat|file|grep(?: -[A-Za-z]+)*|"
+    r"sed -n (?:'[0-9,$p ]+'|\"[0-9,$p ]+\"|[0-9,$p]+))"
+    r"(?: -[A-Za-z0-9]+(?: [0-9]+)?)*"
+    r"(?: (?:'[^'`$;&|<>]*'|\"[^\"`$;&|<>]*\"|[\w@.:+=/,*-]+))*"
+    r"(?:\s*(?:2>&1|2>/dev/null))*\s*$",
+)
+
+# Een DAX-bot die zijn EIGEN werktak bijwerkt (15 nov: Luka keurde elke
+# "git add . && git commit … && git push origin dax/…" los goed). Alleen git,
+# alleen gekoppeld met &&, push alleen naar dax/<naam>, nooit --force en nooit
+# naar main/master/orchestrator. Mergen blijft een PR die Luka ziet.
+_DAX_GIT_STAP = re.compile(
+    r"^git (?:status|diff(?: [\w./-]+)*|fetch(?: origin)?|checkout(?: -b)? dax/[\w.-]+|"
+    r"pull origin (?:main|master|orchestrator|dax/[\w.-]+)|add (?:\.|-A|[\w./ -]+)|"
+    r"commit -m (?:'[^'`$]*'|\"[^\"`$]*\")|push(?: -u)? origin dax/[\w.-]+)$"
+)
+
+
+def is_dax_git_werktak(command: str) -> bool:
+    cmd = " ".join((command or "").split())
+    if not cmd or re.search(r"--force|\s-f(\s|$)|--mirror|--delete|:refs|;|\|\||\||`|\$\(", cmd):
+        return False
+    stappen = [x.strip() for x in cmd.split("&&")]
+    if not any(x.startswith("git push") for x in stappen):
+        return False
+    return all(_DAX_GIT_STAP.match(x) for x in stappen)
+
+
 def is_inspectie(command: str) -> bool:
     cmd = " ".join((command or "").split())
+    if LEES_RE.match(cmd) and not re.search(r"\bsed\b.*\s-i\b|>", cmd):
+        return True
     return bool(INSPECTIE_RE.match(cmd))
 
 
@@ -177,6 +210,8 @@ def shell_auto_reden(command: str, *, dax: bool = False) -> str | None:
         return "in-plan: write under the agent's own /dax/artifacts"
     if is_inspectie(cmd):
         return "in-plan: read-only inspection"
+    if is_dax_git_werktak(cmd):
+        return "in-plan: DAX pushes its own dax/* work branch (merge stays with Luka)"
     return None
 
 
