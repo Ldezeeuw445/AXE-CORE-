@@ -8736,12 +8736,20 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   right: 10px;
 }
 .axe-managers-room-zoekrij--kop {
-  flex: 1;
+  flex: 1 1 140px;
   min-width: 0;
   padding: 0;
 }
+/* 16 nov: met "Wacht op jou · 42" erbij past de kop niet altijd op één regel.
+   Afbreken in plaats van over elkaar schuiven; knoppen houden hun tekst heel. */
 .axe-managers-room-lijst-kop {
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.axe-managers-room-lijst-kop .axe-managers-room-daxlink {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Chat / Activity & plans / Memory in de kop, tussen de zoekbalk en DAX.
