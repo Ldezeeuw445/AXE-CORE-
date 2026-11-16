@@ -822,11 +822,23 @@ def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any
         except Exception:  # noqa: BLE001
             overzicht = False
 
+    # 16 nov: niet meer de wachtrij tellen (89, 90, 90...) maar de drie deals
+    # die het dichtst bij een deal zijn, met waar ze op vastzitten en de
+    # volgende stap. De telling blijft in het rapport en het dagoverzicht.
+    focus: list[tuple[str, str]] = []
+    try:
+        import northsea_focus
+        focus = northsea_focus.focus(nu, ophaler)
+    except Exception as exc:  # noqa: BLE001 -- focus mag de pulse nooit breken
+        log.warning("northseamgr: focus niet gelezen (%s)", exc)
+    chat_bevindingen = ([b for b in bevindingen if b.code != "wachtrij"] if focus else list(bevindingen)) + [
+        bewaker.Bevinding(code="focus", voor="info", titel=t, detail=d) for t, d in focus]
+
     samenvatting = "; ".join(b.titel for b in bevindingen) or "desk loopt, niets voor Luka"
     # Alleen bij verandering: 8 nov 97 keer per dag hetzelfde rapport.
     _rapporteer_bij_verandering(db, "northseamgr", _met_sleutels(db, "NorthSea", f"NorthSea: {samenvatting}."))
     chat = _chat_met_luka(
-        db, "northseamgr", bevindingen,
+        db, "northseamgr", chat_bevindingen,
         gedaan=[f"{duidingen} binnengekomen mails van een korte duiding voorzien"] if duidingen else [],
         app="NorthSea", rustig="De desk loopt, er wacht niets op jou.")
     return {
@@ -838,6 +850,7 @@ def run_northseamgr(db: Any, nu: datetime, ophaler: Any = None) -> dict[str, Any
         "dagoverzicht": overzicht,
         "mailduidingen": duidingen,
         "chat": chat,
+        "focus": [t for t, _ in focus],
         "opruimen": opruimen,
         "sent": 0,
         "flags": "untouched",

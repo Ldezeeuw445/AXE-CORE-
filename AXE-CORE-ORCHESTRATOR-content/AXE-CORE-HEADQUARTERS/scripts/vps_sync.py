@@ -153,6 +153,7 @@ MANIFEST = {
     "/opt/axe-core-api/stem_vloer.py": ("backend/axe_api/stem_vloer.py", "axe-core-api"),
     "/opt/axe-core-api/manager_draad.py": ("backend/axe_api/manager_draad.py", "axe-core-api"),
     "/opt/axe-core-api/northsea_opruimen.py": ("backend/axe_api/northsea_opruimen.py", "axe-core-api"),
+    "/opt/axe-core-api/northsea_focus.py": ("backend/axe_api/northsea_focus.py", "axe-core-api"),
     "/opt/axe-core-api/intel_jets_registry.json": ("backend/axe_api/intel_jets_registry.json", "axe-core-api"),
     # Android-poller (#245): main.py mount device_notify (GET /device/notifications).
     "/opt/axe-core-api/device_notify.py": ("backend/axe_api/device_notify.py", "axe-core-api"),
@@ -239,7 +240,7 @@ WORKER_IMPORTS = {
     "staande_diensten.py": ("grok_managers.py", "dax_bouw.py", "intel_bewaker.py", "intel_feeds.py",
                             "intel_wereld.py", "intel_jets_registry.json"),
     "intel_wereld.py": ("intel_feeds.py", "intel_jets_registry.json"),
-    "grok_managers.py": ("northsea_bewaker.py", "projecten_bewaker.py", "roosters_bewaker.py", "intel_bewaker.py", "axon_bewaker.py", "baas_bewaker.py", "goedkeuring_melding.py", "northsea_gateway.py", "sleutels.py", "manager_draad.py", "northsea_opruimen.py"),
+    "grok_managers.py": ("northsea_bewaker.py", "projecten_bewaker.py", "roosters_bewaker.py", "intel_bewaker.py", "axon_bewaker.py", "baas_bewaker.py", "goedkeuring_melding.py", "northsea_gateway.py", "sleutels.py", "manager_draad.py", "northsea_opruimen.py", "northsea_focus.py"),
     "axon_bewaker.py": ("memory_schrijfhek.py",),
     "northsea_mailwachter.py": ("goedkeuring_melding.py", "northsea_gateway.py"),
 }
