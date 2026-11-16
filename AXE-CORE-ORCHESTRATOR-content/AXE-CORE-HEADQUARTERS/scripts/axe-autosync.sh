@@ -222,5 +222,17 @@ if taskpolicy -b nice -n 19 env -i HOME="$HOME" USER="$USER" LOGNAME="$USER" SHE
 else
   echo "$DOEL" > "$MISLUKT"
   log "bouw van $DOEL MISLUKT — zie ~/Library/Logs/axe-autosync-bouw.log"
+  # 16 nov: op de Mac mini mislukte de bouw stil, halverwege `npm ci`. Die gooit
+  # eerst node_modules weg, dus daarna faalde ook de Trading Team-job (vite-node
+  # weg) en zei een manager "AI-tegoed op". Het buildlog stond alleen op die Mac.
+  # Nu de laatste regels in AXE, zodat een manager (of Claude) het kan zien.
+  if [[ -n "$SBU" && -n "$SBK" ]]; then
+    STAART="$(tail -n 25 "$HOME/Library/Logs/axe-autosync-bouw.log" 2>/dev/null | tr -d '\033' | sed 's/\[[0-9;]*m//g' | tail -c 1400)"
+    BODY="$(python3 -c 'import json,sys; print(json.dumps({"type":"warning","message":sys.argv[1][:1900]}))' \
+      "$(scutil --get LocalHostName 2>/dev/null || hostname -s) app build of $DOEL FAILED; the previous app keeps running. Last lines of ~/Library/Logs/axe-autosync-bouw.log: $STAART")"
+    printf 'apikey: %s\nAuthorization: Bearer %s\n' "$SBK" "$SBK" \
+      | curl -s -m 15 -o /dev/null -X POST "$SBU/rest/v1/core_notifications" \
+          -H @- -H "Content-Type: application/json" -H "Prefer: return=minimal" -d "$BODY" || true
+  fi
   osascript -e "display notification \"Update $DOEL kon niet gebouwd worden; de vorige app blijft draaien.\" with title \"AXE CORE\"" 2>/dev/null || true
 fi
