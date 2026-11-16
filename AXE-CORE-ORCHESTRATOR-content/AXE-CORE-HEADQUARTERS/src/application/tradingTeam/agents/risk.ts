@@ -4,6 +4,7 @@
  */
 import type { ChartsResult, NewsResult, RiskResult, ScoutCandidate } from '../types';
 import { GOLD_ORB_STRATEGY_ID } from '../strategies';
+import { rrAtLeast } from './riskReward';
 
 export function runRisk(input: {
   news: NewsResult | null;
@@ -28,25 +29,32 @@ export function runRisk(input: {
   });
   if (newsBlock) blocked.push('news_window');
 
-  const rr = input.charts?.riskReward ?? 0;
-  const minRr = isOrb ? 0.45 : 2;
-  const rrOk = rr >= minRr;
-  checks.push({
-    id: 'min_rr',
-    ok: rrOk,
-    detail: isOrb
-      ? `R:R=${rr.toFixed?.(2) ?? rr} (Gold ORB allows ~0.5R TP)`
-      : `R:R=${rr.toFixed?.(2) ?? rr} (min 2.0)`,
-  });
-  if (!rrOk) blocked.push('min_rr');
+  const noData = input.charts?.noData;
+  if (noData) {
+    // Charts could not look at the market. Do not invent a min_rr / structure verdict out of that.
+    checks.push({ id: 'chart_data', ok: false, detail: `no data: ${noData.code} — ${noData.detail}` });
+    blocked.push('no_data');
+  } else {
+    const rr = input.charts?.riskReward ?? 0;
+    const minRr = isOrb ? 0.45 : 2;
+    const rrOk = rrAtLeast(rr, minRr);
+    checks.push({
+      id: 'min_rr',
+      ok: rrOk,
+      detail: isOrb
+        ? `R:R=${rr.toFixed?.(2) ?? rr} (Gold ORB allows ~0.5R TP)`
+        : `R:R=${rr.toFixed?.(2) ?? rr} (min 2.0)`,
+    });
+    if (!rrOk) blocked.push('min_rr');
 
-  const structureOk = Boolean(input.charts?.structureOk);
-  checks.push({
-    id: 'structure',
-    ok: structureOk,
-    detail: structureOk ? 'charts structure ok' : 'charts structure not ok',
-  });
-  if (!structureOk) blocked.push('structure');
+    const structureOk = Boolean(input.charts?.structureOk);
+    checks.push({
+      id: 'structure',
+      ok: structureOk,
+      detail: structureOk ? 'charts structure ok' : 'charts structure not ok',
+    });
+    if (!structureOk) blocked.push('structure');
+  }
 
   checks.push({
     id: 'demo_lot_cap',

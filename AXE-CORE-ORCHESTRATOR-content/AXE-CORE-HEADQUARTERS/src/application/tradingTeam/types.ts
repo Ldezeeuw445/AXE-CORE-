@@ -4,7 +4,7 @@
  * Spec: /workspace/trading-team/SETUP.md. Demo-only via account allowlist.
  */
 
-export type TradingTeamVerdict = 'GO' | 'WAIT' | 'NO-GO' | 'BLOCKED';
+export type TradingTeamVerdict = 'GO' | 'WAIT' | 'NO-GO' | 'BLOCKED' | 'NO-DATA';
 export type TradingTeamSide = 'buy' | 'sell';
 export type TradingTeamRunStatus = 'running' | 'completed' | 'blocked' | 'error';
 export type AccountGuardStatus = 'pending' | 'allowed' | 'rejected';
@@ -56,9 +56,18 @@ export interface SentimentResult {
   notes: string[];
 }
 
+/** Why Charts could not look at the market. Set only when there were not enough bars. */
+export interface NoDataReason {
+  /** EodProblemCode from researchSources (no_key, quota, auth, empty, …) or 'too_few_bars'. */
+  code: string;
+  detail: string;
+}
+
 export interface ChartsResult {
   symbol: string;
   bias: 'bullish' | 'bearish' | 'neutral';
+  /** Present when Charts abstained for lack of data. This is not a chart-structure verdict. */
+  noData?: NoDataReason;
   entry?: number;
   stopLoss?: number;
   takeProfit?: number;

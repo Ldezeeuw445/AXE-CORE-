@@ -29,6 +29,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from geheimen import verberg_geheimen
+
 FALEND_NA = 3          # zoveel keer achter elkaar mislukt = een melding waard
 LUKA_NA = 6            # en vanaf hier moet Luka het weten
 ACHTER_NA = timedelta(minutes=30)   # next_run_at zo ver voorbij en niemand pakt hem
@@ -76,6 +78,22 @@ def _naam(r: dict[str, Any]) -> str:
     return str(r.get("name") or r.get("job_key") or "?")[:60]
 
 
+def _reden(r: dict[str, Any]) -> str:
+    """Waarom faalde een shell-job? De laatste regel van zijn uitvoer, zonder sleutels.
+
+    Alleen voor `exec`-jobs (`exit=<code>` + regeleinde + uitvoer). Tot 16 nov stond daar voor de Trading Team-cyclus
+    alleen "exit=1"; sinds die dag zet het script er een geschoonde staart in. Dit blijft kort
+    omdat het in een melding aan Luka komt.
+    """
+    tekst = str(r.get("last_result") or "")
+    if not tekst.startswith("exit="):
+        return ""
+    regels = [ln.strip() for ln in tekst.splitlines()[1:] if ln.strip()]
+    if not regels:
+        return ""
+    return " ".join(verberg_geheimen(regels[-1]).split())[:140]
+
+
 def tijdelijk(r: dict[str, Any]) -> bool:
     """Was de laatste fout iets dat vanzelf overgaat (gateway, time-out)?"""
     return r.get("last_status") in ("fail", "timeout") and (
@@ -118,6 +136,7 @@ def beoordeel(rijen: list[dict[str, Any]], nu: datetime) -> list[Bevinding]:
             # Vaste titel: _vraag_luka ontdubbelt op titel.
             "jobs_falen", "luka", "Vaste jobs falen achter elkaar",
             "; ".join(f"{_naam(r)}: {_fouten(r)}x" + (" (tijdelijke fout, ik herkans)" if tijdelijk(r) else "")
+                      + (f" — {_reden(r)}" if _reden(r) else "")
                       for r in ernstig[:5]) + ".",
         ))
     licht = [r for r in falend if _fouten(r) < LUKA_NA]

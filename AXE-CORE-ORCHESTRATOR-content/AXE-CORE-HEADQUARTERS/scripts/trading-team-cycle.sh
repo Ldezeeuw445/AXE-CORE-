@@ -16,7 +16,14 @@ if [[ -f "$ROOT/.env" ]]; then
   eval "$(python3 "$ROOT/scripts/_trading-team-export-env.py")"
 fi
 mkdir -p "$(dirname "$LOG")"
-{
+
+# Everything still goes to the log. But when the cycle fails, a short redacted tail also goes to
+# stderr, because the job runner stores stderr in core_job_runs.error. Until 2026-11-16 that
+# field only said "exit=1": 22 failed runs and nobody could see why.
+RUN_OUT="$(mktemp "${TMPDIR:-/tmp}/axe-trading-team-cycle.XXXXXX")"
+trap 'rm -f "$RUN_OUT"' EXIT
+set +e
+(
   echo "==== $(date '+%Y-%m-%d %H:%M:%S %Z') ===="
   echo "root=$ROOT"
   if [[ ! -x "$ROOT/node_modules/.bin/vite-node" ]]; then
@@ -24,4 +31,12 @@ mkdir -p "$(dirname "$LOG")"
     exit 1
   fi
   "$ROOT/node_modules/.bin/vite-node" "$ROOT/scripts/trading-team-cycle.mts" --run
-} >>"$LOG" 2>&1
+) >"$RUN_OUT" 2>&1
+RC=$?
+set -e
+cat "$RUN_OUT" >>"$LOG"
+if [[ "$RC" -ne 0 ]]; then
+  echo "trading-team-cycle failed (exit $RC), log tail:" >&2
+  python3 "$ROOT/scripts/_trading-team-redact.py" <"$RUN_OUT" >&2 || echo "(log tail unavailable)" >&2
+fi
+exit "$RC"
