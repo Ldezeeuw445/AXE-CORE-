@@ -95,3 +95,32 @@ def test_pulse_meldt_luka_eenmaal_en_leest_alleen_vandaag():
     assert [r.get("title") for r in db.rows("core_approvals")].count("Geheugenlimiet vol door de notitiesync") == 1
     rapporten = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "axon" and r["to_agent"] != "luka"]
     assert len(rapporten) == 1 and "10 lessen, 118 notities" in rapporten[0]["body"]
+
+
+def test_poging_die_luka_nodig_heeft_gaat_meteen_naar_luka():
+    """16 nov 10:41: de eerste echte poging vond opgebruikt AI-tegoed en schreef
+    "Luka must add credits"; daarna stond er uren "Ik ben zelf bezig" in de chat."""
+    db = _Db()
+    db.db["rag_memories"] = list(RAG_8NOV)
+    gm.run_axon(db, NU)
+    zelf = next(r for r in db.rows("core_tasks") if r.get("title", "").startswith("Zelf oplossen:"))
+    zelf["status"] = "completed"
+    zelf["result"] = {"summary": "Sync re-imports notes daily. Luka must add credits on the billing page."}
+    gm.run_axon(db, NU)
+    vragen = [r for r in db.rows("core_approvals") if r.get("title") == "Geheugenlimiet vol door de notitiesync"]
+    assert len(vragen) == 1 and "add credits" in vragen[0]["detail"]
+    chat = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "axon" and r["to_agent"] == "luka"]
+    assert "Ik ben zelf bezig" not in chat[-1]["body"]
+
+
+def test_geslaagde_poging_staat_als_bevinding_in_de_chat():
+    db = _Db()
+    db.db["rag_memories"] = list(RAG_8NOV)
+    gm.run_axon(db, NU)
+    zelf = next(r for r in db.rows("core_tasks") if r.get("title", "").startswith("Zelf oplossen:"))
+    zelf["status"] = "completed"
+    zelf["result"] = {"summary": "Obsidian sync now skips unchanged notes."}
+    gm.run_axon(db, NU)
+    assert not [r for r in db.rows("core_approvals") if r.get("title") == "Geheugenlimiet vol door de notitiesync"]
+    chat = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "axon" and r["to_agent"] == "luka"]
+    assert "Wat ik vond: Obsidian sync now skips unchanged notes" in chat[-1]["body"]

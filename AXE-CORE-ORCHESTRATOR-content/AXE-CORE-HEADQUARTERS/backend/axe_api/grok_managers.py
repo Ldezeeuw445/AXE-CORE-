@@ -387,8 +387,7 @@ def _chat_met_luka(db: Any, agent: str, bevindingen: list[Any], gedaan: list[str
             open_vragen = set()
         zelf = [b for b in bevindingen if b.voor == "luka" and b.code in ZELF_PROBEREN and b.titel not in open_vragen]
         nodig = [f"{b.titel}. {b.detail}".strip() for b in bevindingen if b.voor == "luka" and b not in zelf]
-        gedaan = list(gedaan or []) + [f"Ik ben zelf bezig met: {b.titel.rstrip('.')}; lukt het niet, dan vraag ik het je"
-                                       for b in zelf]
+        gedaan = list(gedaan or []) + [_zelf_regel(db, agent, b) for b in zelf]
         gezien = [f"{b.titel}. {b.detail}".strip() for b in bevindingen if b.voor != "luka"]
         if app:
             import sleutels
@@ -420,17 +419,44 @@ def _zelf_titel(b: Any) -> str:
     return f"Zelf oplossen: {b.titel}"[:200]
 
 
+def _pogingen(db: Any, agent: str, b: Any) -> list[dict[str, Any]]:
+    try:
+        return (db.table("core_tasks").select("id,status,created_at,result,error")
+                .eq("assignee", agent).eq("title", _zelf_titel(b))
+                .order("created_at", desc=True).limit(5).execute().data) or []
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _samenvatting(p: dict[str, Any] | None) -> str:
+    if not p:
+        return ""
+    r, e = p.get("result"), p.get("error")
+    wat = str(r.get("summary") or "") if isinstance(r, dict) else ""
+    return wat or (str(e.get("message") or "") if isinstance(e, dict) else "")
+
+
+# 16 nov, eerste echte poging: companionmgr vond in 2 minuten dat de testjobs
+# falen op opgebruikt OpenAI/Gemini-tegoed en schreef "Luka must add credits".
+# Daarna stond er nog uren "Ik ben zelf bezig" in de chat. Zegt de poging zelf
+# dat Luka nodig is, dan meteen naar Luka -- niet 6 uur wachten op een herkansing.
+_LUKA_NODIG = re.compile(r"\bluka\b|\byou must\b|\bneeds? (?:a |your )?(?:login|payment|credits?|decision)|"
+                         r"\b(?:add|top up) (?:credits?|funds)\b|\bbilling\b", re.I)
+
+
+def _zelf_regel(db: Any, agent: str, b: Any) -> str:
+    laatste = next(iter(_pogingen(db, agent, b)), None)
+    if laatste and laatste.get("status") not in OPEN_TAAK and (wat := _samenvatting(laatste)):
+        return f"Zelf bekeken: {b.titel.rstrip('.')}. Wat ik vond: {wat[:300]}"
+    return f"Ik ben zelf bezig met: {b.titel.rstrip('.')}; lukt het niet, dan vraag ik het je"
+
+
 def _eerst_zelf(db: Any, agent: str, b: Any, nu: datetime) -> str:
     """'zelf' (taak uitgezet), 'bezig', 'wacht' (net geprobeerd) of 'luka' (gevraagd)."""
     if b.code not in ZELF_PROBEREN:
         _vraag_luka(db, agent, b.titel, b.detail)
         return "luka"
-    try:
-        pogingen = (db.table("core_tasks").select("id,status,created_at,result,error")
-                    .eq("assignee", agent).eq("title", _zelf_titel(b))
-                    .order("created_at", desc=True).limit(5).execute().data) or []
-    except Exception:  # noqa: BLE001 -- niet kunnen kijken = liever Luka dan stil
-        pogingen = []
+    pogingen = _pogingen(db, agent, b)
     if any(p.get("status") in OPEN_TAAK for p in pogingen):
         return "bezig"
 
@@ -443,9 +469,11 @@ def _eerst_zelf(db: Any, agent: str, b: Any, nu: datetime) -> str:
 
     vandaag = [p for p in pogingen if (t := _tijd(p)) and nu - t < timedelta(hours=24)]
     laatste = vandaag[0] if vandaag else None
+    wat = _samenvatting(laatste)
+    if laatste and _LUKA_NODIG.search(wat):
+        _vraag_luka(db, agent, b.titel, f"{b.detail} Ik heb zelf gekeken; hier ben jij voor nodig: {wat[:400]}".strip())
+        return "luka"
     if laatste and (laatste.get("status") in _ZELF_KLAAR_MIS or len(vandaag) >= ZELF_MAX_PER_DAG):
-        wat = str((laatste.get("result") or {}).get("summary") if isinstance(laatste.get("result"), dict) else "")
-        wat = wat or str((laatste.get("error") or {}).get("message") if isinstance(laatste.get("error"), dict) else "")
         _vraag_luka(db, agent, b.titel, (f"{b.detail} Ik heb het {len(vandaag)}x zelf geprobeerd; "
                                          f"het lukte niet. Laatste poging: {wat[:300] or laatste.get('status')}.").strip())
         return "luka"
