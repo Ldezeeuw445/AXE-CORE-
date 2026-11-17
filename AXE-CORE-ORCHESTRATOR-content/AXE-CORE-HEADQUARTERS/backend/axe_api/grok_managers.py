@@ -703,6 +703,11 @@ def run_companionmgr(db: Any, nu: datetime) -> dict[str, Any]:
     voor_luka = [b for b in bevindingen if b.voor == "luka"]
     for b in voor_luka:
         _eerst_zelf(db, "companionmgr", b, nu)
+    # Trading Team: NO-DATA-reeks en stille runner, als directe warning (17 nov).
+    try:
+        trading = rb.trading_ronde(db, rijen, nu)
+    except Exception as exc:  # noqa: BLE001 — mag de pulse nooit breken
+        trading = {"error": str(exc)[:200]}
     overzicht = _dagoverzicht(db, nu, "Vaste jobs", bevindingen)
 
     delen = [b.titel for b in bevindingen]
@@ -723,6 +728,7 @@ def run_companionmgr(db: Any, nu: datetime) -> dict[str, Any]:
         "jobs": len(aan),
         "failing": sum(1 for r in aan if r.get("last_status") in ("fail", "timeout")),
         "herkanst": [r.get("job_key") for r in herkanst],
+        "trading": trading,
         "chat": chat,
         "voor_luka": [b.code for b in voor_luka],
         "bevindingen": [b.code for b in bevindingen],
