@@ -9,13 +9,15 @@ export default function TradingDemoHub() {
       tab="trading"
       title="Trading"
       sub="Demo hub · geen live orders"
+      /* 17 nov, UI-ronde: de tegels zeiden alleen "EX"/"DOCS"/"STAGE" en een
+         naam. Nu staat er wat erachter zit, en een label dat je kunt lezen. */
       tiles={[
-        { id: 'desk', label: 'Desk', note: 'Trading Desk', badge: 'ex', badgeTone: 'ex', path: '/trading-desk' },
-        { id: 'intel', label: 'Intel', note: 'Trading Intel', badge: 'ex', badgeTone: 'ex', path: '/trading-intel' },
-        { id: 'memory', label: 'Memory', note: 'Trading Memory', badge: 'docs', badgeTone: 'docs', path: '/memory/trading' },
-        { id: 'risk', label: 'Risk', note: 'Risk panel', badge: 'ex', badgeTone: 'ex', path: '/trading-desk' },
-        { id: 'pnl', label: 'PnL', note: 'PnL snapshot · demo', badge: 'ex', badgeTone: 'ex', path: '/trading-intel' },
-        { id: 'watch', label: 'Watch', note: 'Watchlist', badge: 'stage', badgeTone: 'stage', path: '/trading-intel' },
+        { id: 'desk', label: 'Desk', note: 'Trading Desk · posities en demo-orders', badge: 'demo', badgeTone: 'ex', path: '/trading-desk' },
+        { id: 'intel', label: 'Intel', note: 'Trading Intel · markt, signalen, nieuws', badge: 'demo', badgeTone: 'ex', path: '/trading-intel' },
+        { id: 'memory', label: 'Memory', note: 'Trading Memory · lessen en notities', badge: 'notities', badgeTone: 'docs', path: '/memory/trading' },
+        { id: 'risk', label: 'Risk', note: 'Risico per positie · in de Desk', badge: 'demo', badgeTone: 'ex', path: '/trading-desk' },
+        { id: 'pnl', label: 'PnL', note: 'Winst en verlies · demo-account', badge: 'demo', badgeTone: 'ex', path: '/trading-intel' },
+        { id: 'watch', label: 'Watch', note: 'Watchlist · in Intel', badge: 'in opbouw', badgeTone: 'stage', path: '/trading-intel' },
       ]}
     />
   );

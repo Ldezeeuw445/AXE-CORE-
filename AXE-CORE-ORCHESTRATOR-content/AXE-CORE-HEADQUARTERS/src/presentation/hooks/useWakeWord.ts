@@ -58,7 +58,8 @@ export function useWakeWord() {
   }, []);
 
   useEffect(() => {
-    if (!aan || !isHoofdvenster()) return;
+    if (!aan) return;
+    if (!isHoofdvenster()) return;
     const Ctor = getRec();
     if (!Ctor) return;
     let stop = false;

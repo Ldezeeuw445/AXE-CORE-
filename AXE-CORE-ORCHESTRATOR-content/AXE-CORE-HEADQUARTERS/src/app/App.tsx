@@ -301,6 +301,10 @@ export default function App() {
             <Route path="managers" element={<Agents managersOnly />} />
             <Route path="dax" element={<DaxOverzicht />} />
             <Route path="agents" element={<Navigate to="/managers" replace />} />
+            {/* 17 nov, UI-ronde: een onbekend adres (bv. #/taken) gaf een
+                helemaal zwart scherm zonder uitleg. Dan liever terug naar Home. */}
+            <Route path="taken" element={<Navigate to="/tasks" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
             <Route path="bouwen" element={<BouwenHub />} />
             <Route path="systeem" element={<SysteemHub />} />
             <Route path="northsea" element={<NorthseaDesk />} />

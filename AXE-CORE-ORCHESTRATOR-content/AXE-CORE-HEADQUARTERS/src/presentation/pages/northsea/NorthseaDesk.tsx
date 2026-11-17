@@ -15,6 +15,7 @@
  * uitziet maar het niet is.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import {
   Map as MapIcon, Target, TrendingUp, Building2, MessageSquare, LineChart,
   FileText, ShieldCheck, Workflow, FileBarChart, Crosshair, ArrowRight, AlertTriangle, RefreshCw,
@@ -63,7 +64,11 @@ export default function NorthseaDesk() {
   const [fout, setFout] = useState<string | null>(null);
   const [bezig, setBezig] = useState(false);
   // ?deal=<id>: "Wacht op jou" opent zo direct de deal waar de vraag over gaat.
-  const linkDeal = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('deal') : null;
+  // Via de router en niet window.location.search: met HashRouter staat de
+  // query ná de # (#/northsea?deal=...) en was .search altijd leeg (17 nov).
+  const [zoekParams] = useSearchParams();
+  const linkDeal = zoekParams.get('deal');
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>(() =>
     linkDeal ? 'deals'
       : typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches ? 'chase' : 'live',
@@ -194,6 +199,8 @@ export default function NorthseaDesk() {
           kies={{
             actief: () => setTab('deals'),
             akkoord: () => { setFilter('akkoord'); setTab(compact ? 'chase' : 'live'); },
+            // 17 nov: concepten verstuur je in "Wacht op jou" (met je eigen inlog).
+            concepten: () => navigate('/wacht'),
             geblokkeerd: () => setTab('deals'),
             bounces: () => { setCommStart({ filter: 'niet_bezorgd' }); setTab('communicatie'); },
             afgerond: () => setTab('deals'),

@@ -14,6 +14,7 @@ import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { codingSeatsHeartbeat, fixDurableTask, retryDurableTask } from '@/infrastructure/gateways/axeCoreApiService';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 import { groepeerAbonnementen, stoelSleutel, type CodingSeat } from '@/domain/codingSeats';
+import { haalWachtOpJou } from '@/application/approvals/wachtOpJou';
 import './homeLive.css';
 
 type LijstSleutel = 'lopend' | 'recent' | 'ok' | 'seats' | null;
@@ -103,6 +104,20 @@ export function HomeLiveDashboard() {
   const jobs = useAxeJobStore((s) => s.jobs);
   const [stoelen, setStoelen] = useState<CodingSeat[]>([]);
   const [lijst, setLijst] = useState<LijstSleutel>(null);
+  /* 17 nov, UI-ronde: "No pending approvals." terwijl er 48 wachtten -- deze
+     kaart kende alleen AXE's eigen vragen. Nu ook wat elders wacht (NorthSea),
+     met de knop naar "Wacht op jou". Eén keer per minuut ververst. */
+  const [elders, setElders] = useState(0);
+  useEffect(() => {
+    let levend = true;
+    const tel = () => {
+      if (document.hidden) return;
+      void haalWachtOpJou().then((r) => { if (levend) setElders(r.items.filter((i) => i.bron !== 'axe').length); });
+    };
+    const eerste = setTimeout(tel, 0);
+    const t = window.setInterval(tel, 60_000);
+    return () => { levend = false; clearTimeout(eerste); window.clearInterval(t); };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -196,8 +211,14 @@ export function HomeLiveDashboard() {
   const kaartOk = (
     <div className="axe-home-live-kaart-vak" data-axe-home-ok data-axe-home-kaart="ok">
       <Kaart className="axe-home-live-kaart" titel="NEEDS YOUR OK">
-        {stand.goedkeuringen.length === 0 && (
-          <Regel kleur="var(--text-muted)">No pending approvals.</Regel>
+        {stand.goedkeuringen.length === 0 && !elders && (
+          <Regel kleur="var(--text-muted)">Niets wacht op jou.</Regel>
+        )}
+        {elders > 0 && (
+          <button type="button" className="axe-home-live-actie" data-axe-home-wacht
+            style={{ color: 'rgb(251,146,60)', textAlign: 'left' }} onClick={() => navigate('/wacht')}>
+            {elders} NorthSea-{elders === 1 ? 'ding wacht' : 'dingen wachten'} · open Wacht op jou
+          </button>
         )}
         <GoedkeuringActie
           rijen={okZicht}

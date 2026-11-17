@@ -369,6 +369,30 @@ export function AxeShellChrome() {
       if (dok) obs.observe(dok);
     }
 
+    /* 17 nov, UI-ronde op Home: --axe-composer-hoog stond op 163 terwijl de
+       composer 244 hoog was, en de live-kaartjes schoven eronder. De observer
+       hierboven hangt aan het element dat er bij het laden was; wisselt de
+       route of klapt de composer-kolom om, dan komt er een NIEUW element en
+       keek niemand meer. Dus: nieuwe composer/vak/plaat ook gaan volgen. */
+    const gevolgd = new WeakSet<Element>();
+    let wacht = 0;
+    const volgNieuwe = () => {
+      wacht = 0;
+      if (!obs) return;
+      let nieuw = false;
+      for (const sel of ['.axe-composer', '.axe-vak', '.axe-chatplaat']) {
+        const el = document.querySelector(sel);
+        if (el && !gevolgd.has(el)) { gevolgd.add(el); obs.observe(el); nieuw = true; }
+      }
+      if (nieuw) meetHoogte();
+    };
+    for (const sel of ['.axe-composer', '.axe-vak', '.axe-chatplaat']) {
+      const el = document.querySelector(sel);
+      if (el) gevolgd.add(el);
+    }
+    const nieuweObs = new MutationObserver(() => { if (!wacht) wacht = window.requestAnimationFrame(volgNieuwe); });
+    nieuweObs.observe(document.body, { childList: true, subtree: true });
+
     /* Corrective round 6, Part 3: Neural's tab-switch race was still not
      * fixed by the timed retries in the tab-switch effect below -- Terrain
      * is fine, Neural still reverts. The reason is knowable, not random:
@@ -456,6 +480,8 @@ export function AxeShellChrome() {
       window.removeEventListener('resize', meetHoogte);
       window.removeEventListener('resize', meetMidden);
       obs?.disconnect();
+      nieuweObs.disconnect();
+      if (wacht) window.cancelAnimationFrame(wacht);
       middenObs?.disconnect();
       slotAdoptieObs?.disconnect();
       for (const naam of ['--axe-chat-top', '--axe-chat-hoog', '--axe-chat-onder', '--axe-chat-links', '--axe-chat-rechts', '--axe-composer-onder', '--axe-composer-hoog', '--axe-vak-hoog', '--axe-dock-hoog']) {

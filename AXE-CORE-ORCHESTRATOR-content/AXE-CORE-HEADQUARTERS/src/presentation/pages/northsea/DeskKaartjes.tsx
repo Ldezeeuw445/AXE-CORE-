@@ -122,6 +122,8 @@ export function DeskKaartjes({ data, tellers, routes, kies }: {
   kies?: {
     actief?: () => void;
     akkoord?: () => void;
+    /** Pending drafts: daar waar je ze echt kunt versturen ("Wacht op jou"). */
+    concepten?: () => void;
     geblokkeerd?: () => void;
     bounces?: () => void;
     afgerond?: () => void;
@@ -195,7 +197,7 @@ export function DeskKaartjes({ data, tellers, routes, kies }: {
           sub={tellers ? (tellers.akkoordNamen.join(', ') || 'Nothing waiting') : undefined}
           subKleur={tellers?.akkoord ? '#22D3EE' : undefined} onKies={kies?.akkoord} />
         <Getal waarde={data ? (data.concepten?.length ?? 0) : leeg} label="Pending drafts" kleur="#FBBF24"
-          sub={data ? ((data.concepten?.length ?? 0) ? 'Human approval before send' : 'None waiting') : undefined} onKies={kies?.akkoord} />
+          sub={data ? ((data.concepten?.length ?? 0) ? 'Read & send in Wacht op jou' : 'None waiting') : undefined} onKies={kies?.concepten ?? kies?.akkoord} />
         <Getal waarde={tellers?.geblokkeerd ?? leeg} label="Blocked" kleur="#F87171"
           sub={tellers ? (tellers.geblokkeerd ? 'Action required' : 'Nothing blocked') : undefined} onKies={kies?.geblokkeerd} />
         <Getal waarde={data ? (data.bounces?.length ?? 0) : leeg} label="Delivery failures" kleur="#F87171"
