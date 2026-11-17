@@ -4,18 +4,37 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Check, ExternalLink, RefreshCw, X } from 'lucide-react';
+import { Check, ExternalLink, Mail, RefreshCw, Send, X } from 'lucide-react';
 import { hoeLang, type WachtItem } from '@/domain/approvals/wachtOpJou';
 import { haalWachtOpJou } from '@/application/approvals/wachtOpJou';
 import { beslisApproval } from '@/application/approvals/beslisAgentOk';
+import { northseaActie, northseaMensGoedkeuren } from '@/infrastructure/gateways/axeCoreApiService';
+
+type Concept = { to?: string; subject?: string; body?: string };
+
+async function leesConcept(approvalId: string): Promise<Concept> {
+  const { result } = await northseaActie('get_approval', { approval_id: approvalId });
+  const d = (result as { draft?: Concept }).draft ?? {};
+  return { to: d.to, subject: d.subject, body: d.body };
+}
 
 const VERVERS_MS = 60_000;
 
-function Rij({ item, onBesluit, onOpen }: {
+function Rij({ item, onBesluit, onOpen, onVerstuur }: {
   item: WachtItem;
   onBesluit: (i: WachtItem, ja: boolean) => void;
   onOpen: (i: WachtItem) => void;
+  onVerstuur: (i: WachtItem) => void;
 }) {
+  const [concept, setConcept] = useState<Concept | null>(null);
+  const [leest, setLeest] = useState(false);
+  const toon = async () => {
+    if (concept) { setConcept(null); return; }
+    if (!item.approvalId) return;
+    setLeest(true);
+    try { setConcept(await leesConcept(item.approvalId)); } catch { setConcept({ body: 'Kon de tekst nu niet lezen.' }); }
+    setLeest(false);
+  };
   return (
     <li className="rounded-xl p-3" style={{ background: 'var(--axe-barbtn, rgba(255,255,255,0.04))' }} data-wacht-bron={item.bron}>
       <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
@@ -39,6 +58,19 @@ function Rij({ item, onBesluit, onOpen }: {
               <X size={13} /> Nee
             </button>
           </>
+        ) : item.kanVersturen ? (
+          <>
+            <button type="button" onClick={() => onVerstuur(item)}
+              className="flex items-center gap-1 rounded-md px-3 py-1 text-[12px] font-medium"
+              style={{ background: 'var(--tint)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
+              <Send size={13} /> Versturen
+            </button>
+            <button type="button" onClick={() => void toon()}
+              className="flex items-center gap-1 rounded-md px-3 py-1 text-[12px] font-medium"
+              style={{ border: '1px solid rgba(255,255,255,0.15)', color: 'var(--text-primary)' }}>
+              <Mail size={13} /> {concept ? 'Verberg mail' : leest ? 'Lezen…' : 'Lees mail'}
+            </button>
+          </>
         ) : (
           <button type="button" onClick={() => onOpen(item)}
             className="flex items-center gap-1 rounded-md px-3 py-1 text-[12px] font-medium"
@@ -47,6 +79,13 @@ function Rij({ item, onBesluit, onOpen }: {
           </button>
         )}
       </div>
+      {concept && (
+        <div className="mt-2 rounded-lg p-2 text-[12.5px]" style={{ background: 'rgba(0,0,0,0.25)', color: 'var(--text-primary)' }}>
+          {concept.to && <div style={{ color: 'var(--text-secondary)' }}>Aan: {concept.to}</div>}
+          {concept.subject && <div className="mb-1 font-semibold">{concept.subject}</div>}
+          <div style={{ whiteSpace: 'pre-wrap' }}>{concept.body}</div>
+        </div>
+      )}
     </li>
   );
 }
@@ -83,10 +122,29 @@ export default function WachtOpJou() {
     }
   };
 
+  const verstuur = async (lijst: WachtItem[]) => {
+    const ids = lijst.map((i) => i.approvalId).filter((x): x is string => Boolean(x));
+    if (!ids.length) return;
+    if (ids.length > 1 && !window.confirm(`${ids.length} mails versturen? Ze gaan echt naar de tegenpartijen.`)) return;
+    setMelding(ids.length > 1 ? `${ids.length} mails versturen…` : 'Versturen…');
+    try {
+      const r = await northseaMensGoedkeuren(ids);
+      const mis = r.results.filter((x) => !x.ok);
+      const weg = new Set(r.results.filter((x) => x.ok).map((x) => x.draft_id));
+      setItems((oud) => (oud ?? []).filter((x) => !(x.approvalId && weg.has(x.approvalId))));
+      setMelding(mis.length
+        ? `${r.sent} verstuurd; ${mis.length} niet: ${mis[0].message ?? mis[0].code}`
+        : `${r.sent} verstuurd.`);
+    } catch (e) {
+      setMelding(`Lukte niet: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
   const open = (i: WachtItem) => navigate(i.dealId ? `/northsea?deal=${encodeURIComponent(i.dealId)}` : '/northsea');
 
   const axe = (items ?? []).filter((i) => i.bron === 'axe');
   const ns = (items ?? []).filter((i) => i.bron === 'northsea');
+  const verstuurbaar = ns.filter((i) => i.kanVersturen);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4" data-axe-wacht-op-jou="">
@@ -123,17 +181,26 @@ export default function WachtOpJou() {
                   AXE Core · {axe.length}
                 </h2>
                 <ul className="flex flex-col gap-2">
-                  {axe.map((i) => <Rij key={i.id} item={i} onBesluit={besluit} onOpen={open} />)}
+                  {axe.map((i) => <Rij key={i.id} item={i} onBesluit={besluit} onOpen={open} onVerstuur={(x) => void verstuur([x])} />)}
                 </ul>
               </section>
             )}
             {ns.length > 0 && (
               <section>
-                <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-                  NorthSea · {ns.length}
-                </h2>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+                    NorthSea · {ns.length}
+                  </h2>
+                  {verstuurbaar.length > 1 && (
+                    <button type="button" onClick={() => void verstuur(verstuurbaar)}
+                      className="flex items-center gap-1 rounded-md px-3 py-1 text-[12px] font-medium"
+                      style={{ background: 'var(--tint)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
+                      <Send size={13} /> Alle {verstuurbaar.length} mails versturen
+                    </button>
+                  )}
+                </div>
                 <ul className="flex flex-col gap-2">
-                  {ns.map((i) => <Rij key={i.id} item={i} onBesluit={besluit} onOpen={open} />)}
+                  {ns.map((i) => <Rij key={i.id} item={i} onBesluit={besluit} onOpen={open} onVerstuur={(x) => void verstuur([x])} />)}
                 </ul>
               </section>
             )}

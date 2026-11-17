@@ -1305,7 +1305,23 @@ export function northseaTab<T extends TabNaam>(naam: T, vers = false): Promise<T
 export type NorthseaActie =
   | 'get_next_actions' | 'review_deal' | 'qualify_opportunity' | 'investigate_blockers'
   | 'assess_match' | 'process_reply' | 'research_counterparty' | 'prepare_outreach'
-  | 'get_live_operations' | 'list_pending_approvals';
+  | 'get_live_operations' | 'list_pending_approvals' | 'get_approval';
+
+/**
+ * Luka keurt NorthSea-mails goed en verstuurt ze, vanuit "Wacht op jou" (17 nov).
+ * Stuurt zijn EIGEN sessietoken mee; de NorthSea-server controleert dat zelf
+ * bij Supabase. Zonder inlog: een fout, nooit stil de service-sleutel.
+ */
+export async function northseaMensGoedkeuren(draftIds: string[]): Promise<{
+  results: { draft_id: string; ok: boolean; sent?: boolean; code?: string; message?: string }[];
+  sent: number;
+}> {
+  const { sessieClient } = await import('@/infrastructure/supabase/supabaseClient');
+  const sb = await sessieClient();
+  const token = sb ? (await sb.auth.getSession()).data.session?.access_token : undefined;
+  if (!token) throw new Error('Je bent niet ingelogd in AXE; log opnieuw in en probeer het nog eens.');
+  return call('POST', '/northsea/mens/goedkeuren', { draft_ids: draftIds, user_token: token });
+}
 
 export async function northseaActie(actie: NorthseaActie, params: Record<string, unknown>): Promise<{
   action: string; tool: string; result: Record<string, unknown>;

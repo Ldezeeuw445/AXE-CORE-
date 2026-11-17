@@ -33,6 +33,11 @@ export interface WachtItem {
   kanHierBeslissen: boolean;
   taskId?: string;
   dealId?: string;
+  /** NorthSea: de soort (reply_draft, deal_decision, ...) en het id voor goedkeuren. */
+  soort?: string;
+  approvalId?: string;
+  /** NorthSea-concept dat Luka hier zelf kan goedkeuren en versturen (niet gevoelig). */
+  kanVersturen?: boolean;
 }
 
 export interface AxeVraag {
@@ -52,6 +57,7 @@ export interface NorthseaVraag {
   kind: string;
   deal_id?: string | null;
   subject?: string | null;
+  sensitive_action?: boolean | null;
   gate?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -80,7 +86,7 @@ export function zonderUuid(s: string): string {
 const NORTHSEA_SOORT: Record<string, { wat: string; waarom: string }> = {
   reply_draft: {
     wat: 'Mail klaar om te versturen',
-    waarom: 'De desk schreef een antwoord. Lees hem en keur goed of wijs af; zonder jou gaat hij niet weg.',
+    waarom: 'De desk schreef deze mail. Lees hem en druk op "Versturen"; zonder jou gaat hij niet weg.',
   },
   deal_tasks_approval: {
     wat: 'Volgende stap van een deal',
@@ -132,6 +138,9 @@ export function vanNorthsea(rijen: NorthseaVraag[]): WachtItem[] {
       sinds: r.created_at || r.updated_at || '',
       kanHierBeslissen: false,
       dealId: r.deal_id || undefined,
+      soort: r.kind,
+      approvalId: r.approval_id,
+      kanVersturen: r.kind === 'reply_draft' && r.sensitive_action !== true,
     };
   });
 }

@@ -102,6 +102,8 @@ ACTIONS: dict[str, ActionSpec] = {
     "get_communication": ActionSpec("northsea_get_communication", ("communication",)),
     "get_communication_thread": ActionSpec("northsea_get_communication_thread", ("communication",)),
     "list_pending_approvals": ActionSpec("northsea_list_pending_approvals", (), ("limit", "offset")),
+    # Alleen lezen: de exacte tekst van één wachtend concept, voor "Wacht op jou".
+    "get_approval": ActionSpec("northsea_get_approval", ("approval_id",)),
 }
 
 # De acties die de agentlus mag gebruiken. Bewust zonder research_*,
@@ -187,3 +189,24 @@ async def call_action(action: str, params: dict[str, Any]) -> dict[str, Any]:
             raise NorthSeaGatewayError("bad_response", "The NorthSea MCP returned an unstructured response.") from None
 
     return {"action": action, "tool": spec.tool, "result": data}
+
+
+async def mens_keurt_goed(draft_ids: list[str], user_token: str) -> dict[str, Any]:
+    """Luka's goedkeuring doorgeven, met ZIJN token (niet de service-sleutel).
+
+    De NorthSea-server controleert dat token zelf bij Supabase en past alle
+    eigen regels toe (mens, gevoeligheid, contactbeleid); AXE geeft het alleen
+    door. Zie backend/northsea_mcp/northsea_mcp/mens_goedkeuren.py."""
+    import httpx
+    basis = MCP_URL.rsplit("/mcp", 1)[0]
+    try:
+        async with httpx.AsyncClient(timeout=CALL_TIMEOUT_S) as http:
+            r = await http.post(f"{basis}/human/drafts/approve-send", json={"draft_ids": draft_ids[:60]},
+                                headers={"Authorization": f"Bearer {user_token}"})
+    except httpx.HTTPError as e:
+        raise NorthSeaGatewayError("upstream_unreachable", "Could not reach the NorthSea MCP service.") from e
+    if r.status_code == 401:
+        raise NorthSeaGatewayError("not_signed_in", "NorthSea did not recognise your AXE sign-in. Sign in again.")
+    if r.status_code != 200:
+        raise NorthSeaGatewayError("tool_error", f"NorthSea refused ({r.status_code}).")
+    return r.json()

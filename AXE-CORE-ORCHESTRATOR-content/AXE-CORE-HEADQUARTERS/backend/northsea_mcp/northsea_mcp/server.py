@@ -675,6 +675,39 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
             return JSONResponse({"error": "upstream_error"}, status_code=502)
         return JSONResponse(uit.model_dump(), headers={"Cache-Control": "no-store"})
 
+    @route("/human/drafts/approve-send", methods=["POST"])
+    async def mens_keurt_goed(request: Request) -> Response:
+        """Luka keurt goed en verstuurt vanuit AXE, met zijn eigen inlog (mens_goedkeuren.py).
+
+        Authorization: Bearer <Luka's AXE Supabase access token>. Body:
+        {"draft_ids": [..] (max 60)}. Elk concept los: wat een regel weigert,
+        komt terug met zijn code; de rest gaat door."""
+        from . import mens_goedkeuren as mg
+        auth = request.headers.get("authorization", "")
+        token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+        uid = await mg.wie_is_dit(oauth.http, axe_url=settings.axe_url, axe_key=settings.axe_key,
+                                  token=token, toegestaan=settings.allowed_user_ids)
+        if not uid:
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers={"Cache-Control": "no-store"})
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            body = {}
+        ids = [str(x) for x in ((body or {}).get("draft_ids") or []) if isinstance(x, str)][:mg.MAX_PER_VENSTER]
+        if not ids or any(not re.fullmatch(r"[0-9a-fA-F-]{36}", i) for i in ids):
+            return JSONResponse({"error": "invalid_draft_ids"}, status_code=400, headers={"Cache-Control": "no-store"})
+        ok, _, _ = store.hit(f"mens:{uid}", mg.VENSTER_S, mg.MAX_PER_VENSTER)
+        if not ok:
+            return JSONResponse({"error": "rate_limited"}, status_code=429, headers={"Cache-Control": "no-store"})
+        resultaten = []
+        for i in ids:
+            try:
+                resultaten.append(await mg.keur_goed_en_verstuur(service, uid, i))
+            except RepositoryError:
+                resultaten.append({"draft_id": i, "ok": False, "code": "upstream_error", "message": "Database unreachable."})
+        return JSONResponse({"results": resultaten, "sent": sum(1 for r in resultaten if r.get("sent"))},
+                            headers={"Cache-Control": "no-store"})
+
     operations_lock = asyncio.Lock()
 
     @route("/internal/operations/sweep", methods=["POST"])
