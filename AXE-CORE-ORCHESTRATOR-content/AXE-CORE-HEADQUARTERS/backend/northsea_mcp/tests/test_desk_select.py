@@ -312,3 +312,19 @@ def test_marktplaats_leverancier_met_adres_krijgt_een_eerste_mail_binnen_de_dagr
     # Ook als echte deals alle plekken vullen, houdt eerste contact één plek.
     vol_echt = kies(limit=1)
     assert [o["id"] for o in vol_echt["chosen"]] == [lev]
+
+
+async def test_tweede_hek_laat_marktplaats_leverancier_met_adres_door(research, crew):
+    """17 nov 12:07: selectie koos de deal, het tweede hek gooide hem er weer uit."""
+    repo = FakeRepo()
+    voeg_marktplaats_papier(repo, parked=False)
+    repo.t["contacts"].append({"id": "13131313-1313-4131-8131-131313131313", "company_id": MARKET_SELLER,
+                               "full_name": "Sales desk", "email": "sales@kghm.example", "is_primary": True})
+    repo.t["deal_automation_policy"][0].update(auto_send_qualification=True, auto_reply_nonbinding=True)
+    service = NorthSeaService(repo, research, crew)
+    uit = await finish_after_event(service, _event(MARKET_OPP), _ok())
+    assert uit.get("reason") != "stale_marketplace_paper"
+    # Met de vaste regel aan: een eerste kwalificatiemail, zonder ja-kaart voor Luka.
+    assert uit.get("standing_rule") is True and uit.get("notice") is None, uit
+    d = next(r for r in repo.t["reply_drafts"] if r.get("id") == uit["draft_id"])
+    assert d["to_email"] == "sales@kghm.example" and d["approval_status"] == "not_required"

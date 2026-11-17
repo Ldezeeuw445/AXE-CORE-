@@ -24,6 +24,7 @@ from .desk_select import (
     engaged_opportunity_ids,
     parked_opportunity_ids,
     skip_desk_run,
+    supplier_has_email,
 )
 from .policy import PolicyDenied
 from .service import (
@@ -257,12 +258,23 @@ async def desk_run_skip_for_opportunity(service: Any, opp: dict[str, Any]) -> st
     queue = await service.repo.list_action_queue(opp["id"])
     parked_ids = parked_opportunity_ids(taken, queue)
     comms = await service.repo.list_communications(opportunity_id=opp["id"], limit=50)
-    return skip_desk_run(
+    reden = skip_desk_run(
         opp,
         parked_ids=parked_ids,
         companies=companies_of_opportunity(opp),
         engaged_ids=engaged_opportunity_ids(comms),
     )
+    # 17 nov: de selectie laat marktplaats-leveranciers mét adres door voor een
+    # eerste mail (Luka: "Ja, max 5 per dag"); dit hek gooide ze er daarna weer
+    # uit, dus de 12:07-ronde eindigde zonder mail. Zelfde uitzondering hier.
+    if reden == "stale_marketplace_paper":
+        off = opp.get("supplier_offers") if isinstance(opp.get("supplier_offers"), dict) else {}
+        nest = off.get("companies") if isinstance(off.get("companies"), dict) else {}
+        cid = off.get("company_id") or nest.get("id")
+        contacten = await service.repo.list_contacts(str(cid)) if cid else []
+        if supplier_has_email(opp, offers={}, contacts_by_company={str(cid): contacten} if cid else {}):
+            return None
+    return reden
 
 
 async def _schrijf_taak(service: Any, *, opportunity_id: str, title: str, description: str,
