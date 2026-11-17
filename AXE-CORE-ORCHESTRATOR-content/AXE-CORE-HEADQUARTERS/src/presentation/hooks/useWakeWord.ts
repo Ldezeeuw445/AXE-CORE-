@@ -30,6 +30,23 @@ function getRec(): RecCtor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+/**
+ * Alleen het hoofdvenster luistert.
+ *
+ * 17 nov, ~/.axe/focus.log op de Mac mini: elke ~10 s "focus axe-float-axe".
+ * App.tsx draait in elk AXE-venster, dus ook in de notch, en daar zat deze
+ * herkenner dus ook in. Spraakherkenning stopt na een paar seconden stilte en
+ * `onend` start hem opnieuw -- en elke herstart maakte de notch het actieve
+ * venster: Luka's toetsenbord sprong weg, midden in een zin op zijn andere
+ * scherm. Eén luisteraar is genoeg; het hoofdvenster is die ene.
+ */
+export function isHoofdvenster(w: unknown = typeof window === 'undefined' ? undefined : window): boolean {
+  const meta = (w as { __TAURI_INTERNALS__?: { metadata?: { currentWindow?: { label?: string } } } } | undefined)
+    ?.__TAURI_INTERNALS__?.metadata;
+  if (!meta) return true; // browser of telefoon: één venster
+  return (meta.currentWindow?.label ?? 'main') === 'main';
+}
+
 export function useWakeWord() {
   const [aan, setAan] = useState(false);
 
@@ -41,7 +58,7 @@ export function useWakeWord() {
   }, []);
 
   useEffect(() => {
-    if (!aan) return;
+    if (!aan || !isHoofdvenster()) return;
     const Ctor = getRec();
     if (!Ctor) return;
     let stop = false;
