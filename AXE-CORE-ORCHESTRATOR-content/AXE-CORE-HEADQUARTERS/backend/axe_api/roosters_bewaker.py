@@ -161,3 +161,139 @@ def beoordeel(rijen: list[dict[str, Any]], nu: datetime) -> list[Bevinding]:
                              "; ".join(_naam(r) for r in wacht[:5]) + "."))
 
     return sorted(uit, key=lambda b: 0 if b.voor == "luka" else 1)
+
+
+# ── Trading Team: geen koersdata en een stille runner (17 nov 2026) ──────────
+# Twee gaten die "Vaste jobs falen achter elkaar" niet dekt:
+#
+# * NO-DATA: zonder koersdata eindigt de cyclus als `completed` met exit 0, dus
+#   de job staat op "ok" en telt nergens als fout. Hij analyseert en handelt
+#   dan niets, ook niet als dat dagen zo blijft. De uitkomst staat wel per run
+#   in core_trading_team_runs.verdict ("NO-DATA", decision.ts); die tellen we.
+# * Stil: de job staat aan maar draait niet meer (Mac-uitvoerder weg, de
+#   planner pakt hem niet). Bij 15 minuten rooster is 45 min = drie gemiste runs.
+#
+# Wat al bestond en hier dus NIET dubbel komt: falen in terugval-rust. De 5e
+# mislukking op rij geeft al een error-melding (main._meld_run, planning.MAX_FAILS)
+# en vanaf 6x komt "Vaste jobs falen achter elkaar" met de reden (PR #314).
+# Een job met zoveel fouten ligt bewust stil; dat is geen stille runner.
+#
+# Zelfde regel als worker_wacht (Mac offline / DAX geblokkeerd / VPS-wacht):
+# één warning op Home en telefoon, niet opnieuw zolang de vorige ongelezen is (24 u).
+
+TRADING_JOB = "axe_core:trading-team-test-15m-mac"
+NO_DATA_NA = 3                          # zoveel runs achter elkaar zonder koersdata
+NO_DATA_VERS = timedelta(hours=2)       # oudere reeks = runner ligt stil, dat meldt de hartslag
+TRADING_STIL_NA = timedelta(minutes=45)  # rooster elke 15 min: drie gemiste runs
+TRADING_AFGEVOERD_NA = timedelta(days=7)
+FAALT_AL_GEMELD_VANAF = 5               # = planning.MAX_FAILS: vanaf hier melden _meld_run en jobs_falen al
+NO_DATA_KOP = "Trading geen koersdata"
+TRADING_KOP = "Trading runner stil/faalt"
+
+
+def _lokaal(t: datetime | None) -> str:
+    if t is None:
+        return "?"
+    try:
+        from zoneinfo import ZoneInfo
+        return t.astimezone(ZoneInfo("Europe/Amsterdam")).strftime("%d-%m %H:%M")
+    except Exception:  # noqa: BLE001
+        return t.strftime("%d-%m %H:%M") + " UTC"
+
+
+def no_data_reeks(runs: list[dict[str, Any]]) -> int:
+    """Hoeveel afgeronde runs, nieuwste eerst, achter elkaar NO-DATA gaven. Puur.
+
+    Een run die nog loopt (status running, nog geen verdict) telt niet mee en
+    breekt de reeks niet; elke andere uitkomst (ook BLOCKED of een fout) wel."""
+    n = 0
+    for r in runs:
+        if r.get("status") == "running" and not r.get("verdict"):
+            continue
+        if str(r.get("verdict") or "").upper() != "NO-DATA":
+            break
+        n += 1
+    return n
+
+
+def _no_data_code(run: dict[str, Any]) -> str:
+    notes = ((run.get("decision") or {}) if isinstance(run.get("decision"), dict) else {}).get("notes") or []
+    codes = [str(x) for x in notes if isinstance(x, str) and x != "no_data"]
+    return " ".join(verberg_geheimen(codes[0]).split())[:80] if codes else ""
+
+
+def trading_stil(schema: dict[str, Any] | None, nu: datetime) -> str | None:
+    """De reden waarom de trading-runner stil is, of None. Puur.
+
+    None als de job uit staat, nu loopt, nog nooit draaide, al een week weg is,
+    of al in terugval-rust ligt na >= FAALT_AL_GEMELD_VANAF fouten (dat is gemeld)."""
+    if not schema or not schema.get("enabled"):
+        return None
+    if schema.get("lease_owner") and (_tijd(schema.get("lease_until")) or nu) > nu:
+        return None
+    if _fouten(schema) >= FAALT_AL_GEMELD_VANAF:
+        return None
+    laatst = _tijd(schema.get("last_run_at"))
+    if laatst is None:
+        return None
+    stil = nu - laatst
+    if not (TRADING_STIL_NA < stil <= TRADING_AFGEVOERD_NA):
+        return None
+    status = schema.get("last_status") or "?"
+    fouten = _fouten(schema)
+    volgende = _tijd(schema.get("next_run_at"))
+    reden = (f"Trading Team draaide niet meer sinds {_lokaal(laatst)} ({int(stil.total_seconds()) // 60} min); "
+             f"laatste status {status}" + (f", {fouten}x mislukt op rij" if fouten else ""))
+    if volgende is not None:
+        reden += (f", gepland voor {_lokaal(volgende)} maar niet opgepakt" if volgende < nu
+                  else f", volgende run {_lokaal(volgende)}")
+    if _reden(schema):
+        reden += f" — {_reden(schema)}"
+    return reden + ". Check of de Mac-uitvoerder draait (launchctl list | grep -i axe)."
+
+
+def trading_ronde(db: Any, rijen: list[dict[str, Any]], nu: datetime) -> dict[str, Any]:
+    """Eén controle in de Companion Manager-pulse. Hooguit twee warnings; slikt fouten."""
+    from goedkeuring_melding import LUKA_USER_ID
+    from worker_wacht import _al_gemeld
+
+    schema = next((r for r in rijen if r.get("job_key") == TRADING_JOB), None)
+    if not schema or not schema.get("enabled"):
+        return {"enabled": False, "no_data": 0, "notified": []}
+    gemeld: list[str] = []
+
+    def _meld(voor: str, tekst: str, code: str) -> None:
+        if _al_gemeld(db, {}, nu, voor):
+            return
+        try:
+            db.table("core_notifications").insert({
+                "recipient": LUKA_USER_ID, "type": "warning", "message": f"{voor}{tekst}"[:1900],
+            }).execute()
+            gemeld.append(code)
+        except Exception:  # noqa: BLE001
+            pass
+
+    uit_fout = ""
+    try:
+        runs = (db.table("core_trading_team_runs").select("created_at,status,verdict,decision")
+                .eq("mode", "test").order("created_at", desc=True).limit(10).execute().data) or []
+    except Exception as exc:  # noqa: BLE001 — de hartslag hieronder moet nog steeds kunnen
+        runs, uit_fout = [], str(exc)[:200]
+    reeks = no_data_reeks(runs)
+    nieuwste = next((r for r in runs if str(r.get("verdict") or "").upper() == "NO-DATA"), None)
+    vers = nieuwste is not None and (nu - (_tijd(nieuwste.get("created_at")) or nu - NO_DATA_VERS * 2)) <= NO_DATA_VERS
+    if reeks >= NO_DATA_NA and vers:
+        code = _no_data_code(nieuwste)
+        _meld(f"{NO_DATA_KOP}: ",
+              f"de laatste {reeks} Trading Team-runs hadden geen koersdata (NO-DATA"
+              + (f", {code}" if code else "") + f", laatste {_lokaal(_tijd(nieuwste.get('created_at')))}). "
+              "De job staat op ok, maar er is niets geanalyseerd en niets gehandeld. "
+              "Check de databronnen (EODHD/MetaAPI-koersen).", "no_data")
+
+    stil = trading_stil(schema, nu)
+    if stil:
+        _meld(f"{TRADING_KOP}: ", stil, "stil")
+    uit: dict[str, Any] = {"enabled": True, "no_data": reeks, "stil": bool(stil), "notified": gemeld}
+    if uit_fout:
+        uit["error"] = uit_fout
+    return uit
