@@ -216,7 +216,7 @@ fi
 log "app is ${GEBOUWD:-onbekend}, code is $DOEL — bouwen (laagste prioriteit)"
 if taskpolicy -b nice -n 19 env -i HOME="$HOME" USER="$USER" LOGNAME="$USER" SHELL=/bin/zsh TMPDIR="${TMPDIR:-/tmp}" \
      PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.cargo/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
-     /bin/bash "$HIER/scripts/axe-bijwerken.sh" >"$HOME/Library/Logs/axe-autosync-bouw.log" 2>&1; then
+     AXE_ACHTERGROND=1 /bin/bash "$HIER/scripts/axe-bijwerken.sh" >"$HOME/Library/Logs/axe-autosync-bouw.log" 2>&1; then
   rm -f "$MISLUKT"
   log "klaar: app draait op $DOEL"
 else

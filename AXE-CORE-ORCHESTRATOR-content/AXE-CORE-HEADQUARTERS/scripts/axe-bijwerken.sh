@@ -187,6 +187,32 @@ printf '%s\n' "$VERWACHT_SHA" > "$STAMP_FILE"
 codesign --force --deep --sign "$APPLE_SIGNING_IDENTITY" "$APP"
 codesign --verify --deep --strict "$APP" || stop "Gebouwde AXE CORE signature-verificatie faalde na build-stamp."
 
+# ── 3b. Niet herstarten onder Luka's handen ──────────────────────────────────
+#
+# 17 nov (Luka, Mac mini): "elke keer als er iets gebeurt in AXE CORE stopt hij
+# met waar ik mee bezig was". De autosync begint pas na 5 min stilte te bouwen,
+# maar het bouwen duurt zelf minuten. Was Luka intussen terug, dan sloot dit
+# script de oude AXE af en startte de nieuwe midden in zijn zin -- en een
+# Tauri-app maakt zich bij het starten actief (tao: activateIgnoringOtherApps),
+# dus het toetsenbord sprong naar AXE. Na elke commit opnieuw.
+#
+# Nu, alleen vanuit de autosync (AXE_ACHTERGROND=1): wachten tot er een minuut
+# niets is aangeraakt, de app op de achtergrond starten, en de app die vooraan
+# stond daarna weer vooraan zetten. Met de hand bijwerken blijft zoals het was.
+stil_seconden() { ioreg -c IOHIDSystem 2>/dev/null | awk '/HIDIdleTime/ {print int($NF/1000000000); exit}'; }
+vooraan_app() { lsappinfo info -only bundleid "$(lsappinfo front 2>/dev/null)" 2>/dev/null | sed -n 's/.*"CFBundleIdentifier"="\([^"]*\)".*/\1/p'; }
+ACHTERGROND="${AXE_ACHTERGROND:-0}"
+VOORAAN=""
+if [[ "$ACHTERGROND" == "1" ]]; then
+  for _ in $(seq 1 720); do   # hooguit 3 uur wachten, daarna toch (maar stil)
+    (( $(stil_seconden || echo 999) >= 60 )) && break
+    sleep 15
+  done
+  VOORAAN="$(vooraan_app || true)"
+  # Universal Control of AXE zelf vooraan: niets om terug te zetten.
+  case "$VOORAAN" in com.apple.universalcontrol|com.axe.core|"") VOORAAN="" ;; esac
+fi
+
 # ── 4. De oude afsluiten ─────────────────────────────────────────────────────
 # Tauri laat geen tweede instantie toe: draait de oude nog, dan lijkt de nieuwe
 # gewoon niet te openen en zie je nergens waarom.
@@ -307,7 +333,19 @@ zeg "Starten — $(date '+%H:%M') · gebouwd uit $(git rev-parse --short HEAD)"
 # Startte iemand tijdens de workers-stap toch de oude (Dock, Spotlight), dan
 # eerst die weg: anders opent `open` er een tweede naast.
 oude_axe_weg
-open "$APP"
+if [[ "$ACHTERGROND" == "1" ]]; then
+  open -g "$APP"
+  if [[ -n "$VOORAAN" ]]; then
+    # tao activeert AXE bij het opstarten toch; geef de focus terug.
+    for _ in $(seq 1 20); do
+      [[ "$(vooraan_app || true)" == "com.axe.core" ]] && break
+      sleep 0.5
+    done
+    open -b "$VOORAAN" 2>/dev/null || true
+  fi
+else
+  open "$APP"
+fi
 
 # Dezelfde commit staat boven in beeld op Home. Klopt die niet met wat hier
 # staat, dan kijk je naar een andere app -- `npm run welke` zegt welke.

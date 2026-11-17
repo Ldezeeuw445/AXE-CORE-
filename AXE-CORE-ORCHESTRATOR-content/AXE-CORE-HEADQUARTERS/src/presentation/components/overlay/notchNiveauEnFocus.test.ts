@@ -102,3 +102,19 @@ describe('de notch klapt in tot een handvat (Luka, 6 nov)', () => {
     expect(floatAxe).toContain('axe-ov__handvat');
   });
 });
+
+describe('een AXE-update pakt het toetsenbord niet af (17 nov, Mac mini)', () => {
+  const ruw = (p: string) => readFileSync(resolve(hier, p), 'utf8');
+  const bijwerken = ruw('../../../../scripts/axe-bijwerken.sh');
+  const autosync = ruw('../../../../scripts/axe-autosync.sh');
+
+  it('de autosync bouwt op de achtergrond', () => {
+    expect(autosync).toMatch(/AXE_ACHTERGROND=1 \/bin\/bash "\$HIER\/scripts\/axe-bijwerken\.sh"/);
+  });
+
+  it('wacht op een minuut stilte, start met open -g en zet de vorige app terug', () => {
+    expect(bijwerken).toMatch(/stil_seconden \|\| echo 999\) >= 60/);
+    expect(bijwerken).toContain('open -g "$APP"');
+    expect(bijwerken).toContain('open -b "$VOORAAN"');
+  });
+});
