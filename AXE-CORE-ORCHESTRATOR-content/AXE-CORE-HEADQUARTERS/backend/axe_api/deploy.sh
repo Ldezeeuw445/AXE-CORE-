@@ -100,23 +100,14 @@ TERM_DIR="$INSTALL_DIR/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS"
 bash "$TERM_DIR/infra/terminal/install-axe-terminal.sh" \
   "$TERM_DIR" "$INSTALL_DIR/.env" "${WORKSPACE_DIR:-/opt/axe-workspace}"
 
-# 7. Self-hosted scheduler crontab — ping /cron/tick every minute with the
-# CRON_SECRET so due schedules in core_schedules run. This replaces n8n entirely.
-# CRON_SECRET matches AXE Companion / Trading OS so one secret covers all three
-# (CRON_KEY still accepted as a fallback). Idempotent: line removed + re-added.
-CRON_SECRET_VAL="$(grep -E '^CRON_SECRET=' "$INSTALL_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'"'' | tr -d '[:space:]')"
-if [ -z "$CRON_SECRET_VAL" ]; then
-  CRON_SECRET_VAL="$(grep -E '^CRON_KEY=' "$INSTALL_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'"'"'' | tr -d '[:space:]')"
-fi
-if [ -n "$CRON_SECRET_VAL" ]; then
-  echo "→ Installing /cron/tick crontab (every minute)..."
-  TICK_LINE="* * * * * curl -fsS -m 55 -X POST -H \"X-Cron-Secret: $CRON_SECRET_VAL\" https://api.axecompanion.com/cron/tick >/dev/null 2>&1"
-  ( crontab -l 2>/dev/null | grep -v '/cron/tick' || true ; echo "$TICK_LINE" ) | crontab -
-  echo "  Scheduler: crontab -l | grep cron/tick"
-else
-  echo "⚠️  CRON_SECRET not set in $INSTALL_DIR/.env — the self-hosted scheduler is OFF."
-  echo "    Add CRON_SECRET=<your secret> to .env and re-run this script to enable cron."
-fi
+# 7. Self-hosted scheduler crontab — ping /cron/tick every minute via the
+# VPS wrapper so the secret never lands in crontab. This replaces n8n entirely.
+# Does not read CRON_SECRET from $INSTALL_DIR/.env and does not create or
+# change the wrapper or /etc/axe/cron.env. Idempotent: the helper removes any
+# previous /cron/tick curl line or wrapper line, then adds the wrapper line once.
+# If the wrapper or /etc/axe/cron.env is missing, it warns and leaves crontab
+# unchanged — it never falls back to a plaintext secret.
+bash "$INSTALL_DIR/install_cron_wrapper.sh"
 
 echo ""
 echo "✓ Deploy complete!"
