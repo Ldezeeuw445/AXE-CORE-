@@ -19,6 +19,7 @@ import {
   MANAGER_APP_GROEPEN,
   PROJECTS_ORCH_ID,
   bossAgent,
+  bossDoorsturenNaar,
   classificeerBossNaarManager,
   classificeerProjectsNaarManager,
   doorgestuurdTekst,
@@ -308,6 +309,27 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
         verversServerAgents();
         // Niets om goed te keuren: dan is het gewoon een bericht, geen stilte.
         if (!ok) void laatManagerAntwoorden(agent.id, tekst, (actie) => startManagerJob(agent.id, actie, { device: job?.device ?? null, tab: job?.tab }));
+      });
+      return;
+    }
+
+    // AXE Core (Boss): praat zelf, zoals Grok Bot. Alleen een bericht dat
+    // duidelijk over één app gaat, zet hij door naar die manager.
+    if (isBoss(agent.id) && !bossDoorsturenNaar(tekst)) {
+      const opties = { device: job?.device ?? null, tab: job?.tab };
+      void haalWachtOpJou().then((w) => {
+        const ns = w.items.filter((i) => i.bron === 'northsea').length;
+        const ax = w.items.length - ns;
+        const stand = w.fouten.length
+          ? 'De lijst "Wacht op jou" was nu niet volledig te lezen.'
+          : `Op Luka wachten nu ${w.items.length} dingen (${ax} AXE, ja/nee meteen; ${ns} NorthSea, goedkeuren in de desk). `
+            + `Ze staan allemaal onder "Wacht op jou", de knop rechtsboven in de Managers-tab.`;
+        return `${tekst}\n\n[Context voor jou, niet herhalen tenzij relevant: ${stand}]`;
+      }).catch(() => tekst).then((vraag) =>
+        laatManagerAntwoorden(agent.id, vraag, (actie) => startManagerJob(agent.id, actie, opties)),
+      ).then((zelf) => {
+        if (!zelf) handoff(agent.id, classificeerBossNaarManager(tekst), tekst);
+        tick((n) => n + 1);
       });
       return;
     }

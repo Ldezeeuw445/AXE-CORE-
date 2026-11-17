@@ -8,6 +8,32 @@ zet je naam bij het punt dat je oppakt, zodat we niet twee keer hetzelfde doen.
 
 ---
 
+## Nu — AXE als co-founder (Luka, 17 nov 2026)
+
+Luka: "het moet juist zo zijn dat axe core me assistent is en zelfs co-founder
+en me uit zichzelf helpt met alles en dingen echt makkelijker maakt."
+
+- [x] **AXE Core praat zelf.** De bovenste chat in de Managers-tab (agent
+      `axe`) was leeg: hij stuurde alles door en zei nooit iets. Nu antwoordt
+      hij zelf (abonnement), stuurt alleen door als het duidelijk over één app
+      gaat, en schrijft elke 3 uur een overzicht: wat er wacht, waar, en wat de
+      managers zelf deden (`backend/axe_api/axe_overzicht.py`).
+- [x] **Geen 53x dezelfde managervraag**; betaling/login blijft bij Luka.
+- [ ] **NorthSea-mails goedkeuren in AXE zelf.** Er is nu nergens in AXE een
+      knop: de desk is alleen-lezen en de NorthSea-server neemt een ja alleen
+      aan van een ingelogde mens, niet van AXE's sleutel. Daarom "44 wachten
+      ergens". Nodig: één knop in "Wacht op jou" (met de tekst erbij en "alle
+      veilige in één keer") die met Luka's eigen inlog goedkeurt.
+- [ ] **Vaste vervolgmails onder de vaste regel** (max 5/dag, 14 dagen rust,
+      alleen het sjabloon). Wacht op Luka's ja.
+- [ ] **UI-ronde: alles nalopen.** Luka: "het is allemaal nog niet echt
+      perfect en duidelijk". Elke tab langs: overlap, wat-is-dit, waar klik ik.
+      Begint met inloggen in het browserpaneel (preview poort 5199).
+- [ ] **Managers als Grok Bot**: zelf doen, onderling overleggen, alleen
+      vragen wat echt van Luka is.
+- [ ] Deal-specifieke mails door een model; abonnementen samenvoegen;
+      stem-punten; device manager.
+
 ## Af, en gemeten
 
 - **Providerkaarten** — 16 providers, één kaartvorm, groen/rood in de rand,

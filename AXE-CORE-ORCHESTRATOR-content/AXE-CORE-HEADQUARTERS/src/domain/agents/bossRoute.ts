@@ -89,6 +89,19 @@ export function classificeerBossNaarManager(tekst: string): GrokManagerId {
 }
 
 /**
+ * Alleen doorsturen als het bericht duidelijk over één app gaat.
+ *
+ * Luka, 17 nov: "de axe core chat is helemaal leeg ... het is niet echt alsof
+ * ik met jou praat of zoals grok bot". `classificeerBossNaarManager` heeft een
+ * standaard (AXE Core Manager), dus élk bericht aan AXE Core werd doorgestuurd
+ * en AXE zei zelf nooit iets. Zonder duidelijk signaal antwoordt AXE nu zelf.
+ */
+export function bossDoorsturenNaar(tekst: string): GrokManagerId | null {
+  const t = (tekst || '').trim();
+  return SIGNALEN.find((s) => s.re.test(t))?.id ?? null;
+}
+
+/**
  * Projects Manager routing: same signals, but never routes back to itself
  * (falls through to AXE CORE Manager).
  */

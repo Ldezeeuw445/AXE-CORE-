@@ -284,6 +284,37 @@ def _sluit_opgeloste_vragen(db: Any, vragen: list[dict[str, Any]], rapporten: di
     return gesloten
 
 
+def _axe_overzicht(db: Any, nu: datetime, axe_vragen: int, managers_ok: bool, ophaler: Any = None) -> bool:
+    """AXE Core zelf (agent `axe`) vertelt Luka hoe het staat; zie axe_overzicht.py."""
+    import axe_overzicht as ao
+    try:
+        laatste = (db.table("core_manager_messages").select("created_at").eq("from_agent", ao.AXE)
+                   .eq("to_agent", "luka").order("created_at", desc=True).limit(1).execute().data) or []
+        t = datetime.fromisoformat(str(laatste[0]["created_at"]).replace("Z", "+00:00")) if laatste else None
+    except Exception:  # noqa: BLE001
+        t = None
+    if not ao.mag_nu(t, nu):
+        return False
+    ns: int | None = None
+    eerst = ""
+    try:
+        import northsea_bewaker as bewaker
+        _, ops, _ = bewaker.haal(ophaler)
+        goed = ops.get("approval_required") or {}
+        ns = int(goed.get("count") or 0)
+        eerst = next((str(i.get("subject") or "")[:90] for i in (goed.get("items") or []) if i.get("subject")), "")
+    except Exception as exc:  # noqa: BLE001 -- dan zegt het bericht dat de telling ontbreekt
+        log.warning("axe: northsea niet gelezen voor overzicht (%s)", exc)
+    begin = nu.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    try:
+        zelf = len((db.table("core_approvals").select("id").eq("decided_by", "axe").eq("status", "approved")
+                    .gte("decided_at", begin).limit(500).execute().data) or [])
+    except Exception:  # noqa: BLE001
+        zelf = 0
+    import manager_draad as md
+    return md.vertel_luka(db, ao.AXE, ao.tekst(ao.Stand(axe_vragen, ns, eerst, zelf, managers_ok)))
+
+
 def run_axemanager(db: Any, nu: datetime) -> dict[str, Any]:
     """Baas: ziet of de managers zelf draaien, haalt vragen die opgelost zijn
     van Luka's lijst, en zegt alleen iets als er iets verandert."""
@@ -330,8 +361,10 @@ def run_axemanager(db: Any, nu: datetime) -> dict[str, Any]:
         rustig=(f"Alle managers draaien. Er wachten {len(open_vragen)} vragen van de managers op jou."
                 if open_vragen else "Alle managers draaien. De managers zelf hebben geen open vraag aan jou; "
                 "wat er per app op je wacht (zoals de NorthSea-desk) staat in het gesprek met die manager."))
+    overzicht = _axe_overzicht(db, nu, len(open_vragen), managers_ok=not voor_luka)
     return {
         "job": "orchestrate managers",
+        "overzicht": overzicht,
         "aanbeveling": aanbeveling,
         "pending_ok": len(open_vragen),
         "gesloten": [v.get("title") for v in gesloten],

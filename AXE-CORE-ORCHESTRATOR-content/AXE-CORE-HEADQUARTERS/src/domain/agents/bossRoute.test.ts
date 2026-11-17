@@ -74,3 +74,16 @@ describe('Projects orchestrator + relay label', () => {
     expect(berichtGestuurdLabel('axe')).toBe('AXE Core');
   });
 });
+
+describe('AXE Core antwoordt zelf, tenzij het duidelijk over één app gaat (17 nov)', () => {
+  it('een gewone vraag blijft bij AXE', async () => {
+    const { bossDoorsturenNaar } = await import('./bossRoute');
+    expect(bossDoorsturenNaar('wat moet ik vandaag doen?')).toBeNull();
+    expect(bossDoorsturenNaar('waar staan die 44 approvals?')).toBeNull();
+  });
+  it('een duidelijk app-bericht gaat naar die manager', async () => {
+    const { bossDoorsturenNaar } = await import('./bossRoute');
+    expect(bossDoorsturenNaar('hoe staat de northsea deal met aurubis?')).toBe('northseamgr');
+    expect(bossDoorsturenNaar('start een demo trade in trading os')).toBe('tradingos');
+  });
+});
