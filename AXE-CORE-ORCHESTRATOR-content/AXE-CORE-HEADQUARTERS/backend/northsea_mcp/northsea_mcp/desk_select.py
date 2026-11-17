@@ -365,8 +365,10 @@ def select_operations_deals(
         str(o.get("updated_at") or ""),
     ))
     vrij = [o for o in first_touch if str(o.get("id")) not in recent and str(o.get("id")) not in resting]
-    extra = vrij[:max(0, min(EERSTE_CONTACT_PER_RONDE, ruimte, limit - len(gekozen)))]
-    gekozen = gekozen + extra
+    # Eén plek gereserveerd: met 30+ vrije echte deals kwam eerste contact anders
+    # nooit aan de beurt (17 nov, eerste live check: 394 klaar, 0 gekozen).
+    extra = vrij[:max(0, min(EERSTE_CONTACT_PER_RONDE, ruimte, limit))]
+    gekozen = gekozen[:limit - len(extra)] + extra
     skipped["stale_marketplace_paper"] += len(first_touch) - len(extra)
     return {
         "first_touch": [str(o.get("id")) for o in extra],

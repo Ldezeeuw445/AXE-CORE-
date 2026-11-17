@@ -309,3 +309,6 @@ def test_marktplaats_leverancier_met_adres_krijgt_een_eerste_mail_binnen_de_dagr
     oud = select_operations_deals(opps, audits=[], tasks=[], queue=[], communications=[], companies=[],
                                   requirements=[], offers=offers, now=NU)
     assert oud["first_touch"] == [] and oud["skipped"]["stale_marketplace_paper"] == 2
+    # Ook als echte deals alle plekken vullen, houdt eerste contact één plek.
+    vol_echt = kies(limit=1)
+    assert [o["id"] for o in vol_echt["chosen"]] == [lev]
