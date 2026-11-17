@@ -283,3 +283,29 @@ def test_rustende_deal_gaat_achteraan_tot_er_antwoord_is():
     mens = [{"opportunity_id": a, "generated_by": "northsea-desk", "created_at": gisteren}]
     assert resting_opportunity_ids(oud, [], now=NU) == set()
     assert resting_opportunity_ids(mens, [], now=NU) == set()
+
+
+def test_marktplaats_leverancier_met_adres_krijgt_een_eerste_mail_binnen_de_dagruimte():
+    """Luka, 17 nov: marktplaats-leveranciers met e-mailadres mogen, max 5 per dag."""
+    lev, kaal = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
+    echt = "33333333-3333-4333-8333-333333333333"
+    markt = {"source_url": "https://www.go4worldbusiness.com/x.html"}
+
+    def opp(oid, co):
+        return {"id": oid, "stage": "identified", "supplier_offer_id": f"off-{oid}", "execution_metadata": markt}
+    opps = [opp(lev, "c-lev"), opp(kaal, "c-kaal"), {"id": echt, "stage": "qualifying", "deal_priority": "P1"}]
+    offers = [{"id": f"off-{lev}", "company_id": "c-lev"}, {"id": f"off-{kaal}", "company_id": "c-kaal"}]
+    contacts = [{"company_id": "c-lev", "email": "sales@lev.example"}, {"company_id": "c-kaal", "email": None}]
+    kies = lambda **kw: select_operations_deals(opps, audits=[], tasks=[], queue=[], communications=[], companies=[],
+                                                requirements=[], offers=offers, now=NU, contacts=contacts, **kw)
+    uit = kies()
+    # Echte deal eerst, daarna precies één eerste contact; zonder adres blijft overgeslagen.
+    assert [o["id"] for o in uit["chosen"]] == [echt, lev]
+    assert uit["first_touch"] == [lev] and uit["skipped"]["stale_marketplace_paper"] == 1
+    # Dagruimte op (5 automatische mails vandaag): geen eerste contact, dus ook geen concept op Luka's stapel.
+    vol = [{"approval_status": "not_required", "generated_by": "northsea-mcp", "created_at": NU.isoformat()}] * 5
+    assert [o["id"] for o in kies(drafts=vol)["chosen"]] == [echt]
+    # Zonder contacten (oude aanroep) blijft alles zoals het was.
+    oud = select_operations_deals(opps, audits=[], tasks=[], queue=[], communications=[], companies=[],
+                                  requirements=[], offers=offers, now=NU)
+    assert oud["first_touch"] == [] and oud["skipped"]["stale_marketplace_paper"] == 2

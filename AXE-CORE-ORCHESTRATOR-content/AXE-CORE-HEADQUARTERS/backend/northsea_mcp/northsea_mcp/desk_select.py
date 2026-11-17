@@ -251,6 +251,42 @@ def resting_opportunity_ids(drafts: list[dict], communications: list[dict], *, n
     return set(laatste)
 
 
+# Luka, 17 nov: "Ja, max 5 per dag" -- marktplaats-leveranciers mét een
+# e-mailadres mogen een eerste kwalificatiemail krijgen onder de vaste regel
+# (service.POLICY_PER_DAG, 14 dagen rust per adres). Zonder adres blijven ze
+# overgeslagen. Hooguit EERSTE_CONTACT_PER_RONDE per sweep, en niet meer zodra
+# de dagelijkse ruimte op is: anders schrijft de crew concepten die toch op
+# Luka's stapel belanden.
+EERSTE_CONTACT_PER_RONDE = 1
+EERSTE_CONTACT_PER_DAG = 5
+
+
+def supplier_has_email(
+    opp: dict[str, Any],
+    *,
+    offers: dict[str, dict],
+    contacts_by_company: dict[str, list[dict]],
+) -> bool:
+    blob = opp.get("supplier_offers") if isinstance(opp.get("supplier_offers"), dict) else None
+    off = blob or offers.get(opp.get("supplier_offer_id")) or {}
+    nest = off.get("companies") if isinstance(off.get("companies"), dict) else {}
+    cid = off.get("company_id") or nest.get("id")
+    if not cid:
+        return False
+    return any("@" in _s(c.get("email")) for c in contacts_by_company.get(str(cid), []))
+
+
+def automatic_first_mails_today(drafts: list[dict], *, now: datetime) -> int:
+    n = 0
+    for d in drafts:
+        if d.get("approval_status") != "not_required" or d.get("generated_by") != EIGEN_MAKER:
+            continue
+        t = _ts(d.get("created_at"))
+        if t and t.date() == now.date():
+            n += 1
+    return n
+
+
 def _open_pool(opportunities: list[dict]) -> list[dict]:
     return [
         o for o in opportunities
@@ -272,6 +308,7 @@ def select_operations_deals(
     now: datetime,
     limit: int = OPERATIONS_BATCH,
     drafts: list[dict] | None = None,
+    contacts: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Kies tot `limit` deals voor de operations-sweep.
 
@@ -286,14 +323,26 @@ def select_operations_deals(
     recent = recent_crew_opportunity_ids(audits, now=now)
     resting = resting_opportunity_ids(drafts or [], communications, now=now)
 
+    per_bedrijf: dict[str, list[dict]] = {}
+    for c in contacts or []:
+        if c.get("company_id"):
+            per_bedrijf.setdefault(str(c["company_id"]), []).append(c)
+    ruimte = EERSTE_CONTACT_PER_DAG - automatic_first_mails_today(drafts or [], now=now)
+
     pool = _open_pool(opportunities)
     skipped = {"parked": 0, "stale_marketplace_paper": 0}
     eligible: list[dict] = []
+    first_touch: list[dict] = []
     for o in pool:
         partijen = companies_of_opportunity(
             o, companies=co_by_id, requirements=req_by_id, offers=off_by_id,
         )
         reden = skip_desk_run(o, parked_ids=parked_ids, companies=partijen, engaged_ids=engaged_ids)
+        if reden == "stale_marketplace_paper" and supplier_has_email(
+            o, offers=off_by_id, contacts_by_company=per_bedrijf,
+        ):
+            first_touch.append(o)
+            continue
         if reden:
             skipped[reden] = skipped.get(reden, 0) + 1
             continue
@@ -309,7 +358,20 @@ def select_operations_deals(
     # Rustend = de crewronde eindigt toch in "draft already prepared"; 16 nov om
     # 16:07 koos de sweep er nog drie toen de rest al een 12-uursronde had gehad.
     gekozen = [o for o in eligible if str(o.get("id")) not in recent and str(o.get("id")) not in resting][:limit]
+    # Eerste contact komt ná echte deals, en alleen als er vandaag nog ruimte is.
+    first_touch.sort(key=lambda o: (
+        _PRIORITY_RANK.get(_s(o.get("deal_priority")).upper(), 2),
+        -int(o.get("readiness_score") or 0),
+        str(o.get("updated_at") or ""),
+    ))
+    vrij = [o for o in first_touch if str(o.get("id")) not in recent and str(o.get("id")) not in resting]
+    extra = vrij[:max(0, min(EERSTE_CONTACT_PER_RONDE, ruimte, limit - len(gekozen)))]
+    gekozen = gekozen + extra
+    skipped["stale_marketplace_paper"] += len(first_touch) - len(extra)
     return {
+        "first_touch": [str(o.get("id")) for o in extra],
+        "first_touch_pool": len(first_touch),
+        "first_touch_room_today": max(0, ruimte),
         "chosen": gekozen,
         "active": pool,
         "eligible": eligible,
