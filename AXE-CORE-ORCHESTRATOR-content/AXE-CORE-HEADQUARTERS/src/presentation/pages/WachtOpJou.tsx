@@ -143,11 +143,16 @@ export default function WachtOpJou() {
   const open = (i: WachtItem) => navigate(i.dealId ? `/northsea?deal=${encodeURIComponent(i.dealId)}` : '/northsea');
 
   const axe = (items ?? []).filter((i) => i.bron === 'axe');
-  const ns = (items ?? []).filter((i) => i.bron === 'northsea');
+  /* Wat je met één klik kunt afhandelen bovenaan (17 nov: de 66 dagen oude
+     deal-besluiten stonden eerst en de 29 mails pas daaronder). */
+  const ns = (items ?? []).filter((i) => i.bron === 'northsea')
+    .sort((a, b) => Number(Boolean(b.kanVersturen)) - Number(Boolean(a.kanVersturen)));
   const verstuurbaar = ns.filter((i) => i.kanVersturen);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4" data-axe-wacht-op-jou="">
+    /* pb-48: het AXE-invoervak zweeft onderaan over de pagina; zonder ruimte
+       viel de laatste rij eronder (17 nov). */
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-4 pb-48" data-axe-wacht-op-jou="">
       <div className="mx-auto w-full max-w-3xl">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>

@@ -424,7 +424,7 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
               )}
             </span>
             <span className="axe-managers-room-status" data-tone={status.tone}>
-              {opts?.orch ? 'Boss · Orchestrator' : status.label}
+              {opts?.orch ? 'Orchestrator' : status.label}
               {!isBoss(a.id) && srv?.current_action ? ` · ${srv.current_action.slice(0, 40)}` : ''}
             </span>
           </span>
@@ -510,7 +510,7 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
               {matchZoek(projects) && (
                 <>
                   <li className="axe-managers-room-sectie" aria-label="Projects orchestrator">
-                    <p className="axe-managers-room-sectie-label">Boss</p>
+                    <p className="axe-managers-room-sectie-label">Orchestrator</p>
                   </li>
                   {renderRij(projects, { pin: true, orch: true })}
                 </>

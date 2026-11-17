@@ -14,6 +14,7 @@ Dit is dat ene bericht. Puur: geen netwerk, geen klok -- de pulse
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -32,6 +33,17 @@ class Stand:
     managers_ok: bool = True
 
 
+_UUID = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
+
+
+def leesbaar(onderwerp: str) -> str:
+    """'Yes needed: 4538…-… — Copper Cathode' -> 'Copper Cathode'. Een id zegt Luka niets."""
+    t = _UUID.sub("", onderwerp or "")
+    t = re.sub(r"^\s*(yes needed|ja nodig)\s*:\s*", "", t, flags=re.I)
+    t = re.sub(r"^[\s—–-]+", "", t)
+    return " ".join(t.split())
+
+
 def tekst(s: Stand) -> str:
     regels: list[str] = []
     ns = s.northsea or 0
@@ -43,12 +55,12 @@ def tekst(s: Stand) -> str:
         if s.axe_vragen:
             delen.append(f"{s.axe_vragen} kun je meteen met ja of nee beantwoorden")
         if ns:
-            delen.append(f"{ns} {'is' if ns == 1 else 'zijn'} van NorthSea (mails klaar om te versturen en "
-                         "deal-besluiten); die keur je goed in de NorthSea-desk, met de tekst ervoor")
+            delen.append(f"{ns} {'is' if ns == 1 else 'zijn'} van NorthSea: mails lees en verstuur je daar met "
+                         "één klik (of allemaal tegelijk), deal-besluiten open je in de desk")
         kop = f"Er {'wacht' if totaal == 1 else 'wachten'} {totaal} {'ding' if totaal == 1 else 'dingen'} op jou"
         regels.append(f"{kop}: {', en '.join(delen)}. Alles staat {WAAR}.")
-        if s.northsea_eerst:
-            regels.append(f"Als eerste bij NorthSea: {s.northsea_eerst}.")
+        if leesbaar(s.northsea_eerst):
+            regels.append(f"Als eerste bij NorthSea: {leesbaar(s.northsea_eerst)}.")
     if s.northsea is None:
         regels.append("De NorthSea-desk kon ik nu niet lezen; die telling ontbreekt dus.")
     if s.zelf_vandaag:

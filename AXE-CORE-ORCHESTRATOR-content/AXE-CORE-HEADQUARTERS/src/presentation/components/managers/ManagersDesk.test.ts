@@ -71,7 +71,9 @@ describe('ManagersDesk Grok Bot layout', () => {
     expect(src).not.toContain("['activity', 'Activity & plans']");
     expect(src).toContain('data-axe-boss-tile');
     expect(src).toContain('axe-browser-vak');
-    expect(src).toContain('Boss · Orchestrator');
+    // 17 nov: één baas (AXE Core); Projects is de orchestrator, geen tweede "Boss".
+    expect(src).toContain("'Orchestrator'");
+    expect(src).not.toContain('Boss · Orchestrator');
     // Full Grok names without Twin / kort short labels in the row
     expect(src).toContain('{a.name}');
     expect(src).not.toContain('{a.kort || a.name}');

@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { haalWachtOpJou } from '@/application/approvals/wachtOpJou';
 import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
@@ -15,6 +17,16 @@ type Seg = (typeof SEGS)[number]['id'];
 
 export default function PhoneAgents() {
   const [seg, setSeg] = useState<Seg>('waiting');
+  const navigate = useNavigate();
+  /* 17 nov: hier stond "Nothing waiting." terwijl er 48 dingen wachtten -- deze
+     kaart kende alleen AXE's eigen ja/nee-vragen, niet NorthSea. Nu het echte
+     totaal uit "Wacht op jou", met de weg erheen. */
+  const [elders, setElders] = useState<number | null>(null);
+  useEffect(() => {
+    let levend = true;
+    void haalWachtOpJou().then((r) => { if (levend) setElders(r.items.filter((i) => i.bron !== 'axe').length); });
+    return () => { levend = false; };
+  }, []);
   const server = useServerAgents();
   const rijen = rijenVanLijst(server.approvals);
   const agents = useMemo(() => Object.values(server.agents), [server.agents]);
@@ -40,9 +52,18 @@ export default function PhoneAgents() {
                 }).then(verversServerAgents);
               }}
             />
-          ) : (
-            <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Nothing waiting.</div>
+          ) : elders ? null : (
+            <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+              {elders === null ? 'Kijken wat er wacht…' : 'Niets wacht op jou.'}
+            </div>
           )}
+          {elders ? (
+            <button type="button" onClick={() => navigate('/wacht')}
+              className="mt-2 w-full rounded-lg px-3 py-2 text-left text-[13px] font-medium"
+              style={{ background: 'rgba(251,146,60,0.12)', border: '1px solid rgba(251,146,60,0.35)', color: 'rgb(251,146,60)' }}>
+              {elders} NorthSea-{elders === 1 ? 'ding wacht' : 'dingen wachten'} op jou · open "Wacht op jou"
+            </button>
+          ) : null}
         </PhoneKaart>
       )}
 

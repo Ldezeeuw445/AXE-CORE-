@@ -111,9 +111,10 @@ function menselijkeStatusChips(
       const g = first?.goedgekeurd_uitgevoerd?.length ?? 0;
       if (v || g) chips.push(`${v} voorstellen · ${g} uitgevoerd`);
     } catch { /* ignore */ }
-  } else if (reason && !zietEruitAlsJson(reason)) {
-    chips.push(reason.slice(0, 48));
   }
+  /* Een gewone zin als reden hoort niet in een pil: hij werd na 22 tekens
+     afgekapt ("1 planned task(s) in its bac…", 17 nov). Die zin staat al
+     voluit in de missie/status-strook eronder. */
   return chips.filter(Boolean).slice(0, 4);
 }
 
@@ -464,9 +465,9 @@ export function ManagerChat({
                 <p className="axe-manager-pro-naam">{agent.name}</p>
                 <p className="axe-manager-pro-rol">
                   {agent.id === 'axe'
-                    ? 'Boss · classificeert en deelt uit'
+                    ? 'Jouw assistent · praat zelf, zet door wat bij een manager hoort'
                     : agent.id === 'projectsmgr'
-                      ? 'Boss · Orchestrator · alle managers'
+                      ? 'Orchestrator · verdeelt werk over de managers'
                       : (agent.role || 'Manager')}
                 </p>
               </div>
