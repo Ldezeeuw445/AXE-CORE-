@@ -328,3 +328,7 @@ async def test_tweede_hek_laat_marktplaats_leverancier_met_adres_door(research, 
     assert uit.get("standing_rule") is True and uit.get("notice") is None, uit
     d = next(r for r in repo.t["reply_drafts"] if r.get("id") == uit["draft_id"])
     assert d["to_email"] == "sales@kghm.example" and d["approval_status"] == "not_required"
+    # Een eerste mail bedankt niet voor "interest" die er nooit was, en vraagt niets dubbel.
+    assert d["body"].startswith("Dear Sir or Madam,\n\nNorthSea Commodity Partners is an independent")
+    assert "Thank you for your interest" not in d["body"] and "still open" not in d["body"]
+    assert "No counterparty introduction" in d["body"]

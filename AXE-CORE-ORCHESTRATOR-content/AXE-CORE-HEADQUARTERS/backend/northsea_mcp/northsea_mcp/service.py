@@ -118,6 +118,23 @@ POLICY_DOELEN = frozenset({"NorthSea MCP outreach: supplier_qualification",
                            "NorthSea MCP outreach: document_request"})
 
 
+# 17 nov, eerste mail onder de vaste regel (Aurubis): die opende met "Thank you
+# for your interest", terwijl zij nooit iets hadden gestuurd, en vroeg dezelfde
+# punten twee keer (de vraag én "still open"). Een eerste mail stelt zich voor.
+_BEDANKT = "Thank you for your interest in working with NorthSea Commodity Partners.\n\n"
+_NOG_OPEN = re.compile(r"\n\nFrom the information we hold, the following points are still open: [^\n]*")
+
+
+def eerste_contact_tekst(tekst: str, *, product: str, kant: str) -> str:
+    if tekst.startswith(_BEDANKT):
+        wat = (f"We are reviewing a requirement for {product} and would like to understand whether you can supply it."
+               if kant == "supplier" else
+               f"We are reviewing supply of {product} and would like to understand your current requirement.")
+        tekst = ("Dear Sir or Madam,\n\nNorthSea Commodity Partners is an independent commodity intermediary. "
+                 f"{wat}\n\n" + tekst[len(_BEDANKT):])
+    return _NOG_OPEN.sub("", tekst)
+
+
 def now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -1387,6 +1404,7 @@ class NorthSeaService:
             else:
                 if eerste_contact:
                     onderwerp = onderwerp.removeprefix("Re: ")
+                    tekst = eerste_contact_tekst(tekst, product=product, kant=kant)
                 # Luka's vaste regel (16 nov): een vrijblijvende eerste kwalificatiemail
                 # mag zonder hem, binnen de grenzen hieronder. Anders: pending, zoals altijd.
                 regel = None
