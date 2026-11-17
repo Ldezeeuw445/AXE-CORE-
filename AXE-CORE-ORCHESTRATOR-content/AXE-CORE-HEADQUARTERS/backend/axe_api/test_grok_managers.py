@@ -134,3 +134,18 @@ def test_geheugen_schrijft_geen_cycle_of_hold():
     assert gm._les_schrijven(db, "axon", "Buyers ghost after first call unless a named next step exists.") == "ok"
     assert len(db.db["memory"]) == 1
     assert db.db["memory"][0]["agent"] == "axe_axon"
+
+
+def test_vraag_luka_vraagt_niet_opnieuw_binnen_een_dag_na_antwoord():
+    """17 nov: 53x 'Vaste jobs falen achter elkaar' in 24 uur."""
+    from datetime import timedelta
+    net = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    oud = (datetime.now(timezone.utc) - timedelta(hours=30)).isoformat()
+    db = FakeDb(core_approvals=[{"id": "a1", "title": "Vaste jobs falen achter elkaar", "status": "approved",
+                                 "created_at": net}], core_tasks=[])
+    gm._vraag_luka(db, "companionmgr", "Vaste jobs falen achter elkaar", "MetaAPI moet opgewaardeerd")
+    assert len(db.db["core_approvals"]) == 1 and db.db["core_tasks"] == []
+    # Ouder dan een dag: mag weer gevraagd worden.
+    db.db["core_approvals"][0]["created_at"] = oud
+    gm._vraag_luka(db, "companionmgr", "Vaste jobs falen achter elkaar", "MetaAPI moet opgewaardeerd")
+    assert len(db.db["core_approvals"]) == 2

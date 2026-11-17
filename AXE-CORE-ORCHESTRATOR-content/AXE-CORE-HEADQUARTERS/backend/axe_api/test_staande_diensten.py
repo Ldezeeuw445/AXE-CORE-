@@ -35,6 +35,14 @@ class FakeQuery:
         self.filters[k] = v
         return self
 
+    def neq(self, k, v):
+        self.verschil = {**getattr(self, "verschil", {}), k: v}
+        return self
+
+    def gte(self, k, v):
+        self.minstens = {**getattr(self, "minstens", {}), k: v}
+        return self
+
     def limit(self, n):
         self.limit_n = n
         return self
@@ -52,7 +60,9 @@ class FakeQuery:
             row = {"id": f"{self.table}-{len(rows) + 1}", **self.body}
             rows.append(row)
             return FakeResult([row])
-        hits = [r for r in rows if all(r.get(k) == v for k, v in self.filters.items())]
+        hits = [r for r in rows if all(r.get(k) == v for k, v in self.filters.items())
+                and all(r.get(k) != v for k, v in getattr(self, "verschil", {}).items())
+                and all(str(r.get(k) or "") >= str(v) for k, v in getattr(self, "minstens", {}).items())]
         if self.op == "update":
             for r in hits:
                 r.update(self.body)

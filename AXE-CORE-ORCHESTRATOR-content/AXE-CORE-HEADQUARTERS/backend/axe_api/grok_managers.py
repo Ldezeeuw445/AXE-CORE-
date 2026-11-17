@@ -196,11 +196,28 @@ def _les_schrijven(db: Any, agent: str, les: str) -> str:
     return "ok"
 
 
+OPNIEUW_VRAGEN_NA = timedelta(hours=24)
+
+
+def _recent_beantwoord(db: Any, titel: str, nu: datetime | None = None) -> bool:
+    grens = ((nu or datetime.now(timezone.utc)) - OPNIEUW_VRAGEN_NA).isoformat()
+    try:
+        rijen = (db.table("core_approvals").select("id").eq("title", titel)
+                 .neq("status", "pending").gte("created_at", grens).limit(1).execute().data) or []
+    except Exception:  # noqa: BLE001 -- bij twijfel liever vragen dan zwijgen
+        return False
+    return bool(rijen)
+
+
 def _vraag_luka(db: Any, agent: str, wat: str, waarom: str) -> None:
     """Zet een echte core_approvals-rij klaar. Managers keuren dit niet zelf."""
     toets_actie("ask", wat)
     bestaande = _rijen(db, "core_approvals", "id,title,status", status="pending")
     if any((r.get("title") or "") == wat for r in bestaande):
+        return
+    # Al beantwoord in de laatste 24 uur (door Luka of door het beleid): niet
+    # elke pulse opnieuw vragen. 17 nov: 53x dezelfde vraag op één dag.
+    if _recent_beantwoord(db, wat):
         return
     taak = _schrijf(db, "core_tasks", {
         "title": wat,

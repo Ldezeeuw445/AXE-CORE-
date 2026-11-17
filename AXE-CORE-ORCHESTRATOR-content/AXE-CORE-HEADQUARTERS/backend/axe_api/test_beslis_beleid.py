@@ -177,3 +177,12 @@ def test_dax_eigen_werktak_pushen_mag_vanzelf_main_niet():
                      "git add . && git commit -m 'x' && git push origin dax/a && python3 -c 'print(1)'",
                      "git push origin --delete dax/a"):
         assert shell_auto_reden(gevraagd, dax=True) is None, gevraagd
+
+
+def test_managervraag_over_betaling_of_login_blijft_bij_luka():
+    vraag = {"kind": "manager_ask", "title": "Vaste jobs falen achter elkaar",
+             "detail": "Ik heb zelf gekeken; hier ben jij voor nodig: Luka must top up MetaAPI account."}
+    assert beslis_goedkeuring(vraag).actie == ACTIE_ASK
+    # Een gewone managervraag zonder betaling/login blijft in-plan.
+    gewoon = {"kind": "manager_ask", "title": "Dubbele voorstellen opruimen", "detail": "3 dubbel."}
+    assert beslis_goedkeuring(gewoon).actie == ACTIE_AUTO

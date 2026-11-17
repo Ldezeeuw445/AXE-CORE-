@@ -183,6 +183,18 @@ def schrijft_eigen_artifacts(command: str) -> bool:
     return True
 
 
+# 17 nov: een manager vroeg 53x in 24 uur "Vaste jobs falen achter elkaar"
+# (MetaAPI moest opgewaardeerd). Elke vraag keurde AXE zelf goed als
+# "in-plan", de taak liep leeg en Luka zag nooit wat hij moest doen. Een
+# managervraag die een betaling, tegoed of login van Luka noemt, kan AXE niet
+# zelf oplossen; die blijft bij Luka.
+LUKA_ZELF_RE = re.compile(
+    r"\b(?:top[- ]?up|add (?:credits?|funds)|credits?|tegoed|opwaarder|billing|payment|betal|"
+    r"log ?in|logged out|inlog|subscription|abonnement)\b|\bluka must\b|hier ben jij voor nodig",
+    re.I,
+)
+
+
 def harde_grens(tekst: str, app: str | None = None) -> str | None:
     bron = tekst or ""
     if AUTO_SEND_RE.search(bron):
@@ -235,6 +247,13 @@ def beslis_goedkeuring(
             "hard-limit: NorthSea deal go/no-go",
             f"Dit is: een dealbeslissing ({(rij.get('title') or 'deze deal')[:80]}).",
             "Waarom: een deal verzetten of ja/nee op een deal is van Luka of de NorthSea Desk Manager.",
+        )
+
+    if kind == "manager_ask" and LUKA_ZELF_RE.search(tekst):
+        return Besluit(
+            ACTIE_ASK, "needs Luka: payment, credits or login",
+            f"Dit is: {(rij.get('title') or 'een vraag van een manager')[:80]}.",
+            "Waarom: de manager keek zelf; dit vraagt een betaling, tegoed of login van Luka.",
         )
 
     grens = harde_grens(tekst, app)
