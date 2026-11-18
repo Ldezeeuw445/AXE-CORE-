@@ -674,3 +674,8 @@ button.axe-ov__wie-chip { cursor: pointer; }
 .axe-ov__wie-chip > span > b { font-weight: 600; font-size: .85em; color: color-mix(in srgb, var(--chip) 75%, #fff); }
 .axe-ov__wie-chip > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .axe-ov__claude .axe-ov__gezicht, .axe-ov__claude svg { margin-right: 2px; }
+
+/* Portal (18 nov): iets van de iPhone landt -- schuift één keer van links in. */
+.axe-ov__peek--portal { animation: axe-ov-portal-in 420ms cubic-bezier(.2,.9,.25,1.15) both; }
+.axe-ov__peek--portal .axe-ov__peek-titel { color: #a78bfa; }
+@keyframes axe-ov-portal-in { from { opacity: 0; transform: translateX(-60px) scale(.96); } to { opacity: 1; transform: none; } }

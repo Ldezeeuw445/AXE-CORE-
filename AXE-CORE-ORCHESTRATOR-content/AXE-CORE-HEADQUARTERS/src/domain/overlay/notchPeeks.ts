@@ -11,7 +11,7 @@
  */
 
 export type PeekTab = 'approvals' | 'claude' | 'chat' | 'home';
-export type PeekSoort = 'goedkeuring' | 'claude-klaar' | 'claude-wacht' | 'taak-klaar';
+export type PeekSoort = 'goedkeuring' | 'claude-klaar' | 'claude-wacht' | 'taak-klaar' | 'portal';
 
 export interface Peek {
   id: string;
@@ -19,6 +19,8 @@ export interface Peek {
   titel: string;
   tekst: string;
   tab: PeekTab;
+  /** Portal: het gelande bestand; klik = laat zien in Finder. */
+  pad?: string;
 }
 
 /** Wat de notch elke tik weet; genoeg om verschil te zien. */

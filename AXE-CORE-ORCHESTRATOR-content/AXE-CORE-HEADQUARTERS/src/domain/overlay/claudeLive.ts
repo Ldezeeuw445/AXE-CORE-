@@ -47,7 +47,7 @@ export function leesStand(ruw: string | null | undefined): ClaudeStand {
   } catch { return {}; }
 }
 
-export function kiesSessie(stand: ClaudeStand, nuS: number, vorige?: string | null): ClaudeSessie | null {
+function kiesSessie(stand: ClaudeStand, nuS: number, vorige?: string | null): ClaudeSessie | null {
   const levend = Object.values(stand.sessies ?? {}).filter((s) => nuS - (s.bijgewerkt ?? s.begon) < OUD_NA_S);
   if (!levend.length) return null;
   const wacht = levend.find((s) => s.wacht);

@@ -402,6 +402,14 @@
       "kind": "migration"
     },
     {
+      "path": "supabase/migrations/20261118120000_axe_approval_inbox.sql",
+      "kind": "migration"
+    },
+    {
+      "path": "supabase/migrations/20261119090000_axe_portal.sql",
+      "kind": "migration"
+    },
+    {
       "path": "supabase/northsea/migrations/20260916150000_p0_a_columns.sql",
       "kind": "migration"
     },
@@ -2426,7 +2434,9 @@
         "supabase/migrations/20261029233000_core_trading_team.sql",
         "supabase/migrations/20261104120000_core_task_attempts.sql",
         "supabase/migrations/20261109190000_core_voice_claims.sql",
-        "supabase/migrations/20261110144500_trading_team_mac_schedule.sql"
+        "supabase/migrations/20261110144500_trading_team_mac_schedule.sql",
+        "supabase/migrations/20261118120000_axe_approval_inbox.sql",
+        "supabase/migrations/20261119090000_axe_portal.sql"
       ]
     },
     {
@@ -2511,6 +2521,48 @@
       },
       "sources": [
         "supabase/migrations/20260707_axe_core_n8n.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:axe_approval_decisions",
+      "kind": "table",
+      "label": "axe_approval_decisions",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "axe_approval_decisions",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261118120000_axe_approval_inbox.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:axe_approval_items",
+      "kind": "table",
+      "label": "axe_approval_items",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "axe_approval_items",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261118120000_axe_approval_inbox.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:axe_approval_policies",
+      "kind": "table",
+      "label": "axe_approval_policies",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "axe_approval_policies",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261118120000_axe_approval_inbox.sql"
       ]
     },
     {
@@ -3034,6 +3086,20 @@
       },
       "sources": [
         "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_portal",
+      "kind": "table",
+      "label": "core_portal",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_portal",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261119090000_axe_portal.sql"
       ]
     },
     {
@@ -4591,6 +4657,36 @@
       ]
     },
     {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:axe_approval_decisions",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:axe_approval_decisions",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261118120000_axe_approval_inbox.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:axe_approval_items",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:axe_approval_items",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261118120000_axe_approval_inbox.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:axe_approval_policies",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:axe_approval_policies",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261118120000_axe_approval_inbox.sql"
+      ]
+    },
+    {
       "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:axe_intel",
       "source": "supabase:pqnngpcgbdwxavbatbia",
       "target": "table:pqnngpcgbdwxavbatbia:axe_intel",
@@ -4963,6 +5059,16 @@
       "label": "has-table",
       "sources": [
         "supabase/migrations/20260707_axe_core_brain.sql"
+      ]
+    },
+    {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_portal",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_portal",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261119090000_axe_portal.sql"
       ]
     },
     {
@@ -6258,7 +6364,9 @@
         "supabase/migrations/20261029233000_core_trading_team.sql",
         "supabase/migrations/20261104120000_core_task_attempts.sql",
         "supabase/migrations/20261109190000_core_voice_claims.sql",
-        "supabase/migrations/20261110144500_trading_team_mac_schedule.sql"
+        "supabase/migrations/20261110144500_trading_team_mac_schedule.sql",
+        "supabase/migrations/20261118120000_axe_approval_inbox.sql",
+        "supabase/migrations/20261119090000_axe_portal.sql"
       ]
     },
     {

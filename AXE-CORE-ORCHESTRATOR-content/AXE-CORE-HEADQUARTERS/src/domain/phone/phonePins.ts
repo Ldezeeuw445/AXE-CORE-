@@ -116,9 +116,10 @@ export function pinIsActief(pathname: string, pin: PhonePin): boolean {
   return pathname === pin.path || pathname.startsWith(`${pin.path}/`);
 }
 
-/** Geen AXE-composer: AXON, Companion, Developer. */
+/** Geen AXE-composer: AXON, Companion, Developer, Portal (daar veeg je kaarten weg). */
 export function phoneZonderComposer(path: string): boolean {
   return path === '/companion'
+    || path === '/portal'
     || path === '/code-editor'
     || path === '/memory'
     || path.startsWith('/memory/');

@@ -82,6 +82,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/eve', label: 'EVE', keywords: ['eve'] },
   { path: '/browser', label: 'Browser', keywords: ['browser', 'axe browser', 'web browser', 'browser use', 'navigate', 'surf'] },
   { path: '/computer-use', label: 'Computer Use', keywords: ['computer use', 'personal computer use', 'my computer', 'mijn computer', 'mac control', 'control my mac'] },
+  { path: '/portal', label: 'Portal', keywords: ['portal', 'gooi', 'naar mac', 'stuur naar mac', 'throw', 'send to mac', 'klembord', 'clipboard', 'airdrop'] },
   { path: '/device', label: 'Device Manager', keywords: ['device manager', 'device', 'phone', 'samsung', 'a17', 'toestel', 'telefoon', 'adb', 'mobile device'] },
   { path: '/devices', label: 'Devices', keywords: ['devices', 'device inventory', 'installations', 'presence', 'samsung', 'mac mini'] },
   { path: '/lock', label: 'Lock Screen', keywords: ['lock screen', 'lockscreen', 'vergrendelscherm', 'glance', 'lock', 'slot', 'startscherm'] },

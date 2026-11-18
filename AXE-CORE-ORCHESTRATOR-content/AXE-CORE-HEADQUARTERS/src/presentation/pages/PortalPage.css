@@ -1,0 +1,57 @@
+/* Portal (18 nov): donker, rustig, één ding tegelijk -- AXE-stijl. */
+.axe-portal {
+  --p-ink: #eef1f6;
+  --p-dim: rgba(238, 241, 246, 0.55);
+  --p-vak: rgba(17, 17, 17, 0.86);
+  --p-rand: rgba(255, 255, 255, 0.08);
+  --p-accent: #22d3ee;
+  min-height: 100%;
+  padding: 20px 16px calc(96px + env(safe-area-inset-bottom));
+  color: var(--p-ink);
+  display: flex; flex-direction: column; gap: 16px;
+  overflow-x: hidden;
+}
+.axe-portal__kop { display: flex; align-items: center; gap: 14px; }
+.axe-portal__kop h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.axe-portal__kop p { margin: 2px 0 0; color: var(--p-dim); font-size: 14px; }
+.axe-portal__doelen { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.axe-portal__doelen button {
+  flex-shrink: 0; padding: 8px 14px; border-radius: 999px; font: inherit; font-size: 14px; cursor: pointer;
+  border: 1px solid var(--p-rand); background: var(--p-vak); color: var(--p-dim);
+}
+.axe-portal__doelen button[aria-checked='true'] { border-color: var(--p-accent); color: var(--p-accent); }
+.axe-portal__knoppen { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.axe-portal__knoppen button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  min-height: 92px; border-radius: 18px; font: inherit; font-size: 14px; cursor: pointer;
+  border: 1px solid var(--p-rand); background: var(--p-vak); color: var(--p-ink);
+}
+.axe-portal__knoppen button:active { border-color: var(--p-accent); }
+.axe-portal__melding { margin: 0; padding: 10px 14px; border-radius: 12px; background: rgba(251, 191, 36, 0.12); color: #fbbf24; font-size: 14px; }
+.axe-portal__stapel { display: flex; flex-direction: column; gap: 10px; }
+.axe-portal__leeg { padding: 28px 16px; border-radius: 18px; border: 1px dashed var(--p-rand); color: var(--p-dim); text-align: center; font-size: 14px; }
+.axe-portal__kaart {
+  display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 18px;
+  border: 1px solid var(--p-rand); background: var(--p-vak);
+  touch-action: pan-y; user-select: none; -webkit-user-select: none;
+  transition: transform 260ms cubic-bezier(.2,.8,.2,1), opacity 260ms;
+}
+.axe-portal__kaart.is-klaar { cursor: grab; }
+.axe-portal__kaart.is-vliegt { opacity: 0; transition: transform 420ms cubic-bezier(.5,0,.9,.4), opacity 420ms; }
+.axe-portal__kaart.is-geland { border-color: rgba(52, 211, 153, 0.45); }
+.axe-portal__kaart.is-fout { border-color: rgba(239, 68, 68, 0.5); }
+.axe-portal__kaart img, .axe-portal__icoon {
+  width: 56px; height: 56px; flex-shrink: 0; border-radius: 12px; object-fit: cover; pointer-events: none;
+}
+.axe-portal__icoon { display: grid; place-items: center; background: #0b0d12; color: var(--p-accent); font-weight: 700; font-size: 13px; }
+.axe-portal__info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.axe-portal__info b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-portal__info span { color: var(--p-dim); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-portal__kaart.is-geland .axe-portal__info span { color: #34d399; }
+.axe-portal__kaart.is-fout .axe-portal__info span { color: #f87171; }
+.axe-portal__gooi {
+  flex-shrink: 0; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid var(--p-accent); background: transparent; color: var(--p-accent);
+}
+@media (prefers-reduced-motion: reduce) { .axe-portal__kaart { transition: none; } }
+.axe-portal > * { flex-shrink: 0; }

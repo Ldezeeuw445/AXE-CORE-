@@ -21,6 +21,9 @@ import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 import { NotchResultaat } from './NotchResultaat';
 import { AXE_WIT, AxeGezicht, CLAUDE_KORAAL, type Stemming } from '@/presentation/components/axe-core/AxeGezicht';
 import { AXE_AGENTS } from '@/domain/agents/roster';
+import { isVoorMij, landTekst } from '@/domain/portal/portal';
+import { claimWorp, getekendeLink, openWorpen } from '@/infrastructure/gateways/portalService';
+import { ditToestel } from '@/infrastructure/gateways/axeDeviceService';
 import { eerstvolgende, homeStand, nieuwePeeks, PEEK_MS, zetInRij, type NotchMoment, type Peek } from '@/domain/overlay/notchPeeks';
 import { calendarJobs, gedeeldeStappen, type GedeeldeStap } from '@/infrastructure/gateways/axeCoreApiService';
 import { EEN_DING_SLEUTEL, datumSleutel, kiesEenDing, type EigenDing } from '@/domain/overlay/eenDing';
@@ -533,6 +536,50 @@ export function AxeOverlayNotch({
     if (erbij.length && !open) setPeekRij((r) => zetInRij(r, erbij));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [momentSleutel]);
+  /* Portal (18 nov): wat de iPhone hierheen gooit, landt hier. Elke 4 s
+     kijken; alleen in de echte app (de Mac moet zelf downloaden). */
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    let weg = false;
+    let mijnId = '';
+    let bezig = false;
+    const tik = async () => {
+      if (bezig || weg) return;
+      bezig = true;
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        if (!mijnId) mijnId = (await ditToestel()).device_id;
+        const rijen = await openWorpen();
+        if (!rijen.length) return;
+        const stil = await invoke<number | null>('systeem_idle_s').catch(() => null);
+        for (const r of rijen.filter((x) => isVoorMij(x, mijnId, stil))) {
+          const mijn = await claimWorp(r.id, mijnId);
+          if (!mijn) continue; // een andere Mac was sneller
+          const zeg = landTekst(mijn);
+          let pad: string | undefined;
+          if (mijn.soort === 'tekst') {
+            await invoke('portal_klembord', { tekst: mijn.tekst ?? '' });
+          } else if (mijn.pad) {
+            pad = await invoke<string>('portal_bewaar', { url: await getekendeLink(mijn.pad), naam: mijn.naam });
+          }
+          const p: Peek = { id: `p-${mijn.id}`, soort: 'portal', titel: zeg.titel,
+            tekst: mijn.soort === 'tekst' ? `${zeg.tekst} · staat op je klembord` : zeg.tekst, tab: 'home', pad };
+          setPeekRij((rij) => zetInRij(rij, [p]));
+          if (openRef.current) setStatusNote(`${p.titel}: ${p.tekst}`);
+        }
+      } catch {
+        /* geen verbinding of nog niet ingelogd: volgende tik opnieuw */
+      } finally {
+        bezig = false;
+      }
+    };
+    void tik();
+    const id = window.setInterval(() => void tik(), 4000);
+    return () => { weg = true; window.clearInterval(id); };
+  }, []);
+  const openRef = useRef(open);
+  openRef.current = open;
+
   const peek = !open ? peekRij[0] ?? null : null;
   useEffect(() => {
     if (open && peekRij.length) setPeekRij([]);
@@ -817,7 +864,15 @@ export function AxeOverlayNotch({
         <button
           type="button"
           className={`axe-ov__peek axe-ov__peek--${peek.soort}`}
-          onClick={() => { setPeekRij([]); set(true); setTab(peek.tab); }}
+          onClick={() => {
+            setPeekRij([]);
+            if (peek.pad) {
+              void import('@tauri-apps/api/core').then(({ invoke }) => invoke('portal_toon', { pad: peek.pad })).catch(() => undefined);
+              return;
+            }
+            set(true);
+            setTab(peek.tab);
+          }}
           title="Openen"
         >
           <span className="axe-ov__peek-titel">{peek.titel}</span>

@@ -438,6 +438,116 @@ fn claude_antwoord(id: String, besluit: String) -> Result<(), String> {
     fs::rename(&tmp, map.join(format!("{id}.json"))).map_err(|e| e.to_string())
 }
 
+/// Portal (18 nov): waar geworpen bestanden landen.
+fn portal_map() -> Result<PathBuf, String> {
+    let home = std::env::var_os("HOME").ok_or_else(|| "HOME niet gezet".to_string())?;
+    Ok(PathBuf::from(home).join("Downloads").join("AXE Portal"))
+}
+
+/// Alleen een kale bestandsnaam: geen mappen, geen verborgen bestand, niet te lang.
+fn portal_veilige_naam(naam: &str) -> String {
+    let schoon: String = naam
+        .chars()
+        .map(|c| if c == '/' || c == '\\' || c == ':' || c.is_control() { '_' } else { c })
+        .collect();
+    let schoon = schoon.trim().trim_start_matches('.').to_string();
+    let schoon: String = schoon.chars().take(120).collect();
+    if schoon.is_empty() { "portal-bestand".into() } else { schoon }
+}
+
+/// Een vrij pad: "foto.jpg", anders "foto (2).jpg", enzovoort.
+fn portal_vrij_pad(map: &std::path::Path, naam: &str) -> PathBuf {
+    let eerste = map.join(naam);
+    if !eerste.exists() {
+        return eerste;
+    }
+    let (stam, ext) = match naam.rfind('.') {
+        Some(i) if i > 0 => (&naam[..i], &naam[i..]),
+        _ => (naam, ""),
+    };
+    (2..1000)
+        .map(|n| map.join(format!("{stam} ({n}){ext}")))
+        .find(|p| !p.exists())
+        .unwrap_or(eerste)
+}
+
+/// Portal: haal een geworpen bestand op via een kortlevende Supabase-link en
+/// zet het in ~/Downloads/AXE Portal. De Mac downloadt zelf (curl), zodat 50 MB
+/// niet als base64 door de webview hoeft. Geeft het pad terug.
+#[tauri::command]
+async fn portal_bewaar(url: String, naam: String) -> Result<String, String> {
+    if !url.starts_with("https://") || !url.contains(".supabase.co/storage/v1/object/sign/axe-portal/") {
+        return Err("alleen een getekende axe-portal-link".into());
+    }
+    let map = portal_map()?;
+    fs::create_dir_all(&map).map_err(|e| e.to_string())?;
+    let doel = portal_vrij_pad(&map, &portal_veilige_naam(&naam));
+    let tmp = doel.with_extension("axe-portal-deel");
+    let uit = tauri::async_runtime::spawn_blocking(move || {
+        std::process::Command::new("/usr/bin/curl")
+            .args(["-sSfL", "--max-time", "300", "-o"])
+            .arg(&tmp)
+            .arg(&url)
+            .output()
+            .map(|o| (o, tmp))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    let (o, tmp) = uit;
+    if !o.status.success() {
+        let _ = fs::remove_file(&tmp);
+        return Err(format!("download mislukt: {}", String::from_utf8_lossy(&o.stderr).trim()));
+    }
+    fs::rename(&tmp, &doel).map_err(|e| e.to_string())?;
+    Ok(doel.to_string_lossy().into_owned())
+}
+
+/// Portal: tekst van de iPhone op het klembord van deze Mac.
+#[tauri::command]
+fn portal_klembord(tekst: String) -> Result<(), String> {
+    use std::io::Write;
+    if tekst.len() > 1_000_000 {
+        return Err("te lang".into());
+    }
+    let mut kind = std::process::Command::new("/usr/bin/pbcopy")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    kind.stdin.as_mut().ok_or("geen stdin")?.write_all(tekst.as_bytes()).map_err(|e| e.to_string())?;
+    kind.wait().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Portal: laat een geland bestand zien in Finder -- alleen binnen AXE Portal.
+#[tauri::command]
+fn portal_toon(pad: String) -> Result<(), String> {
+    let map = portal_map()?;
+    let p = PathBuf::from(&pad);
+    let echt = p.canonicalize().map_err(|e| e.to_string())?;
+    let map_echt = map.canonicalize().map_err(|e| e.to_string())?;
+    if !echt.starts_with(&map_echt) {
+        return Err("buiten AXE Portal".into());
+    }
+    std::process::Command::new("/usr/bin/open").arg("-R").arg(&echt).spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod portal_tests {
+    #[test]
+    fn veilige_naam_en_vrij_pad() {
+        assert_eq!(super::portal_veilige_naam("../../etc/passwd"), "_.._etc_passwd");
+        assert_eq!(super::portal_veilige_naam(".verborgen"), "verborgen");
+        assert_eq!(super::portal_veilige_naam("   "), "portal-bestand");
+        let map = std::env::temp_dir().join(format!("axe-portal-test-{}", std::process::id()));
+        std::fs::create_dir_all(&map).unwrap();
+        std::fs::write(map.join("foto.jpg"), b"x").unwrap();
+        assert_eq!(super::portal_vrij_pad(&map, "foto.jpg"), map.join("foto (2).jpg"));
+        let _ = std::fs::remove_dir_all(&map);
+    }
+}
+
 /// Pending route from the standalone axe-overlay notch (`~/.axe/overlay-open-route`).
 /// Reads + deletes the file. Only `/northsea` and `/trading` are accepted.
 #[tauri::command]
@@ -652,6 +762,9 @@ pub fn run() {
         show_main_window,
         lees_claude_live,
         claude_antwoord,
+        portal_bewaar,
+        portal_klembord,
+        portal_toon,
         toon_hoofdvenster_stil,
         consume_overlay_open_route,
         platform_info,

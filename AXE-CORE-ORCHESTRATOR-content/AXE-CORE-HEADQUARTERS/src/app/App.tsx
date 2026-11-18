@@ -72,6 +72,7 @@ import { ontwerpModus, zaaiOntwerpOpslag } from '@/infrastructure/supabase/ontwe
 const AppsPage = lazy(() => import('@/presentation/pages/AppsPage'));
 const MobileSystem = lazy(() => import('@/presentation/pages/MobileSystem'));
 const DeviceManager = lazy(() => import('@/presentation/pages/DeviceManager'));
+const PortalPage = lazy(() => import('@/presentation/pages/PortalPage'));
 const LockScreen = lazy(() => import('@/presentation/pages/LockScreen'));
 const PhonePinScreen = lazy(() => import('@/presentation/pages/PhonePinScreen'));
 const CompanionPage = lazy(() => import('@/presentation/pages/phone/ProductEmbed'));
@@ -335,6 +336,7 @@ export default function App() {
             <Route path="computer-use" element={<ComputerUse />} />
             <Route path="mobile" element={<MobileSystem />} />
             <Route path="device" element={<DeviceManager />} />
+            <Route path="portal" element={<PortalPage />} />
             {/* Lock Screen — binnen de AppShell, maar als command-surface
                 (zie AppShell): alle chrome weg, de plaat blijft eronder, dus
                 exact de app-look met licht/donker. */}

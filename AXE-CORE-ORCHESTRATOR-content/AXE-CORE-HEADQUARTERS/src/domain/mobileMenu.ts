@@ -31,7 +31,7 @@ export const MENU_GROUPS: readonly MenuGroup[] = [
   { id: 'money', title: 'Trading & deals', paths: ['/trading-intel', '/maps-3d', '/finance', '/trading'] },
   { id: 'systems', title: 'Systems', paths: ['/mcp', '/infrastructure', '/control-plane', '/table-editor', '/terminals', '/terminal', '/computer-use', '/developer'] },
   { id: 'build', title: 'Build', paths: ['/code-editor', '/browser', '/organization'] },
-  { id: 'phone', title: 'Phone', paths: ['/device', '/lock', '/settings'] },
+  { id: 'phone', title: 'Phone', paths: ['/portal', '/device', '/lock', '/settings'] },
 ] as const;
 
 /** Where "Home" goes: `/` is empty on a phone, the real home is `/mobile`. */
