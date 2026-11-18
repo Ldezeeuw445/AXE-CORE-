@@ -128,20 +128,12 @@ html[data-axe-notch] {
   border-color: var(--axe-notch-accent);
 }
 .axe-ov__blob {
-  width: calc(38px * var(--axe-notch-scale)); height: calc(28px * var(--axe-notch-scale));
-  border-radius: calc(14px * var(--axe-notch-scale)); border: none; cursor: pointer; flex-shrink: 0;
-  background: radial-gradient(circle at 50% 40%, #fff 0%, #eef1f6 55%, #c5ccd8 100%);
-  box-shadow: 0 0 24px rgba(255,255,255,.55), 0 4px 12px rgba(0,0,0,.35);
+  /* 19 nov: drager van het AXE-driehoekje (AxeGezicht), geen eigen vorm meer. */
+  display: grid; place-items: center; padding: 0; border: none; background: none; cursor: pointer; flex-shrink: 0;
+  width: calc(38px * var(--axe-notch-scale)); height: calc(34px * var(--axe-notch-scale));
   position: relative;
 }
-.axe-ov__blob::before, .axe-ov__blob::after {
-  content: ""; position: absolute;
-  width: calc(4px * var(--axe-notch-scale)); height: calc(4px * var(--axe-notch-scale));
-  background: #151515;
-  border-radius: 50%; top: 11px;
-}
-.axe-ov__blob::before { left: calc(12px * var(--axe-notch-scale)); }
-.axe-ov__blob::after { right: calc(12px * var(--axe-notch-scale)); }
+.axe-ov__blob svg { width: calc(34px * var(--axe-notch-scale)); height: calc(34px * var(--axe-notch-scale)); }
 
 /**
  * Leven: dat je aan de strook ziet dat AXE er is.

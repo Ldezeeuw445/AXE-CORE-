@@ -9,7 +9,7 @@ import { ClipboardPaste, ImagePlus, Send } from 'lucide-react';
 import { grootteTekst, isWorp, PORTAL_MAX_BYTES, type PortalRij } from '@/domain/portal/portal';
 import { gooiBestand, gooiTekst, recenteWorpen } from '@/infrastructure/gateways/portalService';
 import { ditToestel, laadDevices } from '@/infrastructure/gateways/axeDeviceService';
-import { AXE_WIT, AxeGezicht } from '@/presentation/components/axe-core/AxeGezicht';
+import { AXE_CYAAN, AxeGezicht } from '@/presentation/components/axe-core/AxeGezicht';
 import './PortalPage.css';
 
 type Kaart = {
@@ -130,7 +130,7 @@ export default function PortalPage() {
   return (
     <div className="axe-portal">
       <header className="axe-portal__kop">
-        <AxeGezicht kleur={AXE_WIT} stemming={onderweg.length ? 'werkt' : 'rust'} size={44} label="AXE" />
+        <AxeGezicht kleur={AXE_CYAAN} stemming={onderweg.length ? 'werkt' : 'rust'} size={44} label="AXE" />
         <div>
           <h1>Portal</h1>
           <p>Veeg naar links — het landt op {doel === 'alle' ? 'de Mac waar je zit' : doelNaam}.</p>

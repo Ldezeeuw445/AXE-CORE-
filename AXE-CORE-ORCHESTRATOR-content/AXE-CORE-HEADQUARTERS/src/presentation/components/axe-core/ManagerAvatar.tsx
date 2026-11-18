@@ -1,11 +1,11 @@
 /**
- * Het gezicht van een manager (18 nov 2026: Luka wilde de avatars "zoals de
- * voorbeeldfoto's, maar AXE-stijl"). Was een driehoekje met ogen; nu het
- * AXE-gezicht uit AxeGezicht.tsx, in de accentkleur uit roster.ts. AXE Core
- * zelf is wit, zoals de bol in de notch -- zo is het overal dezelfde AXE.
+ * Het driehoekje van AXE, maar dan als gezicht: ronde hoeken, twee ogen, en
+ * gevuld met de accentkleur van die manager uit roster.ts. Zo herken je op één
+ * blik wie er praat, ook op 20 pixels. Sinds 19 nov tonen de ogen ook wat hij
+ * doet (zie AxeGezicht.tsx), en staat hetzelfde driehoekje in de notch.
  */
 import type { AxeAgent } from '@/domain/agents/roster';
-import { AXE_WIT, AxeGezicht, type Stemming } from './AxeGezicht';
+import { AxeGezicht, type Stemming } from './AxeGezicht';
 
 export function ManagerAvatar({
   agent,
@@ -16,12 +16,5 @@ export function ManagerAvatar({
   size?: number;
   stemming?: Stemming;
 }) {
-  return (
-    <AxeGezicht
-      kleur={agent.id === 'axe' ? AXE_WIT : agent.accent}
-      stemming={stemming}
-      size={size}
-      label={agent.name}
-    />
-  );
+  return <AxeGezicht kleur={agent.accent} stemming={stemming} size={size} label={agent.name} />;
 }

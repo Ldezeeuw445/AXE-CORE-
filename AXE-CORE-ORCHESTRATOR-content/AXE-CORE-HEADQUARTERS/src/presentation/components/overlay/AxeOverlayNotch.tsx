@@ -19,7 +19,7 @@ import { beoordeelNotch } from '@/domain/overlay/notchLeven';
 import { projectieUitVraag } from '@/application/sphere/vraagRouter';
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 import { NotchResultaat } from './NotchResultaat';
-import { AXE_WIT, AxeGezicht, CLAUDE_KORAAL, type Stemming } from '@/presentation/components/axe-core/AxeGezicht';
+import { AXE_CYAAN, AxeGezicht, CLAUDE_KORAAL, type Stemming } from '@/presentation/components/axe-core/AxeGezicht';
 import { AXE_AGENTS } from '@/domain/agents/roster';
 import { isVoorMij, landTekst } from '@/domain/portal/portal';
 import { claimWorp, getekendeLink, openWorpen } from '@/infrastructure/gateways/portalService';
@@ -64,11 +64,13 @@ function gezichtVoor(wie: string | null | undefined): { kleur: string; naam: str
   const id = String(wie || '').toLowerCase();
   if (id.includes('claude')) return { kleur: CLAUDE_KORAAL, naam: 'Claude' };
   const a = AXE_AGENTS.find((x) => x.id === id);
-  if (!a || a.id === 'axe') return { kleur: AXE_WIT, naam: 'AXE' };
+  if (!a || a.id === 'axe') return { kleur: AXE_CYAAN, naam: 'AXE' };
   return { kleur: a.accent, naam: a.kort || a.name };
 }
 
 const CLAUDE_STEMMING: Record<'bezig' | 'wacht' | 'klaar', Stemming> = { bezig: 'werkt', wacht: 'wacht', klaar: 'klaar' };
+/** De bol-toestanden (notchLeven) als ogen van het AXE-driehoekje. */
+const AXE_STEMMING: Record<string, Stemming> = { rust: 'rust', werkt: 'werkt', denkt: 'werkt', luistert: 'rust', wacht: 'wacht', onbereikbaar: 'fout' };
 
 type Msg = { role: 'user' | 'assistant' | 'system'; content: string; at: number };
 
@@ -827,7 +829,10 @@ export function AxeOverlayNotch({
               aria-label={`${open ? 'Collapse' : 'Expand'} AXE — ${leven.uitleg}`}
               onClick={() => set((v) => !v)}
               title={`${manager.label} — ${leven.uitleg}`}
-            />
+            >
+              {/* 19 nov: het AXE-driehoekje uit het Managers-tabblad, niet meer de ronde bol. */}
+              <AxeGezicht kleur={AXE_CYAAN} stemming={AXE_STEMMING[leven.toestand] ?? 'rust'} size={34} label="AXE" />
+            </button>
           </span>
           {claude && (
             <button
