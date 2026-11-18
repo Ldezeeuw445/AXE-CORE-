@@ -113,6 +113,14 @@ in de app.
   de repo: site, `engine-proxy` en `intel-proxy`. Een mislukte commit wordt
   niet herhaald; dan volgt één melding in AXE. Log:
   `~/Library/Logs/tradingos-release.log`. Uit: `touch ~/.axe/tradingos-release-uit`.
+- **De Trading OS-app (Tauri) zelf** is een venster op tradingosapp.com: elke
+  site-release staat er vanzelf in, en een open venster ziet een nieuwe versie
+  zelf (trading-os-app#101). Alleen als de schil (`src-tauri/`) op `main`
+  verandert, bouwt autosync via `scripts/tradingos-desktop.sh` op elke Mac met
+  `/Applications/Trading OS.app` de app opnieuw (`npm run desktop:build` +
+  `desktop:install`), als Luka 5 minuten niets aanraakt, en opent hem opnieuw als
+  hij draaide. Mislukt = één melding in AXE, niet elke 5 minuten opnieuw. Log:
+  `~/Library/Logs/tradingos-desktop.log`. Uit: `touch ~/.axe/tradingos-desktop-uit`.
 - Dezelfde app, dezelfde mogelijkheden. De Mac mini blijft het brein (lokale
   API :8001, planner); de iMac-app praat daar via Tailscale mee. Start op de
   iMac geen tweede axe_api.

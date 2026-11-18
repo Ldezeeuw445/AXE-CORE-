@@ -196,6 +196,14 @@ if [[ -x "$HIER/scripts/tradingos-release.sh" ]]; then
     || log "Trading OS-release liep niet — zie ~/Library/Logs/tradingos-release.log"
 fi
 
+# De Trading OS-app (Tauri) zelf: alleen opnieuw bouwen als de schil (src-tauri/)
+# op main veranderde; de site erin is altijd de live site. Zie tradingos-desktop.sh.
+# Uit: touch ~/.axe/tradingos-desktop-uit
+if [[ -x "$HIER/scripts/tradingos-desktop.sh" ]]; then
+  SUPABASE_URL="$SBU" SUPABASE_SERVICE_ROLE="$SBK" "$HIER/scripts/tradingos-desktop.sh" \
+    || log "Trading OS-app bouwen liep niet — zie ~/Library/Logs/tradingos-desktop.log"
+fi
+
 DOEL="$(git rev-parse --short HEAD)"
 GEBOUWD="$(cat "$APP_STEMPEL" 2>/dev/null || true)"
 [[ "$GEBOUWD" == "$DOEL" ]] && exit 0
