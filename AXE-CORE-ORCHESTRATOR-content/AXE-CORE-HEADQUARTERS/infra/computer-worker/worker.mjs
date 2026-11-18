@@ -634,11 +634,30 @@ async function execute(payload) {
 
   const ws = WORKSPACES[workspace];
   if (!ws) throw new Error(`unknown workspace '${workspace}'`);
-  const root = resolve(ws.root);
+  let root = resolve(ws.root);
 
   // Third and last check on protected branches — see the header.
-  const branch = (await git(root, 'branch', '--show-current')).trim();
+  let branch = (await git(root, 'branch', '--show-current')).trim();
   const writes = !READ_ONLY.has(tool);
+
+  /* 18 nov (Luka: "waarom failen die dingen"): een agent-run (codex/claude/
+     cursor) op de hoofdmap stond altijd op 'orchestrator' en werd hieronder
+     geweigerd -- terecht, want dat is Luka's eigen checkout waar de autosync
+     op draait. Maar niemand maakte de werkbranch aan, dus faalde élke run.
+     Nu: zo'n run krijgt zijn EIGEN git-worktree op een nieuwe branch
+     axe/<datum>-<id>, naast de hoofdmap. Luka's checkout en orchestrator
+     blijven onaangeroerd; het werk staat op die branch, klaar voor een PR. */
+  const AGENT_RUNS = new Set(['codex.run', 'claude_code.run', 'cursor.run']);
+  if (writes && ws.protected.includes(branch) && AGENT_RUNS.has(tool)) {
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const id = Math.random().toString(36).slice(2, 8);
+    const nieuweBranch = `axe/${stamp}-${id}`;
+    const pad = join(homedir(), '.axe', 'worktrees', `${workspace.replace(/\W+/g, '-').toLowerCase()}-${stamp}-${id}`);
+    await mkdir(dirname(pad), { recursive: true });
+    await git(root, 'worktree', 'add', '-b', nieuweBranch, pad, 'HEAD');
+    root = pad;
+    branch = nieuweBranch;
+  }
   // Creating a NEW feature branch is precisely how AXE gets off a protected
   // branch, so that one operation must be allowed while standing on
   // orchestrator/main. Every other write remains blocked here.

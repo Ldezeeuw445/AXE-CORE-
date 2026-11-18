@@ -38,6 +38,8 @@ import { laatManagerAntwoorden } from '@/application/managers/managerAntwoord';
 import { northseaOpruimenOk } from '@/infrastructure/gateways/axeCoreApiService';
 import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
 import { haalWachtOpJou } from '@/application/approvals/wachtOpJou';
+import { keurAllesGoed } from '@/application/approvals/allesGoedkeuren';
+import { allesZin, isAllesGoedkeuren } from '@/domain/approvals/allesGoedkeuren';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { startAxeJobs } from '@/presentation/store/installTierRouter';
 import { managerChatRoute } from '@/domain/agents/managersComposerDoel';
@@ -274,6 +276,26 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
     if (!agent) return;
     // Wat je typt staat binnen een paar seconden ook op je andere apparaten.
     window.setTimeout(() => { void syncManagerDraad(alleIds); }, 1500);
+    // 18 nov, Grok Bot-stijl: "keur alles goed" / "ok alles" tegen AXE Core of
+    // de NorthSea Manager wordt uitgevoerd, niet doorgestuurd. Luka's woord is
+    // de ja; AXE zegt in het gesprek wat er gebeurd is.
+    if ((isBoss(agent.id) || agent.id === 'northseamgr') && isAllesGoedkeuren(tekst)) {
+      const zeg = (zin: string) => {
+        bewaarManagerChat(agent.id, [...laadManagerChat(agent.id), nieuwMsg('assistant', zin)]);
+        tick((n) => n + 1);
+      };
+      zeg('Komt eraan: ik keur goed wat met één ja kan…');
+      void keurAllesGoed(agent.id === 'northseamgr' ? 'northsea' : undefined)
+        .then((u) => zeg(allesZin(u)))
+        .catch((e: unknown) => zeg(`Lukte niet: ${e instanceof Error ? e.message : String(e)}`))
+        .finally(() => {
+          if (agent.id === 'northseamgr') void northseaOpruimenOk(tekst).catch(() => undefined);
+          verversServerAgents();
+          window.setTimeout(() => { void syncManagerDraad(alleIds); }, 1500);
+        });
+      return;
+    }
+
     // 15 nov: dit moet VÓÓR 'ok = keur de wachtende stap goed', anders at die
     // regel 'ok V1' op en gebeurde er stil niets.
     // NorthSea: "ok V1" / "ok alles" voert dat opruimvoorstel uit. Alleen

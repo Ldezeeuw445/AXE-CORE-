@@ -33,6 +33,43 @@ en me uit zichzelf helpt met alles en dingen echt makkelijker maakt."
       tien `_backup_`/`_rollback_`-mappen; deal-link opent alleen deals uit de
       actieve lijst; telefoonweergave per tab nog niet nagelopen; 4 oude
       frontendtests rood (dodeCode, eeuwigGesprek).
+- [x] **"Keur alles goed" in het gesprek** (18 nov): tegen AXE Core of de
+      NorthSea Manager "ok alles" / "keur alles goed" -> veilige NorthSea-mails
+      verstuurd met Luka's eigen inlog, AXE-vragen ja; AXE zegt wat er gebeurde.
+- [x] **codex.run/claude_code.run faalden altijd** ("protected branch
+      orchestrator"): de werker maakt nu zelf een worktree op axe/<datum>-<id>.
+      En de agent weet dat git en GitHub op de Macs staan, niet op de VPS.
+- [ ] **NorthSea draait zelf: vervolgmails onder de vaste regel.** Luka 18 nov:
+      "dat is een bedrijf wat geautomatiseerd moet lopen". Vervolg op eigen
+      draad, vast sjabloon, max N/dag. Raakt service.send_policy_allowed EN de
+      databasecontrole (alleen eerste-contact-doelen) -> migratie + deploy.
+- [ ] **Managers vragen in hun eigen gesprek** (zoals Claude/Grok): een vraag
+      komt als bericht met ja/nee-knoppen in de chat van die manager, niet als
+      losse kaart elders. "Ja" in het gesprek voert hem uit.
+- [ ] **AXE voert uit wat Luka toestaat.** "Als ik zeg dat het mag, dan mag
+      het": een staande toestemming per soort actie, vastgelegd en terug te
+      draaien, zodat dezelfde vraag niet terugkomt.
+
+## Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov)
+
+Wat AXE ook moet kunnen, naar het voorbeeld van Spazio OS Pro:
+- [ ] **Geheugen tussen sessies**: na elk gesprek een korte notitie (wat
+      gevraagd, wat veranderd, waar gestopt); het volgende begint met de
+      laatste zes. "Ga verder waar we waren" werkt dan gewoon.
+- [ ] **Chats-pagina**: elk gesprek met AXE en de managers doorzoekbaar,
+      samenvatten in drie regels, vragen aan alle gesprekken tegelijk (met bron).
+- [ ] **Vaste agents**: ochtendbrief elke dag, roadmap-check maandag,
+      opruimlijst vrijdag, weekreview zondag. Nooit versturen/kopen/wissen;
+      wat Luka nodig heeft wordt een stap.
+- [ ] **Vandaag-scherm**: de ene prioriteit van vandaag, volgende stappen en
+      wiens beurt het is, projecten van idee tot verkoop, log van wat af is.
+- [ ] **Interview**: AXE leert wie Luka is via een geleid gesprek.
+- [ ] **Jouw stem**: 3-5 eigen teksten -> AXE schrijft en reviewt in die stem.
+- [ ] **De Raad**: acht bedachte experts reviewen teksten, pagina's, projecten.
+- [ ] **"Doe het zelf"-knop** op een stap: AXE werkt hem op de achtergrond af.
+- [ ] **Maak het van jou**: "verberg X", "andere kleuren" in gewone taal.
+- [ ] Focusmodus, geld achter een PIN, rustige muziek (Life OS-hoek).
+
 - [ ] **Managers als Grok Bot**: zelf doen, onderling overleggen, alleen
       vragen wat echt van Luka is.
 - [ ] Deal-specifieke mails door een model; abonnementen samenvoegen;

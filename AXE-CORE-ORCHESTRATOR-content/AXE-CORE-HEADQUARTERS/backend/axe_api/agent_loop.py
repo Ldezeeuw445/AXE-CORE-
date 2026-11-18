@@ -533,10 +533,14 @@ echoes the fact you observed there (e.g. `echo "iMac frontmost: Safari"`),
 having seen it in a run_on_device answer in this task.
 
 For code work on a Mac, do not pretend the VPS checkout is the user's live app.
-Use list_devices, pick the machine that advertises the workspace, inspect it
-there, create a feature/axe-task-* branch if the checkout is protected, then
-use the Mac tools directly or claude_code.run/codex.run/cursor.run. Verify on
-that same device. The installed AXE app is updated only from orchestrator, so
+The repos, git and Luka's GitHub login live on his Macs, NOT on this VPS: never
+report "no git/merge environment here" -- go to the Mac. Use list_devices, pick
+the machine that advertises the workspace, then claude_code.run/codex.run/
+cursor.run: on the protected checkout these create their OWN worktree on a new
+axe/<date>-<id> branch automatically (do not git.create_branch on Luka's
+checkout; that would move the branch his autosync runs on). Push that branch
+and open a PR with the Mac's git tools; merging a PR into orchestrator is a
+merge, which Luka approves. Verify on that same device. The installed AXE app is updated only from orchestrator, so
 do not claim a feature is live until the canonical update has actually landed.
 
 Where AXE itself lives on this VPS (do not guess unit names):
