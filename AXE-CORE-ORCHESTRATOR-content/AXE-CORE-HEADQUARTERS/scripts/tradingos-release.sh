@@ -63,7 +63,25 @@ git -C "$REPO" fetch -q origin main 2>/dev/null || exit 0
 DOEL="$(git -C "$REPO" rev-parse --short=7 origin/main 2>/dev/null)" || exit 0
 LIVE="$(curl -fsS -m 5 "$HEALTH_URL" 2>/dev/null \
   | python3 -c 'import json,sys; print(json.load(sys.stdin).get("commit",""))' 2>/dev/null || true)"
-[[ -n "$LIVE" && "${LIVE:0:7}" == "${DOEL:0:7}" ]] && exit 0
+# De site is bij. De proxies ook? release-mac.sh schrijft na een geslaagde
+# uitrol van engine-proxy + intel-proxy de commit in ~/.tradingos-serve/edge.commit.
+# 18 nov ging de site twee keer live via een route zonder proxies; intel-proxy
+# bleef op 14:51 UTC staan en deze check zag alleen een bijgewerkte site.
+EDGE="$(cat "$HOME/.tradingos-serve/edge.commit" 2>/dev/null || true)"
+if [[ -n "$LIVE" && "${LIVE:0:7}" == "${DOEL:0:7}" ]]; then
+  [[ -n "$EDGE" && "${EDGE:0:7}" == "${DOEL:0:7}" ]] && exit 0
+  # Schrijft de release-mac.sh op main die marker niet, dan zou elke ronde een
+  # nieuwe release volgen: dan alleen de site tellen, zoals vóór 18 nov.
+  git -C "$REPO" show origin/main:scripts/release-mac.sh 2>/dev/null | grep -q 'edge.commit' || exit 0
+  # Proxies achter (of nooit vastgelegd): alleen releasen als er sinds hun
+  # commit iets aan de functies veranderde; zonder vastgelegde commit één keer.
+  if [[ -n "$EDGE" ]] && git -C "$REPO" diff --quiet "$EDGE" "origin/main" -- supabase/functions src/engine src/lib/aisVesselFilter.ts 2>/dev/null; then
+    exit 0
+  fi
+  log "site is bij ($LIVE), proxies op ${EDGE:-onbekend} — release voor engine-proxy + intel-proxy"
+  LIVE="${LIVE} (proxies ${EDGE:-?})"
+  rm -f "$GEDAAN"
+fi
 # Antwoordt de site even niet, dan niet elke ronde dezelfde commit opnieuw.
 [[ -z "$LIVE" && "$(cat "$GEDAAN" 2>/dev/null)" == "$DOEL" ]] && exit 0
 
