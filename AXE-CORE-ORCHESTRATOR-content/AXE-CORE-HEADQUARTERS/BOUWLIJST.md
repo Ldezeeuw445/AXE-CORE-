@@ -92,9 +92,9 @@ wat de andere deed:
 
 ### Notch beter, naar het voorbeeld van Pulsar Agent (Luka, 18 nov)
 
-In AXE-stijl houden; ideeën uit de Pulsar Agent-opzet (juliendesigncraft,
-CC BY-NC: vrij voor eigen gebruik, niet voor verkoop -- dus niet letterlijk
-overnemen in AXON-als-product):
+AXE blijft alleen van Luka, dus deze ideeën mogen erin (Pulsar: CC BY-NC,
+vrij voor eigen gebruik). Niet namaken: AXE-stijl en AXE-design houden, alleen
+de slimme dingen en wat AXE nog mist:
 - [ ] **Claude Code live in de notch, naast AXE**: wat Claude nu doet (lezen,
       bewerken, uitvoeren), de tijd, en "klaar" aan het eind -- via de hooks
       van Claude Code (UserPromptSubmit, PreToolUse, PostToolUse, Stop) naar
@@ -112,6 +112,26 @@ overnemen in AXON-als-product):
       sessies volgt de notch de sessie die op jou wacht, nooit springen.
 - [ ] Nooit zonder te vragen ~/.claude/settings.json aanpassen; eerst laten
       zien wat erbij komt, met een gedateerde kopie.
+
+### Slimme dingen uit Spazio voor AXE (Luka, 18 nov)
+
+Niet namaken -- AXE heeft al Taken, Home en de managers. Wat erbij moet:
+- [ ] **Eén ding vandaag**: bovenaan Home één kaart met DE prioriteit van
+      vandaag (de eerste open stap van Luka, of die hij vastpint), niet een lijst.
+- [ ] **Wiens beurt**: Taken in drie kolommen -- "Jouw beurt", "AXE's beurt"
+      (of een manager/Claude), "Samen" -- met per stap waarom, welke bestanden,
+      en wat de AI moet doen als het zijn beurt is.
+- [ ] **"Doe de rij"**: zeg tegen AXE "doe de rij" en hij werkt de open
+      stappen af waar hij eigenaar van is, één voor één, met een logregel per stap.
+- [ ] **Log + ritme**: elke afgeronde stap één regel in het log (wie, wat), en
+      een strookje "ritme" met hoeveel er per dag af is, laatste 30 dagen.
+- [ ] **`axe`-commando voor elke AI-sessie**: `axe log "wat ik deed"`,
+      `axe stap-af <id> "uitkomst"`, `axe stap-nieuw ...` -- zodat Claude Code,
+      Codex en Cursor (en later via AXON elke AI) in hetzelfde log en dezelfde
+      stappen schrijven als AXE en de managers. Plus de regel in CLAUDE.md /
+      AGENTS.md: lees eerst de stappen, log aan het eind.
+- [ ] **Bureau**: mappen met links (sites, tools, methodes) met één regel
+      waarom ze ertoe doen.
 
 - [ ] **Managers als Grok Bot**: zelf doen, onderling overleggen, alleen
       vragen wat echt van Luka is.
