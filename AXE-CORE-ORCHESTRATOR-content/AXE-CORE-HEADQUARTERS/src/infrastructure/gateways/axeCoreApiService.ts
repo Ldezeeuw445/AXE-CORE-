@@ -216,6 +216,9 @@ export interface DurableTaskApproval {
   decided_by?: string | null;
   decision_reason?: string | null;
   created_at: string;
+  /** Fase 2: zelfde record vanuit een manager-thread of reactie. */
+  thread_id?: string | null;
+  message_id?: string | null;
 }
 
 export interface DurableTaskEvent {
@@ -1312,15 +1315,30 @@ export type NorthseaActie =
  * Stuurt zijn EIGEN sessietoken mee; de NorthSea-server controleert dat zelf
  * bij Supabase. Zonder inlog: een fout, nooit stil de service-sleutel.
  */
+async function northseaMensToken(): Promise<string> {
+  const { sessieClient } = await import('@/infrastructure/supabase/supabaseClient');
+  const sb = await sessieClient();
+  const token = sb ? (await sb.auth.getSession()).data.session?.access_token : undefined;
+  if (!token) throw new Error('You are not signed in to AXE; sign in again and retry.');
+  return token;
+}
+
 export async function northseaMensGoedkeuren(draftIds: string[]): Promise<{
   results: { draft_id: string; ok: boolean; sent?: boolean; code?: string; message?: string }[];
   sent: number;
 }> {
-  const { sessieClient } = await import('@/infrastructure/supabase/supabaseClient');
-  const sb = await sessieClient();
-  const token = sb ? (await sb.auth.getSession()).data.session?.access_token : undefined;
-  if (!token) throw new Error('Je bent niet ingelogd in AXE; log opnieuw in en probeer het nog eens.');
-  return call('POST', '/northsea/mens/goedkeuren', { draft_ids: draftIds, user_token: token });
+  return call('POST', '/northsea/mens/goedkeuren', { draft_ids: draftIds, user_token: await northseaMensToken() });
+}
+
+export async function northseaMensBeslis(
+  draftIds: string[],
+  action: 'approve' | 'reject' | 'send',
+): Promise<{
+  results: { draft_id: string; ok: boolean; action?: string; sent?: boolean; code?: string; message?: string }[];
+  ok: number;
+  sent: number;
+}> {
+  return call('POST', '/northsea/mens/beslis', { draft_ids: draftIds, action, user_token: await northseaMensToken() });
 }
 
 export async function northseaActie(actie: NorthseaActie, params: Record<string, unknown>): Promise<{

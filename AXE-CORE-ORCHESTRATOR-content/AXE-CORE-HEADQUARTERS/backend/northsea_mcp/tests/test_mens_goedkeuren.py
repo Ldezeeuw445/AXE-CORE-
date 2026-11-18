@@ -59,3 +59,32 @@ async def test_rare_ids_worden_geweigerd(h):
     r = await h.post("/human/drafts/approve-send", json={"draft_ids": ["'; drop table"]},
                      headers={"Authorization": f"Bearer {GOED}"})
     assert r.status_code == 400
+
+
+async def test_decide_approve_wacht_niet_op_send(h, repo):
+    r = await h.post("/human/drafts/decide", json={"draft_ids": [DRAFT_PENDING], "action": "approve"},
+                     headers={"Authorization": f"Bearer {GOED}"})
+    assert r.status_code == 200, r.text
+    uit = r.json()["results"][0]
+    assert uit["ok"] and uit["action"] == "approve" and not uit.get("sent")
+    d = next(x for x in repo.t["reply_drafts"] if x["id"] == DRAFT_PENDING)
+    assert d["approval_status"] == "approved" and d["approval_actor_type"] == "human"
+    assert repo.sends == []
+
+
+async def test_decide_reject_is_human_en_verstuurt_niet(h, repo):
+    r = await h.post("/human/drafts/decide", json={"draft_ids": [DRAFT_PENDING], "action": "reject"},
+                     headers={"Authorization": f"Bearer {GOED}"})
+    assert r.status_code == 200, r.text
+    d = next(x for x in repo.t["reply_drafts"] if x["id"] == DRAFT_PENDING)
+    assert d["approval_status"] == "rejected" and d["approval_actor_type"] == "human"
+    assert repo.sends == []
+
+
+async def test_decide_zonder_mens_keurt_niet_goed(h, repo, monkeypatch):
+    monkeypatch.setenv("NORTHSEA_HUMAN_PRINCIPALS", "")
+    r = await h.post("/human/drafts/decide", json={"draft_ids": [DRAFT_PENDING], "action": "approve"},
+                     headers={"Authorization": f"Bearer {GOED}"})
+    assert r.json()["results"][0]["code"] == "human_approval_required"
+    d = next(x for x in repo.t["reply_drafts"] if x["id"] == DRAFT_PENDING)
+    assert d["approval_status"] == "pending"

@@ -708,6 +708,43 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
         return JSONResponse({"results": resultaten, "sent": sum(1 for r in resultaten if r.get("sent"))},
                             headers={"Cache-Control": "no-store"})
 
+    @route("/human/drafts/decide", methods=["POST"])
+    async def mens_beslist(request: Request) -> Response:
+        """Approve of reject, zonder te wachten op Resend. Send is apart.
+
+        Body: {"draft_ids": [...], "action": "approve"|"reject"|"send"}.
+        Elke id los; een weigering stopt de rest niet."""
+        from . import mens_goedkeuren as mg
+        auth = request.headers.get("authorization", "")
+        token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+        uid = await mg.wie_is_dit(oauth.http, axe_url=settings.axe_url, axe_key=settings.axe_key,
+                                  token=token, toegestaan=settings.allowed_user_ids)
+        if not uid:
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers={"Cache-Control": "no-store"})
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            body = {}
+        actie = str((body or {}).get("action") or "")
+        if actie not in ("approve", "reject", "send"):
+            return JSONResponse({"error": "invalid_action"}, status_code=400, headers={"Cache-Control": "no-store"})
+        ids = [str(x) for x in ((body or {}).get("draft_ids") or []) if isinstance(x, str)][:mg.MAX_PER_VENSTER]
+        if not ids or any(not re.fullmatch(r"[0-9a-fA-F-]{36}", i) for i in ids):
+            return JSONResponse({"error": "invalid_draft_ids"}, status_code=400, headers={"Cache-Control": "no-store"})
+        ok, _, _ = store.hit(f"mens:{uid}", mg.VENSTER_S, mg.MAX_PER_VENSTER)
+        if not ok:
+            return JSONResponse({"error": "rate_limited"}, status_code=429, headers={"Cache-Control": "no-store"})
+        resultaten = []
+        for i in ids:
+            try:
+                resultaten.append(await mg.beslis(service, uid, i, actie))
+            except RepositoryError:
+                resultaten.append({"draft_id": i, "ok": False, "action": actie, "code": "upstream_error",
+                                   "message": "Database unreachable."})
+        return JSONResponse({"results": resultaten, "ok": sum(1 for r in resultaten if r.get("ok")),
+                             "sent": sum(1 for r in resultaten if r.get("sent"))},
+                            headers={"Cache-Control": "no-store"})
+
     operations_lock = asyncio.Lock()
 
     @route("/internal/operations/sweep", methods=["POST"])

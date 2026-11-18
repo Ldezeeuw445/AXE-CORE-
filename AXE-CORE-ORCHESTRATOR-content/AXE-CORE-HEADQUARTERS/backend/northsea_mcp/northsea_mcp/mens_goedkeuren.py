@@ -33,7 +33,7 @@ log = logging.getLogger("northsea_mcp.mens")
 CLIENT_ID = "luka-in-app"
 SCOPES = frozenset({"northsea.admin", "northsea.deal.read"})
 VENSTER_S = 60.0
-MAX_PER_VENSTER = 60  # 44 in één keer moet kunnen; een lus van duizenden niet
+MAX_PER_VENSTER = 120  # ~100 NorthSea-mails op een dag; één bulk mag die lijst leegmaken
 
 
 async def wie_is_dit(http: httpx.AsyncClient, *, axe_url: str, axe_key: str, token: str,
@@ -52,17 +52,47 @@ async def wie_is_dit(http: httpx.AsyncClient, *, axe_url: str, axe_key: str, tok
     return uid if isinstance(uid, str) and uid in toegestaan else None
 
 
+def _caller(uid: str) -> Caller:
+    return Caller(principal=uid, client_id=CLIENT_ID, scopes=SCOPES)
+
+
 async def keur_goed_en_verstuur(service: Any, uid: str, draft_id: str,
                                 expected_updated_at: str | None = None) -> dict[str, Any]:
     """Eén concept: goedkeuren als Luka, en dan versturen. Weigert wat de regels weigeren."""
-    caller = Caller(principal=uid, client_id=CLIENT_ID, scopes=SCOPES)
+    goed = await beslis(service, uid, draft_id, "approve", expected_updated_at=expected_updated_at)
+    if not goed.get("ok"):
+        return goed
+    verstuur = await beslis(service, uid, draft_id, "send")
+    return {**goed, "ok": bool(verstuur.get("ok") or verstuur.get("sent") or verstuur.get("duplicate")),
+            "sent": bool(verstuur.get("sent")), "duplicate": bool(verstuur.get("duplicate")),
+            "message": verstuur.get("message") or goed.get("message"),
+            "code": verstuur.get("code"), "send_ok": verstuur.get("ok")}
+
+
+async def beslis(service: Any, uid: str, draft_id: str, actie: str,
+                 expected_updated_at: str | None = None) -> dict[str, Any]:
+    """Approve of reject zonder te wachten op Resend. Send is een aparte, latere stap.
+
+    17 nov: één klik die approve+send deed, voelde weg als Resend traag was.
+    De inbox haalt de rij weg op approve; send loopt daarna."""
+    caller = _caller(uid)
     try:
-        ok = await service.approve_draft(caller, draft_id=draft_id, expected_updated_at=expected_updated_at)
-        uit = await service.send_approved_communication(caller, draft_id=draft_id, confirm=True)
+        if actie == "reject":
+            uit = await service.reject_draft(caller, draft_id=draft_id, expected_updated_at=expected_updated_at)
+            return {"draft_id": draft_id, "ok": True, "action": "reject", "approval_status": uit.approval_status,
+                    "sent": False, "message": uit.message}
+        if actie == "approve":
+            uit = await service.approve_draft(caller, draft_id=draft_id, expected_updated_at=expected_updated_at)
+            return {"draft_id": draft_id, "ok": True, "action": "approve", "approval_status": uit.approval_status,
+                    "approved_at": uit.approved_at, "sent": False, "message": uit.message}
+        if actie == "send":
+            uit = await service.send_approved_communication(caller, draft_id=draft_id, confirm=True)
+            return {"draft_id": draft_id, "ok": bool(uit.submitted or uit.duplicate), "action": "send",
+                    "sent": bool(uit.submitted), "duplicate": bool(uit.duplicate), "message": uit.message}
     except PolicyDenied as e:
-        return {"draft_id": draft_id, "ok": False, "code": e.code, "message": e.message}
+        return {"draft_id": draft_id, "ok": False, "action": actie, "code": e.code, "message": e.message}
     except NotFound:
-        return {"draft_id": draft_id, "ok": False, "code": "not_found", "message": "Draft not found."}
-    return {"draft_id": draft_id, "ok": bool(uit.submitted or uit.duplicate), "approved_at": ok.approved_at,
-            "sent": bool(uit.submitted), "duplicate": bool(uit.duplicate), "message": uit.message}
+        return {"draft_id": draft_id, "ok": False, "action": actie, "code": "not_found", "message": "Draft not found."}
+    return {"draft_id": draft_id, "ok": False, "action": actie, "code": "invalid_action",
+            "message": "Action must be approve, reject or send."}
 

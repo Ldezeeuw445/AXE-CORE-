@@ -322,7 +322,7 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
         const ax = w.items.length - ns;
         const stand = w.fouten.length
           ? 'De lijst "Wacht op jou" was nu niet volledig te lezen.'
-          : `Op Luka wachten nu ${w.items.length} dingen (${ax} AXE, ja/nee meteen; ${ns} NorthSea, goedkeuren in de desk). `
+          : `Op Luka wachten nu ${w.items.length} dingen (${ax} AXE, ${ns} NorthSea; ja/nee in Wacht op jou). `
             + `Ze staan allemaal onder "Wacht op jou", de knop rechtsboven in de Managers-tab.`;
         return `${tekst}\n\n[Context voor jou, niet herhalen tenzij relevant: ${stand}]`;
       }).catch(() => tekst).then((vraag) =>

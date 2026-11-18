@@ -1804,6 +1804,31 @@ class NorthSeaService:
         return DraftApprovalResult(draft_id=d["id"], approval_status="approved", approved_at=tijd,
                                    sensitive=bool(d.get("sensitive_action")), message="Draft approved. It has not been sent.")
 
+    async def reject_draft(self, caller: Caller, *, draft_id: str, expected_updated_at: str | None = None) -> DraftApprovalResult:
+        """Luka wijst af. Zelfde is_human-hek als goedkeuren; geen send."""
+        d = await self.repo.get_draft(draft_id)
+        if not d:
+            raise NotFound("draft")
+        if d.get("sent_at") or d.get("resend_email_id") or d.get("approval_status") == "sent":
+            raise PolicyDenied("already_sent", "This draft has already been sent.")
+        if d.get("approval_status") == "rejected":
+            return DraftApprovalResult(draft_id=d["id"], approval_status="rejected", approved_at=d.get("approved_at"),
+                                       sensitive=bool(d.get("sensitive_action")), message="Draft was already rejected.")
+        if d.get("approval_status") != "pending":
+            raise PolicyDenied("not_pending", "Only pending drafts can be rejected.")
+        if not caller.is_human:
+            raise PolicyDenied("human_approval_required",
+                               "Draft rejection must come from a signed-in human user; a service credential cannot reject.")
+        tijd = now().isoformat()
+        rij = await self.repo.update_draft_if(d["id"], expected_updated_at or d["updated_at"],
+                                              {"approval_status": "rejected", "approved_at": None, "updated_at": tijd,
+                                               "approved_by": caller.principal, "approval_actor_type": "human",
+                                               "approval_channel": "northsea_mcp", "lifecycle_state": "rejected"})
+        if not rij:
+            raise PolicyDenied("conflict", "The draft changed since it was read. Reload it and review it again.")
+        return DraftApprovalResult(draft_id=d["id"], approval_status="rejected", approved_at=None,
+                                   sensitive=bool(d.get("sensitive_action")), message="Draft rejected. It was not sent.")
+
     async def send_approved_communication(self, caller: Caller, *, draft_id: str, confirm: bool) -> SendResult:
         if confirm is not True:
             raise PolicyDenied("confirmation_required", "Sending requires confirm=true after a human reviewed the approved draft.")

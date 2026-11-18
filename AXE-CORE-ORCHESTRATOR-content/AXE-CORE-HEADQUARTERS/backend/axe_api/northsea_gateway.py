@@ -191,22 +191,39 @@ async def call_action(action: str, params: dict[str, Any]) -> dict[str, Any]:
     return {"action": action, "tool": spec.tool, "result": data}
 
 
+def _mens_antwoord(r) -> dict[str, Any]:
+    if r.status_code == 401:
+        raise NorthSeaGatewayError("not_signed_in", "NorthSea did not recognise your AXE sign-in. Sign in again.")
+    if r.status_code == 429:
+        raise NorthSeaGatewayError("rate_limited", "Too many approval clicks; wait a minute.")
+    if r.status_code != 200:
+        raise NorthSeaGatewayError("tool_error", f"NorthSea refused ({r.status_code}).")
+    return r.json()
+
+
+async def _mens_post(pad: str, body: dict, user_token: str):
+    import httpx
+    basis = MCP_URL.rsplit("/mcp", 1)[0]
+    try:
+        async with httpx.AsyncClient(timeout=CALL_TIMEOUT_S) as http:
+            return await http.post(f"{basis}{pad}", json=body, headers={"Authorization": f"Bearer {user_token}"})
+    except httpx.HTTPError as e:
+        raise NorthSeaGatewayError("upstream_unreachable", "Could not reach the NorthSea MCP service.") from e
+
+
 async def mens_keurt_goed(draft_ids: list[str], user_token: str) -> dict[str, Any]:
     """Luka's goedkeuring doorgeven, met ZIJN token (niet de service-sleutel).
 
     De NorthSea-server controleert dat token zelf bij Supabase en past alle
     eigen regels toe (mens, gevoeligheid, contactbeleid); AXE geeft het alleen
     door. Zie backend/northsea_mcp/northsea_mcp/mens_goedkeuren.py."""
-    import httpx
-    basis = MCP_URL.rsplit("/mcp", 1)[0]
-    try:
-        async with httpx.AsyncClient(timeout=CALL_TIMEOUT_S) as http:
-            r = await http.post(f"{basis}/human/drafts/approve-send", json={"draft_ids": draft_ids[:60]},
-                                headers={"Authorization": f"Bearer {user_token}"})
-    except httpx.HTTPError as e:
-        raise NorthSeaGatewayError("upstream_unreachable", "Could not reach the NorthSea MCP service.") from e
-    if r.status_code == 401:
-        raise NorthSeaGatewayError("not_signed_in", "NorthSea did not recognise your AXE sign-in. Sign in again.")
-    if r.status_code != 200:
-        raise NorthSeaGatewayError("tool_error", f"NorthSea refused ({r.status_code}).")
-    return r.json()
+    r = await _mens_post("/human/drafts/approve-send", {"draft_ids": draft_ids[:120]}, user_token)
+    return _mens_antwoord(r)
+
+
+async def mens_beslist(draft_ids: list[str], action: str, user_token: str) -> dict[str, Any]:
+    """Approve/reject/send, los van elkaar. Approve wacht niet op Resend."""
+    if action not in ("approve", "reject", "send"):
+        raise NorthSeaGatewayError("invalid_action", "Action must be approve, reject or send.")
+    r = await _mens_post("/human/drafts/decide", {"draft_ids": draft_ids[:120], "action": action}, user_token)
+    return _mens_antwoord(r)
