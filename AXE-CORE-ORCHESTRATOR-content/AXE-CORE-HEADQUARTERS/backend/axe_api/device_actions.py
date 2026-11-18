@@ -116,6 +116,30 @@ def resolve_device(name: str, apparaten: list[dict[str, Any]] | None = None) -> 
     return levende_van(vast, apparaten) if apparaten is not None else vast
 
 
+# Velden zonder welke de Mac de actie toch weigert (worker.mjs). Hier al
+# controleren: anders vraagt AXE Luka om goedkeuring voor iets dat gegarandeerd
+# faalt, en staat er elk uur een rode "claude_code.run needs a prompt" in zijn
+# lijst (18 nov: 6x per dag, de developer-agent vergat args.prompt).
+VERPLICHT: dict[str, tuple[str, ...]] = {
+    "claude_code.run": ("prompt",),
+    "codex.run": ("prompt",),
+    "cursor.run": ("prompt",),
+    "terminal.free": ("command",),
+}
+
+
+def ontbrekend(tool: str, args: dict[str, Any] | None) -> str | None:
+    """Een foutzin voor het model als een verplicht veld leeg is, anders None."""
+    args = args or {}
+    for veld in VERPLICHT.get(tool, ()):
+        if not str(args.get(veld) or "").strip():
+            return (f"{tool} needs args.{veld} (a non-empty string) -- nothing was sent to the Mac. "
+                    f"Call run_on_device again with args.{veld} set"
+                    + (": the full instruction for the coding agent, including repo/branch and what done looks like."
+                       if veld == "prompt" else "."))
+    return None
+
+
 def approval_key(device: str, tool: str, args: dict[str, Any]) -> str | None:
     """What Luka has to say yes to before this runs, or None if it may run.
 
@@ -199,6 +223,9 @@ def run_on_device(
         return {"error": f"unknown device tool {tool!r}. Known: {', '.join(sorted(TOOL_TIERS))}"}
     if read_only and tier in ("write", "consequential"):
         return {"error": "This is a read-only task. Observe and report instead of changing the Mac."}
+    fout = ontbrekend(tool, args)
+    if fout:
+        return {"error": fout}
     if workspace not in WORKSPACES:
         return {"error": f"unknown workspace {workspace!r}. Use one of {', '.join(WORKSPACES)}."}
 

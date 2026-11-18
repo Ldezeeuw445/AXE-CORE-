@@ -409,7 +409,8 @@ TOOL_DECLARATIONS = [
             "workspace files; observe/control screen, pointer, keyboard, windows and apps; "
             "run typecheck/lint/test/build/install or an approved free terminal command; "
             "create branches, inspect/commit/push/merge/open PRs; and delegate coding work "
-            "to claude_code.run, codex.run or cursor.run. Use the narrowest tool that does "
+            "to claude_code.run, codex.run or cursor.run (these REQUIRE args.prompt: the "
+            "full instruction for the coding agent). Use the narrowest tool that does "
             "the job. Clicking, typing and writes are approval-gated; consequential actions "
             "such as terminal.free, git push/merge/PR and delete always require the exact "
             "approval and cannot be approved by voice."
@@ -1713,7 +1714,10 @@ async def _lus(
                 device = str(pinned if pinned and pinned != "vps" else (args.get("device") or ""))
                 tool = str(args.get("tool") or "")
                 dargs = args.get("args") if isinstance(args.get("args"), dict) else {}
-                key = None if read_only else device_actions.approval_key(device, tool, dargs)
+                # Eerst: kan dit überhaupt? Anders geen goedkeuring vragen voor
+                # een actie die op de Mac gegarandeerd faalt (18 nov).
+                fout = device_actions.ontbrekend(tool, dargs)
+                key = None if (read_only or fout) else device_actions.approval_key(device, tool, dargs)
                 if key and normalize_command(key) not in pre_approved:
                     transcript.append({
                         "step": step, "tool": "run_on_device", "device": device,

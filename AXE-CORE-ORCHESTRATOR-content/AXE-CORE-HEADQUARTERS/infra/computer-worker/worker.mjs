@@ -516,8 +516,29 @@ function run(cmd, args, cwd, extraEnv) {
   return runStatus(cmd, args, cwd, extraEnv).then(r => r.out);
 }
 
+
+/**
+ * Waar staat een CLI op deze Mac? (18 nov: codex.run faalde elk uur op de iMac
+ * met "not found: /opt/homebrew/bin/codex" -- daar staat hij in ~/.local/bin.)
+ * Volgorde: de env-variabele, dan de gewone plekken, dan PATH. Niets gevonden:
+ * de eerste kandidaat, zodat de fout blijft zeggen waar gezocht is.
+ */
+export function vindBin(naam, envSleutel, omgeving = env, bestaat = existsSync) {
+  const eigen = omgeving[envSleutel];
+  if (eigen) return eigen;
+  const plekken = [
+    `${homedir()}/.local/bin`, '/opt/homebrew/bin', '/usr/local/bin', `${homedir()}/.npm-global/bin`,
+    `${homedir()}/.bun/bin`, ...String(omgeving.PATH || '').split(':').filter(Boolean),
+  ];
+  for (const dir of plekken) {
+    const p = join(dir, naam);
+    if (bestaat(p)) return p;
+  }
+  return `/opt/homebrew/bin/${naam}`;
+}
+
 async function runCodexWithFallback(prompt, root, seat, requestedModel) {
-  const bin = env.AXE_CODEX_BIN ?? '/opt/homebrew/bin/codex';
+  const bin = vindBin('codex', 'AXE_CODEX_BIN');
   const raw = String(requestedModel || env.AXE_CODEX_MODEL || '').trim();
   // gpt-5-codex geeft model_not_found op een ChatGPT-login; astra/gpt-6 400.
   // Leeg = de CLI kiest zelf. Andere AXE_CODEX_MODEL-waarden blijven een pin.
@@ -540,7 +561,7 @@ async function runCodexWithFallback(prompt, root, seat, requestedModel) {
   }
 
   if (isCodexModelNotFound(result.out)) {
-    const claude = env.AXE_CLAUDE_BIN ?? '/opt/homebrew/bin/claude';
+    const claude = vindBin('claude', 'AXE_CLAUDE_BIN');
     tried.push(`claude CLI fallback (${claude})`);
     try {
       const claudeArgv = ['-p', prompt, '--output-format', 'json', '--permission-mode', 'acceptEdits'];
@@ -759,7 +780,7 @@ async function execute(payload) {
       const base = String(args.base ?? 'orchestrator').trim();
       if (!title) throw new Error('git.pr_open needs a title');
       if (!/^[A-Za-z0-9._\/-]+$/.test(base)) throw new Error('invalid PR base branch');
-      const gh = env.AXE_GH_BIN ?? '/opt/homebrew/bin/gh';
+      const gh = vindBin('gh', 'AXE_GH_BIN');
       return run(gh, ['pr', 'create', '--title', title, '--body', body, '--base', base, '--head', branch], root);
     }
 
@@ -784,7 +805,7 @@ async function execute(payload) {
     case 'claude_code.run': {
       const prompt = String(args.prompt ?? '').trim();
       if (!prompt) throw new Error('claude_code.run needs a prompt');
-      const bin = env.AXE_CLAUDE_BIN ?? '/opt/homebrew/bin/claude';
+      const bin = vindBin('claude', 'AXE_CLAUDE_BIN');
       const seat = String(args.seat ?? 'claude');
       const argv = ['-p', prompt, '--output-format', 'json', '--permission-mode', 'acceptEdits'];
       const model = String(args.model ?? '').trim();
@@ -803,7 +824,7 @@ async function execute(payload) {
     case 'cursor.run': {
       const prompt = String(args.prompt ?? '').trim();
       if (!prompt) throw new Error('cursor.run needs a prompt');
-      const bin = env.AXE_CURSOR_BIN ?? '/opt/homebrew/bin/cursor-agent';
+      const bin = vindBin('cursor-agent', 'AXE_CURSOR_BIN');
       const argv = ['-p', prompt, '--output-format', 'json', '--force'];
       const model = String(args.model ?? '').trim();
       if (model) argv.push('--model', model);
