@@ -29,6 +29,9 @@ describe('Wacht op jou — één inbox, aangesloten', () => {
     expect(pagina).toContain('messageId: i.messageId');
     expect(pagina).toContain('klik(');
     expect(pagina).toContain('Bulk approve');
+    expect(pagina).toContain('Approved, but send failed');
+    expect(pagina).not.toContain(".catch(() => undefined)");
+    expect(pagina).toContain('i.kanHierBeslissen');
   });
 
   it('migratie koppelt item aan thread/message en via reaction/thread', () => {

@@ -200,6 +200,16 @@ export function evalueer(
     flipsAutoSend: false as const,
   };
 
+  if (k.sensitive && !regel.axeMayApproveAll) {
+    return {
+      ...basis,
+      mode: 'escalate',
+      actorType: 'human',
+      needsLuka: true,
+      reason: 'Sensitive draft: needs Luka.',
+    };
+  }
+
   if (regel.mode === 'auto_reject') {
     return {
       ...basis,

@@ -177,6 +177,34 @@ describe('evalueer: conservatieve NorthSea-defaults', () => {
     })).category).toBe('commitment');
   });
 
+  it('sensitive chase escaleert, ook als de drempels verder kloppen', () => {
+    const uit = evalueer(k({
+      hasThread: true,
+      namedRecipient: true,
+      addressVerified: true,
+      chases14dForContact: 1,
+      sensitive: true,
+      body: 'Hi Chanda, following up on the COA.',
+    }));
+    expect(uit.mode).toBe('escalate');
+    expect(uit.needsLuka).toBe(true);
+    expect(uit.reason).toMatch(/sensitive/i);
+  });
+
+  it('sensitive + axeMayApproveAll op die categorie mag AXE wél auto-approven', () => {
+    const vrij: BeleidRegel[] = STANDAARD_REGELS.map((r) =>
+      r.category === 'chase' ? { ...r, axeMayApproveAll: true } : r,
+    );
+    const uit = evalueer(k({
+      hasThread: true,
+      namedRecipient: false,
+      sensitive: true,
+      body: 'Following up.',
+    }), vrij);
+    expect(uit.mode).toBe('auto_approve');
+    expect(uit.actorType).toBe('axe_policy');
+  });
+
   it('generieke supply-qualification wordt auto-REJECT, niet human', () => {
     const uit = evalueer(k({
       subject: 'Copper Cathode — supply qualification',

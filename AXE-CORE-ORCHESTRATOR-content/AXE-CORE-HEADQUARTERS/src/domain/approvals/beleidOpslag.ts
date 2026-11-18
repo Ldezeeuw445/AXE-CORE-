@@ -43,9 +43,16 @@ export function laadRegels(): BeleidRegel[] {
 }
 
 export function zetCategorieVrij(managerId: string, category: ApprovalCategorie, aan: boolean): BeleidRegel[] {
+  const standaard = STANDAARD_REGELS.find((r) => r.managerId === managerId && r.category === category);
   const regels = laadRegels().map((r) =>
     r.managerId === managerId && r.category === category
-      ? { ...r, axeMayApproveAll: aan, mode: aan ? 'auto_approve' as const : r.mode }
+      ? {
+          ...r,
+          axeMayApproveAll: aan,
+          // Uit: terug naar de default. Anders blijft price/contract op auto_approve
+          // staan nadat Luka de schakelaar weer uitzet (Vercel-review, 18 nov).
+          mode: aan ? 'auto_approve' as const : (standaard?.mode ?? 'escalate'),
+        }
       : r,
   );
   if (typeof localStorage !== 'undefined') localStorage.setItem(SLEUTEL, JSON.stringify(regels));

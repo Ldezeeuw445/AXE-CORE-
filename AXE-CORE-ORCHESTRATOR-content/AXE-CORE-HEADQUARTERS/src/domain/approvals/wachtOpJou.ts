@@ -205,7 +205,9 @@ export function vanNorthsea(rijen: NorthseaVraag[], regels: BeleidRegel[] = STAN
       doet: soort.doet,
       waarom: beleid.needsLuka ? soort.waarom : beleid.reason,
       sinds: r.created_at || r.updated_at || '',
-      kanHierBeslissen: true,
+      // Alleen reply_draft heeft /human/drafts/decide. Deal/inbound-ids daarheen
+      // sturen geeft not_found en een dode knop (Vercel-review, 18 nov).
+      kanHierBeslissen: r.kind === 'reply_draft',
       dealId: r.deal_id || undefined,
       soort: r.kind,
       approvalId: r.approval_id,

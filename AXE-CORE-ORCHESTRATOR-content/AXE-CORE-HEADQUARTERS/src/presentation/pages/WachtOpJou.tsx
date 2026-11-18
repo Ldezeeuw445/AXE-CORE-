@@ -34,8 +34,16 @@ async function voerUit(item: WachtItem, actie: 'approve' | 'reject' | 'send'): P
   const r = await northseaMensBeslis([item.approvalId], actie);
   const eerste = r.results[0];
   if (!eerste?.ok) throw new Error(eerste?.message ?? eerste?.code ?? 'NorthSea refused.');
-  if (actie === 'approve' && item.kanVersturen) {
-    void northseaMensBeslis([item.approvalId], 'send').catch(() => undefined);
+}
+
+async function verstuurNaGoedkeuren(approvalId: string): Promise<string | null> {
+  try {
+    const r = await northseaMensBeslis([approvalId], 'send');
+    const eerste = r.results[0];
+    if (eerste?.ok) return null;
+    return eerste?.message ?? eerste?.code ?? 'NorthSea refused.';
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
   }
 }
 
@@ -145,7 +153,13 @@ export default function WachtOpJou() {
       via: 'inbox', at: new Date().toISOString(), threadId: i.threadId, messageId: i.messageId,
     });
     void voerUit(i, actie).then(
-      () => setStand((oud) => gelukt(oud, i.id)),
+      async () => {
+        setStand((oud) => gelukt(oud, i.id));
+        if (actie === 'approve' && i.kanVersturen && i.approvalId) {
+          const fout = await verstuurNaGoedkeuren(i.approvalId);
+          if (fout) setMelding(`Approved, but send failed: ${fout}`);
+        }
+      },
       (e: unknown) => {
         setStand((oud) => mislukt(oud, i.id, i));
         setMelding(`Did not stick: ${e instanceof Error ? e.message : String(e)}`);
@@ -157,7 +171,7 @@ export default function WachtOpJou() {
     const zichtbaar = filterItems(stand.pending as WachtItem[], {
       manager: manager === 'all' ? undefined : manager,
       category: category === 'all' ? undefined : category,
-    });
+    }).filter((i) => i.kanHierBeslissen);
     if (!zichtbaar.length) return;
     for (const i of zichtbaar) besluit(i, 'approve');
   };
