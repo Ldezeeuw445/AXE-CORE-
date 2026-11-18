@@ -19,6 +19,8 @@ import { beoordeelNotch } from '@/domain/overlay/notchLeven';
 import { projectieUitVraag } from '@/application/sphere/vraagRouter';
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 import { NotchResultaat } from './NotchResultaat';
+import { AXE_WIT, AxeGezicht, CLAUDE_KORAAL, type Stemming } from '@/presentation/components/axe-core/AxeGezicht';
+import { AXE_AGENTS } from '@/domain/agents/roster';
 import { eerstvolgende, homeStand, nieuwePeeks, PEEK_MS, zetInRij, type NotchMoment, type Peek } from '@/domain/overlay/notchPeeks';
 import { calendarJobs, gedeeldeStappen, type GedeeldeStap } from '@/infrastructure/gateways/axeCoreApiService';
 import { EEN_DING_SLEUTEL, datumSleutel, kiesEenDing, type EigenDing } from '@/domain/overlay/eenDing';
@@ -54,14 +56,16 @@ function useClaudeLive(): ClaudeLive | null {
   return live;
 }
 
-/** 3x3 pixelglyph die leeft: kleur per soort werk, golf als hij bezig is. */
-function ClaudeGlyph({ live }: { live: ClaudeLive }) {
-  return (
-    <span className="axe-ov__cglyph" data-soort={live.soort} data-toestand={live.toestand} aria-hidden="true">
-      {Array.from({ length: 9 }, (_, i) => <i key={i} style={{ animationDelay: `${(i % 3) * 120 + Math.floor(i / 3) * 90}ms` }} />)}
-    </span>
-  );
+/** Wie doet het: kleur en naam voor een taak-assignee (18 nov, gezichten in de notch). */
+function gezichtVoor(wie: string | null | undefined): { kleur: string; naam: string } {
+  const id = String(wie || '').toLowerCase();
+  if (id.includes('claude')) return { kleur: CLAUDE_KORAAL, naam: 'Claude' };
+  const a = AXE_AGENTS.find((x) => x.id === id);
+  if (!a || a.id === 'axe') return { kleur: AXE_WIT, naam: 'AXE' };
+  return { kleur: a.accent, naam: a.kort || a.name };
 }
+
+const CLAUDE_STEMMING: Record<'bezig' | 'wacht' | 'klaar', Stemming> = { bezig: 'werkt', wacht: 'wacht', klaar: 'klaar' };
 
 type Msg = { role: 'user' | 'assistant' | 'system'; content: string; at: number };
 
@@ -154,18 +158,19 @@ async function sendChat(text: string, history: Msg[], managerLabel: string): Pro
  * doen". Dat is de ene fout die een altijd-aanwezige balk niet mag maken: je
  * vertrouwt dan op iets dat al een uur dood kan zijn. Daarom twee velden.
  */
-async function fetchActivity(): Promise<{ ok: boolean; regels: string[] }> {
+async function fetchActivity(): Promise<{ ok: boolean; regels: string[]; wie?: string[] }> {
   try {
     const url = `${VPS_API_ORIGIN}/tasks?limit=12`;
     const r = await fetch(url, { headers: { ...vpsAuthHeaders(url) } });
     if (!r.ok) return { ok: false, regels: [] };
-    const data = (await r.json()) as { tasks?: Array<{ title?: string; status?: string; capability?: string }> };
+    const data = (await r.json()) as { tasks?: Array<{ title?: string; status?: string; capability?: string; assignee?: string | null }> };
+    const open = (data.tasks || [])
+      .filter((t) => /running|queued|active|in_progress|waiting/i.test(String(t.status || '')))
+      .slice(0, 4);
     return {
       ok: true,
-      regels: (data.tasks || [])
-        .filter((t) => /running|queued|active|in_progress|waiting/i.test(String(t.status || '')))
-        .slice(0, 4)
-        .map((t) => `${t.title || t.capability || 'task'} · ${t.status}`),
+      regels: open.map((t) => `${t.title || t.capability || 'task'} · ${t.status}`),
+      wie: open.map((t) => String(t.assignee || '')),
     };
   } catch {
     return { ok: false, regels: [] };
@@ -219,6 +224,7 @@ export function AxeOverlayNotch({
   const [dragging, setDragging] = useState(false);
   const [approvals, setApprovals] = useState<DurableTaskApproval[]>([]);
   const [activity, setActivity] = useState<string[]>([]);
+  const [activityWie, setActivityWie] = useState<string[]>([]);
   // Begint op true: anders roept de notch "geen verbinding" in de seconde
   // vóór de eerste ronde, en dat is een vals alarm bij elke start.
   const [bereikbaar, setBereikbaar] = useState(true);
@@ -299,7 +305,7 @@ export function AxeOverlayNotch({
       try {
         const act = await fetchActivity();
         if (act.ok) {
-          if (!cancelled) setActivity(act.regels);
+          if (!cancelled) { setActivity(act.regels); setActivityWie(act.wie ?? []); }
           takenOk = true;
         }
       } catch {
@@ -783,7 +789,7 @@ export function AxeOverlayNotch({
               title={`Claude · ${claude.project}${claude.vraag ? ` — ${claude.vraag}` : ''}`}
               onClick={() => { set(true); setTab('claude'); }}
             >
-              <ClaudeGlyph live={claude} />
+              <AxeGezicht kleur={CLAUDE_KORAAL} stemming={CLAUDE_STEMMING[claude.toestand]} size={22} label="Claude" />
               <span className="axe-ov__claude-tekst">{claude.nu}</span>
               <span className="axe-ov__claude-tijd">{klok(claude.seconden)}</span>
             </button>
@@ -836,9 +842,15 @@ export function AxeOverlayNotch({
           {(activity.length > 0 || dragging) && (
             <div className="axe-ov__activity">
               {dragging && <div className="axe-ov__drop-hint">Drop → AXE</div>}
-              {activity.map((line, i) => (
-                <div key={i} className="axe-ov__act-chip"><span className="dot" />{line}</div>
-              ))}
+              {activity.map((line, i) => {
+                const g = gezichtVoor(activityWie[i]);
+                return (
+                  <div key={i} className="axe-ov__act-chip axe-ov__act-chip--gezicht" style={{ ['--chip' as string]: g.kleur }} title={`${g.naam} · ${line}`}>
+                    <AxeGezicht kleur={g.kleur} stemming={/waiting/i.test(line) ? 'wacht' : 'werkt'} size={22} label={g.naam} />
+                    <span className="axe-ov__act-tekst">{line.replace(/\s·\s[^·]*$/, '')}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -930,6 +942,25 @@ export function AxeOverlayNotch({
                   </li>
                 ))}
               </ul>
+              {(claude || activity.length > 0) && (
+                <div className="axe-ov__wie">
+                  {claude && (
+                    <button type="button" className="axe-ov__wie-chip" style={{ ['--chip' as string]: CLAUDE_KORAAL }} onClick={() => setTab('claude')}>
+                      <AxeGezicht kleur={CLAUDE_KORAAL} stemming={CLAUDE_STEMMING[claude.toestand]} size={26} label="Claude" />
+                      <span><b>Claude</b>{claude.nu}</span>
+                    </button>
+                  )}
+                  {activity.map((line, i) => {
+                    const g = gezichtVoor(activityWie[i]);
+                    return (
+                      <div key={i} className="axe-ov__wie-chip" style={{ ['--chip' as string]: g.kleur }}>
+                        <AxeGezicht kleur={g.kleur} stemming={/waiting/i.test(line) ? 'wacht' : 'werkt'} size={26} label={g.naam} />
+                        <span><b>{g.naam}</b>{line.replace(/\s·\s[^·]*$/, '')}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <button
                 type="button"
                 className="axe-ov__home-open"

@@ -32,6 +32,7 @@ import {
   projectsOrchAgent,
 } from '@/domain/agents/bossRoute';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
+import type { Stemming } from '@/presentation/components/axe-core/AxeGezicht';
 import { syncManagerDraad, managerGelezen, MANAGER_DRAAD_EVT } from '@/infrastructure/persistence/managerDraadSync';
 import { GESPREK_CONTEXT } from '@/domain/tierRouter/agentDraad';
 import { laatManagerAntwoorden } from '@/application/managers/managerAntwoord';
@@ -114,6 +115,14 @@ function statusVoor(
   if (agent.id === 'tradingos') return { label: 'Demo', tone: 'idle' };
   if (srv && srv.status !== 'SLEEPING') return { label: 'Live', tone: 'live' };
   return { label: 'Ready', tone: 'live' };
+}
+
+/** Wat het gezicht laat zien (18 nov): dezelfde toestand als het label. */
+function stemmingVan(s: { label: string; tone: string }, busy = false): Stemming {
+  if (s.label === 'Blocked') return 'fout';
+  if (s.tone === 'wait') return 'wacht';
+  if (s.tone === 'busy' || busy) return 'werkt';
+  return 'rust';
 }
 
 function ongelezen(agentId: string, srv?: ServerAgent, busy = false): number {
@@ -443,7 +452,7 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
           style={{ ['--mgr-accent' as string]: a.accent }}
         >
           <span className="axe-managers-room-av">
-            <ManagerAvatar agent={a} size={40} />
+            <ManagerAvatar agent={a} size={40} stemming={stemmingVan(status)} />
             <span className="axe-managers-room-stip" data-tone={status.tone} aria-hidden />
           </span>
           <span className="axe-managers-room-meta">
@@ -532,7 +541,7 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
               style={{ ['--mgr-accent' as string]: boss.accent }}
             >
               <span className="axe-managers-room-boss-av">
-                <ManagerAvatar agent={boss} size={72} />
+                <ManagerAvatar agent={boss} size={72} stemming={stemmingVan(bossStatus, bossBusy)} />
                 <span className="axe-managers-room-stip" data-tone={bossStatus.tone} aria-hidden />
               </span>
               <span className="axe-managers-room-boss-naam">AXE Core</span>

@@ -654,3 +654,23 @@ html[data-axe-notch] {
   padding: 8px 14px; border-radius: 10px; font: inherit; cursor: pointer;
   border: 1px solid var(--axe-notch-accent); background: transparent; color: var(--axe-notch-accent);
 }
+
+/* ── Gezichten (18 nov): wie doet wat, in de kleur van wie het doet. */
+.axe-ov__act-chip--gezicht {
+  display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px 3px 4px;
+  border-radius: 999px; border: 1px solid color-mix(in srgb, var(--chip) 45%, transparent);
+  background: color-mix(in srgb, var(--chip) 12%, #0b0d12);
+}
+.axe-ov__act-tekst { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; color: color-mix(in srgb, var(--chip) 70%, #fff); }
+.axe-ov__wie { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.axe-ov__wie-chip {
+  display: flex; align-items: center; gap: 10px; min-width: 0; padding: 6px 14px 6px 6px;
+  border-radius: 999px; font: inherit; text-align: left; color: var(--axe-notch-ink);
+  border: 1px solid color-mix(in srgb, var(--chip) 45%, transparent);
+  background: color-mix(in srgb, var(--chip) 12%, #0b0d12);
+}
+button.axe-ov__wie-chip { cursor: pointer; }
+.axe-ov__wie-chip > span { display: flex; flex-direction: column; min-width: 0; font-size: .9em; }
+.axe-ov__wie-chip > span > b { font-weight: 600; font-size: .85em; color: color-mix(in srgb, var(--chip) 75%, #fff); }
+.axe-ov__wie-chip > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-ov__claude .axe-ov__gezicht, .axe-ov__claude svg { margin-right: 2px; }
