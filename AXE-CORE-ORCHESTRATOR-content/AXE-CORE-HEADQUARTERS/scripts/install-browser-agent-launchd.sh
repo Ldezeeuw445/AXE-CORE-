@@ -16,7 +16,20 @@ PY="$ROOT/backend/axe_api/.venv-local/bin/python"
 # The Python package alone is not a usable browser worker: Playwright's actual
 # Chromium binary is a separate install. This command is idempotent and only
 # downloads the matching browser when it is missing.
-"$PY" -m playwright install chromium
+#
+# 18 nov (Mac mini): de update van AXE stopte hier op een achtergebleven
+# ~/Library/Caches/ms-playwright/__dirlock, terwijl de app zelf al gebouwd was.
+# Een slot ouder dan 10 minuten is van een afgebroken install: weghalen. En
+# lukt Chromium dan nog niet, dan waarschuwen en doorgaan -- de browser-agent
+# is één onderdeel; AXE zelf moet gewoon bijgewerkt worden.
+SLOT="$HOME/Library/Caches/ms-playwright/__dirlock"
+if [[ -e "$SLOT" ]] && [[ -n "$(find "$SLOT" -maxdepth 0 -mmin +10 2>/dev/null)" ]]; then
+  echo "Oud Playwright-slot gevonden (>10 min); weggehaald." >&2
+  rm -rf "$SLOT"
+fi
+if ! "$PY" -m playwright install chromium; then
+  echo "WAARSCHUWING: Chromium voor de browser-agent niet geïnstalleerd; AXE-update gaat door." >&2
+fi
 
 mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
 
