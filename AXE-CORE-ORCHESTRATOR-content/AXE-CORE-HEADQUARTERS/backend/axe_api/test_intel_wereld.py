@@ -140,10 +140,14 @@ def test_energie_zonder_key_eerlijk_en_met_key_een_keer_per_dag(monkeypatch):
 
 
 def test_geen_verzonnen_marktstroom():
-    """marketTide/unusualOptions/darkPool horen hier niet: geen echte bron zonder abonnement."""
+    """marketTide/unusualOptions/darkPool haalt deze module niet zelf op en slaat ze niet op:
+    alleen de gedeelde intel-proxy serveert ze (CBOE/FINRA), en run_proxy meet die alleen."""
     feeds = {d["agent"] for d in w.diensten()}
-    assert feeds == {"intel-wereld", "intel-lucht"}
+    assert feeds == {"intel-wereld", "intel-lucht", "intel-proxy-peiling"}
     assert not hasattr(w, "run_market_tide")
+    db = _Db()
+    w.run_proxy(db, NU, post=lambda a, _args: (200, {"ok": True, "data": [{"x": 1}], "source": "cboe_delayed"}))
+    assert db.geschreven == {}
 
 
 def test_diensten_staan_in_de_catalogus():
@@ -176,3 +180,59 @@ def test_jets_eerste_staart_via_losse_vraag():
     rijen, info = w.haal_jets(_get, 0, NU.replace(hour=0))
     assert info["in_beeld"] >= 1
     assert any(r["icao24"] == "a835af" and "TSLA" in r["company"] for r in rijen)
+
+
+# ── live via de gedeelde intel-proxy ───────────────────────────────────────
+
+def _proxy(antwoorden):
+    gevraagd = []
+
+    def post(action, args):
+        gevraagd.append(action)
+        return antwoorden[action]
+    return post, gevraagd
+
+
+def test_proxy_feeds_worden_gemeten_zoals_de_apps_ze_krijgen():
+    db = _Db()
+    post, gevraagd = _proxy({
+        "darkPoolPrints": (200, {"ok": True, "data": [{"symbol": "SPY"}] * 12, "source": "finra_reg_sho_daily"}),
+        "unusualOptions": (200, {"ok": True, "data": [{"symbol": "NVDA"}] * 25, "source": "cboe_delayed"}),
+        "marketTide": (200, {"ok": True, "data": [{"bias": "neutral"}] * 6, "source": "cboe_delayed"}),
+        "cyberThreats": (200, {"ok": True, "data": [{"cveId": "CVE-1"}] * 25, "source": "cisa_kev"}),
+        "vesselStream": (200, {"ok": True, "data": {"vessels": [{"mmsi": "1"}] * 3, "alerts": []},
+                               "source": "digitraffic", "aisstream_note": "aisstream_no_messages: connect_timeout_8s"}),
+    })
+    uit = w.run_proxy(db, NU, post=post)
+    assert gevraagd == ["darkPoolPrints", "unusualOptions", "marketTide", "cyberThreats", "vesselStream"]
+    assert db.sync["darkPool"] == {"feed_id": "darkPool", "source": "intel-proxy:finra_reg_sho_daily",
+                                   "last_error": None, "last_sync_at": NU.isoformat(), "rows_synced": 12}
+    assert db.sync["marketTide"]["rows_synced"] == 6
+    assert db.sync["vesselTracking"]["rows_synced"] == 3
+    assert uit["vesselTracking"]["let_op"].startswith("aisstream_no_messages")
+    # Niets opgeslagen: alleen de log.
+    assert db.geschreven == {}
+    staande_diensten._geen_verboden(uit)
+
+
+def test_proxy_fout_of_nul_rijen_laat_de_oude_stand_oud():
+    db = _Db()
+    post, _ = _proxy({
+        "darkPoolPrints": (500, {"ok": False, "error": "offexchange_failed"}),
+        "unusualOptions": (200, {"ok": True, "data": [], "source": "cboe_delayed"}),
+        "marketTide": (200, None),
+        "cyberThreats": (200, {"ok": False, "error": "kev down"}),
+        "vesselStream": (200, {"ok": False, "error": "aisstream_no_messages"}),
+    })
+    uit = w.run_proxy(db, NU, post=post)
+    for feed in ("darkPool", "unusualOptions", "marketTide", "cyberThreats", "vesselTracking"):
+        assert "last_sync_at" not in db.sync[feed], feed
+        assert db.sync[feed]["last_error"], feed
+    assert "http_500" in uit["darkPool"]["fout"]
+    assert uit["unusualOptions"]["fout"] == "intel-proxy gaf 0 rijen"
+
+
+def test_proxy_peiling_is_een_staande_dienst():
+    dienst = next(d for d in w.diensten() if d["agent"] == "intel-proxy-peiling")
+    assert dienst["run"] is w.run_proxy and dienst["cron_expr"] == "45 * * * *"
+    assert staande_diensten.catalogus_voor("intel-proxy-peiling") is not None

@@ -17,6 +17,16 @@ optie- en dark-pool-stromen; de oude Finnhub-variant van marketTide verzon de
 call/put-premies (vast 2 miljard met een scheefheid erop). Liever leeg en eerlijk
 dan een getal dat er echt uitziet.
 
+18 nov: die drie, plus cyberThreats en vesselTracking, serveert de gedeelde
+intel-proxy (Trading OS-repo) nu live uit gratis bronnen: CBOE (vertraagde
+optieketens), FINRA Reg SHO (dagelijks off-exchange volume), CISA KEV en
+Digitraffic/AISstream. Er is geen tabel die ze bewaart; de apps vragen de proxy.
+Hun regels in intel_sync_log bleven daardoor op augustus staan, en de Trading
+OS Manager meldde elke dag "4 marktfeeds staan 95 dagen stil" terwijl de apps
+verse data lieten zien. `run_proxy` vraagt elk uur de proxy precies wat de apps
+krijgen, en schrijft per feed de bron, het aantal rijen of de fout in de log.
+Nul rijen is een fout, geen verse ronde.
+
 Alleen lezen bij de bron. Geen orders, geen mail.
 """
 from __future__ import annotations
@@ -297,6 +307,77 @@ def haal_jets(get: Getter, pauze: float, nu: datetime | None = None) -> tuple[li
     }
 
 
+# ── live via de gedeelde intel-proxy (alleen meten, niets opslaan) ─────────
+
+# feed_id in intel_sync_log → actie die de apps aan intel-proxy vragen
+PROXY_FEEDS: tuple[tuple[str, str], ...] = (
+    ("darkPool", "darkPoolPrints"),
+    ("unusualOptions", "unusualOptions"),
+    ("marketTide", "marketTide"),
+    ("cyberThreats", "cyberThreats"),
+    ("vesselTracking", "vesselStream"),
+)
+
+Poster = Callable[[str, dict[str, Any]], tuple[int, Any]]
+
+
+def _proxy_post(action: str, args: dict[str, Any]) -> tuple[int, Any]:
+    """POST naar intel-proxy met de sleutel van deze backend; de sleutel gaat
+    alleen in de header, nooit in een log of foutmelding."""
+    import httpx
+    url = (os.environ.get("SUPABASE_URL") or "").rstrip("/")
+    sleutel = (os.environ.get("SUPABASE_SERVICE_ROLE") or "").strip()
+    if not url or not sleutel:
+        raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE ontbreken op deze host")
+    r = httpx.post(f"{url}/functions/v1/intel-proxy", json={"action": action, "args": args},
+                   headers={"Authorization": f"Bearer {sleutel}", "apikey": sleutel}, timeout=60)
+    try:
+        return r.status_code, r.json()
+    except ValueError:
+        return r.status_code, None
+
+
+def proxy_rijen(body: Any) -> int:
+    """Aantal rijen dat de proxy gaf: een lijst, of {vessels: [...]} bij schepen."""
+    data = body.get("data") if isinstance(body, dict) else None
+    if isinstance(data, list):
+        return len(data)
+    if isinstance(data, dict) and isinstance(data.get("vessels"), list):
+        return len(data["vessels"])
+    return 0
+
+
+def peil_proxy_feed(db: Any, nu: datetime, feed: str, action: str, post: Poster) -> dict[str, Any]:
+    """Eén feed: wat geeft de proxy nu? Fout of nul rijen = oude stand blijft oud."""
+    bron = "intel-proxy"
+    try:
+        status, body = post(action, {})
+        if isinstance(body, dict) and body.get("source"):
+            bron = f"intel-proxy:{body['source']}"
+        if status != 200 or not isinstance(body, dict) or body.get("ok") is not True:
+            reden = body.get("error") if isinstance(body, dict) else None
+            raise RuntimeError(f"http_{status}: {str(reden or 'geen geldig antwoord')[:200]}")
+        n = proxy_rijen(body)
+        if n == 0:
+            raise RuntimeError("intel-proxy gaf 0 rijen")
+        _log_sync(db, feed, bron, n, None, nu)
+        uit: dict[str, Any] = {"rijen": n, "bron": bron}
+        if isinstance(body.get("aisstream_note"), str):
+            uit["let_op"] = body["aisstream_note"][:200]
+        return uit
+    except Exception as exc:  # noqa: BLE001
+        _log_sync(db, feed, bron, 0, str(exc)[:300], nu)
+        return {"fout": str(exc)[:200]}
+
+
+def run_proxy(db: Any, nu: datetime, post: Poster = _proxy_post) -> dict[str, Any]:
+    """Elk uur: de vijf feeds die alleen via de gedeelde intel-proxy bestaan."""
+    uit: dict[str, Any] = {"job": "intel proxy feeds"}
+    for feed, action in PROXY_FEEDS:
+        uit[feed] = peil_proxy_feed(db, nu, feed, action, post)
+    return uit
+
+
 # ── schrijven ──────────────────────────────────────────────────────────────
 
 def _schrijf(db: Any, tabel: str, rijen: list[dict[str, Any]], nu: datetime) -> int:
@@ -381,7 +462,15 @@ def diensten() -> tuple[dict[str, Any], ...]:
                    "api.adsb.lol (hourly). Read-only at the source.",
             "run": run_lucht,
         },
+        {
+            "agent": "intel-proxy-peiling", "name": "Intel feeds: options, market tide, dark pool, cyber, vessels",
+            "job_key": "axe_core:staande-intel-proxy", "cron_expr": "45 * * * *",
+            "wat": "Ask the shared intel-proxy what Trading OS and AXE Companion get for darkPool, "
+                   "unusualOptions, marketTide, cyberThreats and vesselTracking, and record source, row "
+                   "count or error in intel_sync_log (hourly). Read-only; nothing is stored.",
+            "run": run_proxy,
+        },
     )
 
 
-__all__ = ["run_wereld", "run_lucht", "diensten"]
+__all__ = ["run_wereld", "run_lucht", "run_proxy", "diensten"]
