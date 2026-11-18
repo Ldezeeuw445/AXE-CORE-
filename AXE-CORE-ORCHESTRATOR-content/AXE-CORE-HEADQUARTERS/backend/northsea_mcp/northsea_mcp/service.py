@@ -1462,8 +1462,13 @@ class NorthSeaService:
             return SendResult(draft_id=d["id"], submitted=False, duplicate=True, communication_id=None,
                               provider_message_id=d.get("resend_email_id"), message="Already sent; nothing was sent again.")
         regel = d.get("policy_decision") if isinstance(d.get("policy_decision"), dict) else {}
+        eerste = d.get("generated_by") == "northsea-mcp" and d.get("purpose") in POLICY_DOELEN
+        # 18 nov: ook een vervolgmail van de engine op een eigen eerdere mail,
+        # alleen onder de regel luka_followups_2026_11_18 (engine.py).
+        vervolg = (d.get("generated_by") == "northsea-engine" and str(d.get("purpose") or "").startswith("Follow-up ")
+                   and regel.get("rule") == "luka_followups_2026_11_18" and bool(d.get("communication_id")))
         if (d.get("approval_status") != "not_required" or not regel.get("allowed") or d.get("sensitive_action")
-                or d.get("generated_by") != "northsea-mcp" or d.get("purpose") not in POLICY_DOELEN):
+                or not (eerste or vervolg)):
             raise PolicyDenied("policy_send_not_allowed", "This draft is not a policy-allowed first qualification mail.")
         res = await self.repo.send_approved_reply(d["id"], requested_by=caller.principal)
         if res.get("ok"):

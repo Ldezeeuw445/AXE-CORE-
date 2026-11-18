@@ -44,6 +44,8 @@ def _lower(v: Any) -> str:
 
 
 CANONICAL_MAILBOX = "trade@northseacommodity.com"
+VERVOLG_REGEL = "luka_followups_2026_11_18"
+VERVOLG_PER_DAG = 10
 BLOCKING_POLICIES = ("do_not_contact", "review_required")
 
 
@@ -120,6 +122,17 @@ class EngineService:
         interval = policy.get("followup_interval_hours")
         max_fu = policy.get("max_auto_followups")
         policy_ok = isinstance(interval, int) and isinstance(max_fu, int) and interval > 0
+        # 18 nov, Luka: "dat is een bedrijf wat geautomatiseerd moet lopen en niet
+        # dat ik van alles moet approven per dag". Vervolgmails op een eigen
+        # eerdere mail mogen zonder hem, maar alleen als auto_send_followups AAN
+        # staat (de noodknop), hooguit VERVOLG_PER_DAG per dag, vast sjabloon.
+        # De database eist bij een not_required-concept een policy_decision met
+        # allowed=true en houdt het contactbeleid aan; dat blijft zo.
+        vervolg_zelf = bool(policy.get("auto_send_followups")) and bool(policy.get("auto_reply_nonbinding"))
+        vandaag = nu.date()
+        vervolg_vandaag = sum(1 for x in drafts if x.get("generated_by") == "northsea-engine"
+                              and x.get("approval_status") == "not_required"
+                              and str(x.get("created_at") or "")[:10] == vandaag.isoformat())
 
         opp_by_id = {o["id"]: o for o in d["opportunities"]}
 
@@ -346,12 +359,22 @@ class EngineService:
                     item["result"] = "blocked_no_recipient"
                     continue
                 try:
+                    zelf = vervolg_zelf and vervolg_vandaag < VERVOLG_PER_DAG
+                    beslissing = ({"allowed": True, "action": "followup_send", "rule": VERVOLG_REGEL,
+                                   "reason": "follow-up on our own earlier mail, fixed template, within daily limit",
+                                   "limit_per_day": VERVOLG_PER_DAG, "decided_at": nu.isoformat(), "engine_version": rules.ENGINE_VERSION}
+                                  if zelf else
+                                  {"allowed": False, "action": "followup_send",
+                                   "reasons": ["human approval required" if not vervolg_zelf else f"daily limit of {VERVOLG_PER_DAG} automatic follow-ups reached"],
+                                   "engine_version": rules.ENGINE_VERSION})
                     dr = await self.repo.engine_insert("reply_drafts", {
                         "communication_id": f.anchor_communication_id, "company_id": f.company_id, "contact_id": f.contact_id, "opportunity_id": f.opportunity_id,
                         "to_email": adres, "subject": concept["subject"], "body": concept["body"], "purpose": f"Follow-up {f.attempt} (engine)",
-                        "approval_status": "pending", "lifecycle_state": "approval_required", "sensitive_action": False, "generated_by": "northsea-engine",
-                        "policy_decision": {"allowed": False, "action": "followup_send", "reasons": ["human approval required",
-                                            "auto_send_followups is not used by the engine in P1"], "engine_version": rules.ENGINE_VERSION}})
+                        "approval_status": "not_required" if zelf else "pending",
+                        "lifecycle_state": "policy_allowed" if zelf else "approval_required",
+                        "sensitive_action": False, "generated_by": "northsea-engine", "policy_decision": beslissing})
+                    if zelf:
+                        vervolg_vandaag += 1
                     await self.repo.engine_patch("northsea_followups", {"id": f"eq.{fu_id}"}, {"status": "draft_created", "draft_id": dr[0]["id"], "updated_at": nu.isoformat()})
                     item["result"] = "draft_created"
                     item["draft_id"] = dr[0]["id"]

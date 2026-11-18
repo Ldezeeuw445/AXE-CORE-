@@ -648,3 +648,28 @@ async def test_desk_tidy_route_met_engine_token(client, store, repo):
     r = await client.post("/internal/desk/tidy", json={"dry_run": False, "apply": ["auto"]}, headers=h)
     assert r.status_code == 200 and any(s["id"] == a for s in r.json()["applied"])
     assert next(x for x in repo.t["action_queue"] if x["id"] == a)["status"] == "cancelled"
+
+
+async def test_vervolgmail_gaat_zelf_alleen_met_de_noodknop_aan():
+    """18 nov, Luka: 'een bedrijf wat geautomatiseerd moet lopen'. Met
+    auto_send_followups AAN wordt de vervolgmail policy-allowed en verstuurd
+    na de tick; met de knop UIT blijft hij een pending concept (test hierboven)."""
+    from northsea_mcp.crew_loop import finish_engine_tick
+    from northsea_mcp.service import NorthSeaService
+    repo = FakeRepo()
+    repo.t["deal_automation_policy"][0].update(auto_send_followups=True, auto_send_qualification=True, auto_reply_nonbinding=True)
+    oude_inbound(repo)
+    repo.t["reply_drafts"] = [d for d in repo.t["reply_drafts"] if d["approval_status"] != "pending"]
+    anker = outbound(repo, h=-60)
+    uit = await eng(repo).tick()
+    fu = repo.t["northsea_followups"][0]
+    d = next(x for x in repo.t["reply_drafts"] if x["id"] == fu["draft_id"])
+    assert d["approval_status"] == "not_required" and d["policy_decision"]["allowed"] is True
+    assert d["policy_decision"]["rule"] == "luka_followups_2026_11_18" and d["communication_id"] == anker
+    lus = await finish_engine_tick(NorthSeaService(repo, None, None), uit)
+    assert lus["sent"] == 1 and len(repo.sends) == 1
+    # Noodknop weer uit: een volgend policy-allowed vervolgconcept gaat niet meer weg.
+    repo.t["deal_automation_policy"][0]["auto_send_followups"] = False
+    nog = dict(d, id=str(uuid.uuid4()), sent_at=None, resend_email_id=None)
+    repo.t["reply_drafts"].append(nog)
+    assert (await repo.send_approved_reply(nog["id"]))["ok"] is False

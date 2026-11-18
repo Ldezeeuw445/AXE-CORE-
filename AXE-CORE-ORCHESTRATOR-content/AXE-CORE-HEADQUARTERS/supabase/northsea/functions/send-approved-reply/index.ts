@@ -1,4 +1,4 @@
-// send-approved-reply v8 (op live v7.1: auth accepteert de door de gateway geverifieerde service_role-JWT).
+// send-approved-reply v9 (18 nov: + vervolgmails onder luka_followups_2026_11_18). v8 op live v7.1: auth accepteert de door de gateway geverifieerde service_role-JWT).
 // Verstuurt ÉÉN door een MENS goedgekeurde draft, of (v8, 16 nov) één vrijblijvende
 // eerste kwalificatiemail die de deskloop volgens Luka's vaste regel mag sturen:
 // approval_status=not_required, policy_decision.allowed, niet gevoelig, alleen de
@@ -69,7 +69,17 @@ Deno.serve(async (req) => {
     if (policyPad) {
       const pd = (d.policy_decision ?? {}) as Record<string, unknown>;
       const { data: mag } = await sb.rpc("northsea_policy_allows", { p_action: "auto_qualification_reply" });
-      if (pd.allowed !== true || d.sensitive_action || d.generated_by !== "northsea-mcp" || !POLICY_PURPOSES.has(String(d.purpose ?? ""))
+      const eersteMail = d.generated_by === "northsea-mcp" && POLICY_PURPOSES.has(String(d.purpose ?? ""));
+      // v9 (18 nov, Luka: "een bedrijf wat geautomatiseerd moet lopen"): ook een
+      // vervolgmail van de engine op een EIGEN eerdere mail, onder de regel
+      // luka_followups_2026_11_18, en alleen zolang auto_send_followups aanstaat.
+      let vervolg = false;
+      if (d.generated_by === "northsea-engine" && String(d.purpose ?? "").startsWith("Follow-up ")
+          && pd.rule === "luka_followups_2026_11_18" && d.communication_id) {
+        const { data: pol } = await sb.from("deal_automation_policy").select("auto_send_followups").eq("id", 1).maybeSingle();
+        vervolg = pol?.auto_send_followups === true;
+      }
+      if (pd.allowed !== true || d.sensitive_action || !(eersteMail || vervolg)
           || d.approval_actor_type || d.approved_by || mag !== true) {
         await audit(sb, { actor_type: "service", actor: "send-approved-reply", action: "policy_send_refused", draft_id: d.id,
           opportunity_id: d.opportunity_id, company_id: d.company_id, details: { requested_by: requestedBy, policy_on: mag === true, purpose: d.purpose } });

@@ -684,6 +684,14 @@ async def finish_engine_tick(service: Any, tick: dict[str, Any]) -> dict[str, An
         purpose = str(d.get("purpose") or "").lower()
         if "follow-up" not in purpose and "follow_up" not in purpose:
             continue
+        if d.get("approval_status") == "not_required":
+            # 18 nov: vervolgmail onder Luka's regel (engine.py, VERVOLG_REGEL).
+            try:
+                uit = await service.send_policy_allowed(desk_manager_caller(), draft_id=draft_id)
+                verzonden += 1 if uit.submitted else 0
+            except (PolicyDenied, ServiceError, NotFound):
+                pass
+            continue
         try:
             vrij = await _vrijgeven(service, draft_id)
         except (PolicyDenied, ServiceError):

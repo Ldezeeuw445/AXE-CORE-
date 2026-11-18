@@ -433,15 +433,19 @@ class FakeRepo:
                 if r["approval_status"] == "not_required":  # v8: Luka's vaste regel
                     p = (self.t.get("deal_automation_policy") or [{}])[0]
                     mag = bool(p.get("auto_send_qualification") and p.get("auto_reply_nonbinding"))
-                    if not (mag and (r.get("policy_decision") or {}).get("allowed") and not r.get("sensitive_action")
-                            and r.get("generated_by") == "northsea-mcp"):
+                    pd = r.get("policy_decision") or {}
+                    vervolg = (r.get("generated_by") == "northsea-engine" and str(r.get("purpose") or "").startswith("Follow-up ")
+                               and pd.get("rule") == "luka_followups_2026_11_18" and r.get("communication_id")
+                               and p.get("auto_send_followups") is True)  # v9
+                    if not (mag and pd.get("allowed") and not r.get("sensitive_action")
+                            and (r.get("generated_by") == "northsea-mcp" or vervolg)):
                         return {"ok": False, "error": "policy_send_not_allowed", "_status": 409}
                 elif r["approval_status"] != "approved":
                     return {"ok": False, "error": "draft_not_approved", "_status": 409}
                 elif r.get("approval_actor_type") != "human" or not r.get("approved_by"):
                     return {"ok": False, "error": "human_approval_provenance_missing", "_status": 409}
-                if r["sent_at"] or r["resend_email_id"]:
-                    return {"ok": True, "duplicate": True, "resend_email_id": r["resend_email_id"], "_status": 200}
+                if r.get("sent_at") or r.get("resend_email_id"):
+                    return {"ok": True, "duplicate": True, "resend_email_id": r.get("resend_email_id"), "_status": 200}
                 r["sent_at"] = ts()
                 r["resend_email_id"] = f"re_{uuid.uuid4().hex[:12]}"
                 self.sends.append(r["id"])
