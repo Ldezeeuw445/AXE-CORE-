@@ -76,12 +76,15 @@ fi
 DRAAIDE=0
 pgrep -f "$APP/Contents/MacOS/" >/dev/null 2>&1 && DRAAIDE=1
 
+# Alleen de .app, geen .dmg: bundle_dmg.sh stuurt Finder aan via AppleScript en
+# faalt vanuit een achtergrondtaak (18 nov, eerste run op de Mac mini). De .dmg
+# is alleen nodig om de app aan iemand anders te geven; desktop:build maakt hem.
 log "schil veranderd (src-tauri ${DOEL:0:12}) — Trading OS.app bouwen (laagste prioriteit)"
 RUN="$(mktemp "${TMPDIR:-/tmp}/tradingos-desktop.XXXXXX")"
 if (cd "$REPO" && nice -n 15 env -i HOME="$HOME" USER="${USER:-}" LOGNAME="${USER:-}" SHELL=/bin/zsh \
       TMPDIR="${TMPDIR:-/tmp}" PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
       /usr/bin/perl -e 'alarm shift @ARGV; exec @ARGV or die "exec: $!"' "${TRADINGOS_DESKTOP_MAX_S:-3600}" \
-      /bin/bash -c 'npm ci --no-audit --no-fund && bash scripts/desktop-build.sh && bash scripts/desktop-install.sh') > "$RUN" 2>&1; then
+      /bin/bash -c 'npm ci --no-audit --no-fund && npx tauri build --bundles app && bash scripts/desktop-install.sh') > "$RUN" 2>&1; then
   cat "$RUN" >> "$LOG"; rm -f "$RUN"
   echo "$DOEL" > "$STAAT/gebouwd"
   rm -f "$STAAT/mislukt"
