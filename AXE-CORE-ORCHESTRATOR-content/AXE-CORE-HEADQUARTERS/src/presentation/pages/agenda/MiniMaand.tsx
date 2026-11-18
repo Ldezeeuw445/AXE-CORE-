@@ -43,6 +43,13 @@ export function MiniMaand({
   const vanVandaag = items
     .filter(i => i.datum === vandaag)
     .sort((a, b) => a.tijd.localeCompare(b.tijd));
+  /* 18 nov, UI-ronde: "Today 93" -- bijna alles was een cron-routine om 00:00,
+     en Luka's eigen afspraken verdwenen ertussen. Routines nu samen op één
+     regel, open te klappen. */
+  const isRoutine = (i: RoosterItem) => /^cron\b|routine/i.test(i.titel) || /cron|routine/i.test(i.soort);
+  const eigen = vanVandaag.filter(i => !isRoutine(i));
+  const routines = vanVandaag.filter(isRoutine);
+  const [routinesOpen, setRoutinesOpen] = useState(false);
 
   const schuif = (n: number) => setMaand(new Date(maand.getFullYear(), maand.getMonth() + n, 1));
 
@@ -76,12 +83,12 @@ export function MiniMaand({
       </div>
 
       <div className="axe-minimaand-vandaag">
-        <div className="axe-minimaand-label">Today <em>{vanVandaag.length}</em></div>
-        {vanVandaag.length === 0 ? (
-          <p>Nothing planned today.</p>
+        <div className="axe-minimaand-label">Today <em>{eigen.length}</em></div>
+        {eigen.length === 0 ? (
+          <p>Geen eigen afspraken vandaag.</p>
         ) : (
           <ul>
-            {vanVandaag.map(i => (
+            {eigen.map(i => (
               <li key={i.id} title={i.titel}>
                 <i style={{ background: i.kleur }} />
                 <span>{i.tijd}</span>
@@ -89,6 +96,25 @@ export function MiniMaand({
               </li>
             ))}
           </ul>
+        )}
+        {routines.length > 0 && (
+          <>
+            <button type="button" className="axe-minimaand-label" style={{ marginTop: 8, cursor: 'pointer', background: 'none', border: 0, padding: 0 }}
+              onClick={() => setRoutinesOpen(o => !o)} aria-expanded={routinesOpen}>
+              {routinesOpen ? '▾' : '▸'} Automatische routines <em>{routines.length}</em>
+            </button>
+            {routinesOpen && (
+              <ul>
+                {routines.map(i => (
+                  <li key={i.id} title={i.titel}>
+                    <i style={{ background: i.kleur }} />
+                    <span>{i.tijd}</span>
+                    <b>{i.titel.replace(/^Cron · /, '')}</b>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </div>
     </div>

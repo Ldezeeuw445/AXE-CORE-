@@ -313,6 +313,13 @@ export function AppShell() {
       className={`axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden${opPlaatMobiel ? ' axe-plaat-mobiel' : ''}${mobielTab ? ' axe-mobiel-randloos' : ''}${volScherm ? ' axe-mobiel-desk' : ''}${opSlot ? ' axe-lock-pad' : ''}`}
       data-axe-plaat={opPlaatMobiel ? 'ja' : undefined}
       data-axe-randloos={mobielTab ? 'ja' : undefined}
+      /* 18 nov, UI-ronde: na "Meer" stond de hele schil 388px opzij
+         (scrollLeft op een overflow-hidden doos; de browser scrolt die toch
+         als iets erbuiten de focus krijgt). De schil scrolt nooit zelf. */
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        if (el.scrollLeft || el.scrollTop) { el.scrollLeft = 0; el.scrollTop = 0; }
+      }}
       style={
         opPlaatMobiel
           ? {

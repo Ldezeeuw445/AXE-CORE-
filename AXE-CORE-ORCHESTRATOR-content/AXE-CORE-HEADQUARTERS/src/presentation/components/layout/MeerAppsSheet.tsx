@@ -63,9 +63,7 @@ export function MeerAppsSheet({ open, onClose }: { open: boolean; onClose: () =>
                   }}
                 >
                   <span className="block text-[13px] font-semibold leading-tight">{item.label}</span>
-                  <span className="block mt-0.5 text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
-                    {item.path}
-                  </span>
+                  {/* Geen route-pad ("/maps-3d") meer: dat zegt Luka niets (18 nov). */}
                 </button>
               );
             })}
