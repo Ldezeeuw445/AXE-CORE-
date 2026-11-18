@@ -82,6 +82,16 @@ function bewaarHandvat(aan: boolean) {
 }
 let handvat = leesHandvat();
 
+/** Alleen een open notch (door Luka zelf opengeklikt) mag het toetsenbord
+ *  krijgen; dicht nooit. Zie zwevendeVensters.ts (18 nov). */
+async function zetFocusbaar(aan: boolean) {
+  if (!isTauriRuntime()) return;
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    await getCurrentWindow().setFocusable(aan);
+  } catch { /* oudere build zonder het recht: dan blijft het zoals het was */ }
+}
+
 async function dockTop(open: boolean) {
   if (!isTauriRuntime()) return;
   try {
@@ -196,6 +206,7 @@ export default function FloatAxe() {
       // Always start collapsed. Inferring from innerHeight re-opens a stale
       // expanded frame (870×720) and leaves the notch "big in the screen".
       void dockTop(false);
+      void zetFocusbaar(false);
     })();
     return () => {
       document.documentElement.style.background = prev[0];
@@ -259,7 +270,7 @@ export default function FloatAxe() {
     <div style={{ padding: 0, background: 'transparent', height: '100vh', boxSizing: 'border-box' }}>
       <AxeOverlayNotch
         onHome={() => { openRef.current = false; void dockTop(false); }}
-        onOpenChange={(open) => { openRef.current = open; void dockTop(open); }}
+        onOpenChange={(open) => { openRef.current = open; void dockTop(open); void zetFocusbaar(open); }}
         onInklappen={() => kiesHandvat(true)}
       />
     </div>

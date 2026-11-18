@@ -127,6 +127,11 @@ export async function openZwevend(type: ZwevendType): Promise<void> {
     alwaysOnTop: type !== 'axe',
     /* Verschijnen zonder het toetsenbord over te nemen. */
     focus: type !== 'axe',
+    /* 18 nov (Mac mini, focus.log: elke ~10 s 'focus axe-float-axe', ook na de
+       wekwoord-fix): de notch mag de toetsenbordfocus NOOIT vanzelf krijgen.
+       Niet-focusable = macOS maakt hem nooit 'key'; klikken werkt gewoon.
+       Pas als Luka de notch zelf openklikt om te typen, zet FloatAxe dit aan. */
+    focusable: type !== 'axe',
     visibleOnAllWorkspaces: true,
     resizable: type !== 'axe',
     /* Notch: OS-schaduw op een transparent rechthoek + CSS-radius = donkere
