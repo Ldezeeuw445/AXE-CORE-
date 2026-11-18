@@ -639,10 +639,37 @@ def systeem_prompt() -> str:
             f"Luka pinned this job to {pinned}. Use run_on_device with that "
             "device. Do not switch machine."
         )
+    log = _gedeeld_log_context()
+    if log:
+        extra.append(log)
     kop = brief
     if extra:
         kop = f"{brief}\n\n" + "\n".join(extra) if brief else "\n".join(extra)
     return f"{kop}\n\n{basis}" if kop else basis
+
+
+_LOG_CACHE: dict[str, Any] = {"t": 0.0, "tekst": ""}
+
+
+def _gedeeld_log_context(nu: float | None = None) -> str:
+    """18 nov (Luka): elke AI begint met het gedeelde log van de andere sessies.
+    Hooguit eens per minuut gelezen; een leesfout geeft gewoon geen context."""
+    import time as _t
+    nu = _t.time() if nu is None else nu
+    if nu - float(_LOG_CACHE["t"]) < 60:
+        return str(_LOG_CACHE["tekst"])
+    tekst = ""
+    try:
+        import gedeeld_log as _gl
+        db = _db_voor_stoelen()
+        if db is not None:
+            rijen = (db.table("core_manager_messages").select("from_agent,body,created_at").eq("to_agent", _gl.LOG)
+                     .order("created_at", desc=True).limit(10).execute().data) or []
+            tekst = _gl.context_tekst([_gl.als_regel(r) for r in rijen])
+    except Exception:  # noqa: BLE001
+        tekst = ""
+    _LOG_CACHE.update(t=nu, tekst=tekst)
+    return tekst
 
 
 class ProviderUitgeput(RuntimeError):

@@ -8,6 +8,19 @@ Dit bestand bestaat omdat Luka met meerdere assistenten tegelijk werkt —
 Claude Code, Cursor, Cowork. Nemen jullie verschillende dingen aan, dan bouwen
 jullie langs elkaar heen.
 
+**Eén regel voor elke sessie (Luka, 18 nov 2026).** Begin met het gedeelde
+log en de stappen, eindig met één logregel. Zo weet elke AI -- AXE, de
+managers, DAX, Claude Code, Codex, Cursor -- wat de anderen net deden:
+
+```
+AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/cli/axe log            # laatste regels lezen
+AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/cli/axe stappen        # wat open staat, wiens beurt
+AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/cli/axe log "wat ik deed, waar ik stopte"   # aan het eind
+```
+
+(Zet `AXE_ACTOR` op je eigen naam, bv. `claude-code`. De sleutel komt uit
+`AXE_API_KEY` of `~/.config/axe/config.json`; nooit in een commit.)
+
 Het begint met waar Core naartoe gaat, want zonder dat optimaliseert elke
 sessie voor "niets slopen" in plaats van "Core meer maken wat het moet zijn".
 Daarna staat wat goed werk hier is, en pas daarna wat er stukgaat. Die

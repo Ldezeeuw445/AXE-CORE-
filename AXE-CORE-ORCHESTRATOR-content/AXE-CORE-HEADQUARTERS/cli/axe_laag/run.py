@@ -372,6 +372,15 @@ def _run(path: str, parsed: dict[str, Any], client: Client, cfg: dict[str, Any])
             "servers": _settled(lambda: client.get("/mcp/servers")),
             "hub": _settled(lambda: client.get("/mcp/hub")),
         })
+    if path == "log":
+        # 18 nov (Luka): elke AI begint met het log lezen en eindigt met één regel.
+        tekst = " ".join(p).strip()
+        if tekst:
+            return envelope(path, "ok", client.post("/log", {"actor": actor, "tekst": tekst}))
+        limit = _flag(parsed, "limit") or "20"
+        return envelope(path, "ok", client.get("/log", {"limit": limit}))
+    if path == "stappen":
+        return envelope(path, "ok", client.get("/stappen"))
     if path == "notify":
         msg = _flag(parsed, "message") or " ".join(p)
         if not msg:

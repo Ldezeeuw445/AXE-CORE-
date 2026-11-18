@@ -51,6 +51,8 @@ COMMANDS = [
     ("agents activity", "axe agents activity", "What every agent is really doing (server-side status)"),
     ("dax list", "axe dax list", "DAX computers, slots in use"),
     ("observe", "axe observe", "Missions, tasks, DAX, approvals at a glance"),
+    ("log", "axe log [\"<wat ik deed>\"] [--limit <n>]", "Shared log of every AI: read the latest lines, or write one at the end of a session"),
+    ("stappen", "axe stappen", "Open steps, split into Luka's turn and an AI's turn"),
 ]
 
 TWO_WORD = {
@@ -119,7 +121,7 @@ def _resolve(words: list[str]) -> tuple[str, list[str]]:
         return path, words[2:]
     if words[0] in ("help", "--help", "-h"):
         return "help", words[1:]
-    if words[0] in ("notify", "report", "status", "help", "observe"):
+    if words[0] in ("notify", "report", "status", "help", "observe", "log", "stappen"):
         return words[0], words[1:]
     raise UsageError(f"unknown or incomplete command '{' '.join(words)}'. See axe help")
 

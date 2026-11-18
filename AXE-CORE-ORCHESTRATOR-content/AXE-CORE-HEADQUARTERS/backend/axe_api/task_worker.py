@@ -302,6 +302,15 @@ class TaskWorker:
                 checkpoint=context.task.get("checkpoint") or {},
                 result={**result, "verification": evidence},
             )
+            # 18 nov (Luka): elke AI-sessie eindigt met één regel in het gedeelde log.
+            try:
+                import gedeeld_log as _gl
+                from agent_loop import _db_voor_stoelen
+                db = _db_voor_stoelen()
+                if db is not None:
+                    await asyncio.to_thread(_gl.schrijf, db, *_gl.taak_regel(task, result))
+            except Exception:  # noqa: BLE001 -- een logregel mag een afgeronde taak nooit breken
+                pass
         except ApprovalRequired:
             # The handler already parked this task in waiting_approval and gave
             # up its lease. Falling through to the generic branch below would

@@ -3562,6 +3562,45 @@ async def managers_thread_read(body: dict):
     return {"ok": True}
 
 
+class LogRegel(BaseModel):
+    actor: str
+    tekst: str
+
+
+def _lees_log(limit: int) -> list[dict]:
+    import gedeeld_log as _gl
+    rijen = (sb().table("core_manager_messages").select("from_agent,body,created_at")
+             .eq("to_agent", _gl.LOG).order("created_at", desc=True).limit(max(1, min(limit, 200))).execute().data) or []
+    return [_gl.als_regel(r) for r in rijen]
+
+
+@app.get("/log", dependencies=[AUTH])
+async def gedeeld_log_lezen(limit: int = 20):
+    """Het gedeelde log van alle AI's (gedeeld_log.py), nieuwste eerst."""
+    return {"regels": await asyncio.to_thread(_lees_log, limit)}
+
+
+@app.post("/log", dependencies=[AUTH])
+async def gedeeld_log_schrijven(body: LogRegel):
+    import gedeeld_log as _gl
+    try:
+        rij = _gl.log_rij(body.actor, body.tekst)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    await asyncio.to_thread(lambda: sb().table("core_manager_messages").insert(rij).execute())
+    return {"ok": True}
+
+
+@app.get("/stappen", dependencies=[AUTH])
+async def gedeelde_stappen():
+    """Wat er open staat, en wiens beurt het is (Luka of een AI)."""
+    import gedeeld_log as _gl
+    taken = await asyncio.to_thread(lambda: (sb().table("core_tasks").select("id,title,status,assignee,created_at")
+                                              .in_("status", list(_gl.OPEN)).order("created_at", desc=True)
+                                              .limit(200).execute().data) or [])
+    return _gl.verdeel_stappen(taken)
+
+
 class NorthSeaOpruimen(BaseModel):
     tekst: str
 

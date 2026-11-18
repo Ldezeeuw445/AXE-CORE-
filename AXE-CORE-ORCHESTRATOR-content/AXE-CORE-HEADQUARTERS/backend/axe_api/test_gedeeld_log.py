@@ -1,0 +1,27 @@
+"""Eén log en één stappenlijst voor elke AI (18 nov)."""
+import pytest
+
+import gedeeld_log as gl
+
+
+def test_logregel_en_context():
+    r = gl.log_rij("claude-code", "  notch-fix   gepusht ")
+    assert r == {"from_agent": "claude-code", "to_agent": "log", "kind": "log", "body": "notch-fix gepusht"}
+    with pytest.raises(ValueError):
+        gl.log_rij("x", "   ")
+    ctx = gl.context_tekst([{"wie": "northseamgr", "tekst": "29 mails verstuurd", "wanneer": "2026-11-18T19:00:00"}])
+    assert "northseamgr: 29 mails verstuurd" in ctx and ctx.startswith("Gedeeld log")
+
+
+def test_wiens_beurt():
+    s = gl.verdeel_stappen([
+        {"id": "a", "title": "Login vernieuwen", "status": "waiting_approval", "assignee": "companionmgr"},
+        {"id": "b", "title": "Build axon", "status": "queued", "assignee": "dax"},
+        {"id": "c", "title": "Klaar", "status": "completed"},
+    ])
+    assert [x["id"] for x in s["jouw_beurt"]] == ["a"] and [x["id"] for x in s["ai_beurt"]] == ["b"]
+
+
+def test_taak_regel():
+    wie, wat = gl.taak_regel({"title": "Site watch", "assignee": "browser"}, {"summary": "3 sites ok"})
+    assert (wie, wat) == ("browser", "Site watch: 3 sites ok")
