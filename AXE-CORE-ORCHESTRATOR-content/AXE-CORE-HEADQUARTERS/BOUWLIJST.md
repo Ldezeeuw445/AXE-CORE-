@@ -95,13 +95,16 @@ wat de andere deed:
 AXE blijft alleen van Luka, dus deze ideeën mogen erin (Pulsar: CC BY-NC,
 vrij voor eigen gebruik). Niet namaken: AXE-stijl en AXE-design houden, alleen
 de slimme dingen en wat AXE nog mist:
-- [ ] **Claude Code live in de notch, naast AXE**: wat Claude nu doet (lezen,
+- [x] **Claude Code live in de notch, naast AXE** (18 nov, beide Macs gekoppeld): wat Claude nu doet (lezen,
       bewerken, uitvoeren), de tijd, en "klaar" aan het eind -- via de hooks
       van Claude Code (UserPromptSubmit, PreToolUse, PostToolUse, Stop) naar
       een lokaal bestand + socket. Schakelen tussen "AXE" en "Claude".
-- [ ] **Goedkeuren vanuit de notch**: vraagt Claude (of een manager) iets,
+- [x] **Goedkeuren vanuit de notch** (18 nov; sneltoetsen nog open): vraagt Claude (of een manager) iets,
       dan klapt de notch open met de hele opdracht en Weigeren / Altijd /
       Toestaan, plus sneltoetsen vanuit elke app.
+- [x] **Peeks en Home in de notch** (18 nov): dicht -> één regel zakt 5 s
+      uit bij een goedkeuring / Claude klaar / taak af; Home-knop toont wat
+      er nu speelt in plaats van het hoofdvenster naar voren te trekken.
 - [ ] **Paneel aan de rechterrand** met stappen, gewijzigde bestanden (+N -M,
       diff), en "in gewone woorden" wat er gedaan is; een veld om Claude
       tijdens het werk iets te sturen.
