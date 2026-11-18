@@ -113,6 +113,59 @@ de slimme dingen en wat AXE nog mist:
 - [ ] Nooit zonder te vragen ~/.claude/settings.json aanpassen; eerst laten
       zien wat erbij komt, met een gedateerde kopie.
 
+### AXE heerst over de Mac: slimme dingen uit heel Pulsar (Luka, 18 nov)
+
+Niet namaken -- AXE is al een app met eigen design. Wat AXE (en Claude in AXE)
+nuttiger maakt op de Macs, in volgorde van waarde:
+
+**1. De notch als AXE-eiland** (Island + Agent)
+- [ ] Staten: rust (alleen de notch), compact (pil naast de notch), peek
+      (bubbel 2-4 s), open (0,25 s na hover), alarm (opent zelf). De pil
+      heeft precies de notchhoogte en blijft zwart, zodat het één vorm is.
+- [ ] Compact laat zien wat AXE of Claude nu doet + tijd; open: Home met wat
+      er op Luka wacht, laatste dat een AI deed, volgende afspraak, weer.
+- [ ] Claude Code live in het eiland, schakelen AXE / Claude; vragen van
+      Claude (en managers) als keuzeknoppen in het eiland, goedkeuren met
+      Weigeren / Altijd / Toestaan en sneltoetsen vanuit elke app.
+- [ ] Bestand naar de notch slepen = "gaat mee naar AXE/Claude" (of naar het
+      bakje); paperclip met aantal tot het opgepakt is.
+- [ ] Peeks: app open/dicht, oplader, batterij 20%/10%, DND, en "manager
+      klaar met X" -- zonder over de menubalk te gaan.
+- [ ] Vergadering: vanaf 5 min ervoor camera + minuten in de pil, open met
+      "Deelnemen" (Zoom/Meet/Teams-link uit de agenda).
+- [ ] Nooit focus pakken: niet-activerend paneel; doorzichtige delen laten
+      klikken door naar de menubalk; lichte animaties (pauzeren als dicht).
+
+**2. Paneel aan de rechterrand** (Agent)
+- [ ] Kolom ronde icoontjes (Werk, Bestanden, Goedkeuren met stip, Sessies)
+      die als het Dock verschijnt bij de rand; paneel met "Je vroeg", stappen,
+      "In gewone woorden", bestanden +N -M met diff, en een veld om AXE/Claude
+      tijdens het werk iets te sturen.
+
+**3. Bestanden opruimen en omzetten** (Stow)
+- [ ] Sleep op de notch: tegels Web / Versturen / Printen (juiste formaat en
+      grootte), of een formaat kiezen; nooit overschrijven, origineel blijft.
+- [ ] Bureaublad en Downloads netjes houden met eigen regels, met Ongedaan
+      maken en "4 opgeruimd" in de notch. Persoonlijke documenten alleen naar
+      één inbakje.
+
+**4. De Mac zelf** (Lite, Mixer, Trackpad edges)
+- [ ] Kleine schakelaars in AXE: donker, bureaublad-iconen verbergen, wakker
+      houden, DND, scherm op slot -- ook met de stem ("AXE, hou de Mac wakker").
+- [ ] Volume per app en een timer; scherm- en toetsenbordlicht -- als
+      knoppen voor AXE's computer-use, zodat AXE het zelf kan.
+- [ ] Rowline-idee voor de twee Macs: vensters naast elkaar in een rij,
+      werkruimtes bewaren en met één klik terugzetten ("zet mijn
+      NorthSea-werkruimte klaar").
+
+**Valkuilen die we meenemen** (staan uitgebreid in de Pulsar-opzet)
+- Elke build met hetzelfde certificaat en bundle-id, anders vraagt macOS
+  steeds opnieuw om rechten (dat doet de AXE-update al).
+- Hooks van Claude Code mogen Claude nooit blokkeren: elke fout slikken,
+  socket dicht = meteen door. ~/.claude/settings.json nooit zonder Luka's ok.
+- Rechten pas vragen als de functie voor het eerst gebruikt wordt, met één
+  regel waarom. Niets verlaat de Mac.
+
 ### Slimme dingen uit Spazio voor AXE (Luka, 18 nov)
 
 Niet namaken -- AXE heeft al Taken, Home en de managers. Wat erbij moet:
