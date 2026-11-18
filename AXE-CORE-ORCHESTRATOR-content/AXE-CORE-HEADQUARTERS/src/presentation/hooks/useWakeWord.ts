@@ -85,20 +85,44 @@ export function useWakeWord() {
        WebKit maakt elke start het venster actief, dus AXE trok elke keer het
        toetsenbord weg uit de app waar Luka in zat. Nu herstart hij alleen als
        AXE zelf vooraan staat; anders wacht hij tot Luka terugkomt. */
+    /* 18 nov, avond: focus.log Mac mini bleef 'focus main' elke ~5 s geven.
+       document.hasFocus() blijft in WKWebView true als je naar een andere app
+       gaat -- de check hierboven hield dus niets tegen. Nu telt de echte
+       vensterfocus van macOS (Tauri onFocusChanged / isFocused). */
+    let heeftFocus = typeof document !== 'undefined' ? document.hasFocus() : true;
     let wachtOpFocus = false;
+    let losKoppelen: (() => void) | null = null;
     const start = () => {
       if (stop || !aan) return;
-      if (typeof document !== 'undefined' && !document.hasFocus()) { wachtOpFocus = true; return; }
+      if (!heeftFocus) { wachtOpFocus = true; return; }
       wachtOpFocus = false;
       try { rec.start(); } catch { /* */ }
     };
-    const opFocus = () => { if (wachtOpFocus) start(); };
+    const zetFocus = (f: boolean) => {
+      heeftFocus = f;
+      if (f && wachtOpFocus) start();
+      if (!f) { try { rec.stop(); } catch { /* */ } }
+    };
+    const opFocus = () => zetFocus(true);
+    const opBlur = () => zetFocus(false);
     rec.onend = start;
     window.addEventListener('focus', opFocus);
-    start();
+    window.addEventListener('blur', opBlur);
+    void (async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const w = getCurrentWindow();
+        heeftFocus = await w.isFocused();
+        const los = await w.onFocusChanged(({ payload }) => zetFocus(payload));
+        if (stop) los(); else losKoppelen = los;
+      } catch { /* browser of telefoon: window focus/blur volstaat */ }
+      if (!stop) start();
+    })();
     return () => {
       stop = true;
       window.removeEventListener('focus', opFocus);
+      window.removeEventListener('blur', opBlur);
+      losKoppelen?.();
       try { rec.stop(); } catch { /* */ }
     };
   }, [aan]);

@@ -167,13 +167,18 @@ html[data-axe-notch] {
   border-radius: 999px; border: 1px solid transparent;
   pointer-events: none; opacity: 0;
 }
+/* 18 nov (beide Macs traag): de notch staat 24/7 boven alles, met blur
+   erachter. Elk animatieframe laat macOS die blur opnieuw rekenen --
+   WindowServer en WebKit-GPU zaten elk op ~67% CPU. Rust en "werkt" (dat is
+   bijna altijd: managers zijn bezig) ademen daarom in grove stappen: ~1-2
+   frames per seconde i.p.v. 60. Stilstand leest als dood, dit niet. */
 .axe-ov__bol[data-toestand='rust'] .axe-ov__ring {
   border-color: rgba(255, 255, 255, 0.22);
-  animation: axe-ov-adem 7s ease-in-out infinite;
+  animation: axe-ov-adem 7s steps(8, jump-none) infinite;
 }
 .axe-ov__bol[data-toestand='werkt'] .axe-ov__ring {
   border-color: var(--axe-notch-accent);
-  animation: axe-ov-adem 2.4s ease-in-out infinite;
+  animation: axe-ov-adem 2.4s steps(5, jump-none) infinite;
 }
 .axe-ov__bol[data-toestand='denkt'] .axe-ov__ring {
   border-color: var(--axe-notch-accent);
@@ -513,7 +518,7 @@ html[data-axe-notch] {
   --c: var(--axe-notch-accent);
 }
 .axe-ov__cglyph i { width: 3px; height: 3px; border-radius: 1px; background: var(--c); opacity: .35; }
-.axe-ov__cglyph[data-toestand='bezig'] i { animation: axe-claude-golf 1.1s ease-in-out infinite; }
+.axe-ov__cglyph[data-toestand='bezig'] i { animation: axe-claude-golf 1.2s steps(4, end) infinite; } /* steps: 4 frames per ronde i.p.v. 60/s, zelfde golf */
 .axe-ov__cglyph[data-toestand='wacht'] { --c: #fbbf24; }
 .axe-ov__cglyph[data-toestand='wacht'] i { animation: axe-claude-wacht 1.6s ease-in-out infinite; }
 .axe-ov__cglyph[data-toestand='klaar'] i { opacity: .95; }
