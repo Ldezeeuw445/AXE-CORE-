@@ -3591,6 +3591,35 @@ async def gedeeld_log_schrijven(body: LogRegel):
     return {"ok": True}
 
 
+class LesInvoer(BaseModel):
+    regel: str
+    waarom: str = ""
+    toepassen: str = ""
+    actor: str = "luka"
+
+
+@app.get("/lessen", dependencies=[AUTH])
+async def lessen_lezen(limit: int = 50):
+    """Correcties als geheugen (gedeeld_log.py): elke AI leest ze voor hij werkt."""
+    import gedeeld_log as _gl
+    rijen = await asyncio.to_thread(lambda: (sb().table("core_manager_messages").select("from_agent,body,created_at")
+                                              .eq("to_agent", _gl.LESSEN).order("created_at", desc=True)
+                                              .limit(max(1, min(limit, 200))).execute().data) or [])
+    return {"lessen": [{"wie": r.get("from_agent"), "les": r.get("body"), "wanneer": r.get("created_at")} for r in rijen]}
+
+
+@app.post("/lessen", dependencies=[AUTH])
+async def les_schrijven(body: LesInvoer):
+    import gedeeld_log as _gl
+    from datetime import date as _date
+    try:
+        rij = _gl.les_rij(body.actor, body.regel, body.waarom, body.toepassen, _date.today().isoformat())
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    await asyncio.to_thread(lambda: sb().table("core_manager_messages").insert(rij).execute())
+    return {"ok": True, "les": rij["body"]}
+
+
 @app.get("/stappen", dependencies=[AUTH])
 async def gedeelde_stappen():
     """Wat er open staat, en wiens beurt het is (Luka of een AI)."""

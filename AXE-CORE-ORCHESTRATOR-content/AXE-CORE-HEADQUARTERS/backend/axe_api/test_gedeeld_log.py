@@ -25,3 +25,11 @@ def test_wiens_beurt():
 def test_taak_regel():
     wie, wat = gl.taak_regel({"title": "Site watch", "assignee": "browser"}, {"summary": "3 sites ok"})
     assert (wie, wat) == ("browser", "Site watch: 3 sites ok")
+
+
+def test_les_als_geheugen():
+    r = gl.les_rij("luka", "Geen ID's in berichten aan Luka.", "een id zegt hem niets", "toon het onderwerp", "2026-11-18")
+    assert r["to_agent"] == "lessen" and r["body"].startswith("# Geen ID's in berichten aan Luka.")
+    assert "Datum: 2026-11-18." in r["body"] and "Waarom: een id zegt hem niets" in r["body"]
+    assert gl.lessen_tekst([r]).startswith("Lessen van Luka")
+    assert gl.is_correctie("voortaan eerst in gewone taal") and not gl.is_correctie("wat wacht er?")

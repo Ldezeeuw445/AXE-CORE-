@@ -40,6 +40,8 @@ import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
 import { haalWachtOpJou } from '@/application/approvals/wachtOpJou';
 import { keurAllesGoed } from '@/application/approvals/allesGoedkeuren';
 import { allesZin, isAllesGoedkeuren } from '@/domain/approvals/allesGoedkeuren';
+import { isCorrectie, lesBevestiging, lesRegel } from '@/domain/agents/lessen';
+import { schrijfLes } from '@/infrastructure/gateways/axeCoreApiService';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { startAxeJobs } from '@/presentation/store/installTierRouter';
 import { managerChatRoute } from '@/domain/agents/managersComposerDoel';
@@ -276,6 +278,22 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
     if (!agent) return;
     // Wat je typt staat binnen een paar seconden ook op je andere apparaten.
     window.setTimeout(() => { void syncManagerDraad(alleIds); }, 1500);
+    // 18 nov: een correctie wordt een les die AXE en elke manager voortaan lezen.
+    if (isCorrectie(tekst)) {
+      const regel = lesRegel(tekst);
+      void schrijfLes(regel, `Luka zei dit tegen ${agent.name} op ${new Date().toLocaleDateString('nl-NL')}.`)
+        .then(() => {
+          bewaarManagerChat(agent.id, [...laadManagerChat(agent.id), nieuwMsg('assistant', lesBevestiging(regel, agent.name))]);
+          tick((n) => n + 1);
+        })
+        .catch((e: unknown) => {
+          bewaarManagerChat(agent.id, [...laadManagerChat(agent.id),
+            nieuwMsg('assistant', `Ik kon de les niet opslaan: ${e instanceof Error ? e.message : String(e)}`)]);
+          tick((n) => n + 1);
+        });
+      return;
+    }
+
     // 18 nov, Grok Bot-stijl: "keur alles goed" / "ok alles" tegen AXE Core of
     // de NorthSea Manager wordt uitgevoerd, niet doorgestuurd. Luka's woord is
     // de ja; AXE zegt in het gesprek wat er gebeurd is.

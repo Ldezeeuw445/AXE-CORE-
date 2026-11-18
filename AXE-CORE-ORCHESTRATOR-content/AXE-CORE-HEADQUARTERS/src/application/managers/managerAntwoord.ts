@@ -8,6 +8,22 @@ import { agentById, type AxeAgentId } from '@/domain/agents/roster';
 import { bewaarManagerChat, laadManagerChat, nieuwMsg } from '@/domain/agents/managerChatOpslag';
 import { bouwManagerBerichten, splitsAntwoord } from '@/domain/agents/managerAntwoord';
 import { MANAGER_DRAAD_EVT } from '@/infrastructure/persistence/managerDraadSync';
+import { leesLessen } from '@/infrastructure/gateways/axeCoreApiService';
+
+/* 18 nov: de lessen (Luka's correcties) gaan mee in elk antwoord van een
+   manager; eens per minuut opgehaald. */
+let lessenCache: { t: number; tekst: string } = { t: 0, tekst: '' };
+async function lessenContext(): Promise<string> {
+  if (Date.now() - lessenCache.t < 60_000) return lessenCache.tekst;
+  try {
+    const { lessen } = await leesLessen(25);
+    const tekst = lessen.length
+      ? `[Lessen van Luka -- volg ze altijd, nieuwste eerst:\n${lessen.map((l) => l.les).join('\n\n')}]`
+      : '';
+    lessenCache = { t: Date.now(), tekst };
+  } catch { lessenCache = { t: Date.now(), tekst: '' }; }
+  return lessenCache.tekst;
+}
 
 export const MANAGER_DENKT_EVT = 'axe-manager-denkt';
 
@@ -28,7 +44,9 @@ export async function laatManagerAntwoorden(
   const agent = agentById(agentId);
   meld(MANAGER_DENKT_EVT, { agent: agentId, aan: true });
   try {
-    const berichten = bouwManagerBerichten({ naam: agent.name, rol: agent.role }, laadManagerChat(agentId), vraag);
+    const lessen = await lessenContext();
+    const berichten = bouwManagerBerichten({ naam: agent.name, rol: agent.role }, laadManagerChat(agentId),
+      lessen ? `${vraag}\n\n${lessen}` : vraag);
     const ruw = await callProvider({ provider: ABONNEMENT_PROVIDER, key: '', model: 'claude' }, berichten);
     const { tekst, acties } = splitsAntwoord(ruw);
     if (!tekst) return false;

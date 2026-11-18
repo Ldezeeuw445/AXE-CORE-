@@ -1341,6 +1341,15 @@ export async function northseaMensBeslis(
   return call('POST', '/northsea/mens/beslis', { draft_ids: draftIds, action, user_token: await northseaMensToken() });
 }
 
+/** Correcties als geheugen (backend/axe_api/gedeeld_log.py, 18 nov). */
+export async function schrijfLes(regel: string, waarom = '', toepassen = ''): Promise<{ ok: boolean; les: string }> {
+  return call('POST', '/lessen', { regel, waarom, toepassen, actor: 'luka' });
+}
+
+export async function leesLessen(limit = 25): Promise<{ lessen: { wie: string; les: string; wanneer: string }[] }> {
+  return call('GET', `/lessen?limit=${limit}`);
+}
+
 export async function northseaActie(actie: NorthseaActie, params: Record<string, unknown>): Promise<{
   action: string; tool: string; result: Record<string, unknown>;
 }> {

@@ -666,6 +666,10 @@ def _gedeeld_log_context(nu: float | None = None) -> str:
             rijen = (db.table("core_manager_messages").select("from_agent,body,created_at").eq("to_agent", _gl.LOG)
                      .order("created_at", desc=True).limit(10).execute().data) or []
             tekst = _gl.context_tekst([_gl.als_regel(r) for r in rijen])
+            lessen = (db.table("core_manager_messages").select("body,created_at").eq("to_agent", _gl.LESSEN)
+                      .order("created_at", desc=True).limit(_gl.MAX_LESSEN_IN_PROMPT).execute().data) or []
+            les = _gl.lessen_tekst(lessen)
+            tekst = "\n\n".join(x for x in (les, tekst) if x)
     except Exception:  # noqa: BLE001
         tekst = ""
     _LOG_CACHE.update(t=nu, tekst=tekst)

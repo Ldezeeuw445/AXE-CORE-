@@ -15,8 +15,12 @@ managers, DAX, Claude Code, Codex, Cursor -- wat de anderen net deden:
 ```
 AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/cli/axe log            # laatste regels lezen
 AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/cli/axe stappen        # wat open staat, wiens beurt
+AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/cli/axe lessen       # Luka's correcties: altijd volgen
 AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/cli/axe log "wat ik deed, waar ik stopte"   # aan het eind
 ```
+
+Corrigeert Luka je, sla het dan op als les (één per correctie, met waarom):
+`cli/axe lessen "de regel" --waarom "..." --toepassen "..."`.
 
 (Zet `AXE_ACTOR` op je eigen naam, bv. `claude-code`. De sleutel komt uit
 `AXE_API_KEY` of `~/.config/axe/config.json`; nooit in een commit.)

@@ -379,6 +379,13 @@ def _run(path: str, parsed: dict[str, Any], client: Client, cfg: dict[str, Any])
             return envelope(path, "ok", client.post("/log", {"actor": actor, "tekst": tekst}))
         limit = _flag(parsed, "limit") or "20"
         return envelope(path, "ok", client.get("/log", {"limit": limit}))
+    if path == "lessen":
+        regel = " ".join(p).strip()
+        if regel:
+            return envelope(path, "ok", client.post("/lessen", {"regel": regel, "actor": actor,
+                                                                "waarom": _flag(parsed, "waarom") or "",
+                                                                "toepassen": _flag(parsed, "toepassen") or ""}))
+        return envelope(path, "ok", client.get("/lessen"))
     if path == "stappen":
         return envelope(path, "ok", client.get("/stappen"))
     if path == "notify":

@@ -68,3 +68,47 @@ def taak_regel(taak: dict[str, Any], resultaat: dict[str, Any]) -> tuple[str, st
     wat = str(resultaat.get("summary") or "").strip()
     titel = str(taak.get("title") or "taak").strip()
     return wie, (f"{titel}: {wat}" if wat else f"{titel}: afgerond")[:MAX_TEKST]
+
+
+# ── Lessen: een correctie als geheugen (Luka, 18 nov) ──────────────────────
+#
+# "Every correction becomes a small file, with the date and the reason, so
+# Claude doesn't make the same mistake twice." Voor AXE en de managers: elke
+# keer dat Luka corrigeert, één les -- regel, datum, waarom, hoe toepassen --
+# en elke AI leest de lessen voordat hij werkt.
+LESSEN = "lessen"
+MAX_LESSEN_IN_PROMPT = 25
+
+
+def les_rij(actor: str, regel: str, waarom: str = "", toepassen: str = "", datum: str = "") -> dict[str, Any]:
+    regel = " ".join(str(regel or "").split()).rstrip(".")[:200]
+    if not regel:
+        raise ValueError("een les heeft een regel nodig")
+    delen = [f"# {regel}."]
+    if datum:
+        delen.append(f"Datum: {datum[:10]}.")
+    if waarom.strip():
+        delen.append(f"Waarom: {' '.join(waarom.split())[:300]}")
+    if toepassen.strip():
+        delen.append(f"Hoe toepassen: {' '.join(toepassen.split())[:300]}")
+    return {"from_agent": " ".join(str(actor or 'luka').split())[:60], "to_agent": LESSEN, "kind": "les",
+            "body": "\n".join(delen)}
+
+
+def lessen_tekst(rijen: list[dict[str, Any]]) -> str:
+    """De lessen voor in een systeemprompt: nieuwste eerst, kort."""
+    lessen = [str(r.get("body") or "").strip() for r in rijen if str(r.get("body") or "").strip()]
+    if not lessen:
+        return ""
+    return ("Lessen van Luka (correcties; volg ze altijd, nieuwste eerst):\n"
+            + "\n\n".join(lessen[:MAX_LESSEN_IN_PROMPT]))
+
+
+_ONTHOUD = ("onthoud", "voortaan", "vanaf nu", "doe dat nooit meer", "nooit meer", "niet meer doen",
+            "remember", "from now on", "don't ever", "never again")
+
+
+def is_correctie(tekst: str) -> bool:
+    """Luka zegt expliciet dat iets een blijvende regel is."""
+    t = (tekst or "").strip().lower()
+    return 8 <= len(t) <= 600 and any(t.startswith(w) or f" {w}" in t[:40] for w in _ONTHOUD)
