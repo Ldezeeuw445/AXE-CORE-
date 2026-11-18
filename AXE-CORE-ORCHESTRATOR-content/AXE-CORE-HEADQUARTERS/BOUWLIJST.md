@@ -61,7 +61,7 @@ Wat AXE ook moet kunnen, naar het voorbeeld van Spazio OS Pro:
 - [ ] **Vaste agents**: ochtendbrief elke dag, roadmap-check maandag,
       opruimlijst vrijdag, weekreview zondag. Nooit versturen/kopen/wissen;
       wat Luka nodig heeft wordt een stap.
-- [ ] **Vandaag-scherm**: de ene prioriteit van vandaag, volgende stappen en
+- [~] **Vandaag-scherm** (18 nov: "Eén ding vandaag" staat bovenaan Home in de notch; eigen keuze gedeeld tussen de Macs, anders je oudste stap): de ene prioriteit van vandaag, volgende stappen en
       wiens beurt het is, projecten van idee tot verkoop, log van wat af is.
 - [ ] **Interview**: AXE leert wie Luka is via een geleid gesprek.
 - [ ] **Jouw stem**: 3-5 eigen teksten -> AXE schrijft en reviewt in die stem.

@@ -618,3 +618,39 @@ html[data-axe-notch] {
   border: 1px solid var(--axe-notch-accent); background: transparent; color: var(--axe-notch-accent);
 }
 @media (prefers-reduced-motion: reduce) { .axe-ov__peek { animation: none; } }
+
+/* ── Eén ding vandaag (18 nov): bovenaan Home, groter dan de rest. */
+.axe-ov__eending {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 14px 16px; border-radius: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.35); background: var(--axe-notch-btn);
+}
+.axe-ov__eending--rust { border-color: rgba(255, 255, 255, 0.08); }
+.axe-ov__eending--goedkeuring { border-color: rgba(251, 191, 36, 0.45); }
+.axe-ov__eending-label { font-size: .78em; letter-spacing: .06em; text-transform: uppercase; opacity: .55; }
+.axe-ov__eending-rij { display: flex; align-items: center; gap: 10px; }
+.axe-ov__eending-tekst {
+  flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: var(--axe-notch-ink);
+  font: inherit; font-size: 1.2em; font-weight: 600; text-align: left; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.axe-ov__eending-tekst:disabled { cursor: default; }
+.axe-ov__eending--rust .axe-ov__eending-tekst { font-weight: 400; opacity: .6; }
+.axe-ov__eending.is-klaar .axe-ov__eending-tekst { text-decoration: line-through; opacity: .55; }
+.axe-ov__eending-vink {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 7px; cursor: pointer; padding: 0;
+  border: 1.5px solid var(--axe-notch-accent); background: transparent; color: #0a0a0a; font-weight: 700;
+}
+.axe-ov__eending-vink[aria-pressed='true'] { background: var(--axe-notch-accent); }
+.axe-ov__eending-voet { display: flex; align-items: center; gap: 12px; font-size: .9em; }
+.axe-ov__eending-voet > span { flex: 1; opacity: .55; }
+.axe-ov__eending-voet button { padding: 0; border: 0; background: none; color: var(--axe-notch-accent); font: inherit; cursor: pointer; }
+.axe-ov__eending-kies { display: flex; gap: 8px; }
+.axe-ov__eending-kies input {
+  flex: 1; min-width: 0; padding: 8px 12px; border-radius: 10px; font: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(0, 0, 0, 0.35); color: var(--axe-notch-ink);
+}
+.axe-ov__eending-kies button {
+  padding: 8px 14px; border-radius: 10px; font: inherit; cursor: pointer;
+  border: 1px solid var(--axe-notch-accent); background: transparent; color: var(--axe-notch-accent);
+}

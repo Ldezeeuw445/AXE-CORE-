@@ -20,7 +20,9 @@ import { projectieUitVraag } from '@/application/sphere/vraagRouter';
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 import { NotchResultaat } from './NotchResultaat';
 import { eerstvolgende, homeStand, nieuwePeeks, PEEK_MS, zetInRij, type NotchMoment, type Peek } from '@/domain/overlay/notchPeeks';
-import { calendarJobs } from '@/infrastructure/gateways/axeCoreApiService';
+import { calendarJobs, gedeeldeStappen, type GedeeldeStap } from '@/infrastructure/gateways/axeCoreApiService';
+import { EEN_DING_SLEUTEL, datumSleutel, kiesEenDing, type EigenDing } from '@/domain/overlay/eenDing';
+import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
 type Tab = 'chat' | 'approvals' | 'settings' | 'claude' | 'home';
 
@@ -540,6 +542,16 @@ export function AxeOverlayNotch({
   /* ── Home (18 nov): wat er nu speelt in één blik. De agenda één keer per
         5 min; de rest leeft al in de notch. */
   const [volgende, setVolgende] = useState<{ naam: string; at: string } | null>(null);
+  /* Eén ding vandaag (18 nov, uit Spazio): eigen keuze in user_settings, zodat
+     iMac en Mac mini hetzelfde ding tonen; anders de oudste stap van Luka. */
+  const [eigenDing, setEigenDing] = useState<EigenDing | null>(null);
+  const [jouwBeurt, setJouwBeurt] = useState<GedeeldeStap[]>([]);
+  const [dingKiezen, setDingKiezen] = useState(false);
+  const [dingTekst, setDingTekst] = useState('');
+  const bewaarDing = async (d: EigenDing | null) => {
+    setEigenDing(d);
+    await saveSetting(EEN_DING_SLEUTEL(new Date()), d).catch(() => undefined);
+  };
   const [homeNu, setHomeNu] = useState(() => new Date());
   useEffect(() => {
     if (!(open && tab === 'home')) return;
@@ -551,6 +563,17 @@ export function AxeOverlayNotch({
         const { items } = await calendarJobs(nu, new Date(nu.getTime() + 36 * 3600 * 1000));
         if (!weg) setVolgende(eerstvolgende(items.map((i) => ({ naam: i.naam, at: i.at })), nu));
       } catch { /* geen agenda bereikbaar: regel valt weg */ }
+      try {
+        const st = await gedeeldeStappen();
+        if (!weg) setJouwBeurt(st.jouw_beurt);
+      } catch { /* geen verbinding: dan alleen eigen keuze / goedkeuringen */ }
+      try {
+        // De andere Mac kan het ding net gezet hebben: niet uit de lokale cache.
+        const sleutel = EEN_DING_SLEUTEL(new Date());
+        try { localStorage.removeItem(sleutel); } catch { /* */ }
+        const d = await loadSetting<EigenDing | null>(sleutel, null);
+        if (!weg) setEigenDing(d && typeof d === 'object' ? d : null);
+      } catch { /* */ }
     };
     void laad();
     const id = window.setInterval(() => setHomeNu(new Date()), 30_000);
@@ -558,6 +581,7 @@ export function AxeOverlayNotch({
     return () => { weg = true; window.clearInterval(id); window.clearInterval(id2); };
   }, [open, tab]);
   const home = homeStand(homeNu, moment, volgende, bereikbaar);
+  const eenDing = kiesEenDing(eigenDing, jouwBeurt, approvals.length, homeNu, bereikbaar);
 
   const onDropFiles = (list: FileList | File[]) => {
     neemSleepAan({ bestanden: Array.from(list).map((f) => ({ name: f.name, size: f.size })) });
@@ -830,6 +854,66 @@ export function AxeOverlayNotch({
               <div className="axe-ov__home-kop">
                 <b>{home.groet}, Luka</b>
                 <span>{home.datum}</span>
+              </div>
+              <div className={`axe-ov__eending axe-ov__eending--${eenDing.bron}${eenDing.klaar ? ' is-klaar' : ''}`}>
+                <span className="axe-ov__eending-label">Eén ding vandaag</span>
+                {dingKiezen ? (
+                  <form
+                    className="axe-ov__eending-kies"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const tekst = dingTekst.trim();
+                      setDingKiezen(false);
+                      void bewaarDing(tekst ? { datum: datumSleutel(new Date()), tekst, klaar: false } : null);
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      value={dingTekst}
+                      onChange={(e) => setDingTekst(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Escape') setDingKiezen(false); }}
+                      placeholder="Wat moet vandaag echt gebeuren?"
+                      maxLength={140}
+                    />
+                    <button type="submit">Zet vast</button>
+                  </form>
+                ) : (
+                  <>
+                    <div className="axe-ov__eending-rij">
+                      {eenDing.bron === 'eigen' && (
+                        <button
+                          type="button"
+                          className="axe-ov__eending-vink"
+                          aria-pressed={eenDing.klaar}
+                          aria-label={eenDing.klaar ? 'Nog niet af' : 'Af'}
+                          onClick={() => eigenDing && void bewaarDing({ ...eigenDing, klaar: !eigenDing.klaar })}
+                        >
+                          {eenDing.klaar ? '✓' : ''}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="axe-ov__eending-tekst"
+                        disabled={!eenDing.tab}
+                        onClick={() => { if (eenDing.tab) setTab(eenDing.tab); }}
+                      >
+                        {eenDing.tekst}
+                      </button>
+                    </div>
+                    <div className="axe-ov__eending-voet">
+                      <span>{eenDing.uitleg}</span>
+                      <button
+                        type="button"
+                        onClick={() => { setDingTekst(eenDing.bron === 'eigen' ? eenDing.tekst : ''); setDingKiezen(true); }}
+                      >
+                        {eenDing.bron === 'eigen' ? 'Wijzig' : 'Zelf kiezen'}
+                      </button>
+                      {eenDing.bron === 'eigen' && (
+                        <button type="button" onClick={() => void bewaarDing(null)}>Loslaten</button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
               <ul className="axe-ov__home-regels">
                 {home.regels.map((r) => (

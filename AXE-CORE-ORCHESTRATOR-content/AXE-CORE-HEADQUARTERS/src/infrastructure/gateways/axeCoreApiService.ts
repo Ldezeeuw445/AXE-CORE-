@@ -696,6 +696,13 @@ export async function listPendingApprovals(limit = 50): Promise<DurableTaskAppro
   return approvals ?? [];
 }
 
+/** Wat er open staat en wiens beurt het is (GET /stappen, gedeeld_log.py). */
+export interface GedeeldeStap { id?: string | null; titel?: string | null; wie?: string | null; status?: string | null; sinds?: string | null }
+export async function gedeeldeStappen(): Promise<{ jouw_beurt: GedeeldeStap[]; ai_beurt: GedeeldeStap[] }> {
+  const r = await call<{ jouw_beurt?: GedeeldeStap[]; ai_beurt?: GedeeldeStap[] }>('GET', '/stappen');
+  return { jouw_beurt: r.jouw_beurt ?? [], ai_beurt: r.ai_beurt ?? [] };
+}
+
 /** De echte routekaart van de draaiende API (FastAPI's eigen /openapi.json). */
 export async function apiOpenApi(): Promise<unknown> {
   return call('GET', '/openapi.json');
