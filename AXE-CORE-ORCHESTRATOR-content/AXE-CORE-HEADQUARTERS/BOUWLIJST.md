@@ -86,6 +86,32 @@ wat de andere deed:
       de rest via de AXON MCP.
 - [ ] Bouwt op wat er al is: core_manager_messages, memory (memory_schrijfhek,
       cap 120), de AXON-manager; niet een tweede geheugen ernaast.
+- [ ] **AXON blijft een eigen app** (later met abonnement), maar Luka's eigen
+      AXE koppelt eraan zodra AXON goed genoeg is: dan is AXON dat ene
+      globale geheugen, en lezen/loggen gaat via de AXON-koppeling.
+
+### Notch beter, naar het voorbeeld van Pulsar Agent (Luka, 18 nov)
+
+In AXE-stijl houden; ideeën uit de Pulsar Agent-opzet (juliendesigncraft,
+CC BY-NC: vrij voor eigen gebruik, niet voor verkoop -- dus niet letterlijk
+overnemen in AXON-als-product):
+- [ ] **Claude Code live in de notch, naast AXE**: wat Claude nu doet (lezen,
+      bewerken, uitvoeren), de tijd, en "klaar" aan het eind -- via de hooks
+      van Claude Code (UserPromptSubmit, PreToolUse, PostToolUse, Stop) naar
+      een lokaal bestand + socket. Schakelen tussen "AXE" en "Claude".
+- [ ] **Goedkeuren vanuit de notch**: vraagt Claude (of een manager) iets,
+      dan klapt de notch open met de hele opdracht en Weigeren / Altijd /
+      Toestaan, plus sneltoetsen vanuit elke app.
+- [ ] **Paneel aan de rechterrand** met stappen, gewijzigde bestanden (+N -M,
+      diff), en "in gewone woorden" wat er gedaan is; een veld om Claude
+      tijdens het werk iets te sturen.
+- [ ] **Nooit focus pakken**: een niet-activerend paneel (NSPanel
+      nonactivating) dat pas 'key' wordt als je in het tekstveld klikt -- de
+      nette versie van onze notch-focusfix van 18 nov.
+- [ ] Zacht geluid bij een vraag en bij "klaar" (uit te zetten); bij meerdere
+      sessies volgt de notch de sessie die op jou wacht, nooit springen.
+- [ ] Nooit zonder te vragen ~/.claude/settings.json aanpassen; eerst laten
+      zien wat erbij komt, met een gedateerde kopie.
 
 - [ ] **Managers als Grok Bot**: zelf doen, onderling overleggen, alleen
       vragen wat echt van Luka is.
