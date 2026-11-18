@@ -348,6 +348,8 @@ class OAuthServer:
         return _oauth_error("unsupported_grant_type", "Supported: authorization_code, refresh_token.")
 
     def _issue(self, client_id: str, subject: str, scopes: list[str], family: str | None) -> Response:
+        from .scope_cap import scopes_na_cap
+        scopes = list(scopes_na_cap(scopes, self.store.get_client(client_id), subject))
         family = family or secrets.token_hex(8)
         access = self.store.issue(kind="access", client_id=client_id, subject=subject, scopes=scopes,
                                   resource=self.s.resource_url, ttl_s=self.s.access_token_ttl_s, family=family)
