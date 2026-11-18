@@ -35,8 +35,9 @@ export interface ClaudeLive {
 
 /** Een sessie die zo lang niets deed, telt niet meer als live. */
 export const OUD_NA_S = 15 * 60;
-/** Hoe lang "klaar" nog zichtbaar blijft. */
-export const KLAAR_ZICHTBAAR_S = 6;
+/** Hoe lang "klaar" nog zichtbaar blijft (18 nov: na 6 s leek de notch voor
+ *  Luka "nog de oude" -- klaar betekent juist: jouw beurt, dus laat het staan). */
+export const KLAAR_ZICHTBAAR_S = 10 * 60;
 
 export function leesStand(ruw: string | null | undefined): ClaudeStand {
   if (!ruw) return {};
@@ -71,7 +72,7 @@ export function claudeLive(stand: ClaudeStand, nuS: number, vorige?: string | nu
     sessieId: s.id,
     project: s.project ?? '',
     vraag: s.vraag ?? '',
-    nu: toestand === 'wacht' ? (s.melding || 'Wacht op jou') : toestand === 'klaar' ? 'Klaar' : (laatste?.wat ?? 'Denkt na…'),
+    nu: toestand === 'wacht' ? (s.melding || 'Wacht op jou') : toestand === 'klaar' ? 'Klaar · jouw beurt' : (laatste?.wat ?? 'Denkt na…'),
     vorige: toestand === 'klaar' ? (laatste?.wat ?? '') : (daarvoor?.wat ?? ''),
     soort: laatste?.soort ?? 'overig',
     toestand,

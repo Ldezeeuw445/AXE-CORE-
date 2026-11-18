@@ -34,8 +34,9 @@ describe('Claude live in de notch (18 nov)', () => {
     const s = stand();
     s.sessies!.a = { ...s.sessies!.a, klaar: true, eind: 170 };
     delete s.sessies!.b;
-    expect(claudeLive(s, 172)?.nu).toBe('Klaar');
-    expect(claudeLive(s, 200)).toBeNull();
+    expect(claudeLive(s, 172)?.nu).toBe('Klaar · jouw beurt');
+    expect(claudeLive(s, 700)?.toestand).toBe('klaar');
+    expect(claudeLive(s, 800)).toBeNull();
   });
   it('kapotte of lege stand = niets', () => {
     expect(claudeLive(leesStand('geen json'), 1)).toBeNull();
