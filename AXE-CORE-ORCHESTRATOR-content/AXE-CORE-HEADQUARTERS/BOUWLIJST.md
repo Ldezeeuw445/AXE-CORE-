@@ -70,6 +70,23 @@ Wat AXE ook moet kunnen, naar het voorbeeld van Spazio OS Pro:
 - [ ] **Maak het van jou**: "verberg X", "andere kleuren" in gewone taal.
 - [ ] Focusmodus, geld achter een PIN, rustige muziek (Life OS-hoek).
 
+### AXON Memory: één globaal geheugen voor elke AI (Luka, 18 nov)
+
+Het Spazio-patroon in drie stukken, maar dan in AXON en voor ALLE AI's (AXE,
+de managers, DAX, Claude Code, Codex, Cursor, Grok), zodat elke sessie weet
+wat de andere deed:
+- [ ] **Stappen**: één lijst in AXON met wat er nu komt, wie het doet (Luka of
+      welke AI) en wat die AI moet doen. Gedeeld, niet per app.
+- [ ] **Log**: elke sessie van elke AI schrijft aan het eind één regel (wat
+      gevraagd, wat veranderd, waar gestopt). Zo weet de volgende altijd waar
+      we zijn -- ook als het een andere AI op een ander apparaat is.
+- [ ] **Eén regel**: elke AI begint met "lees de stappen en het laatste log
+      in AXON" en eindigt met "schrijf een logregel". Voor Claude Code via
+      CLAUDE.md/AGENTS.md, voor de managers en DAX in hun systeemprompt, voor
+      de rest via de AXON MCP.
+- [ ] Bouwt op wat er al is: core_manager_messages, memory (memory_schrijfhek,
+      cap 120), de AXON-manager; niet een tweede geheugen ernaast.
+
 - [ ] **Managers als Grok Bot**: zelf doen, onderling overleggen, alleen
       vragen wat echt van Luka is.
 - [ ] Deal-specifieke mails door een model; abonnementen samenvoegen;
