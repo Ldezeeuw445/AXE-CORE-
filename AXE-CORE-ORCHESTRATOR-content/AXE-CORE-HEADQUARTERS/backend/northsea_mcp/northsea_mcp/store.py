@@ -146,6 +146,19 @@ class Store:
         return {"client_id": r[0], "client_name": r[1], "redirect_uris": json.loads(r[2]),
                 "token_endpoint_auth_method": r[3], "client_secret_hash": r[4], "metadata": json.loads(r[5])}
 
+    def set_allowed_scopes(self, client_id: str, scopes: list[str] | tuple[str, ...]) -> bool:
+        """Zet het plafond. Tokens blijven staan; lookup snijdt de scopes."""
+        with self.tx() as db:
+            r = db.execute("select metadata from oauth_clients where client_id=?", (client_id,)).fetchone()
+            if not r:
+                return False
+            meta = json.loads(r[0] or "{}")
+            if not isinstance(meta, dict):
+                meta = {}
+            meta["allowed_scopes"] = list(scopes)
+            db.execute("update oauth_clients set metadata=? where client_id=?", (json.dumps(meta), client_id))
+        return True
+
     # ── Autorisatiecodes ───────────────────────────────────────────────────────
     def save_code(self, code: str, *, client_id: str, redirect_uri: str, code_challenge: str,
                   scopes: list[str], resource: str, subject: str, ttl_s: int) -> None:
@@ -187,7 +200,16 @@ class Store:
             return None
         if r[5] is not None and r[5] < time.time():
             return None
-        return TokenRecord(r[0], r[1], r[2], tuple(r[3].split()), r[4], r[5], r[7], r[8])
+        rec = TokenRecord(r[0], r[1], r[2], tuple(r[3].split()), r[4], r[5], r[7], r[8])
+        return self._met_cap(rec)
+
+    def _met_cap(self, rec: TokenRecord) -> TokenRecord:
+        from .scope_cap import scopes_na_cap
+        scopes = scopes_na_cap(rec.scopes, self.get_client(rec.client_id), rec.subject)
+        if scopes == rec.scopes:
+            return rec
+        return TokenRecord(rec.kind, rec.client_id, rec.subject, scopes, rec.resource,
+                           rec.expires_at, rec.family, rec.label)
 
     def rotate_refresh(self, token: str) -> TokenRecord | None:
         """Wisselt een refresh-token in. Hergebruik van een al gebruikt token trekt
