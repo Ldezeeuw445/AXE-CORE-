@@ -35,7 +35,9 @@ def cap_voor(client: dict | None, subject: str) -> frozenset[str] | None:
     if not client:
         return None
     raw = (client.get("metadata") or {}).get("allowed_scopes")
-    if isinstance(raw, list) and raw:
+    # Lege lijst is deny-all. Alleen een ontbrekende key betekent "geen cap"
+    # (Vercel-review, 18 nov: `and raw` behandelde [] als None).
+    if isinstance(raw, list):
         return frozenset(str(s) for s in raw)
     if (subject or "").startswith(LUKA_PREFIX) and is_claude_client(client):
         return frozenset(DRAFTS_ONLY)

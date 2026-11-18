@@ -32,6 +32,24 @@ def test_chatgpt_van_luka_blijft_onaangeraakt():
     assert scopes_na_cap(ALLE, client, USER) == ALLE
 
 
+def test_lege_allowed_scopes_is_deny_all():
+    client = {
+        "client_name": "Claude",
+        "redirect_uris": ["https://claude.ai/cb"],
+        "metadata": {"allowed_scopes": []},
+    }
+    assert cap_voor(client, USER) == frozenset()
+    assert scopes_na_cap(ALLE, client, USER) == ()
+
+
+def test_ontbrekende_allowed_scopes_is_geen_cap_behalve_heuristiek():
+    chatgpt = {"client_name": "ChatGPT", "redirect_uris": ["https://chatgpt.com/cb"], "metadata": {}}
+    assert cap_voor(chatgpt, USER) is None
+    assert scopes_na_cap(ALLE, chatgpt, USER) == ALLE
+    andere = {"client_name": "Other", "redirect_uris": ["https://example.com/cb"]}
+    assert cap_voor(andere, USER) is None
+
+
 def test_expliciete_cap_wint_van_heuristiek():
     client = {
         "client_name": "Claude",
