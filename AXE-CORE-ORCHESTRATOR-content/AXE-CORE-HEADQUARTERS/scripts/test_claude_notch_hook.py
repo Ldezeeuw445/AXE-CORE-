@@ -52,3 +52,28 @@ def test_koppelen_en_ontkoppelen_laat_de_rest_staan():
     assert gekoppeld["hooks"]["Stop"][0]["hooks"][0]["command"] == "say klaar"   # eigen hook blijft
     assert k.koppel(json.loads(json.dumps(gekoppeld))) == gekoppeld                # twee keer = één keer
     assert k.ontkoppel(gekoppeld) == eigen                                          # los = precies terug
+
+
+def test_toestemming_uit_de_notch(tmp_path):
+    ev = {"hook_event_name": "PermissionRequest", "session_id": "p", "tool_name": "Bash",
+          "tool_input": {"command": "git push origin orchestrator", "description": "Push"},
+          "permission_suggestions": [{"type": "addRules", "rules": [{"toolName": "Bash", "ruleContent": "git push:*"}]}]}
+    st = hook.zet_vraag({}, ev, 5, "abc")
+    v = st["sessies"]["p"]["vraag_toestemming"]
+    assert v["opdracht"] == "git push origin orchestrator" and v["altijd_kan"] and st["sessies"]["p"]["wacht"]
+    assert hook.antwoord_als_uitvoer({"besluit": "toestaan"}, ev)["hookSpecificOutput"]["decision"] == {"behavior": "allow"}
+    altijd = hook.antwoord_als_uitvoer({"besluit": "altijd"}, ev)["hookSpecificOutput"]["decision"]
+    assert altijd["updatedPermissions"] == ev["permission_suggestions"]
+    assert hook.antwoord_als_uitvoer({"besluit": "weigeren"}, ev)["hookSpecificOutput"]["decision"]["behavior"] == "deny"
+    assert hook.antwoord_als_uitvoer({"besluit": "??"}, ev) is None
+
+
+def test_zonder_antwoord_vraagt_claude_zelf(tmp_path):
+    ev = {"hook_event_name": "PermissionRequest", "session_id": "q", "tool_name": "Bash", "tool_input": {"command": "ls"}}
+    code = ("import importlib.util,sys;sp=importlib.util.spec_from_file_location('h',sys.argv[1]);"
+            "h=importlib.util.module_from_spec(sp);sp.loader.exec_module(h);h.WACHT_MAX_S=0.3;"
+            "import io,json;sys.stdin=io.StringIO(sys.argv[2]);h.main()")
+    r = subprocess.run([sys.executable, "-c", code, str(HIER / "claude-notch-hook.py"), json.dumps(ev)],
+                       capture_output=True, text=True, env={"AXE_CLAUDE_LIVE": str(tmp_path / "live.json"), "HOME": str(tmp_path), "AXE_NOTCH_ALTIJD": "1"})
+    assert r.returncode == 0 and r.stdout == ""
+    assert "vraag_toestemming" not in json.loads((tmp_path / "live.json").read_text())["sessies"]["q"]

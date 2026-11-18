@@ -12,6 +12,7 @@ export interface ClaudeStap { tool: string; soort: ClaudeStapSoort; wat: string;
 export interface ClaudeSessie {
   id: string; project?: string; vraag?: string; begon: number; bijgewerkt?: number; eind?: number;
   stappen: ClaudeStap[]; klaar: boolean; wacht?: boolean; melding?: string;
+  vraag_toestemming?: { id: string; tool?: string; opdracht?: string; altijd_kan?: boolean; t?: number };
 }
 export interface ClaudeStand { sessies?: Record<string, ClaudeSessie>; bijgewerkt?: number }
 
@@ -28,6 +29,8 @@ export interface ClaudeLive {
   seconden: number;
   stappen: ClaudeStap[];
   aantalSessies: number;
+  /** Claude vraagt toestemming: de HELE opdracht, nooit afgekapt. */
+  toestemming: { id: string; tool: string; opdracht: string; altijdKan: boolean } | null;
 }
 
 /** Een sessie die zo lang niets deed, telt niet meer als live. */
@@ -75,6 +78,10 @@ export function claudeLive(stand: ClaudeStand, nuS: number, vorige?: string | nu
     seconden: Math.max(0, Math.round((s.klaar ? (s.eind ?? nuS) : nuS) - s.begon)),
     stappen: [...stappen].reverse(),
     aantalSessies: Object.keys(stand.sessies ?? {}).length,
+    toestemming: s.vraag_toestemming && /^[0-9a-f]{16}$/.test(s.vraag_toestemming.id)
+      ? { id: s.vraag_toestemming.id, tool: s.vraag_toestemming.tool ?? '', opdracht: s.vraag_toestemming.opdracht ?? '',
+          altijdKan: Boolean(s.vraag_toestemming.altijd_kan) }
+      : null,
   };
 }
 

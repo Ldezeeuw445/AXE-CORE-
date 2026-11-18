@@ -183,6 +183,27 @@ export function AxeOverlayNotch({
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('chat');
   const claude = useClaudeLive();
+  // Vraagt Claude toestemming, dan gaat de notch zelf open (één keer per vraag).
+  const gezienVraag = useRef<string | null>(null);
+  useEffect(() => {
+    const id = claude?.toestemming?.id ?? null;
+    if (id && id !== gezienVraag.current) {
+      gezienVraag.current = id;
+      set(true);
+      setTab('claude');
+    }
+  }, [claude?.toestemming?.id]);
+  const beantwoord = async (besluit: 'toestaan' | 'altijd' | 'weigeren') => {
+    const id = claude?.toestemming?.id;
+    if (!id) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('claude_antwoord', { id, besluit });
+      setStatusNote(besluit === 'weigeren' ? 'Geweigerd' : besluit === 'altijd' ? 'Toegestaan, ook voortaan' : 'Toegestaan');
+    } catch (e) {
+      setStatusNote(`Lukte niet: ${(e as Error).message}`);
+    }
+  };
   const [tekst, setTekst] = useState('');
   const [messages, setMessages] = useState<Msg[]>([]);
   const [busy, setBusy] = useState(false);
@@ -874,6 +895,19 @@ export function AxeOverlayNotch({
                     <span>Claude · {claude.project || 'sessie'}</span>
                     <span>{klok(claude.seconden)}{claude.aantalSessies > 1 ? ` · ${claude.aantalSessies} sessies` : ''}</span>
                   </div>
+                  {claude.toestemming && (
+                    <div className="axe-ov__claude-toestemming">
+                      <b>Claude vraagt toestemming · {claude.toestemming.tool}</b>
+                      <pre>{claude.toestemming.opdracht}</pre>
+                      <div className="axe-ov__claude-knoppen">
+                        <button type="button" className="ghost" onClick={() => void beantwoord('weigeren')}>Weigeren</button>
+                        {claude.toestemming.altijdKan && (
+                          <button type="button" className="ghost" onClick={() => void beantwoord('altijd')}>Altijd</button>
+                        )}
+                        <button type="button" onClick={() => void beantwoord('toestaan')}>Toestaan</button>
+                      </div>
+                    </div>
+                  )}
                   {claude.vraag && <p className="axe-ov__claude-vraag"><b>Je vroeg</b> {claude.vraag}</p>}
                   <ul className="axe-ov__claude-stappen">
                     {claude.stappen.slice(0, 12).map((st, i) => (

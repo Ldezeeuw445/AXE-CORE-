@@ -552,3 +552,23 @@ html[data-axe-notch] {
 @media (prefers-reduced-motion: reduce) {
   .axe-ov__claude, .axe-ov__claude-stappen li, .axe-ov__cglyph i, .axe-ov__ico--claude::after { animation: none !important; }
 }
+
+/* Claude vraagt toestemming (18 nov): de hele opdracht, nooit afgekapt;
+   amber omdat Claude op Luka wacht; Toestaan is de lichte accentknop. */
+.axe-ov__claude-toestemming {
+  border-radius: 12px; padding: 10px; background: rgba(251, 191, 36, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.28);
+  animation: axe-claude-in .3s cubic-bezier(.2, .9, .3, 1.2) both;
+}
+.axe-ov__claude-toestemming b { display: block; font-size: 11px; color: #fbbf24; letter-spacing: .03em; margin-bottom: 6px; }
+.axe-ov__claude-toestemming pre {
+  margin: 0 0 8px; max-height: 120px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  font: 11.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; color: rgba(255,255,255,.9);
+  background: rgba(0,0,0,.35); border-radius: 8px; padding: 7px 8px;
+}
+.axe-ov__claude-knoppen { display: flex; gap: 6px; justify-content: flex-end; }
+.axe-ov__claude-knoppen button {
+  border: 0; border-radius: 999px; padding: 5px 12px; font: 600 11.5px inherit; cursor: pointer;
+  background: var(--axe-notch-accent); color: #0b0d12;
+}
+.axe-ov__claude-knoppen button.ghost { background: rgba(255,255,255,.08); color: rgba(255,255,255,.85); }

@@ -24,6 +24,12 @@ describe('Claude live in de notch (18 nov)', () => {
     s.sessies!.b = { ...s.sessies!.b, bijgewerkt: 164, wacht: true, melding: 'Mag ik git push doen?' };
     expect(claudeLive(s, 165)).toMatchObject({ sessieId: 'b', toestand: 'wacht', nu: 'Mag ik git push doen?' });
   });
+  it('een toestemmingsvraag komt met de hele opdracht mee', () => {
+    const s = stand();
+    s.sessies!.a = { ...s.sessies!.a, wacht: true, melding: 'Mag ik: git push?',
+      vraag_toestemming: { id: '0123456789abcdef', tool: 'Bash', opdracht: 'git push origin orchestrator', altijd_kan: true } };
+    expect(claudeLive(s, 165)?.toestemming).toEqual({ id: '0123456789abcdef', tool: 'Bash', opdracht: 'git push origin orchestrator', altijdKan: true });
+  });
   it('klaar blijft even staan en verdwijnt dan', () => {
     const s = stand();
     s.sessies!.a = { ...s.sessies!.a, klaar: true, eind: 170 };

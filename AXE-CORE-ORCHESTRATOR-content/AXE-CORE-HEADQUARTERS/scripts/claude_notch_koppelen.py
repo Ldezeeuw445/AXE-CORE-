@@ -25,12 +25,14 @@ HIER = Path(__file__).resolve().parent
 BRON = HIER / "claude-notch-hook.py"
 DOEL = Path.home() / ".axe" / "hooks" / "claude-notch-hook.py"
 SETTINGS = Path.home() / ".claude" / "settings.json"
-GEBEURTENISSEN = ("UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure", "Notification", "Stop", "SessionEnd")
+GEBEURTENISSEN = ("UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure", "Notification", "Stop", "SessionEnd",
+                  "PermissionRequest")
 MERK = "claude-notch-hook.py"
 
 
-def onze_regel() -> dict:
-    return {"type": "command", "command": f'/usr/bin/python3 "{DOEL}"', "timeout": 5}
+def onze_regel(ev: str = "") -> dict:
+    # PermissionRequest wacht tot 25 s op Luka's knop in de notch: ruimer timeout.
+    return {"type": "command", "command": f'/usr/bin/python3 "{DOEL}"', "timeout": 40 if ev == "PermissionRequest" else 5}
 
 
 def is_onze(h: dict) -> bool:
@@ -47,7 +49,7 @@ def koppel(cfg: dict) -> dict:
             raise ValueError(f"hooks.{ev} is geen lijst")
         if any(is_onze(h) for blok in lijst if isinstance(blok, dict) for h in blok.get("hooks", [])):
             continue
-        blok = {"hooks": [onze_regel()]}
+        blok = {"hooks": [onze_regel(ev)]}
         if ev in ("PreToolUse", "PostToolUse", "PostToolUseFailure"):
             blok["matcher"] = "*"
         lijst.append(blok)
@@ -89,6 +91,15 @@ def main(argv: list[str]) -> int:
         print(f"Ik raak {SETTINGS} niet aan: {e}")
         return 1
     if nieuw == oud:
+        if ja and not los:
+            try:  # wel altijd de nieuwste hook neerzetten
+                DOEL.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(BRON, DOEL)
+                print("Al gekoppeld; de hook is bijgewerkt naar de nieuwste versie.")
+            except OSError as e:
+                print(f"Al gekoppeld, maar de hook bijwerken lukte niet: {e}")
+                return 1
+            return 0
         print("Er verandert niets: " + ("niet gekoppeld." if los else "al gekoppeld."))
         return 0
     print(f"{'Ontkoppelen' if los else 'Koppelen'}: dit wordt {SETTINGS} ->\n")

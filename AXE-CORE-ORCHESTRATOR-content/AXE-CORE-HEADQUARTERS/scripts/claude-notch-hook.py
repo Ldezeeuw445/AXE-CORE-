@@ -94,10 +94,114 @@ def werk_bij(staat: dict, ev: dict, nu: float) -> dict:
     return staat
 
 
+ANTWOORDEN = PAD.parent / "claude-antwoorden"
+WACHT_MAX_S = 25.0
+
+
+def vraag_id(ev: dict) -> str:
+    """Stabiel id voor één toestemmingsvraag (sessie + tool + invoer)."""
+    import hashlib
+    sleutel = json.dumps([ev.get("session_id"), ev.get("tool_name"), ev.get("tool_input")], sort_keys=True, default=str)
+    return hashlib.sha1(sleutel.encode()).hexdigest()[:16]
+
+
+def zet_vraag(staat: dict, ev: dict, nu: float, vid: str) -> dict:
+    """Een toestemmingsvraag in de stand: de notch toont hem met de HELE opdracht."""
+    sessies = staat.setdefault("sessies", {})
+    sid = str(ev.get("session_id") or "onbekend")
+    s = sessies.setdefault(sid, {"id": sid, "begon": nu, "stappen": [], "klaar": False})
+    invoer = ev.get("tool_input") or {}
+    opdracht = invoer.get("command") or invoer.get("file_path") or invoer.get("url") or json.dumps(invoer, ensure_ascii=False)[:2000]
+    s.update(wacht=True, bijgewerkt=nu, melding=f"Mag ik: {beschrijf(str(ev.get('tool_name') or ''), invoer)}?",
+             vraag_toestemming={"id": vid, "tool": ev.get("tool_name"), "opdracht": str(opdracht)[:4000],
+                                "altijd_kan": bool(ev.get("permission_suggestions")), "t": nu})
+    return staat
+
+
+def antwoord_als_uitvoer(antwoord: dict, ev: dict) -> dict | None:
+    """Het antwoord uit de notch in de vorm die Claude Code verwacht."""
+    besluit = antwoord.get("besluit")
+    if besluit == "toestaan":
+        return {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": {"behavior": "allow"}}}
+    if besluit == "altijd":
+        d = {"behavior": "allow"}
+        if ev.get("permission_suggestions"):
+            d["updatedPermissions"] = ev["permission_suggestions"]
+        return {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": d}}
+    if besluit == "weigeren":
+        return {"hookSpecificOutput": {"hookEventName": "PermissionRequest",
+                                       "decision": {"behavior": "deny", "message": "Luka weigerde dit in de AXE-notch."}}}
+    return None
+
+
+def _schrijf_stand(fn) -> None:
+    PAD.parent.mkdir(parents=True, exist_ok=True)
+    with open(PAD.with_suffix(".lock"), "w") as slot:
+        fcntl.flock(slot, fcntl.LOCK_EX)
+        try:
+            staat = json.loads(PAD.read_text()) if PAD.exists() else {}
+        except (OSError, ValueError):
+            staat = {}
+        staat = fn(staat if isinstance(staat, dict) else {})
+        tmp = PAD.with_suffix(".tmp")
+        tmp.write_text(json.dumps(staat, ensure_ascii=False))
+        os.replace(tmp, PAD)
+
+
+def axe_draait() -> bool:
+    """Draait de AXE-app (en dus de notch)? Zo niet, dan niet wachten."""
+    if os.environ.get("AXE_NOTCH_ALTIJD") == "1":
+        return True
+    import subprocess
+    try:
+        return subprocess.run(["/usr/bin/pgrep", "-f", "AXE CORE.app/Contents/MacOS/"], capture_output=True,
+                              timeout=2).returncode == 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def wacht_op_notch(ev: dict) -> None:
+    """PermissionRequest: vraag in de notch, wacht hooguit 25 s op Luka's knop.
+    Geen antwoord (of de notch draait niet): niets uitprinten -- dan vraagt
+    Claude Code het gewoon zelf, zoals altijd."""
+    if not axe_draait():
+        return  # geen notch om op te wachten: Claude vraagt het meteen zelf
+    vid = vraag_id(ev)
+    _schrijf_stand(lambda st: zet_vraag(st, ev, time.time(), vid))
+    bestand = ANTWOORDEN / f"{vid}.json"
+    eind = time.time() + WACHT_MAX_S
+    uit = None
+    while time.time() < eind:
+        if bestand.exists():
+            try:
+                uit = antwoord_als_uitvoer(json.loads(bestand.read_text()), ev)
+            except (OSError, ValueError):
+                uit = None
+            try:
+                bestand.unlink()
+            except OSError:
+                pass
+            break
+        time.sleep(0.25)
+
+    def ruim_op(st: dict) -> dict:
+        s = (st.get("sessies") or {}).get(str(ev.get("session_id") or "onbekend"))
+        if s:
+            s.pop("vraag_toestemming", None)
+            s["wacht"] = False
+        return st
+    _schrijf_stand(ruim_op)
+    if uit:
+        sys.stdout.write(json.dumps(uit))
+
+
 def main() -> None:
     try:
         ev = json.loads(sys.stdin.read() or "{}")
         if not isinstance(ev, dict):
+            return
+        if ev.get("hook_event_name") == "PermissionRequest":
+            wacht_op_notch(ev)
             return
         PAD.parent.mkdir(parents=True, exist_ok=True)
         with open(PAD.with_suffix(".lock"), "w") as slot:

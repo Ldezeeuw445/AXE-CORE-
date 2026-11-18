@@ -418,6 +418,26 @@ fn lees_claude_live() -> Option<String> {
     fs::read_to_string(pad).ok()
 }
 
+/// Luka's antwoord uit de notch op een toestemmingsvraag van Claude Code
+/// (18 nov). De hook (scripts/claude-notch-hook.py) wacht hooguit 25 s op
+/// ~/.axe/claude-antwoorden/<id>.json. Alleen een id van 16 hex-tekens en een
+/// van de drie besluiten wordt geschreven.
+#[tauri::command]
+fn claude_antwoord(id: String, besluit: String) -> Result<(), String> {
+    if id.len() != 16 || !id.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err("ongeldig id".into());
+    }
+    if !matches!(besluit.as_str(), "toestaan" | "altijd" | "weigeren") {
+        return Err("ongeldig besluit".into());
+    }
+    let home = std::env::var_os("HOME").ok_or_else(|| "HOME niet gezet".to_string())?;
+    let map = PathBuf::from(home).join(".axe").join("claude-antwoorden");
+    fs::create_dir_all(&map).map_err(|e| e.to_string())?;
+    let tmp = map.join(format!("{id}.tmp"));
+    fs::write(&tmp, format!("{{\"besluit\":\"{besluit}\"}}")).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, map.join(format!("{id}.json"))).map_err(|e| e.to_string())
+}
+
 /// Pending route from the standalone axe-overlay notch (`~/.axe/overlay-open-route`).
 /// Reads + deletes the file. Only `/northsea` and `/trading` are accepted.
 #[tauri::command]
@@ -631,6 +651,7 @@ pub fn run() {
         list_vault_files,
         show_main_window,
         lees_claude_live,
+        claude_antwoord,
         toon_hoofdvenster_stil,
         consume_overlay_open_route,
         platform_info,
