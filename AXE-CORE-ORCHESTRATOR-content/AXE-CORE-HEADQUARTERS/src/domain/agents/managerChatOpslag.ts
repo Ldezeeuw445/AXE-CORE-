@@ -5,6 +5,8 @@
  * Relay lines (`kind: "relay"`) are the small centered "Bericht gestuurd • Agent"
  * markers when Boss / Projects Manager hands a message to another manager.
  */
+import type { ManagerKaart, ManagerReactie, ReplyTo } from './managerChatFase2';
+
 export type ManagerChatRol = 'user' | 'assistant' | 'system';
 
 export type ManagerChatMsg = {
@@ -18,6 +20,15 @@ export type ManagerChatMsg = {
   kind?: 'relay';
   /** Agent who dispatched / who the relay names (avatar + label). */
   fromAgentId?: string;
+  /**
+   * Fase 2 (niet gerenderd in deze PR): Grok Bot-hover, quote, emoji's
+   * twee kanten op, en een approval/actiekaart die dezelfde item-id draagt
+   * als Wacht op jou.
+   */
+  replyTo?: ReplyTo;
+  reactions?: ManagerReactie[];
+  requestId?: string;
+  card?: ManagerKaart;
 };
 
 const PREFIX = 'axe_manager_chat_v2:';

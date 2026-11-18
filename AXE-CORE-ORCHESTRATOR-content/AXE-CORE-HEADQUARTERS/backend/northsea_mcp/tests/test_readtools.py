@@ -203,6 +203,8 @@ async def test_pending_approvals_do_not_leak_draft_recipients_without_identity(m
     data = await ok(mcp_server, "northsea_list_pending_approvals")
     assert data["total"] >= 2
     assert "chanda@mopani.com" not in json.dumps(data)
+    drafts = [x for x in data["items"] if x["kind"] == "reply_draft"]
+    assert drafts and all(x.get("thread_id") and x.get("message_id") == x["approval_id"] for x in drafts)
 
 
 # ── Beveiliging ──────────────────────────────────────────────────────────────

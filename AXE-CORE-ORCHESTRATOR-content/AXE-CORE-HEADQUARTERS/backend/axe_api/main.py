@@ -5340,7 +5340,24 @@ async def northsea_mens_goedkeuren(req: NorthseaMensGoedkeurRequest):
     try:
         return await _gateway.mens_keurt_goed(req.draft_ids, req.user_token)
     except _gateway.NorthSeaGatewayError as e:
-        status = {"not_signed_in": 401, "upstream_unreachable": 502}.get(e.code, 502)
+        status = {"not_signed_in": 401, "upstream_unreachable": 502, "rate_limited": 429}.get(e.code, 502)
+        raise HTTPException(status, f"{e.code}: {e.message}")
+
+
+class NorthseaMensBeslisRequest(BaseModel):
+    draft_ids: list[str]
+    action: str
+    user_token: str
+
+
+@app.post("/northsea/mens/beslis", dependencies=[AUTH])
+async def northsea_mens_beslis(req: NorthseaMensBeslisRequest):
+    """Approve of reject zonder te wachten op Resend. Send is een aparte actie."""
+    try:
+        return await _gateway.mens_beslist(req.draft_ids, req.action, req.user_token)
+    except _gateway.NorthSeaGatewayError as e:
+        status = {"not_signed_in": 401, "upstream_unreachable": 502, "invalid_action": 400,
+                  "rate_limited": 429}.get(e.code, 502)
         raise HTTPException(status, f"{e.code}: {e.message}")
 
 

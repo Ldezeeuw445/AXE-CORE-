@@ -677,29 +677,42 @@ class ReadTools:
     # weggezet (status 'dismissed': TradeWheel, verificatiecodes, bounces).
     def _approval_rows(self, v: View) -> list[dict]:
         rows = []
-        for d in v.s.rows("reply_drafts"):
+        from .approval_signals import signals_for_draft
+        drafts = v.s.rows("reply_drafts")
+        companies = v.s.rows("companies")
+        contacts = v.s.rows("contacts")
+        communications = v.s.rows("communications")
+        for d in drafts:
             if d.get("approval_status") == "pending" and not d.get("sent_at"):
+                seinen = signals_for_draft(d, companies=companies, contacts=contacts,
+                                           communications=communications, drafts=drafts, now=v.now)
                 rows.append({"approval_id": d.get("id"), "kind": "reply_draft", "deal_id": d.get("opportunity_id"),
-                             "subject": v.red(d.get("subject")), "sensitive_action": bool(d.get("sensitive_action")),
+                             "subject": v.red(d.get("subject")), "body": v.red(d.get("body")),
+                             "sensitive_action": bool(d.get("sensitive_action")),
                              "gate": "Luka approves the exact draft (northsea_approve_draft); sensitive drafts also need signed commission protection.",
-                             "created_at": d.get("created_at"), "updated_at": d.get("updated_at")})
+                             "created_at": d.get("created_at"), "updated_at": d.get("updated_at"),
+                             **seinen})
         for o in v.s.rows("opportunities"):
             if o.get("approval_required") and canon.is_open(o):
                 rows.append({"approval_id": o.get("id"), "kind": "deal_decision", "deal_id": o.get("id"), "deal": canon.deal_label(o),
                              "approval_type": o.get("approval_type"), "subject": v.red(o.get("next_best_action") or o.get("next_action")),
-                             "gate": "Human decision recorded on the opportunity.", "created_at": o.get("created_at"), "updated_at": o.get("updated_at")})
+                             "gate": "Human decision recorded on the opportunity.", "created_at": o.get("created_at"), "updated_at": o.get("updated_at"),
+                             "deal_stage_move": True, "thread_id": o.get("id"), "message_id": o.get("id")})
         for bron in ("deal_tasks", "action_queue"):
             for t in v.s.rows(bron):
                 if t.get("requires_approval") and t.get("status") in OPEN_TASK:
                     rows.append({"approval_id": t.get("id"), "kind": f"{bron}_approval", "deal_id": t.get("opportunity_id"),
                                  "subject": v.red(t.get("title")), "gate": "Completing needs northsea.admin.",
-                                 "created_at": t.get("created_at"), "updated_at": t.get("updated_at")})
+                                 "created_at": t.get("created_at"), "updated_at": t.get("updated_at"),
+                                 "internal_housekeeping": True,
+                                 "thread_id": t.get("opportunity_id"), "message_id": t.get("id")})
         for e in v.s.rows("email_intelligence"):
             if e.get("requires_human_approval") and _lower(e.get("status")) not in INBOUND_GESLOTEN:
                 rows.append({"approval_id": e.get("id"), "kind": "inbound_needs_human_review", "communication_id": e.get("communication_id"),
                              "deal_id": e.get("opportunity_id"), "subject": v.red(e.get("summary"))[:200],
                              "status": e.get("status"), "gate": "Human review of an inbound message flagged by email intelligence.",
-                             "created_at": e.get("created_at"), "updated_at": e.get("updated_at")})
+                             "created_at": e.get("created_at"), "updated_at": e.get("updated_at"),
+                             "thread_id": e.get("communication_id"), "message_id": e.get("id")})
         rows.sort(key=lambda r: -ts(r.get("updated_at") or r.get("created_at")))
         return rows
 

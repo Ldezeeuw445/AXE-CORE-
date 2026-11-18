@@ -107,6 +107,34 @@ def test_transportfout_wordt_upstream_unreachable(monkeypatch):
     assert exc.value.code == "upstream_unreachable"
 
 
+def test_mens_beslist_weigert_onbekende_actie():
+    with pytest.raises(g.NorthSeaGatewayError) as exc:
+        asyncio.run(g.mens_beslist(["aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"], "approve-send", "tok"))
+    assert exc.value.code == "invalid_action"
+
+
+def test_mens_beslist_gaat_naar_decide_niet_approve_send(monkeypatch):
+    gezien = {}
+
+    async def fake_post(pad, body, user_token):
+        gezien["pad"] = pad
+        gezien["body"] = body
+        gezien["token"] = user_token
+
+        class R:
+            status_code = 200
+            def json(self):
+                return {"results": [{"draft_id": body["draft_ids"][0], "ok": True, "action": body["action"], "sent": False}]}
+        return R()
+
+    monkeypatch.setattr(g, "_mens_post", fake_post)
+    uit = asyncio.run(g.mens_beslist(["aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"], "approve", "luka-token"))
+    assert gezien["pad"] == "/human/drafts/decide"
+    assert gezien["body"]["action"] == "approve"
+    assert gezien["token"] == "luka-token"
+    assert uit["results"][0]["ok"] and not uit["results"][0].get("sent")
+
+
 def test_run_tool_call_weigert_zonder_service_token(monkeypatch):
     monkeypatch.delenv(g.SERVICE_TOKEN_ENV, raising=False)
     with pytest.raises(g.NorthSeaGatewayError) as exc:
