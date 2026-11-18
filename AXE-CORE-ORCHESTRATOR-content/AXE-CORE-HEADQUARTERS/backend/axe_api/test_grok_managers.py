@@ -149,3 +149,14 @@ def test_vraag_luka_vraagt_niet_opnieuw_binnen_een_dag_na_antwoord():
     db.db["core_approvals"][0]["created_at"] = oud
     gm._vraag_luka(db, "companionmgr", "Vaste jobs falen achter elkaar", "MetaAPI moet opgewaardeerd")
     assert len(db.db["core_approvals"]) == 2
+
+
+def test_vraag_die_bij_luka_blijft_staat_ook_in_het_gesprek():
+    """18 nov: vragen in het gesprek van de manager, zoals Claude/Grok dat doen."""
+    db = FakeDb(core_approvals=[], core_tasks=[], core_manager_messages=[])
+    gm._vraag_luka(db, "companionmgr", "Claude-login vernieuwen",
+                   "Ik heb zelf gekeken; hier ben jij voor nodig: Luka must log in again on the Mac mini.")
+    berichten = [m for m in db.db["core_manager_messages"] if m.get("to_agent") == "luka"]
+    assert len(berichten) == 1 and berichten[0]["from_agent"] == "companionmgr"
+    assert "Vraag aan jou: Claude-login vernieuwen." in berichten[0]["body"]
+    assert "'ja' of 'nee'" in berichten[0]["body"]

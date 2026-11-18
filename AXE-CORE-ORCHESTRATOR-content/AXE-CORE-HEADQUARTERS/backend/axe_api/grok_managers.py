@@ -242,6 +242,26 @@ def _vraag_luka(db: Any, agent: str, wat: str, waarom: str) -> None:
         titel=wat, detail=waarom, kind="manager_ask",
         requested_by=agent, metadata={"agent": agent, "manager": True},
     )
+    # 18 nov, Luka: "ik moet het in me gesprek met een manager kunnen doen ...
+    # net als dat jij zoiets vraagt en ik het hier goed keur". Een vraag die
+    # écht bij Luka blijft (het beleid keurt hem niet zelf goed) staat nu ook als
+    # bericht in het gesprek van deze manager. 'ja'/'nee' daar beslist hem
+    # (ManagersDesk: followupIsAkkoord + beslisAgentOk).
+    try:
+        from beslis_beleid import ACTIE_ASK, beslis_goedkeuring
+        if beslis_goedkeuring({"kind": "manager_ask", "title": wat, "detail": waarom}).actie == ACTIE_ASK:
+            import manager_draad as md
+            md.vertel_luka(db, agent, vraag_tekst(wat, waarom))
+    except Exception:  # noqa: BLE001 -- een chatregel mag de vraag zelf nooit breken
+        log.warning("%s: vraag niet in het gesprek gezet", agent)
+
+
+def vraag_tekst(wat: str, waarom: str) -> str:
+    """De vraag zoals een collega hem stelt: wat, waarom, en hoe je antwoordt."""
+    wat = " ".join(str(wat or "").split()).rstrip(".")
+    waarom = " ".join(str(waarom or "").split())
+    return (f"Vraag aan jou: {wat}.\n\n{waarom}\n\n"
+            "Zeg hier gewoon 'ja' of 'nee', dan regel ik de rest.").replace("\n\n\n\n", "\n\n")
 
 
 def _laatste_rapporten(db: Any) -> dict[str, dict[str, Any]]:
