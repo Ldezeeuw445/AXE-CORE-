@@ -538,7 +538,7 @@ export function AxeOverlayNotch({
     if (erbij.length && !open) setPeekRij((r) => zetInRij(r, erbij));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [momentSleutel]);
-  /* Portal (18 nov): wat de iPhone hierheen gooit, landt hier. Elke 4 s
+  /* Portal (18 nov): wat de iPhone hierheen gooit, landt hier. Elke 10 s
      kijken; alleen in de echte app (de Mac moet zelf downloaden). */
   useEffect(() => {
     if (!isTauriRuntime()) return;
@@ -576,7 +576,8 @@ export function AxeOverlayNotch({
       }
     };
     void tik();
-    const id = window.setInterval(() => void tik(), 4000);
+    // 10 s: twee Macs die elke 4 s vragen is voor een kleine database niet niks (19 nov).
+    const id = window.setInterval(() => void tik(), 10_000);
     return () => { weg = true; window.clearInterval(id); };
   }, []);
   const openRef = useRef(open);

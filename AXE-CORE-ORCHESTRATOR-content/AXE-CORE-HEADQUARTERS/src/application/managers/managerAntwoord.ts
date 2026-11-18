@@ -8,7 +8,7 @@ import { agentById, type AxeAgentId } from '@/domain/agents/roster';
 import { bewaarManagerChat, laadManagerChat, nieuwMsg } from '@/domain/agents/managerChatOpslag';
 import { bouwManagerBerichten, splitsAntwoord } from '@/domain/agents/managerAntwoord';
 import { MANAGER_DRAAD_EVT } from '@/infrastructure/persistence/managerDraadSync';
-import { leesLessen } from '@/infrastructure/gateways/axeCoreApiService';
+import { leesLessen, leesManagerContext } from '@/infrastructure/gateways/axeCoreApiService';
 
 /* 18 nov: de lessen (Luka's correcties) gaan mee in elk antwoord van een
    manager; eens per minuut opgehaald. */
@@ -23,6 +23,22 @@ async function lessenContext(): Promise<string> {
     lessenCache = { t: Date.now(), tekst };
   } catch { lessenCache = { t: Date.now(), tekst: '' }; }
   return lessenCache.tekst;
+}
+
+/* 19 nov (audit, punt 1): de wereld van déze manager -- open taken, wat op
+   Luka wacht, wat mislukte, wat hij zelf deed, wat hij mag. Per manager eens
+   per minuut; geen verbinding = gewoon zonder. */
+const contextCache = new Map<string, { t: number; tekst: string }>();
+async function managerContext(agentId: string): Promise<string> {
+  const vorig = contextCache.get(agentId);
+  if (vorig && Date.now() - vorig.t < 60_000) return vorig.tekst;
+  let tekst = '';
+  try {
+    const { context } = await leesManagerContext(agentId);
+    tekst = context ? `[${context}]` : '';
+  } catch { tekst = ''; }
+  contextCache.set(agentId, { t: Date.now(), tekst });
+  return tekst;
 }
 
 export const MANAGER_DENKT_EVT = 'axe-manager-denkt';
@@ -44,9 +60,10 @@ export async function laatManagerAntwoorden(
   const agent = agentById(agentId);
   meld(MANAGER_DENKT_EVT, { agent: agentId, aan: true });
   try {
-    const lessen = await lessenContext();
+    const [lessen, wereld] = await Promise.all([lessenContext(), managerContext(agentId)]);
+    const erbij = [wereld, lessen].filter(Boolean).join('\n\n');
     const berichten = bouwManagerBerichten({ naam: agent.name, rol: agent.role }, laadManagerChat(agentId),
-      lessen ? `${vraag}\n\n${lessen}` : vraag);
+      erbij ? `${vraag}\n\n${erbij}` : vraag);
     const ruw = await callProvider({ provider: ABONNEMENT_PROVIDER, key: '', model: 'claude' }, berichten);
     const { tekst, acties } = splitsAntwoord(ruw);
     if (!tekst) return false;

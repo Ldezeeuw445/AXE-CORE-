@@ -578,6 +578,8 @@ _HUIDIGE_BRIEF: contextvars.ContextVar[str] = contextvars.ContextVar(
 _HUIDIGE_AGENT_WS: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
     "axe_agent_workspace", default=None,
 )
+# 19 nov: de roster-id van deze beurt, voor de managercontext.
+_HUIDIGE_AGENT: contextvars.ContextVar[str | None] = contextvars.ContextVar("axe_agent", default=None)
 
 _HUIDIGE_DEVICE: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "axe_pinned_device", default=None,
@@ -640,6 +642,9 @@ def systeem_prompt() -> str:
             f"Luka pinned this job to {pinned}. Use run_on_device with that "
             "device. Do not switch machine."
         )
+    mgr = _manager_context(_HUIDIGE_AGENT.get())
+    if mgr:
+        extra.append(mgr)
     log = _gedeeld_log_context()
     if log:
         extra.append(log)
@@ -650,6 +655,30 @@ def systeem_prompt() -> str:
 
 
 _LOG_CACHE: dict[str, Any] = {"t": 0.0, "tekst": ""}
+_MGR_CACHE: dict[str, tuple[float, str]] = {}
+
+
+def _manager_context(agent: str | None, nu: float | None = None) -> str:
+    """19 nov (audit, punt 1): de compacte wereld van déze manager -- open taken,
+    wat op Luka wacht, wat mislukte, wat hij zelf deed, wat hij mag.
+    Per manager hooguit eens per minuut gelezen."""
+    import time as _t
+    if not agent:
+        return ""
+    nu = _t.time() if nu is None else nu
+    vorig = _MGR_CACHE.get(agent)
+    if vorig and nu - vorig[0] < 60:
+        return vorig[1]
+    tekst = ""
+    try:
+        import manager_context as _mc
+        db = _db_voor_stoelen()
+        if db is not None:
+            tekst = _mc.lees_context(db, agent)
+    except Exception:  # noqa: BLE001
+        tekst = ""
+    _MGR_CACHE[agent] = (nu, tekst)
+    return tekst
 
 
 def _gedeeld_log_context(nu: float | None = None) -> str:
@@ -1488,6 +1517,7 @@ async def run_agent_loop(
     werkplek_fiche = _HUIDIGE_WORKSPACE.set(task_workspace)
     fiche = _HUIDIGE_BRIEF.set(brief)
     ws_fiche = _HUIDIGE_AGENT_WS.set(agent_ws)
+    agent_fiche = _HUIDIGE_AGENT.set(agent)
     device_fiche = _HUIDIGE_DEVICE.set(pinned if pinned in ("vps", "mac-mini", "imac") else None)
     dax_fiche = _HUIDIGE_DAX.set(dax)
     gratis_fiche = _ALLEEN_GRATIS.set(bool(alleen_gratis))
@@ -1508,6 +1538,7 @@ async def run_agent_loop(
         _HUIDIGE_BRIEF.reset(fiche)
         _HUIDIGE_WORKSPACE.reset(werkplek_fiche)
         _HUIDIGE_AGENT_WS.reset(ws_fiche)
+        _HUIDIGE_AGENT.reset(agent_fiche)
         _HUIDIGE_DEVICE.reset(device_fiche)
         _HUIDIGE_DAX.reset(dax_fiche)
         _ALLEEN_GRATIS.reset(gratis_fiche)

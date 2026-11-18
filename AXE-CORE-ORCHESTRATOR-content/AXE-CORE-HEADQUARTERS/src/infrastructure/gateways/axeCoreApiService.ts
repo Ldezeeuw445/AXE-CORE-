@@ -1353,6 +1353,11 @@ export async function schrijfLes(regel: string, waarom = '', toepassen = ''): Pr
   return call('POST', '/lessen', { regel, waarom, toepassen, actor: 'luka' });
 }
 
+/** Eén managercontext (audit 19 nov): wat deze manager nu moet weten, compact. */
+export async function leesManagerContext(agent: string): Promise<{ agent: string; context: string }> {
+  return call('GET', `/managers/${encodeURIComponent(agent)}/context`);
+}
+
 export async function leesLessen(limit = 25): Promise<{ lessen: { wie: string; les: string; wanneer: string }[] }> {
   return call('GET', `/lessen?limit=${limit}`);
 }

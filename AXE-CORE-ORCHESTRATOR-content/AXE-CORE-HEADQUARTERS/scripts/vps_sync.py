@@ -154,6 +154,7 @@ MANIFEST = {
     "/opt/axe-core-api/manager_draad.py": ("backend/axe_api/manager_draad.py", "axe-core-api"),
     "/opt/axe-core-api/axe_overzicht.py": ("backend/axe_api/axe_overzicht.py", "axe-core-api"),
     "/opt/axe-core-api/gedeeld_log.py": ("backend/axe_api/gedeeld_log.py", "axe-core-api"),
+    "/opt/axe-core-api/manager_context.py": ("backend/axe_api/manager_context.py", "axe-core-api"),
     "/opt/axe-core-api/northsea_opruimen.py": ("backend/axe_api/northsea_opruimen.py", "axe-core-api"),
     "/opt/axe-core-api/northsea_focus.py": ("backend/axe_api/northsea_focus.py", "axe-core-api"),
     "/opt/axe-core-api/intel_jets_registry.json": ("backend/axe_api/intel_jets_registry.json", "axe-core-api"),

@@ -8,6 +8,53 @@ zet je naam bij het punt dat je oppakt, zodat we niet twee keer hetzelfde doen.
 
 ---
 
+## Eerst — één doorlopend systeem (audit 19 nov 2026)
+
+Luka liet een buitenstaander kijken; de conclusie klopt grotendeels: AXE heeft
+geen extra AI nodig maar **bedrading en continuïteit**. Wat al kan, moet één
+gesprek worden dat weet wat er speelt. Gecontroleerd tegen de code (19 nov):
+`agenticEngine` heeft echt geen aanroeper; `toolRegistry.computer` is wél
+aangesloten; `core_agents` heeft 19 rijen zonder dubbelen (wel een testrij
+`poc34142-agent`); `langGraphOrchestrator` zit in spraak/routes, niet in de
+leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
+
+- [x] **1. Eén managercontext** (19 nov: `backend/axe_api/manager_context.py`, in de agent-lus én de managerchat via `GET /managers/{agent}/context`; namen als northsea/northseamgr tellen als één) (`getManagerContext(app, manager)`): bij elk
+      bericht compact mee -- app-status, open taken van die manager, laatste
+      10 beslissingen, tools die hij mag, lessen, wat al geprobeerd is, wat
+      hij zelf mag en wat goedkeuring vraagt. Nu verspreid over
+      `_gedeeld_log_context`, `axe_overzicht` en `grok_managers`.
+- [ ] **2. Live voortgang in het managergesprek**: een taak draait op de
+      achtergrond, Luka praat door, de manager meldt kort tussendoor
+      ("bestanden gelezen", "tests draaien", "klaar, diff staat klaar").
+      Statussen: planning / running / waiting_approval / verifying /
+      completed / failed -- overal dezelfde (geen done naast completed).
+- [ ] **3. Coding-worker als interne medewerker**: manager geeft Claude Code /
+      Codex een opdracht met scope en "af is af"; terug komen diff, tests,
+      risico's; AXE vat samen; Luka keurt goed of vraagt aanpassing. (18 nov:
+      `claude_code.run` zonder prompt faalde elk uur -- die poort staat nu.)
+- [ ] **4. Geheugen terugschrijven na elke taak**: wat gedaan, wat werkte, wat
+      faalde, welk besluit, volgende stap. (Deels: gedeeld log + lessen, 18 nov.)
+      Zichtbaar maken welke herinneringen een antwoord stuurden.
+- [ ] **5. Eén agent-register**: `core_agents` is de enige bron; Agents-tab
+      toont exact dat; testrij weg; per agent rol, tools, model,
+      geheugen-namespace, status.
+- [ ] **6. Eén tool-register dat echt werkt**: test "welke tools heeft agent
+      X" == register; per tool input/output/rechten/fouten/wie mag hem.
+- [ ] **7. Leerlus voor alle agents**: `agenticEngine` aansluiten of weg,
+      `langGraphOrchestrator` in dezelfde lus als `browserAgentLoop`.
+- [ ] **8. De ervaring**: per manager één venster; altijd zichtbaar "luistert /
+      bezig / taak draait / wacht op jou"; spraak, tekst en taakstatus in één
+      stroom; geen popups voor gewone voortgang; meldingen kort, geen spam.
+- [ ] **CLI-abonnementen als uitvoerders, niet als brein**: AXE's eigen lus is
+      de baas; Claude/Codex/Cursor/OpenHands zijn workers of terugval.
+- [ ] **Supabase (AXE) overbelast** (19 nov, 23:15+): zelfs triviale queries
+      15-40 s, inloggen op de PWA lukt niet. Cron-jobs doen HTTP vanuit
+      Postgres (`axe_ops.dispatch_cron`, `uptime_check`: 25-32 s per call,
+      elke 2 min). Uitzoeken: I/O-budget/compute, en die HTTP-jobs naar de
+      VPS verplaatsen.
+
+---
+
 ## Nu — AXE als co-founder (Luka, 17 nov 2026)
 
 Luka: "het moet juist zo zijn dat axe core me assistent is en zelfs co-founder

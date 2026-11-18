@@ -3608,6 +3608,14 @@ async def lessen_lezen(limit: int = 50):
     return {"lessen": [{"wie": r.get("from_agent"), "les": r.get("body"), "wanneer": r.get("created_at")} for r in rijen]}
 
 
+@app.get("/managers/{agent}/context", dependencies=[AUTH])
+async def manager_context_lezen(agent: str):
+    """Eén managercontext (audit 19 nov): wat deze manager nu moet weten."""
+    import manager_context as _mc
+    tekst = await asyncio.to_thread(_mc.lees_context, sb(), agent)
+    return {"agent": _mc.groep_van(agent)[0], "context": tekst}
+
+
 @app.post("/lessen", dependencies=[AUTH])
 async def les_schrijven(body: LesInvoer):
     import gedeeld_log as _gl
