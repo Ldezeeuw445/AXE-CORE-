@@ -80,13 +80,25 @@ export function useWakeWord() {
         if (b.winner && voice.voiceStatus === 'idle') void voice.startListening();
       });
     };
-    rec.onend = () => {
+    /* 18 nov, focus.log Mac mini (na de notch-fix): nu elke ~10 s 'focus main'.
+       Spraakherkenning stopt na stilte en onend startte hem meteen opnieuw; in
+       WebKit maakt elke start het venster actief, dus AXE trok elke keer het
+       toetsenbord weg uit de app waar Luka in zat. Nu herstart hij alleen als
+       AXE zelf vooraan staat; anders wacht hij tot Luka terugkomt. */
+    let wachtOpFocus = false;
+    const start = () => {
       if (stop || !aan) return;
+      if (typeof document !== 'undefined' && !document.hasFocus()) { wachtOpFocus = true; return; }
+      wachtOpFocus = false;
       try { rec.start(); } catch { /* */ }
     };
-    try { rec.start(); } catch { /* */ }
+    const opFocus = () => { if (wachtOpFocus) start(); };
+    rec.onend = start;
+    window.addEventListener('focus', opFocus);
+    start();
     return () => {
       stop = true;
+      window.removeEventListener('focus', opFocus);
       try { rec.stop(); } catch { /* */ }
     };
   }, [aan]);
