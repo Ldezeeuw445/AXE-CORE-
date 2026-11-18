@@ -5,7 +5,8 @@
  * Icons are wired; body always fills the window when open (no empty glass).
  */
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
-import { CheckCircle2, ChevronUp, Home, MessageSquare, Mic, Plus, Settings, Users, Paperclip, X } from 'lucide-react';
+import { Bot, CheckCircle2, ChevronUp, Home, MessageSquare, Mic, Plus, Settings, Users, Paperclip, X } from 'lucide-react';
+import { claudeLive, klok, leesStand, type ClaudeLive } from '@/domain/overlay/claudeLive';
 import { aiProxyUrl, vpsAuthHeaders, isTauriRuntime, VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 import {
   listPendingApprovals,
@@ -19,7 +20,44 @@ import { projectieUitVraag } from '@/application/sphere/vraagRouter';
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 import { NotchResultaat } from './NotchResultaat';
 
-type Tab = 'chat' | 'approvals' | 'settings';
+type Tab = 'chat' | 'approvals' | 'settings' | 'claude';
+
+/**
+ * Claude Code live (18 nov): leest ~/.axe/claude-live.json via de Tauri-
+ * opdracht lees_claude_live, eens per seconde, alleen als er een sessie is
+ * twee keer zo vaak niet nodig. Buiten Tauri: niets.
+ */
+function useClaudeLive(): ClaudeLive | null {
+  const [live, setLive] = useState<ClaudeLive | null>(null);
+  const vorige = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    let weg = false;
+    const tik = async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const ruw = await invoke<string | null>('lees_claude_live');
+        if (weg) return;
+        const l = claudeLive(leesStand(ruw), Date.now() / 1000, vorige.current);
+        vorige.current = l?.sessieId ?? null;
+        setLive(l);
+      } catch { /* oudere build zonder de opdracht */ }
+    };
+    void tik();
+    const id = window.setInterval(() => { void tik(); }, 1000);
+    return () => { weg = true; window.clearInterval(id); };
+  }, []);
+  return live;
+}
+
+/** 3x3 pixelglyph die leeft: kleur per soort werk, golf als hij bezig is. */
+function ClaudeGlyph({ live }: { live: ClaudeLive }) {
+  return (
+    <span className="axe-ov__cglyph" data-soort={live.soort} data-toestand={live.toestand} aria-hidden="true">
+      {Array.from({ length: 9 }, (_, i) => <i key={i} style={{ animationDelay: `${(i % 3) * 120 + Math.floor(i / 3) * 90}ms` }} />)}
+    </span>
+  );
+}
 
 type Msg = { role: 'user' | 'assistant' | 'system'; content: string; at: number };
 
@@ -144,6 +182,7 @@ export function AxeOverlayNotch({
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('chat');
+  const claude = useClaudeLive();
   const [tekst, setTekst] = useState('');
   const [messages, setMessages] = useState<Msg[]>([]);
   const [busy, setBusy] = useState(false);
@@ -511,6 +550,20 @@ export function AxeOverlayNotch({
         <CheckCircle2 size={15} strokeWidth={1.7} />
         <Teller n={approvals.length} />
       </button>
+      {/* 18 nov: AXE én Claude in de notch -- één klik naar wat Claude doet. */}
+      <button
+        type="button"
+        className={`axe-ov__ico ${claude ? 'axe-ov__ico--claude' : ''}`}
+        aria-label="Claude"
+        aria-pressed={open && tab === 'claude'}
+        title={claude ? `Claude · ${claude.nu}` : 'Claude'}
+        onClick={() => {
+          set(true);
+          setTab('claude');
+        }}
+      >
+        <Bot size={15} strokeWidth={1.7} />
+      </button>
       <button
         type="button"
         className="axe-ov__ico axe-ov__ico--teller"
@@ -621,6 +674,18 @@ export function AxeOverlayNotch({
               title={`${manager.label} — ${leven.uitleg}`}
             />
           </span>
+          {claude && (
+            <button
+              type="button"
+              className={`axe-ov__claude axe-ov__claude--${claude.toestand}`}
+              title={`Claude · ${claude.project}${claude.vraag ? ` — ${claude.vraag}` : ''}`}
+              onClick={() => { set(true); setTab('claude'); }}
+            >
+              <ClaudeGlyph live={claude} />
+              <span className="axe-ov__claude-tekst">{claude.nu}</span>
+              <span className="axe-ov__claude-tijd">{klok(claude.seconden)}</span>
+            </button>
+          )}
           {leven.woord !== '' && (
             <button
               type="button"
@@ -793,6 +858,33 @@ export function AxeOverlayNotch({
                     )}
                   </div>
                 ))
+              )}
+            </div>
+          )}
+
+          {tab === 'claude' && (
+            <div className="axe-ov__claude-paneel">
+              {!claude ? (
+                <p className="axe-ov__empty">
+                  Claude is nu niet bezig. Zodra Claude Code werkt (op deze Mac, met de AXE-hook gekoppeld), zie je hier live wat hij doet.
+                </p>
+              ) : (
+                <>
+                  <div className="axe-ov__claude-kop">
+                    <span>Claude · {claude.project || 'sessie'}</span>
+                    <span>{klok(claude.seconden)}{claude.aantalSessies > 1 ? ` · ${claude.aantalSessies} sessies` : ''}</span>
+                  </div>
+                  {claude.vraag && <p className="axe-ov__claude-vraag"><b>Je vroeg</b> {claude.vraag}</p>}
+                  <ul className="axe-ov__claude-stappen">
+                    {claude.stappen.slice(0, 12).map((st, i) => (
+                      <li key={`${st.t}-${i}`} data-soort={st.soort} data-staat={st.staat}>
+                        <i aria-hidden="true" />
+                        <span>{st.wat}</span>
+                        <em>{st.staat === 'bezig' ? 'bezig' : st.staat === 'mislukt' ? 'mislukt' : '✓'}</em>
+                      </li>
+                    ))}
+                  </ul>
+                </>
               )}
             </div>
           )}

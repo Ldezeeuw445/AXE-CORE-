@@ -405,6 +405,19 @@ fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Wat Claude Code nu doet, voor de notch (18 nov). Geschreven door
+/// scripts/claude-notch-hook.py naar ~/.axe/claude-live.json. Alleen lezen,
+/// hooguit 256 kB; ontbreekt het bestand dan is er gewoon geen Claude-sessie.
+#[tauri::command]
+fn lees_claude_live() -> Option<String> {
+    let home = std::env::var_os("HOME")?;
+    let pad = PathBuf::from(home).join(".axe").join("claude-live.json");
+    if fs::metadata(&pad).map(|m| m.len() > 256 * 1024).unwrap_or(true) {
+        return None;
+    }
+    fs::read_to_string(pad).ok()
+}
+
 /// Pending route from the standalone axe-overlay notch (`~/.axe/overlay-open-route`).
 /// Reads + deletes the file. Only `/northsea` and `/trading` are accepted.
 #[tauri::command]
@@ -617,6 +630,7 @@ pub fn run() {
         ensure_vault_dir,
         list_vault_files,
         show_main_window,
+        lees_claude_live,
         toon_hoofdvenster_stil,
         consume_overlay_open_route,
         platform_info,
