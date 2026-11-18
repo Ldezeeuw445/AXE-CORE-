@@ -19,8 +19,10 @@ import { beoordeelNotch } from '@/domain/overlay/notchLeven';
 import { projectieUitVraag } from '@/application/sphere/vraagRouter';
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 import { NotchResultaat } from './NotchResultaat';
+import { eerstvolgende, homeStand, nieuwePeeks, PEEK_MS, zetInRij, type NotchMoment, type Peek } from '@/domain/overlay/notchPeeks';
+import { calendarJobs } from '@/infrastructure/gateways/axeCoreApiService';
 
-type Tab = 'chat' | 'approvals' | 'settings' | 'claude';
+type Tab = 'chat' | 'approvals' | 'settings' | 'claude' | 'home';
 
 /**
  * Claude Code live (18 nov): leest ~/.axe/claude-live.json via de Tauri-
@@ -173,12 +175,15 @@ export function AxeOverlayNotch({
   onSend,
   onOpenChange,
   onInklappen,
+  onPeekChange,
 }: {
   onHome?: () => void;
   onSend?: (text: string) => void;
   onOpenChange?: (open: boolean) => void;
   /** Klapt de notch in tot alleen een handvat. Zonder deze prop geen knop. */
   onInklappen?: () => void;
+  /** Een peek gaat open/dicht: het venster zakt even een regel uit (18 nov). */
+  onPeekChange?: (aan: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('chat');
@@ -502,6 +507,58 @@ export function AxeOverlayNotch({
     setTab('chat');
   };
 
+  /* ── Peeks (18 nov, uit Pulsar): dicht en er gebeurt iets → één regel
+        zakt even uit en trekt zich terug. Nooit focus, nooit als de notch open is. */
+  const moment: NotchMoment = {
+    goedkeuringen: approvals.map((a) => ({ id: a.id, titel: a.wat || a.title })),
+    claude: claude ? { sessieId: claude.sessieId, toestand: claude.toestand, project: claude.project, vraag: claude.vraag,
+      nu: claude.nu, toestemming: Boolean(claude.toestemming) } : null,
+    taken: activity,
+  };
+  const momentSleutel = JSON.stringify([moment.goedkeuringen.map((g) => g.id), moment.claude?.sessieId, moment.claude?.toestand,
+    moment.claude?.toestemming, moment.taken]);
+  const vorigMoment = useRef<NotchMoment | null>(null);
+  const [peekRij, setPeekRij] = useState<Peek[]>([]);
+  useEffect(() => {
+    const erbij = nieuwePeeks(vorigMoment.current, moment);
+    vorigMoment.current = moment;
+    if (erbij.length && !open) setPeekRij((r) => zetInRij(r, erbij));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [momentSleutel]);
+  const peek = !open ? peekRij[0] ?? null : null;
+  useEffect(() => {
+    if (open && peekRij.length) setPeekRij([]);
+  }, [open, peekRij.length]);
+  useEffect(() => {
+    onPeekChange?.(Boolean(peek));
+    if (!peek) return;
+    const id = window.setTimeout(() => setPeekRij((r) => r.slice(1)), PEEK_MS);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [peek?.id]);
+
+  /* ── Home (18 nov): wat er nu speelt in één blik. De agenda één keer per
+        5 min; de rest leeft al in de notch. */
+  const [volgende, setVolgende] = useState<{ naam: string; at: string } | null>(null);
+  const [homeNu, setHomeNu] = useState(() => new Date());
+  useEffect(() => {
+    if (!(open && tab === 'home')) return;
+    let weg = false;
+    const laad = async () => {
+      setHomeNu(new Date());
+      try {
+        const nu = new Date();
+        const { items } = await calendarJobs(nu, new Date(nu.getTime() + 36 * 3600 * 1000));
+        if (!weg) setVolgende(eerstvolgende(items.map((i) => ({ naam: i.naam, at: i.at })), nu));
+      } catch { /* geen agenda bereikbaar: regel valt weg */ }
+    };
+    void laad();
+    const id = window.setInterval(() => setHomeNu(new Date()), 30_000);
+    const id2 = window.setInterval(() => void laad(), 5 * 60_000);
+    return () => { weg = true; window.clearInterval(id); window.clearInterval(id2); };
+  }, [open, tab]);
+  const home = homeStand(homeNu, moment, volgende, bereikbaar);
+
   const onDropFiles = (list: FileList | File[]) => {
     neemSleepAan({ bestanden: Array.from(list).map((f) => ({ name: f.name, size: f.size })) });
   };
@@ -512,11 +569,11 @@ export function AxeOverlayNotch({
         type="button"
         className="axe-ov__ico"
         aria-label="Home"
-        title="Open AXE CORE shell"
+        aria-pressed={open && tab === 'home'}
+        title="Home — wat er nu speelt"
         onClick={() => {
-          set(false);
-          onHome?.();
-          void focusMainShell();
+          set(true);
+          setTab('home');
         }}
       >
         <Home size={15} strokeWidth={1.7} />
@@ -726,6 +783,19 @@ export function AxeOverlayNotch({
         <div className="axe-ov__icons">{iconsRight}</div>
       </div>
 
+      {peek && (
+        <button
+          type="button"
+          className={`axe-ov__peek axe-ov__peek--${peek.soort}`}
+          onClick={() => { setPeekRij([]); set(true); setTab(peek.tab); }}
+          title="Openen"
+        >
+          <span className="axe-ov__peek-titel">{peek.titel}</span>
+          <span className="axe-ov__peek-tekst">{peek.tekst}</span>
+          {peekRij.length > 1 && <span className="axe-ov__peek-meer">+{peekRij.length - 1}</span>}
+        </button>
+      )}
+
       {open && (
         <div className="axe-ov__body">
           <div className="axe-ov__manager">
@@ -752,6 +822,37 @@ export function AxeOverlayNotch({
             <div className="axe-ov__note">
               {statusNote}
               <button type="button" aria-label="Sluit" onClick={() => setStatusNote('')}><X size={12} /></button>
+            </div>
+          )}
+
+          {tab === 'home' && (
+            <div className="axe-ov__home">
+              <div className="axe-ov__home-kop">
+                <b>{home.groet}, Luka</b>
+                <span>{home.datum}</span>
+              </div>
+              <ul className="axe-ov__home-regels">
+                {home.regels.map((r) => (
+                  <li key={r.sleutel}>
+                    <button
+                      type="button"
+                      className={`axe-ov__home-regel${r.rustig ? ' is-rustig' : ''}`}
+                      disabled={!r.tab}
+                      onClick={() => { if (r.tab) setTab(r.tab); }}
+                    >
+                      <span>{r.label}</span>
+                      <b>{r.tekst}</b>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="axe-ov__home-open"
+                onClick={() => { set(false); onHome?.(); void focusMainShell(); }}
+              >
+                Open AXE CORE
+              </button>
             </div>
           )}
 

@@ -577,3 +577,44 @@ html[data-axe-notch] {
   background: var(--axe-notch-accent); color: #0b0d12;
 }
 .axe-ov__claude-knoppen button.ghost { background: rgba(255,255,255,.08); color: rgba(255,255,255,.85); }
+
+/* ── Peek (18 nov): één regel die even onder de dichte balk uitzakt. Past
+   in PEEK_EXTRA_H (58px) van FloatAxe; één keer inschuiven, dan stil. */
+.axe-ov__peek {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; gap: 10px;
+  height: 46px; margin: 0 16px 12px; padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px;
+  background: var(--axe-notch-btn); color: var(--axe-notch-ink);
+  font: inherit; text-align: left; cursor: pointer; overflow: hidden;
+  animation: axe-ov-peek-in 220ms ease-out both;
+}
+.axe-ov__peek:hover { border-color: var(--axe-notch-accent); }
+.axe-ov__peek-titel { flex-shrink: 0; font-weight: 600; color: var(--axe-notch-accent); }
+.axe-ov__peek--goedkeuring .axe-ov__peek-titel,
+.axe-ov__peek--claude-wacht .axe-ov__peek-titel { color: #fbbf24; }
+.axe-ov__peek-tekst { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .85; }
+.axe-ov__peek-meer { flex-shrink: 0; font-size: 11px; opacity: .55; }
+@keyframes axe-ov-peek-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+/* ── Home (18 nov): wat er nu speelt, in één blik. */
+.axe-ov__home { display: flex; flex-direction: column; gap: 12px; padding-top: 4px; }
+.axe-ov__home-kop { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.axe-ov__home-kop b { font-size: 1.25em; font-weight: 600; }
+.axe-ov__home-kop span { opacity: .55; font-variant-numeric: tabular-nums; }
+.axe-ov__home-regels { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.axe-ov__home-regel {
+  width: 100%; display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 12px;
+  padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--axe-notch-btn); color: var(--axe-notch-ink); font: inherit; text-align: left; cursor: pointer;
+}
+.axe-ov__home-regel:disabled { cursor: default; }
+.axe-ov__home-regel:not(:disabled):hover { border-color: var(--axe-notch-accent); }
+.axe-ov__home-regel > span { opacity: .55; font-size: .9em; }
+.axe-ov__home-regel > b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-ov__home-regel.is-rustig > b { opacity: .5; font-weight: 400; }
+.axe-ov__home-open {
+  align-self: flex-start; padding: 8px 14px; border-radius: 10px; cursor: pointer; font: inherit;
+  border: 1px solid var(--axe-notch-accent); background: transparent; color: var(--axe-notch-accent);
+}
+@media (prefers-reduced-motion: reduce) { .axe-ov__peek { animation: none; } }
