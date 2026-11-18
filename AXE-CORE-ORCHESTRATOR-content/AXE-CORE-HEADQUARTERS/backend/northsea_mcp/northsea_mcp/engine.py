@@ -128,7 +128,11 @@ class EngineService:
         # staat (de noodknop), hooguit VERVOLG_PER_DAG per dag, vast sjabloon.
         # De database eist bij een not_required-concept een policy_decision met
         # allowed=true en houdt het contactbeleid aan; dat blijft zo.
-        vervolg_zelf = bool(policy.get("auto_send_followups")) and bool(policy.get("auto_reply_nonbinding"))
+        # Zelfde voorwaarde als de database (northsea_policy_allows('auto_qualification_reply')
+        # = auto_send_qualification EN auto_reply_nonbinding): anders weigert de guard het
+        # concept en zou de vervolgmail als 'blocked' verdwijnen in plaats van bij Luka.
+        vervolg_zelf = (bool(policy.get("auto_send_followups")) and bool(policy.get("auto_send_qualification"))
+                        and bool(policy.get("auto_reply_nonbinding")))
         vandaag = nu.date()
         vervolg_vandaag = sum(1 for x in drafts if x.get("generated_by") == "northsea-engine"
                               and x.get("approval_status") == "not_required"

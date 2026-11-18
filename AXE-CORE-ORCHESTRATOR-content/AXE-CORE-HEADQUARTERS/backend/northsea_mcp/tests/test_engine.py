@@ -673,3 +673,17 @@ async def test_vervolgmail_gaat_zelf_alleen_met_de_noodknop_aan():
     nog = dict(d, id=str(uuid.uuid4()), sent_at=None, resend_email_id=None)
     repo.t["reply_drafts"].append(nog)
     assert (await repo.send_approved_reply(nog["id"]))["ok"] is False
+
+
+async def test_vervolgmail_blijft_concept_als_eerste_mails_uit_staan():
+    """18 nov: Luka zette auto_send_qualification uit. Dan weigert de database elk
+    automatisch concept; de vervolgmail moet dan gewoon een concept voor Luka zijn."""
+    repo = FakeRepo()
+    repo.t["deal_automation_policy"][0].update(auto_send_followups=True, auto_send_qualification=False, auto_reply_nonbinding=True)
+    oude_inbound(repo)
+    repo.t["reply_drafts"] = [d for d in repo.t["reply_drafts"] if d["approval_status"] != "pending"]
+    outbound(repo, h=-60)
+    await eng(repo).tick()
+    fu = repo.t["northsea_followups"][0]
+    d = next(x for x in repo.t["reply_drafts"] if x["id"] == fu["draft_id"])
+    assert d["approval_status"] == "pending" and repo.sends == []
