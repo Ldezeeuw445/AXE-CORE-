@@ -396,10 +396,28 @@ export function buildStableChatCascade(
 
   // Absolute fallback: whatever we have
   if (out.length === 0 && allSlots.length > 0) {
-    return allSlots.slice(0, 3);
+    return metReserve(allSlots.slice(0, 3), allSlots);
   }
 
-  return out.slice(0, 3);
+  return metReserve(out.slice(0, 3), allSlots);
+}
+
+/**
+ * De vaste reserve achter de drie (Luka, 19 nov 2026: "OpenAI als reserve").
+ *
+ * Gemeten die avond: de chat probeerde Groq (gratis, op zijn limiet omdat de
+ * VPS-agents dezelfde Groq gebruiken), Ollama (401) en OpenRouter (geen
+ * tegoed) -- en gaf op met "temporarily unavailable", terwijl OpenAI gewoon
+ * werkte maar nooit aan de beurt kwam door de grens van drie. Nu komt OpenAI
+ * altijd als laatste, als hij een sleutel heeft (of de VPS hem bedient) en er
+ * nog niet in zit. Hij kost per vraag, dus hij komt pas als de rest faalt.
+ */
+export const CHAT_RESERVE: ProviderId = 'openai';
+
+function metReserve(cascade: KeySlot[], allSlots: KeySlot[]): KeySlot[] {
+  if (cascade.some(s => s.provider === CHAT_RESERVE)) return cascade;
+  const reserve = allSlots.find(s => s.provider === CHAT_RESERVE);
+  return reserve ? [...cascade, reserve] : cascade;
 }
 
 /**
@@ -410,8 +428,9 @@ export function buildStableChatCascade(
 export function limitChatIdentityCascade(capability: QueryCapability, slots: KeySlot[]): KeySlot[] {
   if (capability !== 'fast' && capability !== 'creative') return slots;
   if (slots.length <= 3) return slots;
-  // Primary (index 0 after applyPrimarySlot) + up to 2 backups only.
-  return slots.slice(0, 3);
+  // Primary (index 0 after applyPrimarySlot) + up to 2 backups, plus the fixed
+  // reserve (metReserve) so a dead pair of backups never ends the conversation.
+  return metReserve(slots.slice(0, 3), slots);
 }
 
 /**

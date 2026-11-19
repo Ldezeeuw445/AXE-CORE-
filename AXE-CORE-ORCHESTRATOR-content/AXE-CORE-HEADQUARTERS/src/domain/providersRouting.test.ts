@@ -68,3 +68,25 @@ describe('buildStableChatCascade falls through a broke pinned primary', () => {
     expect(googles).toHaveLength(1);
   });
 });
+
+describe('OpenAI als vaste reserve (Luka, 19 nov 2026)', () => {
+  it('komt achter primary + twee dode reserves, zodat de chat niet opgeeft', () => {
+    const all = [slot('groq'), slot('ollama'), slot('openrouter'), slot('openai')];
+    const cascade = buildStableChatCascade(all, {
+      primary: slot('groq'), fallback1: slot('ollama'), fallback2: slot('openrouter'),
+    });
+    expect(cascade.map(s => s.provider)).toEqual(['groq', 'ollama', 'openrouter', 'openai']);
+  });
+
+  it('staat er niet dubbel in als hij al een gekozen slot is', () => {
+    const all = [slot('groq'), slot('openai'), slot('openrouter')];
+    const cascade = buildStableChatCascade(all, { primary: slot('groq'), fallback1: slot('openai') });
+    expect(cascade.filter(s => s.provider === 'openai')).toHaveLength(1);
+  });
+
+  it('zonder OpenAI-sleutel verandert er niets', () => {
+    const all = [slot('groq'), slot('ollama')];
+    const cascade = buildStableChatCascade(all, { primary: slot('groq'), fallback1: slot('ollama') });
+    expect(cascade.map(s => s.provider)).toEqual(['groq', 'ollama']);
+  });
+});

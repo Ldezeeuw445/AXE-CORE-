@@ -115,8 +115,11 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       meer bestaat (gerepareerd, `bae63792`); Groq zelf zat vanavond 7x aan zijn
       limiet omdat de VPS-agents dezelfde Groq-organisatie gebruiken; reserves
       leeg: Gemini (geen tegoed), OpenRouter (geen tegoed), Ollama (401). Alleen
-      OpenAI werkt, maar staat niet in de reserve-rij. Luka beslist: OpenAI als
-      reserve, of Groq/Gemini bijvullen, of agents een eigen Groq-sleutel.
+      OpenAI werkt, maar stond niet in de reserve-rij (de chat probeerde er
+      maximaal 3). Luka koos "OpenAI als reserve" (zijn Groq is gratis): OpenAI
+      komt nu altijd als laatste achter de drie (`CHAT_RESERVE`). In de preview
+      bewezen: Groq en OpenRouter faalden, OpenAI antwoordde. Nog niet gezien
+      in de echte app (volgende build).
 - [ ] **Praten zoals Rabbit OS3**: meerdere dingen zeggen, AXE blijft bij het
       gesprek en zet op de achtergrond taken uit over de managers. (Leunt op
       Eerst 2 en 8.)
