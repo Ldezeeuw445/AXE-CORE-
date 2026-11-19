@@ -83,6 +83,7 @@ log "schil veranderd (src-tauri ${DOEL:0:12}) — Trading OS.app bouwen (laagste
 RUN="$(mktemp "${TMPDIR:-/tmp}/tradingos-desktop.XXXXXX")"
 if (cd "$REPO" && nice -n 15 env -i HOME="$HOME" USER="${USER:-}" LOGNAME="${USER:-}" SHELL=/bin/zsh \
       TMPDIR="${TMPDIR:-/tmp}" PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+      npm_config_cache="$HOME/.cache/tradingos-npm" \
       /usr/bin/perl -e 'alarm shift @ARGV; exec @ARGV or die "exec: $!"' "${TRADINGOS_DESKTOP_MAX_S:-3600}" \
       /bin/bash -c 'npm ci --no-audit --no-fund && npx tauri build --bundles app && bash scripts/desktop-install.sh') > "$RUN" 2>&1; then
   cat "$RUN" >> "$LOG"; rm -f "$RUN"
