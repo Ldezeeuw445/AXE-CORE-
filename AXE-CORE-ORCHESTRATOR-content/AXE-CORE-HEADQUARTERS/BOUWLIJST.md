@@ -1,13 +1,13 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 65 klaar, 24 gebouwd maar nog niet bewezen, 79 open (van 168).
+**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 66 klaar, 23 gebouwd maar nog niet bewezen, 79 open (van 168).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
-| Eerst — één doorlopend systeem (audit 19 nov 2026) | 5 (28%) | 11 | 2 |
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 6 (33%) | 10 | 2 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 12 | 14 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
@@ -98,12 +98,15 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
       20 nov): 22.688 upserts van gemiddeld 1,1 ms = 25 s databasetijd sinds de
       herstart. De schrijver (`snapshotBuffer.ts`) zit in de Trading OS-app,
       niet in deze repo. Opnieuw kijken als de database weer zwaar wordt.
-- [~] **Trage leesqueries**: `rag_memories` (1-2 s) en `global_memory` (0,2 s)
+- [x] **Trage leesqueries** (live 20 nov; bewijs: EXPLAIN ANALYZE na de indexen --
+      rag_memories per gebruiker/app via `rag_memories_user_app_tijd`, 6 blokken
+      en 1,3 ms i.p.v. 7.028 blokken; global_memory op tijd via
+      `global_memory_tijd`, 0,2 ms): `rag_memories` (1-2 s) en `global_memory` (0,2 s)
       per aanroep. Oorzaak gemeten 20 nov: volledige tabelscan (55 MB), geen
       index op gebruiker/app/tijd, en de statistieken waren leeg sinds de
       herstart (ANALYZE gedaan). Indexen staan klaar in
-      `supabase/migrations/20261120090000_geheugen_indexen.sql`; wacht op Luka's
-      ok om toe te passen.
+      `supabase/migrations/20261120090000_geheugen_indexen.sql`, toegepast
+      met Luka's ok.
 ---
 
 ## Besproken 9-19 nov -- alles wat Luka vroeg, op één plek
