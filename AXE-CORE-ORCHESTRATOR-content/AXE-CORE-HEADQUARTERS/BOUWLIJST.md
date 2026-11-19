@@ -1,13 +1,13 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 61 klaar, 12 gebouwd maar nog niet bewezen, 84 open (van 157).
+**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 62 klaar, 11 gebouwd maar nog niet bewezen, 84 open (van 157).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
-| Eerst — één doorlopend systeem (audit 19 nov 2026) | 1 (7%) | 3 | 10 |
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 2 (14%) | 2 | 10 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (5%) | 8 | 11 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
@@ -38,12 +38,12 @@ aangesloten; `core_agents` heeft 19 rijen zonder dubbelen (wel een testrij
 `poc34142-agent`); `langGraphOrchestrator` zit in spraak/routes, niet in de
 leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
 
-- [~] **1. Eén managercontext** (gebouwd 19 nov, nog niet live op de VPS: `backend/axe_api/manager_context.py`, in de agent-lus én de managerchat via `GET /managers/{agent}/context`; namen als northsea/northseamgr tellen als één) (`getManagerContext(app, manager)`): bij elk
+- [x] **1. Eén managercontext** (live 19 nov 13:51; bewijs: `GET /managers/northseamgr/context` op de VPS gaf echte open taken, mislukte taken en eigen berichten van de NorthSea Manager: `backend/axe_api/manager_context.py`, in de agent-lus én de managerchat via `GET /managers/{agent}/context`; namen als northsea/northseamgr tellen als één) (`getManagerContext(app, manager)`): bij elk
       bericht compact mee -- app-status, open taken van die manager, laatste
       10 beslissingen, tools die hij mag, lessen, wat al geprobeerd is, wat
       hij zelf mag en wat goedkeuring vraagt. Nu verspreid over
       `_gedeeld_log_context`, `axe_overzicht` en `grok_managers`.
-- [~] **2. Live voortgang in het managergesprek** (gebouwd 19 nov, nog niet live op de VPS en nog niet met een echte taak gezien: `backend/axe_api/taak_voortgang.py` in de task-worker; een taak uit de managerchat draagt `metadata.chat_manager`, de VPS zet begin / stappen (max 1 per 45 s, max 6) / controleren / wacht op jou / klaar / mislukt als regel in dát gesprek, ook met de app dicht; chat ververst elke 5 s zolang zo'n taak loopt; één statustaal in `taak_voortgang.status()`): een taak draait op de
+- [~] **2. Live voortgang in het managergesprek** (live 19 nov 13:51; bewezen met een echte taak bij de AXE Manager: "begonnen", "wacht op je ok" en "is gestopt" kwamen in zijn gesprek, de ok-vraag als nieuw. Nog niet gezien: tussenstappen en "klaar" bij een taak die afloopt, en de chat in de app die elke 5 s ververst (wacht op de app-build): `backend/axe_api/taak_voortgang.py` in de task-worker; een taak uit de managerchat draagt `metadata.chat_manager`, de VPS zet begin / stappen (max 1 per 45 s, max 6) / controleren / wacht op jou / klaar / mislukt als regel in dát gesprek, ook met de app dicht; chat ververst elke 5 s zolang zo'n taak loopt; één statustaal in `taak_voortgang.status()`): een taak draait op de
       achtergrond, Luka praat door, de manager meldt kort tussendoor
       ("bestanden gelezen", "tests draaien", "klaar, diff staat klaar").
       Statussen: planning / running / waiting_approval / verifying /
