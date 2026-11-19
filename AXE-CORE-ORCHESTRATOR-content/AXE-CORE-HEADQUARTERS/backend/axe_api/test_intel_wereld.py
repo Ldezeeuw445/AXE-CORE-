@@ -198,7 +198,9 @@ def test_proxy_feeds_worden_gemeten_zoals_de_apps_ze_krijgen():
     post, gevraagd = _proxy({
         "darkPoolPrints": (200, {"ok": True, "data": [{"symbol": "SPY"}] * 12, "source": "finra_reg_sho_daily"}),
         "unusualOptions": (200, {"ok": True, "data": [{"symbol": "NVDA"}] * 25, "source": "cboe_delayed"}),
-        "marketTide": (200, {"ok": True, "data": [{"bias": "neutral"}] * 6, "source": "cboe_delayed"}),
+        # Echte vorm: één stand, geen lijst (intel-proxy freeIntel.fetchMarketTide).
+        "marketTide": (200, {"ok": True, "data": {"bias": "neutral", "callPremium": 1.2e9, "putPremium": 1.1e9},
+                             "source": "cboe_delayed"}),
         "cyberThreats": (200, {"ok": True, "data": [{"cveId": "CVE-1"}] * 25, "source": "cisa_kev"}),
         "vesselStream": (200, {"ok": True, "data": {"vessels": [{"mmsi": "1"}] * 3, "alerts": []},
                                "source": "digitraffic", "aisstream_note": "aisstream_no_messages: connect_timeout_8s"}),
@@ -207,7 +209,7 @@ def test_proxy_feeds_worden_gemeten_zoals_de_apps_ze_krijgen():
     assert gevraagd == ["darkPoolPrints", "unusualOptions", "marketTide", "cyberThreats", "vesselStream"]
     assert db.sync["darkPool"] == {"feed_id": "darkPool", "source": "intel-proxy:finra_reg_sho_daily",
                                    "last_error": None, "last_sync_at": NU.isoformat(), "rows_synced": 12}
-    assert db.sync["marketTide"]["rows_synced"] == 6
+    assert db.sync["marketTide"]["rows_synced"] == 1
     assert db.sync["vesselTracking"]["rows_synced"] == 3
     assert uit["vesselTracking"]["let_op"].startswith("aisstream_no_messages")
     # Niets opgeslagen: alleen de log.
@@ -220,7 +222,7 @@ def test_proxy_fout_of_nul_rijen_laat_de_oude_stand_oud():
     post, _ = _proxy({
         "darkPoolPrints": (500, {"ok": False, "error": "offexchange_failed"}),
         "unusualOptions": (200, {"ok": True, "data": [], "source": "cboe_delayed"}),
-        "marketTide": (200, None),
+        "marketTide": (200, {"ok": True, "data": None, "source": "cboe_delayed"}),
         "cyberThreats": (200, {"ok": False, "error": "kev down"}),
         "vesselStream": (200, {"ok": False, "error": "aisstream_no_messages"}),
     })
@@ -230,9 +232,19 @@ def test_proxy_fout_of_nul_rijen_laat_de_oude_stand_oud():
         assert db.sync[feed]["last_error"], feed
     assert "http_500" in uit["darkPool"]["fout"]
     assert uit["unusualOptions"]["fout"] == "intel-proxy gaf 0 rijen"
+    assert uit["marketTide"]["fout"] == "intel-proxy gaf 0 rijen"
 
 
 def test_proxy_peiling_is_een_staande_dienst():
     dienst = next(d for d in w.diensten() if d["agent"] == "intel-proxy-peiling")
     assert dienst["run"] is w.run_proxy and dienst["cron_expr"] == "45 * * * *"
     assert staande_diensten.catalogus_voor("intel-proxy-peiling") is not None
+
+
+def test_proxy_rijen_telt_lijst_schepen_en_een_object():
+    assert w.proxy_rijen({"data": [1, 2, 3]}) == 3
+    assert w.proxy_rijen({"data": {"vessels": [{}, {}], "alerts": []}}) == 2
+    assert w.proxy_rijen({"data": {"bias": "bullish"}}) == 1
+    assert w.proxy_rijen({"data": {}}) == 0
+    assert w.proxy_rijen({"data": None}) == 0
+    assert w.proxy_rijen(None) == 0
