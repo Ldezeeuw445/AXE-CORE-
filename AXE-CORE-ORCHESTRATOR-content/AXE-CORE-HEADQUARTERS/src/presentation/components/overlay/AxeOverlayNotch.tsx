@@ -209,6 +209,9 @@ export function AxeOverlayNotch({
       set(true);
       setTab('claude');
     }
+    // `set` staat verderop (useCallback): in de deps-lijst zou hij vóór zijn
+    // declaratie gelezen worden. Alleen een nieuwe vraag moet dit opnieuw doen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [claude?.toestemming?.id]);
   const beantwoord = async (besluit: 'toestaan' | 'altijd' | 'weigeren') => {
     const id = claude?.toestemming?.id;

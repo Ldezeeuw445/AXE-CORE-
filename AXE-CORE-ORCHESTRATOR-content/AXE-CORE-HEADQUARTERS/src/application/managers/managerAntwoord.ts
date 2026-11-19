@@ -32,7 +32,7 @@ const contextCache = new Map<string, { t: number; tekst: string }>();
 async function managerContext(agentId: string): Promise<string> {
   const vorig = contextCache.get(agentId);
   if (vorig && Date.now() - vorig.t < 60_000) return vorig.tekst;
-  let tekst = '';
+  let tekst: string;
   try {
     const { context } = await leesManagerContext(agentId);
     tekst = context ? `[${context}]` : '';
