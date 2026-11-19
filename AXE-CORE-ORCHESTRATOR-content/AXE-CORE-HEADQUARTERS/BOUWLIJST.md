@@ -1,13 +1,13 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 38% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 23 gebouwd maar nog niet bewezen, 82 open (van 168).
+**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 65 klaar, 24 gebouwd maar nog niet bewezen, 79 open (van 168).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
-| Eerst — één doorlopend systeem (audit 19 nov 2026) | 3 (17%) | 10 | 5 |
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 5 (28%) | 11 | 2 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 12 | 14 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
@@ -89,12 +89,21 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
       per minuut). Bewakingsjobs naar elke 10 en 15 min.
 - [~] **Lease-stapeling op de Macs**: fix op orchestrator (`0d6cfdce`), de Macs
       krijgen hem via autosync; nog niet gemeten dat de lease-calls daar dalen.
-- [ ] **HTTP-cronjobs uit Postgres naar de VPS**: `axe_ops.dispatch_cron` en
-      `uptime_check` doen HTTP vanuit de database (25-32 s per call).
-- [ ] **`chart_live_snapshots` alleen gewijzigde symbolen** schrijven
-      (`snapshotBuffer.ts` upsert nu alles elke 3 s).
-- [ ] **Trage leesqueries**: `rag_memories` (1,7 s) en `global_memory` (0,4 s)
-      per aanroep; index of minder vaak.
+- [x] **HTTP-cronjobs uit Postgres naar de VPS** -- niet meer nodig (gemeten
+      20 nov, pg_stat_statements sinds de herstart): `dispatch_cron` 1.004 keer,
+      gemiddeld 21 ms; `uptime_check` 38 ms. Beide via pg_net (asynchroon). De
+      25-32 s was tijdens de storing. Verhuizen zou ook de Companion-tradingjobs
+      raken (paper-stops, trailing-stops): niet zonder Luka.
+- [x] **`chart_live_snapshots` alleen gewijzigde symbolen** -- niet nodig (gemeten
+      20 nov): 22.688 upserts van gemiddeld 1,1 ms = 25 s databasetijd sinds de
+      herstart. De schrijver (`snapshotBuffer.ts`) zit in de Trading OS-app,
+      niet in deze repo. Opnieuw kijken als de database weer zwaar wordt.
+- [~] **Trage leesqueries**: `rag_memories` (1-2 s) en `global_memory` (0,2 s)
+      per aanroep. Oorzaak gemeten 20 nov: volledige tabelscan (55 MB), geen
+      index op gebruiker/app/tijd, en de statistieken waren leeg sinds de
+      herstart (ANALYZE gedaan). Indexen staan klaar in
+      `supabase/migrations/20261120090000_geheugen_indexen.sql`; wacht op Luka's
+      ok om toe te passen.
 ---
 
 ## Besproken 9-19 nov -- alles wat Luka vroeg, op één plek
