@@ -135,3 +135,30 @@ def test_telefoon_aan_de_usb_maar_adb_ziet_hem_niet(mac, monkeypatch):
     stand["adb"] = "List of devices attached\n\n"
     monkeypatch.setattr(ab, "usb_telefoon", lambda json_uit=None: "SAMSUNG_Android")
     assert ab.werk_bij(nu=1000.0, forceren=False) == "phone on USB but not in adb"
+
+
+def test_bouwkopie_gaat_naar_origin_main_ook_vanaf_een_verdwenen_branch(mac):
+    """19 nov, Mac mini: pull faalde op een weggehaalde branch. Nu: fetch + main."""
+    aanroepen, _ = mac
+    assert ab.werk_bij(nu=1000.0, forceren=True) == "updated"
+    git = [a for a, _ in aanroepen if a[:2] == ["git", "-C"]]
+    assert any("set-url" in a and ab.REMOTE in a for a in git)
+    assert any(a[3:] == ["fetch", "-q", "origin", "main"] for a in git)
+    assert any(a[3:] == ["checkout", "-q", "-B", "main", "origin/main"] for a in git)
+    assert not any("pull" in a for a in git)
+
+
+def test_lokale_wijzigingen_in_de_bouwkopie_blijven_staan(mac, monkeypatch):
+    aanroepen, _ = mac
+    oud = ab.draai
+
+    def met_wijziging(args, **kw):
+        if "status" in args:
+            aanroepen.append((list(args), kw))
+            return subprocess.CompletedProcess(args, 0, " M app/build.gradle.kts\n", "")
+        return oud(args, **kw)
+
+    monkeypatch.setattr(ab, "draai", met_wijziging)
+    assert ab.werk_bij(nu=1000.0, forceren=True) == "fetch failed"
+    assert not any("checkout" in a for a, _ in aanroepen)
+

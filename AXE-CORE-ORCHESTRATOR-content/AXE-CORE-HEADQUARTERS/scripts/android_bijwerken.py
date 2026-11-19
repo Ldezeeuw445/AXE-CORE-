@@ -196,6 +196,26 @@ def machine() -> str:
     return socket.gethostname().split(".")[0]
 
 
+def haal_op() -> subprocess.CompletedProcess:
+    """De bouwkopie op origin/main zetten, wat er lokaal ook uitgecheckt stond.
+
+    19 nov: `git pull --ff-only` faalde op de Mac mini met "no such ref was
+    fetched" -- de kopie stond op een branch die op GitHub al weg was. Dit is
+    een bouwkopie van dit script: altijd main. Alleen met lokale wijzigingen
+    blijft hij af (dan één melding), want die zijn misschien van Luka.
+    """
+    if not os.path.isdir(os.path.join(REPO, ".git")):
+        return draai(["git", "clone", "-q", REMOTE, REPO], timeout=600)
+    draai(["git", "-C", REPO, "remote", "set-url", "origin", REMOTE], timeout=15)
+    f = draai(["git", "-C", REPO, "fetch", "-q", "origin", "main"], timeout=180)
+    if f.returncode != 0:
+        return f
+    vuil = draai(["git", "-C", REPO, "status", "--porcelain", "--untracked-files=no"], timeout=30)
+    if (vuil.stdout or "").strip():
+        return subprocess.CompletedProcess([], 1, "", "axe-core-android has local changes; left untouched")
+    return draai(["git", "-C", REPO, "checkout", "-q", "-B", "main", "origin/main"], timeout=60)
+
+
 def werk_bij(nu: float | None = None, forceren: bool | None = None) -> str:
     """Geeft terug wat er gebeurde, in een paar woorden (voor het log en de tests)."""
     nu = time.time() if nu is None else nu
@@ -251,10 +271,7 @@ def werk_bij(nu: float | None = None, forceren: bool | None = None) -> str:
         schrijf_staat(staat)
         return "no Android Studio"
 
-    if os.path.isdir(os.path.join(REPO, ".git")):
-        bron = draai(["git", "-C", REPO, "pull", "-q", "--ff-only"], timeout=180)
-    else:
-        bron = draai(["git", "clone", "-q", REMOTE, REPO], timeout=600)
+    bron = haal_op()
     if bron.returncode != 0:
         staat["mislukt"] = commit
         meld(staat, "warning", f"Android update on {host} could not fetch axe-core-android: {oorzaak(bron.stderr)}")
