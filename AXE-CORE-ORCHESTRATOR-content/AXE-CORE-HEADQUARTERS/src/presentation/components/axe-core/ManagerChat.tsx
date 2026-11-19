@@ -83,13 +83,17 @@ function menselijkeStatusChips(
   job?: AxeJob | null,
   /** Prefer live local job label (Actief / Wacht / Mislukt) over server heartbeat. */
   lokaleLabel?: string | null,
+  /** De staat staat al in de statusregel: dan geen staat-chip. */
+  zonderStaat = false,
 ): string[] {
   const chips: string[] = [];
   if (!server && !job && !lokaleLabel) return chips;
-  if (lokaleLabel) chips.push(lokaleLabel);
-  else if (server) {
-    const stand = bepaalServerStand(server);
-    if (stand?.label) chips.push(stand.label);
+  if (!zonderStaat) {
+    if (lokaleLabel) chips.push(lokaleLabel);
+    else if (server) {
+      const stand = bepaalServerStand(server);
+      if (stand?.label) chips.push(stand.label);
+    }
   }
   const taken = (server?.pendingApprovals?.length ?? 0) + (job?.state === 'waiting' || job?.state === 'running' || job?.state === 'queued' ? 1 : 0);
   if (taken > 0) chips.push(`${taken} ${taken === 1 ? 'taak' : 'taken'}`);
@@ -400,7 +404,9 @@ export function ManagerChat({
   const typing = wachtOpAntwoord || job?.state === 'queued' || job?.state === 'running';
   const taakLoopt = job?.state === 'queued' || job?.state === 'running'
     ? (job.title || 'task')
-    : (server?.status === 'WORKING' ? (server.task?.title || server.current_action || 'task') : null);
+    : (server && ['WORKING', 'QUEUED', 'WAITING_AGENT', 'WAITING_TOOL'].includes(server.status)
+      ? (server.task?.title || server.current_action || 'task')
+      : null);
   const staatRegel = managerStaat({
     wachtOpJou: Math.max(server?.pendingApprovals?.length ?? 0, wacht ? 1 : 0),
     luistert: micHier && isListening,
@@ -497,10 +503,9 @@ export function ManagerChat({
               {staatRegel.tekst}
             </p>
             <div className="axe-manager-pro-chips" aria-label="Status">
-              {(menselijkeStatusChips(server, job, stand?.label).length
-                ? menselijkeStatusChips(server, job, stand?.label)
-                : [stand?.label || 'Klaar']
-              ).map((c) => {
+              {/* De staat zelf staat in de regel hiernaast (punt 8); de chips
+                  geven alleen nog details, nooit een tweede, tegensprekende staat. */}
+              {menselijkeStatusChips(server, job, null, true).map((c) => {
                 const wait = /wacht|waiting|approval/i.test(c) || stand?.label === 'Waiting' || stand?.label === 'waiting';
                 const fail = /mislukt|failed|error/i.test(c);
                 return (
