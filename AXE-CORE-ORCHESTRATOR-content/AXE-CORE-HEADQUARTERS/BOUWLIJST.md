@@ -1,13 +1,13 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 62 klaar, 17 gebouwd maar nog niet bewezen, 80 open (van 159).
+**Stand: 40% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 16 gebouwd maar nog niet bewezen, 80 open (van 159).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
-| Eerst — één doorlopend systeem (audit 19 nov 2026) | 2 (14%) | 6 | 6 |
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 3 (21%) | 5 | 6 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (5%) | 10 | 11 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
@@ -58,7 +58,7 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
 - [~] **5. Eén agent-register** (live 19 nov 19:27; bewezen op de VPS: de sync gaf 20 agents, 18 oude rijen op retired, testrij weg, 9 capabilities omgezet; `GET /agents/register` geeft 20 rijen met bron core_agents en drift []. Nog niet gezien: de Agents-tab met dit register, die komt met de volgende app-build. Wat er gebouwd is: `backend/axe_api/agent_register.py` vult `core_agents` bij elke API-start uit precies wat de lus draait -- de 20 werkplekken met rol, tools, model (agent_tiers.json), geheugen-namespace en status; de 18 oude rijen uit juli/aug (claude-3.5-sonnet, lege toolsets) gaan op `retired` met `vervangen_door`, de testrij `poc34142-agent` gaat weg, capabilities die naar een oude naam wezen gaan naar de echte agent; `GET /agents/register` geeft de rijen plus `drift`; de Agents-tab leest alleen actieve rijen en bewaart geen lokale "bewerkingen" meer die niets deden; app en lus geven NorthSea nu allebei `northsea_read`, een test houdt de tools gelijk): `core_agents` is de enige bron; Agents-tab
       toont exact dat; testrij weg; per agent rol, tools, model,
       geheugen-namespace, status.
-- [~] **6. Eén tool-register dat echt werkt** (gebouwd 19 nov, nog niet live: `backend/axe_api/tool_register.py` geeft per tool wat hij doet, input, output, rechten, bekende fouten en wie hem mag -- input en "wie" afgeleid uit de lus en de werkplekken, dus kan niet afdrijven; `GET /tools/register?agent=X`; een test eist voor alle 20 agents dat lus == tool-register == core_agents. Gat gedicht: een tool buiten de werkplek werd tot nu toe gewoon uitgevoerd als het model hem toch aanriep -- nu weigert de lus hem en zegt welke tools de agent wel heeft): test "welke tools heeft agent
+- [x] **6. Eén tool-register dat echt werkt** (live 19 nov 19:42; bewijs op de VPS: `GET /tools/register?agent=northseamgr` gaf zijn 6 tools met rechten en gaten [], en de draaiende code weigerde `write_file` voor de NorthSea Manager -- niets geschreven, antwoord "not one of your tools". Wat er gebouwd is: `backend/axe_api/tool_register.py` geeft per tool wat hij doet, input, output, rechten, bekende fouten en wie hem mag -- input en "wie" afgeleid uit de lus en de werkplekken, dus kan niet afdrijven; `GET /tools/register?agent=X`; een test eist voor alle 20 agents dat lus == tool-register == core_agents. Gat gedicht: een tool buiten de werkplek werd tot nu toe gewoon uitgevoerd als het model hem toch aanriep -- nu weigert de lus hem en zegt welke tools de agent wel heeft): test "welke tools heeft agent
       X" == register; per tool input/output/rechten/fouten/wie mag hem.
 - [ ] **7. Leerlus voor alle agents**: `agenticEngine` aansluiten of weg,
       `langGraphOrchestrator` in dezelfde lus als `browserAgentLoop`.
