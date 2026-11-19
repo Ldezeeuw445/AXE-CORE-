@@ -47,8 +47,11 @@ export interface AxeRoute {
   confident: boolean;
 }
 
-/** Groq-model dat al in de stack zit (aiAgent.ts) — klein en snel. */
-export const TIER2_GROQ_MODEL = 'llama-3.1-8b-instant';
+/** Klein en snel Groq-model voor tier 2. Was llama-3.1-8b-instant: dat heeft
+ *  Groq weggehaald (19 nov gemeten: model_not_found), en elke snelle vraag
+ *  eindigde in "AXE Core is temporarily unavailable". gpt-oss-20b gaf in de
+ *  meting een leeg antwoord (alle tokens naar redeneren); 120b antwoordt wel. */
+export const TIER2_GROQ_MODEL = 'openai/gpt-oss-120b';
 
 /** Hard maximum voor de optionele model-classifier. Regels zitten hier ver onder. */
 export const AXE_ROUTE_TIMEOUT_MS = 700;

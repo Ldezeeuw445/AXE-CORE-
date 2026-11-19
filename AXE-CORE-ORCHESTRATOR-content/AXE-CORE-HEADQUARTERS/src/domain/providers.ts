@@ -523,6 +523,8 @@ const _MODEL_MIGRATIONS: Record<string, Record<string,string>> = {
     // openai/gpt-oss-120b is Groq's own recommended replacement.
     'llama-3.3-70b-versatile': 'openai/gpt-oss-120b',
     'qwen/qwen3-32b':          'openai/gpt-oss-120b',
+    // 19 nov 2026: ook weg bij Groq (model_not_found). De snelle vervanger.
+    'llama-3.1-8b-instant':    'openai/gpt-oss-120b',
   },
   // `stealth/ox-alpha` was added to the catalog on the strength of its own
   // documentation and then measured against openrouter.ai/api/v1/models: absent

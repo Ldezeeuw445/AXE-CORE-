@@ -85,7 +85,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
   {
     name: 'Groq',
     endpoint: 'https://api.groq.com/openai/v1/chat/completions',
-    model: 'llama-3.1-8b-instant',
+    model: 'openai/gpt-oss-120b',
     supportsTools: true,
     format: 'openai',
     needsKey: true,
