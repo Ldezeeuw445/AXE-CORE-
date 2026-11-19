@@ -31,6 +31,8 @@ export interface AxeJob {
   repo?: string | null;
   /** Opvolging uit het Home-venster, of een verse plan-job. */
   bron?: 'plan' | 'followup';
+  /** Manager in wiens gesprek dit begon (metadata.chat_manager). */
+  chat?: string;
   /** Open goedkeuring, zodat het venster meer toont dan "waiting". */
   approvalId?: string;
   approvalVraag?: string;

@@ -23,7 +23,7 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
       10 beslissingen, tools die hij mag, lessen, wat al geprobeerd is, wat
       hij zelf mag en wat goedkeuring vraagt. Nu verspreid over
       `_gedeeld_log_context`, `axe_overzicht` en `grok_managers`.
-- [ ] **2. Live voortgang in het managergesprek**: een taak draait op de
+- [x] **2. Live voortgang in het managergesprek** (19 nov: `backend/axe_api/taak_voortgang.py` in de task-worker; een taak uit de managerchat draagt `metadata.chat_manager`, de VPS zet begin / stappen (max 1 per 45 s, max 6) / controleren / wacht op jou / klaar / mislukt als regel in dát gesprek, ook met de app dicht; chat ververst elke 5 s zolang zo'n taak loopt; één statustaal in `taak_voortgang.status()`): een taak draait op de
       achtergrond, Luka praat door, de manager meldt kort tussendoor
       ("bestanden gelezen", "tests draaien", "klaar, diff staat klaar").
       Statussen: planning / running / waiting_approval / verifying /

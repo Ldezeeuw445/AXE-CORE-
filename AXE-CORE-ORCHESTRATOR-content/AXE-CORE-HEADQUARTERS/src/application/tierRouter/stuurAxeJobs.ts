@@ -65,6 +65,7 @@ export function jobsVanStukken(stukken: AxeBeurtStuk[], nu = Date.now(), id = ()
       tab: plek.opdracht && plek.tab ? plek.tab : s.tab,
       repo: s.repo ?? plek.repo ?? null,
       bron: s.bron,
+      ...(s.chat ? { chat: s.chat } : {}),
     };
   });
 }
@@ -123,6 +124,8 @@ function payloadVoor(job: AxeJob, route: AxeRoute): JobStartInput {
         who: WIE_WERKT,
         // Geen auto_send_*: NorthSea blijft read-only vanaf deze ingang.
         northsea_read_only: job.agent === 'northsea',
+        // Live voortgang terug in dít managergesprek (backend/axe_api/taak_voortgang.py).
+        ...(job.chat ? { chat_manager: job.chat } : {}),
         ...managerMeta,
         // Prefer manager coding repo when present; else the job's own repo.
         repo: ('repo' in managerMeta && managerMeta.repo) ? managerMeta.repo : repo,

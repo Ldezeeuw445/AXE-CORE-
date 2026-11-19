@@ -124,6 +124,18 @@ describe('een benoemde skill', () => {
     expect((payload.workspace as { role?: string })?.role).toMatch(/commodity/i);
   });
 
+  it('een taak uit een managergesprek draagt chat_manager, zodat de voortgang daar terugkomt', async () => {
+    await startJobsParallel(
+      [
+        { text: 'check northsea deals', bron: 'followup', chat: 'northseamgr', route: classifyAxeTier('check northsea deals') },
+        { text: 'check northsea deals', route: classifyAxeTier('check northsea deals') },
+      ],
+      { create, id: () => `id-${gestuurd.length}` },
+    );
+    const metas = gestuurd.map((g) => g.metadata as Record<string, unknown>);
+    expect(metas.map((m) => m.chat_manager)).toEqual(['northseamgr', undefined]);
+  });
+
   it('schrijft de taakmap in de kluis, anders ziet de Obsidian-tab hem niet', async () => {
     const mappen: string[] = [];
     await startJobsParallel(

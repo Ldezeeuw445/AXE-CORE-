@@ -163,6 +163,7 @@ function startManagerJob(agentId: AxeAgentId, tekst: string, opts?: { device?: s
     tab: opts?.tab,
     repo,
     bron: 'followup',
+    chat: agentId,
     route: managerChatRoute(agentId, tekst),
   }]);
 }
@@ -228,15 +229,18 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
 
   // Grok Bot-gesprek: de draad staat op de VPS, zodat elk apparaat hetzelfde
   // ziet en de managers je zelf in gewone taal kunnen schrijven.
+  // Loopt er een taak uit een gesprek, dan meldt de VPS tussendoor voortgang
+  // in die chat (taak_voortgang.py): dan elke 5 s kijken, anders elke 20 s.
+  const chatTaakLoopt = jobs.some((j) => j.chat && (j.state === 'running' || j.state === 'queued' || j.state === 'waiting'));
   useEffect(() => {
     let alive = true;
     const ronde = () => { void syncManagerDraad(alleIds).then((n) => { if (alive && n) tick((x) => x + 1); }); };
     ronde();
-    const timer = window.setInterval(ronde, 20_000);
+    const timer = window.setInterval(ronde, chatTaakLoopt ? 5_000 : 20_000);
     const opNieuw = () => tick((x) => x + 1);
     window.addEventListener(MANAGER_DRAAD_EVT, opNieuw);
     return () => { alive = false; window.clearInterval(timer); window.removeEventListener(MANAGER_DRAAD_EVT, opNieuw); };
-  }, [alleIds]);
+  }, [alleIds, chatTaakLoopt]);
 
   const agent = gekozen ? agentById(gekozen) : null;
   const agentJobs = agent

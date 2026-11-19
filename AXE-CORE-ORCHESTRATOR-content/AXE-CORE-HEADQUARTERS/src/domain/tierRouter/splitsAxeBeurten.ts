@@ -19,6 +19,8 @@ export interface AxeBeurtStuk {
   /** Optional repo id/name for coding tasks (Managers → durable task). */
   repo?: string | null;
   bron?: 'plan' | 'followup';
+  /** Manager in wiens gesprek dit begon: de VPS meldt de voortgang daar (taak_voortgang.py). */
+  chat?: string;
 }
 
 function isJob(route: AxeRoute): boolean {

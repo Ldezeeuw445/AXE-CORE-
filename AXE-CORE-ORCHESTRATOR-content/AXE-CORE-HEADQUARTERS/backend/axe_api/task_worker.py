@@ -894,8 +894,13 @@ async def run_forever() -> None:
         dax=DaxRegister(db) if dax_aan() else None,
     )
     from mission_engine import MissieMotor, missies_aan, run_mission_engine
+    # Live voortgang in het managergesprek (taak_voortgang.py): hier, in dit
+    # ene proces, zodat elke regel precies één keer in de chat komt.
+    from taak_voortgang import run_voortgang
+    voortgang = run_voortgang(db)
     if not missies_aan():
-        await (asyncio.gather(slots, _dax_slaapronde(DaxRegister(db))) if dax_aan() else slots)
+        extra = [_dax_slaapronde(DaxRegister(db))] if dax_aan() else []
+        await asyncio.gather(slots, voortgang, *extra)
         return
     from goedkeuring_melding import schrijf_goedkeuring_melding
     from missies import MissieRepository
@@ -905,7 +910,7 @@ async def run_forever() -> None:
     )
     # De missielus naast de slots, in hetzelfde proces onder systemd: geen app,
     # geen browser, geen open websocket nodig om door te werken.
-    lussen = [slots, run_mission_engine(motor)]
+    lussen = [slots, run_mission_engine(motor), voortgang]
     if dax_aan():
         lussen.append(_dax_slaapronde(DaxRegister(db)))
     await asyncio.gather(*lussen)
