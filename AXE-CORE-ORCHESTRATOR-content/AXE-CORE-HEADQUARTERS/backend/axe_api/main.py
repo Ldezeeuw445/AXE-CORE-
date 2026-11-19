@@ -4975,6 +4975,12 @@ async def cron_tick(
                 # never retrieves memory before firing a schedule, so there is
                 # nothing to reinforce — same reasoning as wingman's episodes.
                 verdict = "good" if r["status"] == "ok" else ("poor" if r["status"] in ("fail", "timeout") else "unknown")
+                # 19 nov (punt 7): een geslaagde run schrijft geen episode meer.
+                # Zonder herinneringen valt er niets te versterken, en het waren
+                # ~50.000 rijen per maand die alleen de database belastten. Wat
+                # misgaat, telt wel: daar valt iets aan te zien.
+                if verdict == "good":
+                    continue
                 ins = sb().table("agent_learning_episodes").insert({
                     "user_id": AXE_CORE_EPISODE_USER_ID,
                     "agent": "cron",

@@ -155,7 +155,7 @@ export function managerCodingMeta(managerId: GrokManagerId, tekst: string): {
   };
 }
 
-export function managerNaam(id: string): string {
+function managerNaam(id: string): string {
   if (isGrokManager(id) || id === BOSS_ID) return agentById(id as AxeAgentId).name;
   return id;
 }

@@ -221,7 +221,7 @@ def systeem_verslagen(db: Any, rijen: list[dict[str, Any]]) -> int:
     berichten = {str(r.get("task_id")): r.get("message") for r in rijen if r.get("event_type") == "task.failed"}
     n = 0
     try:
-        taken = (db.table("core_tasks").select("id,title,status,result,error,metadata,assignee")
+        taken = (db.table("core_tasks").select("id,title,status,result,error,metadata,assignee,payload")
                  .in_("id", ids).execute().data or [])
     except Exception as exc:  # noqa: BLE001
         log.warning("[voortgang] systeemverslag: taken niet gelezen: %s", exc)

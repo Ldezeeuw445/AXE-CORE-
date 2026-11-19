@@ -152,6 +152,21 @@ describe('de leerlus is aangesloten, niet alleen gebouwd', () => {
  * openstaande beurt" -- en dat kan er een van een ander zijn, want ophalen is
  * asynchroon. Dan wordt het verkeerde versterkt, zelden en dus onopgemerkt.
  */
+describe('de chat (langGraph) zit in dezelfde lus als de browser-agent', () => {
+  /* BOUWLIJST punt 7. De chatroute via langGraphOrchestrator en de
+     browser-agent gebruiken dezelfde beurten (memoryFeedbackService) en
+     dezelfde episodes (agentFeedbackService). Bij de chat sluit
+     noteOwnerOutcome de beurt, omdat het turn-id daar niet bekend is. */
+  it('voiceStore opent orchestrate en sluit de beurt bij een langGraph-antwoord', () => {
+    const bron = BESTANDEN.find(({ pad }) => pad.endsWith('presentation/store/voiceStore.ts'));
+    expect(bron, 'voiceStore.ts niet gevonden').toBeDefined();
+    const tekst = bron!.tekst;
+    expect(tekst).toMatch(/import\('@\/application\/agents\/langGraphOrchestrator'\)/);
+    const lg = tekst.slice(tekst.indexOf("routeEvt.via='langgraph'"));
+    expect(lg.slice(0, 1200), 'langGraph-antwoord sluit geen beurt').toMatch(/noteOwnerOutcome\(memOwner,'good'\)/);
+  });
+});
+
 describe('elke agent tekent zijn eigen beurt', () => {
   const AGENTS: Array<{ bestand: string; naam: string }> = [
     { bestand: 'agents/browserAgentLoop.ts', naam: 'browser' },
@@ -219,25 +234,15 @@ describe('dode paden krijgen geen leerlus', () => {
   });
 
   /**
-   * agenticEngine.ts is volledig bedraad -- hij haalt op als 'agentic', vraagt
-   * om latestOpenTurnId('agentic') en velt zijn oordeel in recordAgentRun. En
-   * het maakt niets uit, want 863 regels lang importeert niemand hem en hij
-   * staat niet in dist/.
-   *
-   * Dat is geen reden om de bedrading weg te halen -- hij klopt, en de dag dat
-   * iemand hem aansluit leert hij meteen mee. Het is wel een reden om vast te
-   * leggen dat hij nu niet draait, want anders telt hij bij de volgende
-   * inventarisatie mee als "in de lus" terwijl er nooit een beurt langskomt.
+   * agenticEngine.ts (863 regels) en agenticEditBridge.ts zijn weg (19 nov
+   * 2026, BOUWLIJST punt 7: "aansluiten of weg"). Niemand importeerde ze; de
+   * echte agent-lus draait op de VPS (backend/axe_api/agent_loop.py) en
+   * schrijft na elke taak een episode (taak_verslag.py). Een tweede lus in de
+   * browser zou een tweede waarheid zijn.
    */
-  it('agenticEngine heeft nog steeds geen importeurs', () => {
-    const importeurs = BESTANDEN.filter(({ pad, tekst }) =>
-      !pad.endsWith('agents/agenticEngine.ts') &&
-      /from ['"][^'"]*\/agenticEngine['"]|import\(\s*['"][^'"]*\/agenticEngine['"]/.test(tekst),
-    );
-    expect(
-      importeurs.map(({ pad }) => pad),
-      'agenticEngine draait weer -- zet hem dan alsnog in de AGENTS-lijst hierboven',
-    ).toHaveLength(0);
+  it('agenticEngine is weg en komt niet stil terug', () => {
+    const terug = BESTANDEN.filter(({ pad }) => /agents\/agentic(Engine|EditBridge)\.ts$/.test(pad));
+    expect(terug.map(({ pad }) => pad), 'agenticEngine staat er weer -- sluit hem dan echt aan').toHaveLength(0);
   });
 });
 

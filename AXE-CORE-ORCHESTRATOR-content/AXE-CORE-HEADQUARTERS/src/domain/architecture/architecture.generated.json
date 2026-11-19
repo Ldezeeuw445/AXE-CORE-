@@ -410,6 +410,10 @@
       "kind": "migration"
     },
     {
+      "path": "supabase/migrations/20261119100000_axe_ops_cron_lichter.sql",
+      "kind": "migration"
+    },
+    {
       "path": "supabase/northsea/migrations/20260916150000_p0_a_columns.sql",
       "kind": "migration"
     },
@@ -2436,7 +2440,8 @@
         "supabase/migrations/20261109190000_core_voice_claims.sql",
         "supabase/migrations/20261110144500_trading_team_mac_schedule.sql",
         "supabase/migrations/20261118120000_axe_approval_inbox.sql",
-        "supabase/migrations/20261119090000_axe_portal.sql"
+        "supabase/migrations/20261119090000_axe_portal.sql",
+        "supabase/migrations/20261119100000_axe_ops_cron_lichter.sql"
       ]
     },
     {
@@ -6366,7 +6371,8 @@
         "supabase/migrations/20261109190000_core_voice_claims.sql",
         "supabase/migrations/20261110144500_trading_team_mac_schedule.sql",
         "supabase/migrations/20261118120000_axe_approval_inbox.sql",
-        "supabase/migrations/20261119090000_axe_portal.sql"
+        "supabase/migrations/20261119090000_axe_portal.sql",
+        "supabase/migrations/20261119100000_axe_ops_cron_lichter.sql"
       ]
     },
     {

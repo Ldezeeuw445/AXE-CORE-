@@ -53,7 +53,7 @@ function requireRepo(repo?: RepoConfig): RepoConfig {
 }
 
 /** Primary = AXE CORE with token, else first token-bearing repo. */
-export function getPrimaryRepo(): RepoConfig | null {
+function getPrimaryRepo(): RepoConfig | null {
   const repos = loadRepoConfigs();
   return repos.find((r) => r.id === 'axe-core' && r.token)
     ?? repos.find((r) => r.token)

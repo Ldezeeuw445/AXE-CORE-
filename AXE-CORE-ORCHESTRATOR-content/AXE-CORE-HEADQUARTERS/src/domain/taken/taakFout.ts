@@ -84,7 +84,7 @@ function verzamelTekst(waarde: unknown, diepte = 0, uit: string[] = []): string[
 }
 
 /** Eerste lintregels (bestand + rule) uit error/result/events/steps. */
-export function lintUitlegVan(error: unknown, bron?: TaakFoutBron): string {
+function lintUitlegVan(error: unknown, bron?: TaakFoutBron): string {
   const stukken = verzamelTekst({ error, ...bron });
   const vondsten = lintVondsten(stukken.join('\n'));
   return vondsten.join('; ');

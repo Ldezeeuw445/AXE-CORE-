@@ -11,6 +11,7 @@ Puur waar het kan: `verslag` en `als_tekst` doen geen I/O.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 KOP = "Taakverslag"
@@ -73,13 +74,66 @@ def wie(taak: dict[str, Any]) -> str:
     return str(meta.get("chat_manager") or taak.get("assignee") or meta.get("agent") or "axe")[:60]
 
 
+# Leerlus (punt 7): dezelfde tabel en vorm als openEpisode/closeEpisode in de
+# app (agentFeedbackService.ts) en de cron-episodes in main.py.
+EPISODE_USER = "acff7a12-1111-481d-a7a9-cc07583b8069"  # = main.AXE_CORE_EPISODE_USER_ID
+# De namen die de app als lus kent (src/domain/memory/agentLoop.ts LOOP_AGENTS).
+LOOP_AGENTS = frozenset({
+    "chat", "trading", "code-editor", "browser", "research", "intel", "companion", "wingman",
+    "task", "cron", "memory", "thinktank", "finance", "apps", "trading-desk-intel",
+    "trading-desk-companion", "axemanager", "projectsmgr", "companionmgr", "axon", "tradingos",
+    "northseamgr",
+})
+_LUS_NAAM = {"developer": "code-editor", "northsea": "northseamgr", "axe": "task"}
+
+
+def lus_agent(taak: dict[str, Any]) -> str:
+    """Onder welke lus deze taak telt: de agent die hem draaide, anders 'task'."""
+    meta = taak.get("metadata") if isinstance(taak.get("metadata"), dict) else {}
+    payload = taak.get("payload") if isinstance(taak.get("payload"), dict) else {}
+    agent = str(taak.get("assignee") or payload.get("agent") or meta.get("agent") or "axe")
+    naam = _LUS_NAAM.get(agent, agent)
+    return naam if naam in LOOP_AGENTS else "task"
+
+
+def oordeel(status: str, result: dict[str, Any] | None) -> str:
+    """good = klaar én bewezen; poor = mislukt of niet compleet; anders unknown."""
+    r = result or {}
+    if status != "completed":
+        return "poor"
+    op = r.get("oplevering") if isinstance(r.get("oplevering"), dict) else {}
+    if op.get("compleet") is False:
+        return "poor"
+    ver = r.get("verification")
+    if isinstance(ver, dict) and ver.get("passed") is False:
+        return "poor"
+    return "good"
+
+
+def episode(db: Any, taak: dict[str, Any], status: str, result: dict[str, Any] | None,
+            tekst: str) -> bool:
+    """Eén gesloten episode per taak in agent_learning_episodes."""
+    try:
+        nu = datetime.now(timezone.utc).isoformat()
+        db.table("agent_learning_episodes").insert({
+            "user_id": EPISODE_USER, "agent": lus_agent(taak),
+            "subject": _kort(taak.get("title") or taak.get("id"), 500),
+            "memory_ids": [], "memory_keys": [],
+            "verdict": oordeel(status, result), "outcome_note": tekst[:500], "closed_at": nu,
+        }).execute()
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def schrijf(db: Any, taak: dict[str, Any], status: str, result: dict[str, Any] | None = None,
             error: Any = None) -> bool:
-    """Best effort: een verslag mag een taak nooit breken."""
+    """Best effort: een verslag mag een taak nooit breken. Schrijft ook de episode."""
     try:
         import gedeeld_log as gl
         tekst = als_tekst(taak, status, verslag(taak, status, result, error))
         db.table("core_manager_messages").insert(gl.log_rij(wie(taak), tekst)).execute()
-        return True
     except Exception:  # noqa: BLE001
         return False
+    episode(db, taak, status, result, tekst)
+    return True

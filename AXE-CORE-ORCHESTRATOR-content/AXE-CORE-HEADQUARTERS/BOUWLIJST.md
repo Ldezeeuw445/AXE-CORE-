@@ -1,13 +1,13 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 40% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 16 gebouwd maar nog niet bewezen, 80 open (van 159).
+**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 17 gebouwd maar nog niet bewezen, 80 open (van 160).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
-| Eerst — één doorlopend systeem (audit 19 nov 2026) | 3 (21%) | 5 | 6 |
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 3 (20%) | 6 | 6 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (5%) | 10 | 11 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
@@ -60,8 +60,12 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
       geheugen-namespace, status.
 - [x] **6. Eén tool-register dat echt werkt** (live 19 nov 19:42; bewijs op de VPS: `GET /tools/register?agent=northseamgr` gaf zijn 6 tools met rechten en gaten [], en de draaiende code weigerde `write_file` voor de NorthSea Manager -- niets geschreven, antwoord "not one of your tools". Wat er gebouwd is: `backend/axe_api/tool_register.py` geeft per tool wat hij doet, input, output, rechten, bekende fouten en wie hem mag -- input en "wie" afgeleid uit de lus en de werkplekken, dus kan niet afdrijven; `GET /tools/register?agent=X`; een test eist voor alle 20 agents dat lus == tool-register == core_agents. Gat gedicht: een tool buiten de werkplek werd tot nu toe gewoon uitgevoerd als het model hem toch aanriep -- nu weigert de lus hem en zegt welke tools de agent wel heeft): test "welke tools heeft agent
       X" == register; per tool input/output/rechten/fouten/wie mag hem.
-- [ ] **7. Leerlus voor alle agents**: `agenticEngine` aansluiten of weg,
+- [~] **7. Leerlus voor alle agents** (gebouwd 19 nov, nog niet live. Gemeten vooraf: in 30 dagen nul episodes versterkt, bijna geen episode met herinneringen eraan, géén episode voor managers/developer/browser, en cron schreef ~50.000 lege episodes per maand. Nu: elke VPS-taak sluit een episode onder zijn eigen agent (good = klaar én bewezen, poor = mislukt of niet compleet) via `taak_verslag.schrijf`, dus ook als de database de taak op mislukt zette; cron schrijft alleen nog mislukte runs; `agenticEngine` + `agenticEditBridge` (dode code) weg; een test houdt chat (langGraph) en browser-agent in dezelfde beurten-lus en de lus-namen gelijk tussen app en VPS): `agenticEngine` aansluiten of weg,
       `langGraphOrchestrator` in dezelfde lus als `browserAgentLoop`.
+  - [ ] **Versterken voor de managers**: de VPS-lus haalt nog geen herinneringen op
+        die je kunt versterken (0 lessen in het gedeelde log; manager-context is
+        taken/verslagen), dus hun episodes hebben nog geen memory-refs. Eerst
+        bepalen welke herinneringen een manager echt gebruikt.
 - [ ] **8. De ervaring**: per manager één venster; altijd zichtbaar "luistert /
       bezig / taak draait / wacht op jou"; spraak, tekst en taakstatus in één
       stroom; geen popups voor gewone voortgang; meldingen kort, geen spam.

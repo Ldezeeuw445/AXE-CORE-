@@ -137,7 +137,7 @@ async function resolveTarget(request: CodeEditRequest): Promise<{ repo: RepoConf
   return { repo, filePath };
 }
 
-export async function executeCodeEdit(
+async function executeCodeEdit(
   request: CodeEditRequest,
   llmSlot: KeySlot,
 ): Promise<CodeEditResult> {
