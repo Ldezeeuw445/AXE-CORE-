@@ -1,14 +1,14 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 62 klaar, 13 gebouwd maar nog niet bewezen, 84 open (van 159).
+**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 62 klaar, 14 gebouwd maar nog niet bewezen, 83 open (van 159).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 2 (14%) | 3 | 9 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (5%) | 9 | 12 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (5%) | 10 | 11 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
@@ -134,8 +134,11 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       ~21 (1 concept, 10 Yes needed waarvan 7 dezelfde Pitsonel-vraag, 3
       deal-beslissingen, 7 oude inbound-reviews). Bewezen als de stapel een
       dag lang niet meer groeit.
-- [ ] **Eén vraag per beslissing**: dezelfde leverancier met tien kopers is één
-      vraag aan Luka, niet tien (nu 7x Pitsonel Ltd).
+- [~] **Eén vraag per beslissing** (live 19 nov): dezelfde vraag over dezelfde
+      leverancier voor een andere koper komt bij de open vraag te staan
+      (`crew_loop._bundel_bij_open_vraag`). De 8 Pitsonel-vragen zijn er nu één
+      met 8 kopers; "Yes needed" van 30 naar 3. Bewezen als een nieuwe koper
+      bij een open vraag landt in plaats van een nieuwe te maken.
 - [ ] **Belangrijke mail = meteen een melding** aan Luka, in het gesprek.
 - [ ] **Mailroute support@** naar Resend (eigenaarsstap Luka; trade@ is klaar).
 - [~] **Een uitgelogde stoel geeft het werk door, met melding wie het overnam**
