@@ -229,7 +229,7 @@ en me uit zichzelf helpt met alles en dingen echt makkelijker maakt."
 - [ ] **UI-ronde: alles nalopen.** Luka: "het is allemaal nog niet echt
       perfect en duidelijk". Elke tab langs: overlap, wat-is-dit, waar klik ik.
       Begint met inloggen in het browserpaneel (preview poort 5199).
-- [ ] **UI nog open (na ronde 1-3, 18 nov):** bestandsboom in Code begint met
+- [ ] **UI nog open (na ronde 1-3, 18 nov; 20 nov: `_backup_`/`_rollback_` verborgen in de boom via `codeStudio/boomFilter.ts`, en de app-tests weer groen -- dodeCode, nav/portal, architectuur):** bestandsboom in Code begint met
       tien `_backup_`/`_rollback_`-mappen; deal-link opent alleen deals uit de
       actieve lijst; telefoonweergave per tab nog niet nagelopen; 4 oude
       frontendtests rood (dodeCode, eeuwigGesprek).

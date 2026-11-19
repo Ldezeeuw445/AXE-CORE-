@@ -4,6 +4,7 @@
  * code-agent via de AXE-composer. Monaco, echte xterm, echte motoren.
  */
 
+import { zichtbaarInBoom } from '@/domain/codeStudio/boomFilter';
 import { useState, useRef, useEffect, useCallback, useMemo, type CSSProperties } from 'react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { PlaatRail, PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
@@ -714,7 +715,7 @@ export default function CodeEditorPage() {
     zetEditorRepo(claudeRepo);
     try {
       const nodes = await listWorkspaceDirectory('');
-      setFileTree(nodes.map(n => ({ ...n, expanded: false, loaded: n.type === 'file' })));
+      setFileTree(nodes.filter(n => zichtbaarInBoom(n.name)).map(n => ({ ...n, expanded: false, loaded: n.type === 'file' })));
       setRootError(null);
     } catch (err) {
       setRootError(err instanceof Error ? err.message : 'Failed to load project files');
@@ -1154,7 +1155,7 @@ export default function CodeEditorPage() {
         const children = await listWorkspaceDirectory(path);
         setFileTree(prev => mapNode(prev, path, n => ({
           ...n, loading: false, loaded: true, expanded: true,
-          children: children.map(c => ({ ...c, expanded: false, loaded: c.type === 'file' })),
+          children: children.filter(c => zichtbaarInBoom(c.name)).map(c => ({ ...c, expanded: false, loaded: c.type === 'file' })),
         })));
       } catch { setFileTree(prev => mapNode(prev, path, n => ({ ...n, loading: false }))); }
       return;
