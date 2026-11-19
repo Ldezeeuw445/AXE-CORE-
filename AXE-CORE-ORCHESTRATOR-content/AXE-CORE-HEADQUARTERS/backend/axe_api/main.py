@@ -3615,6 +3615,20 @@ async def agent_register_lezen():
     return await asyncio.to_thread(_ar.lees, sb())
 
 
+@app.get("/tools/register", dependencies=[AUTH])
+async def tool_register_lezen(agent: str | None = None):
+    """Eén tool-register (audit 19 nov, punt 6): per tool input/output/rechten/fouten/wie.
+
+    Met ?agent=X alleen de tools van die agent -- dezelfde set die de lus hem geeft.
+    """
+    import tool_register as _tr
+    tools = _tr.register()
+    if agent:
+        mijn = set(_tr.tools_van(agent))
+        tools = [t for t in tools if t["name"] in mijn]
+    return {"tools": tools, "gaten": _tr.gaten()}
+
+
 @app.on_event("startup")
 async def _agent_register_sync():
     """Bij elke start: core_agents gelijk aan de werkplekken waarop de lus draait."""

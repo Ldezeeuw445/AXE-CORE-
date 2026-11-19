@@ -1610,6 +1610,19 @@ async def _lus(
             name = call.get("name")
             args = call.get("args") or {}
 
+            # De poort (punt 6, tool-register): alleen tools uit déze werkplek.
+            # Het model krijgt alleen die te zien, maar roept het toch een andere
+            # aan, dan werd die tot 19 nov gewoon uitgevoerd.
+            if name not in {d["name"] for d in _tool_decls()}:
+                agent_id = (_HUIDIGE_AGENT_WS.get() or {}).get("agent") or "axe"
+                await on_event("axe.progress", f"Step {step}: refused {name!r} -- not a tool of {agent_id}", {})
+                transcript.append({"step": step, "tool": name, "refused": "not_in_workspace"})
+                responses.append({"functionResponse": {"name": name, "response": {
+                    "error": f"{name!r} is not one of your tools. Your tools: "
+                             + ", ".join(d["name"] for d in _tool_decls()),
+                }}})
+                continue
+
             if name == "finish":
                 summary = str(args.get("summary") or "").strip()
                 verify_command = str(args.get("verify_command") or "").strip()
