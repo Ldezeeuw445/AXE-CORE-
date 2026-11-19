@@ -1,6 +1,26 @@
 # AXE CORE — bouwlijst
 
-Bijgewerkt 24 september 2026. Alles hieronder is **gemeten**, niet aangenomen.
+<!-- stand:begin -->
+**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 61 klaar, 12 gebouwd maar nog niet bewezen, 84 open (van 157).
+
+Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
+
+| Deel | Klaar | Gebouwd | Open |
+|---|---|---|---|
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 1 (7%) | 3 | 10 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (5%) | 8 | 11 |
+| Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
+| 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
+| 2 — Agents | 6 (86%) | 0 | 1 |
+| 3 — Trading | 12 (75%) | 0 | 4 |
+| 4 — Computer use, browser, code-editor | 1 (33%) | 0 | 2 |
+| 5 — Luka kan het zelf | 2 (50%) | 0 | 2 |
+| 6 — AXE als baas (Jarvis-route, niet letterlijk Jarvis) | 23 (92%) | 0 | 2 |
+| 7 — axe-commandolaag (CLI + hek, geen tweede agent) | 4 (57%) | 0 | 3 |
+<!-- stand:end -->
+
+Bijgewerkt 19 november 2026. Alles hieronder is **gemeten**, niet aangenomen.
 Staat er een aanname, dan staat erbij dat het er een is.
 
 Lees eerst `AGENTS.md` in de hoofdmap. Werk je hieraan met Cursor of Cowork:
@@ -18,12 +38,12 @@ aangesloten; `core_agents` heeft 19 rijen zonder dubbelen (wel een testrij
 `poc34142-agent`); `langGraphOrchestrator` zit in spraak/routes, niet in de
 leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
 
-- [x] **1. Eén managercontext** (19 nov: `backend/axe_api/manager_context.py`, in de agent-lus én de managerchat via `GET /managers/{agent}/context`; namen als northsea/northseamgr tellen als één) (`getManagerContext(app, manager)`): bij elk
+- [~] **1. Eén managercontext** (gebouwd 19 nov, nog niet live op de VPS: `backend/axe_api/manager_context.py`, in de agent-lus én de managerchat via `GET /managers/{agent}/context`; namen als northsea/northseamgr tellen als één) (`getManagerContext(app, manager)`): bij elk
       bericht compact mee -- app-status, open taken van die manager, laatste
       10 beslissingen, tools die hij mag, lessen, wat al geprobeerd is, wat
       hij zelf mag en wat goedkeuring vraagt. Nu verspreid over
       `_gedeeld_log_context`, `axe_overzicht` en `grok_managers`.
-- [x] **2. Live voortgang in het managergesprek** (19 nov: `backend/axe_api/taak_voortgang.py` in de task-worker; een taak uit de managerchat draagt `metadata.chat_manager`, de VPS zet begin / stappen (max 1 per 45 s, max 6) / controleren / wacht op jou / klaar / mislukt als regel in dát gesprek, ook met de app dicht; chat ververst elke 5 s zolang zo'n taak loopt; één statustaal in `taak_voortgang.status()`): een taak draait op de
+- [~] **2. Live voortgang in het managergesprek** (gebouwd 19 nov, nog niet live op de VPS en nog niet met een echte taak gezien: `backend/axe_api/taak_voortgang.py` in de task-worker; een taak uit de managerchat draagt `metadata.chat_manager`, de VPS zet begin / stappen (max 1 per 45 s, max 6) / controleren / wacht op jou / klaar / mislukt als regel in dát gesprek, ook met de app dicht; chat ververst elke 5 s zolang zo'n taak loopt; één statustaal in `taak_voortgang.status()`): een taak draait op de
       achtergrond, Luka praat door, de manager meldt kort tussendoor
       ("bestanden gelezen", "tests draaien", "klaar, diff staat klaar").
       Statussen: planning / running / waiting_approval / verifying /
@@ -47,11 +67,77 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
       stroom; geen popups voor gewone voortgang; meldingen kort, geen spam.
 - [ ] **CLI-abonnementen als uitvoerders, niet als brein**: AXE's eigen lus is
       de baas; Claude/Codex/Cursor/OpenHands zijn workers of terugval.
-- [ ] **Supabase (AXE) overbelast** (19 nov, 23:15+): zelfs triviale queries
-      15-40 s, inloggen op de PWA lukt niet. Cron-jobs doen HTTP vanuit
-      Postgres (`axe_ops.dispatch_cron`, `uptime_check`: 25-32 s per call,
-      elke 2 min). Uitzoeken: I/O-budget/compute, en die HTTP-jobs naar de
-      VPS verplaatsen.
+- [x] **Supabase (AXE) weer gezond** (19 nov, gemeten): na Luka's herstart
+      inloggen 0,18 s en een query 0,10 s vanaf de VPS (was 15-40 s / time-out);
+      Luka logde weer in op de PWA en gooide een foto via Portal. Oorzaken weg:
+      een vergeten preview-tabblad (185 lease-calls/min), opgestapelde timers
+      bij elke token-refresh (opstartroutine nu één keer per venster), en het
+      managers-overzicht (20 queries per poll -> 1; events-queries 120 -> 5-10
+      per minuut). Bewakingsjobs naar elke 10 en 15 min.
+- [~] **Lease-stapeling op de Macs**: fix op orchestrator (`0d6cfdce`), de Macs
+      krijgen hem via autosync; nog niet gemeten dat de lease-calls daar dalen.
+- [ ] **HTTP-cronjobs uit Postgres naar de VPS**: `axe_ops.dispatch_cron` en
+      `uptime_check` doen HTTP vanuit de database (25-32 s per call).
+- [ ] **`chart_live_snapshots` alleen gewijzigde symbolen** schrijven
+      (`snapshotBuffer.ts` upsert nu alles elke 3 s).
+- [ ] **Trage leesqueries**: `rag_memories` (1,7 s) en `global_memory` (0,4 s)
+      per aanroep; index of minder vaak.
+---
+
+## Besproken 9-19 nov -- alles wat Luka vroeg, op één plek
+
+Uit het gesprek van 9 t/m 19 nov teruggelezen, zodat niets alleen in een chat
+blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
+
+**Praten en luisteren**
+- [~] **Eén stem in de kamer** (9 nov, `/voice/claim`, ADR-01): Mac mini, iMac
+      en Samsung horen tegelijk; AXE kiest er één en de rest zwijgt. Nog nooit
+      met alle drie tegelijk in de kamer getest.
+- [ ] **Alle functies op één lijst, met hands-free**: alles wat ooit in AXE
+      gebouwd of bedacht is (computer use, eigen browser, "hey axe show me the
+      map of New York", ...), per functie: werkt het echt, en kan Luka het met
+      alleen zijn stem gebruiken.
+- [ ] **Praten zoals Rabbit OS3**: meerdere dingen zeggen, AXE blijft bij het
+      gesprek en zet op de achtergrond taken uit over de managers. (Leunt op
+      Eerst 2 en 8.)
+
+**De Macs**
+- [~] **Tweede scherm Mac mini: AXE pakt de focus niet meer** (18 nov,
+      `109779a8` notch, `d7453322` wekwoord volgt echte vensterfocus). Luka
+      heeft nog niet gezegd dat het weg is.
+- [ ] **Notch helemaal tegen de bovenkant van het scherm.**
+- [ ] **Geen nieuwe witte AXE CORE naast de oude op de Mac mini** na een build.
+- [ ] **Beide Macs traag** (18 nov): oorzaak meten en weghalen.
+- [~] **AXE Overlay in de ene notch bovenaan** (9 nov, `580ac272`).
+- [~] **Driehoek-avatars met eigen kleur, ook in de notch** (19 nov,
+      `370d0bd0`); de staten (rust / werkt / wacht) nog niet in het echt gezien.
+- [ ] **Notch luxer en levendiger**: AXE en Claude elk met een eigen gezicht,
+      zodat je ziet wie wat doet.
+
+**Portal (foto/bestand/klembord naar de Mac)**
+- [x] **Van de iPhone naar de Mac** (19 nov: Luka veegde een foto naar de Mac
+      mini via de PWA en hij landde).
+- [ ] **Vanaf de Samsung**: kijken of de APK Portal al heeft (anders opnieuw
+      bouwen, adb op `~/Library/Android/sdk/platform-tools/adb`); klembord in
+      de WebView testen.
+- [~] **Portal-tegel op het Systeem-scherm** (19 nov, `381254ea`); wacht op een
+      nieuwe PWA-build.
+
+**Managers en NorthSea**
+- [ ] **NorthSea Manager runt het bedrijf**: beslist zelf de volgende beste stap
+      per deal (samen met AXE), geen 90 goedkeuringen; deals komen echt
+      dichter bij sluiten; de desk is overzichtelijk. Professioneel: er tekenen
+      al bedrijven terug.
+- [ ] **Belangrijke mail = meteen een melding** aan Luka, in het gesprek.
+- [ ] **Mailroute support@** naar Resend (eigenaarsstap Luka; trade@ is klaar).
+- [~] **Een uitgelogde stoel geeft het werk door, met melding wie het overnam**
+      (9 nov, `93dcdc3b`, `ca9feb3b`).
+- [~] **Keys per app in AXE, met de manager die meldt** (9 nov, `948420eb`,
+      `139f070a`).
+- [ ] **Minder dure abonnementen**: managers en DAX blijven alles kunnen met
+      minder Claude/ChatGPT/Cursor-stoelen (eigen lus + goedkope API's/Ollama
+      als basis, stoelen als terugval).
+- [~] **Agenda: de week is leesbaar** (9 nov, `59ad161d`).
 
 ---
 
@@ -887,6 +973,11 @@ Tauri-only. Daar is het geen gat maar een grens.
 
 Niet omdat de code er staat. Alleen met bewijs dat losstaat van je eigen
 redenering: een test die faalt zonder je wijziging, een meting, een screenshot.
+
+Drie staten (Luka, 19 nov): `[x]` klaar = live én in het echt bewezen, met
+datum en bewijs; `[~]` gebouwd = code en tests staan maar nog niet live of nog
+niet bewezen; `[ ]` open. Alleen `[x]` telt mee in het percentage bovenaan.
+Na elke wijziging: `python3 scripts/bouwlijst_stand.py`.
 
 Blijkt een punt niet te kloppen, verbeter dan de tekst hier in plaats van er
 stilletjes iets anders van te maken.

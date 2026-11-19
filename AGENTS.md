@@ -213,7 +213,12 @@ npx vitest run            # 3245 tests, 430 bestanden; 1 staat al rood
 npm run lint              # poort t.o.v. eslint-baseline.json — faalt alleen op NIEUWE vondsten
 npx eslint src            # volle backlog (~443 fouten, 34 waarschuwingen); na een echte fix: npm run lint:baseline
 python3 scripts/vps_sync.py check   # box en repo eens
+python3 scripts/bouwlijst_stand.py --check   # % klaar bovenaan BOUWLIJST klopt
 ```
+
+In BOUWLIJST.md is `[x]` alleen klaar als het live staat én in het echt
+bewezen is; gebouwd maar niet live of niet bewezen is `[~]`. Het percentage
+bovenaan telt alleen `[x]` en wordt door het script gezet, nooit met de hand.
 
 **Deze getallen zijn een meetlat, geen wens** (gemeten 5 nov 2026 op
 `4e8cbe0`). Ze stonden lang op 733 en 427 terwijl het er 2203 en 457 waren, en
