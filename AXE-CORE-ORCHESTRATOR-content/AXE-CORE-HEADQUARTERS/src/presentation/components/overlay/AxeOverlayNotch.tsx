@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
 import { Bot, CheckCircle2, ChevronUp, Home, MessageSquare, Mic, Plus, Settings, Users, Paperclip, X } from 'lucide-react';
 import { claudeLive, klok, leesStand, type ClaudeLive } from '@/domain/overlay/claudeLive';
-import { aiProxyUrl, vpsAuthHeaders, isTauriRuntime, VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
+import { vpsAuthHeaders, isTauriRuntime, VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 import {
   listPendingApprovals,
   type DurableTaskApproval,
@@ -20,7 +20,11 @@ import { projectieUitVraag } from '@/application/sphere/vraagRouter';
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 import { NotchResultaat } from './NotchResultaat';
 import { AXE_CYAAN, AxeGezicht, CLAUDE_KORAAL, type Stemming } from '@/presentation/components/axe-core/AxeGezicht';
-import { AXE_AGENTS } from '@/domain/agents/roster';
+import { AXE_AGENTS, type AxeAgentId } from '@/domain/agents/roster';
+import { bewaarManagerChat, laadManagerChat, nieuwMsg } from '@/domain/agents/managerChatOpslag';
+import { laatManagerAntwoorden } from '@/application/managers/managerAntwoord';
+import { startManagerJob } from '@/presentation/store/managerJob';
+import { syncManagerDraad, MANAGER_DRAAD_EVT } from '@/infrastructure/persistence/managerDraadSync';
 import { isVoorMij, landTekst } from '@/domain/portal/portal';
 import { claimWorp, getekendeLink, openWorpen } from '@/infrastructure/gateways/portalService';
 import { ditToestel } from '@/infrastructure/gateways/axeDeviceService';
@@ -74,15 +78,26 @@ const AXE_STEMMING: Record<string, Stemming> = { rust: 'rust', werkt: 'werkt', d
 
 type Msg = { role: 'user' | 'assistant' | 'system'; content: string; at: number };
 
+/* `agent` = de echte roster-id. Tot 20 nov praatte de notch met een los
+   gpt-4o-mini dat zich voordeed als de manager, buiten zijn gesprek om. Nu
+   is het hetzelfde gesprek als op de Managers-tab (punt 8). */
 const MANAGERS = [
-  { id: 'axe', label: 'AXE' },
-  { id: 'projects', label: 'Projects' },
-  { id: 'axe-core', label: 'CORE' },
-  { id: 'companion', label: 'Companion' },
-  { id: 'trading', label: 'Trading OS' },
-  { id: 'axon', label: 'AXON' },
-  { id: 'northsea', label: 'NorthSea' },
-] as const;
+  { id: 'axe', agent: 'axe', label: 'AXE' },
+  { id: 'projects', agent: 'projectsmgr', label: 'Projects' },
+  { id: 'axe-core', agent: 'axemanager', label: 'CORE' },
+  { id: 'companion', agent: 'companionmgr', label: 'Companion' },
+  { id: 'trading', agent: 'tradingos', label: 'Trading OS' },
+  { id: 'axon', agent: 'axon', label: 'AXON' },
+  { id: 'northsea', agent: 'northseamgr', label: 'NorthSea' },
+] as const satisfies ReadonlyArray<{ id: string; agent: AxeAgentId; label: string }>;
+
+/** Het managergesprek als notch-regels. */
+function draadAlsRegels(agent: AxeAgentId): Msg[] {
+  return laadManagerChat(agent)
+    .filter((m) => (m.role === 'user' || m.role === 'assistant') && !m.kind && m.text.trim())
+    .slice(-30)
+    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.text, at: m.at }));
+}
 
 
 function isDangerousApproval(a: DurableTaskApproval): boolean {
@@ -120,40 +135,6 @@ function Teller({ n }: { n: number }) {
   return <span className="axe-ov__teller" aria-hidden>{n > 9 ? '9+' : n}</span>;
 }
 
-async function sendChat(text: string, history: Msg[], managerLabel: string): Promise<string> {
-  const url = aiProxyUrl();
-  const messages = [
-    {
-      role: 'system',
-      content:
-        `Je bent ${managerLabel} in de AXE notch. Kort, Nederlands, actiegericht. ` +
-        'Nooit secrets, trades of payments uitvoeren vanuit de notch.',
-    },
-    ...history.slice(-10).map((m) => ({ role: m.role, content: m.content })),
-    { role: 'user', content: text },
-  ];
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...vpsAuthHeaders(url),
-    },
-    body: JSON.stringify({
-      provider: 'openai',
-      model: 'gpt-4o-mini',
-      format: 'openai',
-      baseUrl: 'https://api.openai.com/v1',
-      messages,
-      source: 'axe-overlay-notch',
-    }),
-  });
-  if (!r.ok) {
-    const body = await r.text().catch(() => '');
-    throw new Error(`Chat ${r.status}: ${body.slice(0, 160)}`);
-  }
-  const data = (await r.json()) as { text?: string; choices?: Array<{ message?: { content?: string } }> };
-  return data.text || data.choices?.[0]?.message?.content || '(geen antwoord)';
-}
 
 /**
  * Lopende taken, mét of de VPS überhaupt antwoordde.
@@ -247,6 +228,24 @@ export function AxeOverlayNotch({
   const recRef = useRef<{ stop: () => void } | null>(null);
 
   const manager = MANAGERS[managerIdx] || MANAGERS[0];
+  // Het gesprek van de gekozen manager, en bijblijven als het ergens anders
+  // verandert: de Managers-tab of de VPS in dit venster (MANAGER_DRAAD_EVT),
+  // of een ander venster van de app (storage-event op dezelfde opslag).
+  const agentId = manager.agent;
+  useEffect(() => {
+    const ververs = () => setMessages(draadAlsRegels(agentId));
+    ververs();
+    void syncManagerDraad([agentId]).then(ververs);
+    const opOpslag = (e: StorageEvent) => { if (!e.key || e.key.includes(agentId)) ververs(); };
+    window.addEventListener(MANAGER_DRAAD_EVT, ververs);
+    window.addEventListener('storage', opOpslag);
+    const t = window.setInterval(() => { void syncManagerDraad([agentId]).then(ververs); }, 20_000);
+    return () => {
+      window.removeEventListener(MANAGER_DRAAD_EVT, ververs);
+      window.removeEventListener('storage', opOpslag);
+      window.clearInterval(t);
+    };
+  }, [agentId]);
 
   /**
    * Eén toestand voor de hele strook — ingeklapt én open.
@@ -457,8 +456,20 @@ export function AxeOverlayNotch({
       }
     })();
     try {
-      const reply = await sendChat(payload, messages, manager.label);
-      setMessages((m) => [...m, { role: 'assistant', content: reply, at: Date.now() }]);
+      // In het echte gesprek van deze manager, zoals op de Managers-tab: de
+      // manager antwoordt zelf (abonnement + zijn context), of het wordt een
+      // taak met `chat`, en dan meldt de VPS de voortgang in dit gesprek.
+      const rid = manager.agent;
+      bewaarManagerChat(rid, [...laadManagerChat(rid), nieuwMsg('user', payload)]);
+      setMessages(draadAlsRegels(rid));
+      const zelf = await laatManagerAntwoorden(rid, payload, (actie) => startManagerJob(rid, actie));
+      if (!zelf) {
+        startManagerJob(rid, payload);
+        setMessages((m) => [...m, { role: 'system', content: 'Gestart als taak — de voortgang komt in dit gesprek.', at: Date.now() }]);
+      } else {
+        setMessages(draadAlsRegels(rid));
+      }
+      void syncManagerDraad([rid]);
     } catch (e) {
       setMessages((m) => [
         ...m,

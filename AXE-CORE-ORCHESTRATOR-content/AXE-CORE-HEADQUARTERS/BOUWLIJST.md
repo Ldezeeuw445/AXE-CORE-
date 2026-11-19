@@ -1,13 +1,13 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 38% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 22 gebouwd maar nog niet bewezen, 83 open (van 168).
+**Stand: 38% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 23 gebouwd maar nog niet bewezen, 82 open (van 168).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
-| Eerst — één doorlopend systeem (audit 19 nov 2026) | 3 (17%) | 9 | 6 |
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 3 (17%) | 10 | 5 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 12 | 14 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
@@ -69,7 +69,7 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
 - [~] **8. De ervaring** (gebouwd 19 nov, komt met de volgende app-build; nog niet gezien: één statusregel bovenin elk managervenster -- Waiting on you / Listening / Task running / Thinking / Ready, volgorde = belang (`managerStaat.ts`); spraak via de microfoon in een managervenster gaat naar díe manager, niet meer naar het AXE-hoofdgesprek; een taak uit een managergesprek meldt "klaar" alleen nog in dat gesprek (was: twee keer in de draad + hardop in het hoofdgesprek); tussenstappen die de server al gelezen zette geven geen badge meer; "Done: X" komt er één keer in, niet per open apparaat): per manager één venster; altijd zichtbaar "luistert /
       bezig / taak draait / wacht op jou"; spraak, tekst en taakstatus in één
       stroom; geen popups voor gewone voortgang; meldingen kort, geen spam.
-  - [ ] **De notch-chat aan de managerdraad**: de notch praat nu met een los
+  - [~] **De notch-chat aan de managerdraad** (gebouwd 20 nov, komt met de app-build: de notch toont het echte gesprek van de gekozen manager; een bericht gaat erin, de manager antwoordt zelf of het wordt een taak met `chat`; los gpt-4o-mini weg): de notch praatte met een los
         model (gpt-4o-mini), niet met de echte manager en zijn draad.
   - [~] **Managervenster op Home (AgentVensters) zelfde route als de desk** (gebouwd 20 nov: één gedeelde `startManagerJob` in `presentation/store/managerJob.ts`, met `chat`; het Home-venster houdt de draad bij zolang het open is; komt met de app-build):
         start taken zonder `chat`, dus zonder voortgang in de draad.
