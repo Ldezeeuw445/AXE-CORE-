@@ -338,12 +338,17 @@ def _proxy_post(action: str, args: dict[str, Any]) -> tuple[int, Any]:
 
 
 def proxy_rijen(body: Any) -> int:
-    """Aantal rijen dat de proxy gaf: een lijst, of {vessels: [...]} bij schepen."""
+    """Aantal rijen dat de proxy gaf: een lijst, {vessels: [...]} bij schepen,
+    of één object (marketTide geeft één stand voor SPY+QQQ, geen lijst; null
+    als CBOE niets had). Tot 19 nov telde een object als 0 en stond
+    marketTide maandenlang ten onrechte als leeg."""
     data = body.get("data") if isinstance(body, dict) else None
     if isinstance(data, list):
         return len(data)
-    if isinstance(data, dict) and isinstance(data.get("vessels"), list):
-        return len(data["vessels"])
+    if isinstance(data, dict):
+        if isinstance(data.get("vessels"), list):
+            return len(data["vessels"])
+        return 1 if data else 0
     return 0
 
 

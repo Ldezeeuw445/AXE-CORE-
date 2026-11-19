@@ -272,7 +272,10 @@ def test_computer_worker_codex_fallback_zonder_hard_model():
     assert "runCodexWithFallback" in tekst
     assert "AXE_CODEX_MODEL" in tekst
     assert "isCodexModelNotFound" in tekst
-    assert "/opt/homebrew/bin/claude" in tekst
+    # Sinds de managers-commits zoekt de worker claude/codex in meerdere mappen
+    # (~/.local/bin, /opt/homebrew/bin, …) in plaats van één vast pad.
+    assert "vindBin('claude'" in tekst
+    assert "'/opt/homebrew/bin'" in tekst
     assert "retry without -m" in tekst
     assert "Codex model_not_found" in tekst
     assert "gpt-5-codex" in tekst
