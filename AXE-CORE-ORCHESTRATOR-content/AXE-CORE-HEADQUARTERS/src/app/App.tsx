@@ -201,7 +201,9 @@ export default function App() {
         .then(({ herstelAanmelding }) => herstelAanmelding())
         .catch((e) => console.warn('[AXE] push-aanmelding herstellen faalde', e));
     }
-  }, [user]);
+    // Op het id, niet op het object: dat is na elke tokenverversing nieuw.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   useKeyboardShortcuts({});
   useWakeWord();

@@ -431,8 +431,26 @@ export async function warmLocalOllamaAtBoot(): Promise<void> {
   } catch { /* best-effort */ }
 }
 
+/**
+ * Eén keer per venster (19 nov 2026). App.tsx roept dit aan zodra `user`
+ * verandert, en dat object is na elke tokenverversing (±elk uur) nieuw. Elke
+ * aanroep zette alle setIntervals hieronder er nóg een keer bij: na een dag
+ * open draaide de autopilot-check tientallen keren per minuut, en in een
+ * dev-venster met HMR liep try_autopilot_lease ~1×/s. Dat hielp de database
+ * (en het inloggen op de PWA) mee onderuit. De vlag staat op globalThis zodat
+ * ook een HMR-herlaad van deze module hem ziet.
+ */
+const BOOT_VLAG = '__axeBootstrapGestart';
+export function bootstrapAlGestart(): boolean {
+  const g = globalThis as Record<string, unknown>;
+  if (g[BOOT_VLAG]) return true;
+  g[BOOT_VLAG] = true;
+  return false;
+}
+
 /** Run all bootstraps after the user is authenticated. Non-blocking. */
 export function runAxeBootstrap(): void {
+  if (bootstrapAlGestart()) return;
   void maybeSeedObsidianWelcome();
   void maybeSeedKluisBoom();
   // Niet meer opwarmen bij het opstarten: dat laadde 2,4 GB in op een Mac met
