@@ -46,7 +46,12 @@ export function koppelServerBerichten(
     const id = `${SERVER}${b.id}`;
     if (eigen.has(b.id) || al.has(id) || !b.text?.trim()) continue;
     const at = Date.parse(b.at);
-    erbij.push({ id, role: b.role, text: b.text, at: Number.isFinite(at) ? at : Date.now() });
+    erbij.push({
+      id, role: b.role, text: b.text, at: Number.isFinite(at) ? at : Date.now(),
+      // Tussenstappen zet de VPS meteen op gelezen (taak_voortgang.py): die
+      // horen in de draad, maar niet als nieuw bericht te tellen (punt 8).
+      ...(b.role === 'assistant' && b.read ? { stil: true } : {}),
+    });
   }
   if (!erbij.length) return chat;
   return [...chat, ...erbij].sort((a, b) => a.at - b.at);

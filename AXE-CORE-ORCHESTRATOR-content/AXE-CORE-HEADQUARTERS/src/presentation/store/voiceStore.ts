@@ -401,7 +401,7 @@ interface VoiceState{
   refreshConfiguration:()=>Promise<void>;setApiKey:(key:string)=>void;testApiKey:()=>Promise<boolean>;testSlot:(slot:KeySlot)=>Promise<boolean>;
   clearError:()=>void;setError:(e:string|null)=>void;clearConversation:()=>void;clearRoutingLog:()=>void;
   loadConversation:()=>Promise<void>;loadAllConversations:()=>Promise<void>;switchConversation:(id:string)=>Promise<void>;startNewConversation:()=>void;
-  checkMicPermission:()=>Promise<void>;startListening:()=>Promise<void>;stopListening:()=>void;sendMessage:(text:string)=>Promise<void>;
+  checkMicPermission:()=>Promise<void>;startListening:(naar?:(tekst:string)=>void)=>Promise<void>;stopListening:()=>void;sendMessage:(text:string)=>Promise<void>;
 }
 
 // Resolvers live outside Zustand state (functions aren't serializable state);
@@ -612,7 +612,9 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
 
     checkMicPermission:async()=>{try{if('permissions' in navigator){const r=await navigator.permissions.query({name:'microphone'as PermissionName});set({micPermission:r.state as 'granted'|'denied'|'prompt'});}}catch{}},
 
-    startListening:async()=>{
+    // `naar` (19 nov, punt 8): wie de microfoon in een managervenster aanzet,
+    // praat tegen DIE manager. Zonder `naar` gaat de zin zoals altijd naar AXE.
+    startListening:async(naar?:(tekst:string)=>void)=>{
       try{
         // One AXE voice means one audio-output path. Gemini Live used to take
         // over here whenever a Google slot existed, which made AXE literally
@@ -638,6 +640,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           const visible=(final||interim).trim();
           if(visible)set({transcript:visible});
           if(final.trim()){
+            if(naar){set({voiceStatus:'idle',transcript:''});naar(final.trim());return;}
             set({voiceStatus:'processing',transcript:final.trim()});
             get().sendMessage(final.trim()).catch(()=>set({voiceStatus:'idle'}));
           }

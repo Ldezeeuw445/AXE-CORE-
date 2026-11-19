@@ -133,7 +133,7 @@ function ongelezen(agentId: string, srv?: ServerAgent, busy = false): number {
   if (wachtOpOk(srv, false)) n = Math.max(n, 1);
   const chat = laadManagerChat(agentId);
   for (const m of chat) {
-    if (m.role === 'assistant' && m.at > last) n += 1;
+    if (m.role === 'assistant' && !m.stil && m.at > last) n += 1;
     if (m.kind === 'relay' && m.at > last) n += 1;
   }
   if (busy && n === 0) return 0;

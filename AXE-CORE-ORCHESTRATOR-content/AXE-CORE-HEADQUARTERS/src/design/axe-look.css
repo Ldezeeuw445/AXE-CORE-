@@ -8873,6 +8873,53 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Eén statusregel per manager (punt 8): altijd zichtbaar wat hij doet. */
+.axe-manager-staat {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.axe-manager-staat-stip {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--text-muted);
+  flex: none;
+}
+.axe-manager-staat[data-staat='wacht'] { color: #F87171; }
+.axe-manager-staat[data-staat='wacht'] .axe-manager-staat-stip { background: #F87171; }
+.axe-manager-staat[data-staat='luistert'] { color: var(--accent-cyan, #22D3EE); }
+.axe-manager-staat[data-staat='luistert'] .axe-manager-staat-stip {
+  background: var(--accent-cyan, #22D3EE);
+  animation: axe-manager-staat-puls 1.1s ease-in-out infinite;
+}
+.axe-manager-staat[data-staat='taak'] { color: #FBBF24; }
+.axe-manager-staat[data-staat='taak'] .axe-manager-staat-stip {
+  background: #FBBF24;
+  animation: axe-manager-staat-puls 1.6s ease-in-out infinite;
+}
+.axe-manager-staat[data-staat='denkt'] .axe-manager-staat-stip {
+  background: var(--accent-cyan, #22D3EE);
+  animation: axe-manager-staat-puls 1.6s ease-in-out infinite;
+}
+.axe-manager-staat[data-staat='mislukt'] { color: #F87171; }
+.axe-manager-staat[data-staat='mislukt'] .axe-manager-staat-stip { background: #F87171; }
+.axe-manager-staat[data-staat='rust'] .axe-manager-staat-stip { background: #4ADE80; }
+@keyframes axe-manager-staat-puls {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .axe-manager-staat-stip { animation: none !important; }
+}
 .axe-manager-pro-chip[data-tone='wait'] {
   background: rgba(248, 113, 113, 0.1);
   border-color: rgba(248, 113, 113, 0.28);

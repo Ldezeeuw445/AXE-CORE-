@@ -7,6 +7,7 @@
  * main assistant and this panel collapses back to the brain.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { managerStaat } from '@/domain/agents/managerStaat';
 import { motion } from 'framer-motion';
 import { ArrowUp, ChevronDown, ChevronUp, Mic, Paperclip, Sparkles, Plug, X } from 'lucide-react';
 import { AXE_SKILLS } from '@/domain/tierRouter/axeSkills';
@@ -260,6 +261,9 @@ export function ManagerChat({
   const voiceStatus = useVoiceStore((s) => s.voiceStatus);
   const transcript = useVoiceStore((s) => s.transcript);
   const isListening = voiceStatus === 'listening';
+  // Luistert DIT venster? De stem is één, globaal; alleen als de microfoon
+  // hier werd aangezet zegt deze manager "Listening" (punt 8).
+  const [micHier, setMicHier] = useState(false);
   const [lokaal, setLokaal] = useState<ManagerChatMsg[]>(() => laadManagerChat(agent.id));
   const [wachtOpAntwoord, setWachtOpAntwoord] = useState(false);
   const laatsteJobSamenvatting = useRef<string>('');
@@ -318,6 +322,12 @@ export function ManagerChat({
       setWachtOpAntwoord(true);
       return;
     }
+    // Een taak met `chat` meldt zich via de server in deze draad (punt 8):
+    // hier niet nog eens, anders staat "klaar" er twee keer.
+    if ((job.state === 'done' || job.state === 'failed') && job.chat) {
+      setWachtOpAntwoord(false);
+      return;
+    }
     if ((job.state === 'done' || job.state === 'failed') && job.summary) {
       const key = `${job.id}:${job.summary.slice(0, 80)}`;
       if (laatsteJobSamenvatting.current === key) {
@@ -332,7 +342,7 @@ export function ManagerChat({
       });
       setWachtOpAntwoord(false);
     }
-  }, [job?.id, job?.state, job?.summary]);
+  }, [job?.id, job?.state, job?.summary, job?.chat]);
 
   useEffect(() => {
     const el = draadRef.current;
@@ -368,8 +378,8 @@ export function ManagerChat({
 
   const heeftStrip = !!(server && (missie || server.dax_computer || server.events.length > 0 || (server.routines?.length ?? 0) > 0));
 
-  const stuur = () => {
-    const basis = opvolging.trim();
+  const stuur = (gesproken?: string) => {
+    const basis = (gesproken ?? opvolging).trim();
     const bijlage = formatAttachmentsForPrompt(attachments);
     const t = (basis + bijlage).trim();
     if (!t || !onOpvolging) return;
@@ -388,6 +398,16 @@ export function ManagerChat({
   };
 
   const typing = wachtOpAntwoord || job?.state === 'queued' || job?.state === 'running';
+  const taakLoopt = job?.state === 'queued' || job?.state === 'running'
+    ? (job.title || 'task')
+    : (server?.status === 'WORKING' ? (server.task?.title || server.current_action || 'task') : null);
+  const staatRegel = managerStaat({
+    wachtOpJou: Math.max(server?.pendingApprovals?.length ?? 0, wacht ? 1 : 0),
+    luistert: micHier && isListening,
+    taak: taakLoopt,
+    denkt: wachtOpAntwoord,
+    mislukt: job?.state === 'failed' ? (job.summary || 'last task') : null,
+  });
 
   return (
     <motion.div
@@ -472,6 +492,10 @@ export function ManagerChat({
                 </p>
               </div>
             </div>
+            <p className="axe-manager-staat" data-staat={staatRegel.staat} role="status" aria-live="polite">
+              <span className="axe-manager-staat-stip" aria-hidden />
+              {staatRegel.tekst}
+            </p>
             <div className="axe-manager-pro-chips" aria-label="Status">
               {(menselijkeStatusChips(server, job, stand?.label).length
                 ? menselijkeStatusChips(server, job, stand?.label)
@@ -775,14 +799,17 @@ export function ManagerChat({
               title="Spraak"
               data-listening={isListening ? 'ja' : undefined}
               onClick={() => {
-                void (isListening ? Promise.resolve(stopListening()) : startListening());
+                // Spraak hier gaat naar deze manager, niet naar het AXE-hoofdgesprek.
+                if (isListening) { setMicHier(false); stopListening(); return; }
+                setMicHier(true);
+                void startListening((t) => { setMicHier(false); stuur(t); });
               }}
             >
               <Mic size={16} />
             </button>
             <button
               type="button"
-              onClick={stuur}
+              onClick={() => stuur()}
               disabled={!opvolging.trim() && attachments.length === 0}
               className="axe-manager-send disabled:opacity-40"
               aria-label="Versturen"

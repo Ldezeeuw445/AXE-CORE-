@@ -29,4 +29,13 @@ describe('gedeelde managerdraad', () => {
     expect(na.map((x) => x.id)).toEqual(['s-78', 'a']);
     expect(koppelServerBerichten(na, server, { a: '77' })).toBe(na);
   });
+
+  it('een tussenstap die de server al gelezen zette, telt niet als nieuw (punt 8)', () => {
+    const server = [
+      { id: '1', agent: 'axemanager', role: 'assistant' as const, text: 'Tests draaien.', at: '2026-11-19T20:00:00Z', read: true },
+      { id: '2', agent: 'axemanager', role: 'assistant' as const, text: 'Klaar met X.', at: '2026-11-19T20:01:00Z', read: false },
+    ];
+    const na = koppelServerBerichten([], server, {});
+    expect(na.map((x) => [x.id, Boolean(x.stil)])).toEqual([['s-1', true], ['s-2', false]]);
+  });
 });

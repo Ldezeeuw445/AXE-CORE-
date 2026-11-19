@@ -479,6 +479,11 @@ function meldJobKlaar(job: AxeJob, hervat = false): void {
      goed iets om over een week nog te kunnen opzoeken. `void`, want een
      mislukte schrijfpoging mag het vertellen nooit tegenhouden. */
   void bewaarJobRapport(job);
+  /* Punt 8 (19 nov): een taak uit een managergesprek meldt zich in DAT
+     gesprek -- de VPS zet "klaar"/"mislukt" er zelf in (taak_voortgang.py).
+     Niet nog eens hardop in het AXE-hoofdgesprek. Een vraag om je ok komt
+     wel overal (monitorTier3), want die wacht op jou. */
+  if (job.chat) return;
   if (hervat) {
     const zichtbaar = `${tekst} (finished while you were away.)`;
     zetAxeStil(zichtbaar, { provider: 'tier3', model: job.agent });

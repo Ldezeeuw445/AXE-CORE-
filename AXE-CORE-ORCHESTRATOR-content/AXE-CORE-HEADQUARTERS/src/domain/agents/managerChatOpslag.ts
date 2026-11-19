@@ -18,6 +18,8 @@ export type ManagerChatMsg = {
   error?: boolean;
   /** Inter-agent handoff marker (Grok Bot–style relay line). */
   kind?: 'relay';
+  /** De server zette hem al op gelezen (een tussenstap van een taak): geen badge. */
+  stil?: boolean;
   /** Agent who dispatched / who the relay names (avatar + label). */
   fromAgentId?: string;
   /**

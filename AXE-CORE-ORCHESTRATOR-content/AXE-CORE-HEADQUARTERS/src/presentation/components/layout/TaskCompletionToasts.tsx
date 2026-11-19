@@ -71,10 +71,18 @@ export function TaskCompletionToasts() {
             timers.current.delete(melding.id);
           }, 6500);
           timers.current.set(melding.id, t);
-          void sb.from('core_notifications').insert({
-            type: m.mislukt ? 'warning' : 'success',
-            message: `${m.tekst}: ${rij.title}`,
-          });
+          // Elk open apparaat (Mac mini, iMac, telefoon) ziet dezelfde overgang.
+          // Zonder deze check kwam "Done: X" er tot drie keer in -- en dus drie
+          // keer op je scherm (punt 8, 19 nov). Eerst kijken of een ander
+          // apparaat hem net schreef.
+          const message = `${m.tekst}: ${rij.title}`;
+          void (async () => {
+            const sinds = new Date(Date.now() - 10 * 60_000).toISOString();
+            const { data: al } = await sb.from('core_notifications').select('id')
+              .eq('message', message).gte('created_at', sinds).limit(1);
+            if (al && al.length) return;
+            await sb.from('core_notifications').insert({ type: m.mislukt ? 'warning' : 'success', message });
+          })();
         }
         bekend.current.set(rij.id, rij.status);
       }
