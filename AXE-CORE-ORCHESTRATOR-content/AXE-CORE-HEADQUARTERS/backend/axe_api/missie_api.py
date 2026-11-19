@@ -38,6 +38,34 @@ class MissieBesluit(BaseModel):
     note: Optional[str] = None
 
 
+ACTIVITEIT_TTL = 15.0
+
+
+class GedeeldeCache:
+    """Eén antwoord per sleutel, hooguit één keer per `ttl` seconden berekend.
+
+    Gelijktijdige vragers wachten op dezelfde berekening (lock), zodat drie
+    apps die tegelijk pollen samen één keer de database raken. Een fout wordt
+    niet onthouden: de volgende vraag probeert het opnieuw.
+    """
+
+    def __init__(self, ttl: float, klok: Callable[[], float] | None = None):
+        import time
+        self.ttl = ttl
+        self._klok = klok or time.monotonic
+        self._waarden: dict[Any, tuple[float, Any]] = {}
+        self._lock = asyncio.Lock()
+
+    async def haal(self, sleutel: Any, bereken: Callable[[], Any]) -> Any:
+        async with self._lock:
+            hit = self._waarden.get(sleutel)
+            if hit and self._klok() - hit[0] < self.ttl:
+                return hit[1]
+            waarde = await bereken()
+            self._waarden[sleutel] = (self._klok(), waarde)
+            return waarde
+
+
 def maak_router(client_factory: Callable[[], Any]) -> APIRouter:
     from agent_activiteit import Activiteit
     from agent_workspace import AGENT_WORKSPACES
@@ -106,11 +134,21 @@ def maak_router(client_factory: Callable[[], Any]) -> APIRouter:
         return await _zet(mission_id, "cancelled", req)
 
     # ── Agents ───────────────────────────────────────────────────────────────
+    # Elke open app pollt dit elke 10 s, en één overzicht kost ~25 queries (per
+    # manager een events-query, plus 600 taken). Met drie apps open was dat
+    # ~250 queries/min op de AXE-database -- mede-oorzaak van de IO-uitputting
+    # van 19 nov 2026. Nu rekent de server het hooguit één keer per
+    # ACTIVITEIT_TTL uit en delen alle apps dat antwoord.
+    activiteit_cache = GedeeldeCache(ACTIVITEIT_TTL)
+
     @router.get("/agents/activity")
     async def agent_activiteit(events: int = 8):
+        n = max(1, min(events, 50))
         try:
-            agents = await asyncio.to_thread(activiteit().overzicht, list(AGENT_WORKSPACES), max(1, min(events, 50)))
-            return {"agents": agents, "at": datetime.now(timezone.utc).isoformat()}
+            async def bereken():
+                agents = await asyncio.to_thread(activiteit().overzicht, list(AGENT_WORKSPACES), n)
+                return {"agents": agents, "at": datetime.now(timezone.utc).isoformat()}
+            return await activiteit_cache.haal(n, bereken)
         except Exception as exc:
             raise fout(exc, "agent activity") from exc
 
