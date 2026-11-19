@@ -272,3 +272,35 @@ async def test_vaste_regel_houdt_zich_aan_daglimiet_en_rust_per_adres(repo, rese
     assert uit2["sent"] == 1 and uit2.get("standing_rule") is True
     regel = await service._policy_ruimte("iemand0@elders.com")
     assert regel["allowed"] is False
+
+
+async def test_zelfde_vraag_over_zelfde_leverancier_wordt_een_vraag():
+    """Luka, 19 nov: 7x 'mogen we Pitsonel om hun gegevens vragen' -> één vraag."""
+    from northsea_mcp.crew_loop import BUNDEL_KOP, _bundel_bij_open_vraag
+
+    class Repo:
+        def __init__(self):
+            self.taken = [{"id": "t1", "status": "open", "requires_approval": True, "opportunity_id": "d1",
+                           "title": "Yes needed: d1 — Copper Cathode",
+                           "description": "Buyer: Denel\nSeller: Pitsonel Ltd\nWhat yes does: Request seller legal entity."}]
+
+        async def fetch_all(self, tabel):
+            return self.taken, False
+
+        async def update_deal_task(self, task_id, expected, patch):
+            t = next(t for t in self.taken if t["id"] == task_id)
+            t.update(patch)
+            return t
+
+    repo = Repo()
+    notice = {"what_yes_does": "Request seller legal entity."}
+    kaart = {"seller": "Pitsonel Ltd", "buyer": "Paolo Marelli", "deal_code": "d2"}
+    uit = await _bundel_bij_open_vraag(repo, {"id": "d2"}, kaart, notice)
+    assert uit["bundled_into"] == "t1" and uit["notice"] is None
+    assert BUNDEL_KOP in repo.taken[0]["description"] and "- Paolo Marelli — deal d2" in repo.taken[0]["description"]
+    # Nog een ronde voor dezelfde koper: niets dubbel.
+    await _bundel_bij_open_vraag(repo, {"id": "d2"}, kaart, notice)
+    assert repo.taken[0]["description"].count("Paolo Marelli") == 1
+    # Andere vraag of andere leverancier: gewoon een eigen vraag.
+    assert await _bundel_bij_open_vraag(repo, {"id": "d3"}, {**kaart, "seller": "Atlantic Copper"}, notice) is None
+    assert await _bundel_bij_open_vraag(repo, {"id": "d3"}, kaart, {"what_yes_does": "Send draft X."}) is None

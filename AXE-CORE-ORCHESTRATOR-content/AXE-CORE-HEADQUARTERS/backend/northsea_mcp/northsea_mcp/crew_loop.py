@@ -357,11 +357,54 @@ def _kaart_notice(kaart: dict[str, Any], eval_: rules.DealEvaluation, *,
     }
 
 
+OPEN_TAAK = ("open", "waiting", "in_progress")
+BUNDEL_KOP = "Also for these buyers (same question):"
+
+
+async def _bundel_bij_open_vraag(repo: Any, opp: dict[str, Any], kaart: dict[str, Any],
+                                 notice: dict[str, Any]) -> dict[str, Any] | None:
+    """Luka, 19 nov: "een overlopende emmer". Dezelfde vraag over dezelfde
+    leverancier (zelfde 'wat ja doet') voor een andere koper is geen nieuwe
+    beslissing: zet de koper bij de open vraag, maak er geen tweede bij.
+    Was: 7x 'mogen we Pitsonel Ltd om hun gegevens vragen', één per koper."""
+    partij = kaart.get("seller")
+    if not partij or partij == "seller unknown":
+        return None
+    fetch, update = getattr(repo, "fetch_all", None), getattr(repo, "update_deal_task", None)
+    if not fetch or not update:
+        return None
+    try:
+        taken, _ = await fetch("deal_tasks")
+    except Exception:
+        return None
+    sleutel_partij = f"Seller: {partij}"
+    sleutel_ja = f"What yes does: {notice['what_yes_does']}"
+    for t in taken:
+        besch = str(t.get("description") or "")
+        if (t.get("status") in OPEN_TAAK and t.get("requires_approval")
+                and str(t.get("title") or "").startswith("Yes needed")
+                and t.get("opportunity_id") != opp["id"]
+                and sleutel_partij in besch and sleutel_ja in besch):
+            regel = f"- {kaart.get('buyer')} — deal {kaart.get('deal_code')}"
+            if regel in besch:
+                return {"notice": None, "sent": 0, "approved": 0, "owner": "luka", "bundled_into": t.get("id")}
+            nieuw = (besch + ("\n\n" + BUNDEL_KOP if BUNDEL_KOP not in besch else "") + "\n" + regel)[:4000]
+            try:
+                await update(str(t["id"]), None, {"description": nieuw})
+            except Exception:
+                return None
+            return {"notice": None, "sent": 0, "approved": 0, "owner": "luka", "bundled_into": t.get("id")}
+    return None
+
+
 async def _ja_vraag(service: Any, opp: dict[str, Any], eval_: rules.DealEvaluation, *,
                     to_email: str | None = None, subject: str | None = None,
                     extra: str | None = None) -> dict[str, Any]:
     kaart = deal_card(opp)
     notice = _kaart_notice(kaart, eval_, to_email=to_email, subject=subject, extra=extra)
+    gebundeld = await _bundel_bij_open_vraag(service.repo, opp, kaart, notice)
+    if gebundeld:
+        return gebundeld
     await _schrijf_taak(
         service, opportunity_id=opp["id"], title=notice["titel"],
         description=notice["tekst"], owner="luka", requires_approval=True,
