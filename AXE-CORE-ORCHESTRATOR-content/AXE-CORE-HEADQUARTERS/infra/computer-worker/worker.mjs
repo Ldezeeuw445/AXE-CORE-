@@ -679,6 +679,10 @@ async function execute(payload) {
     root = pad;
     branch = nieuweBranch;
   }
+  // Punt 3 (19 nov): waar begon deze agent-run? Daartegen meten we straks
+  // wat hij opleverde (commits + diff), zodat AXE niet op zijn woord hoeft
+  // te vertrouwen.
+  const basis = AGENT_RUNS.has(tool) ? (await git(root, 'rev-parse', 'HEAD')).trim() : null;
   // Creating a NEW feature branch is precisely how AXE gets off a protected
   // branch, so that one operation must be allowed while standing on
   // orchestrator/main. Every other write remains blocked here.
@@ -810,7 +814,7 @@ async function execute(payload) {
       const argv = ['-p', prompt, '--output-format', 'json', '--permission-mode', 'acceptEdits'];
       const model = String(args.model ?? '').trim();
       if (model) argv.push('--model', model);
-      return run(bin, argv, root, seatChildEnv(seat));
+      return metOplevering(root, branch, basis, await run(bin, argv, root, seatChildEnv(seat)));
     }
 
     case 'codex.run': {
@@ -818,7 +822,7 @@ async function execute(payload) {
       if (!prompt) throw new Error('codex.run needs a prompt');
       const seat = String(args.seat ?? 'codex');
       const model = String(args.model ?? '').trim();
-      return runCodexWithFallback(prompt, root, seat, model);
+      return metOplevering(root, branch, basis, await runCodexWithFallback(prompt, root, seat, model));
     }
 
     case 'cursor.run': {
@@ -828,7 +832,7 @@ async function execute(payload) {
       const argv = ['-p', prompt, '--output-format', 'json', '--force'];
       const model = String(args.model ?? '').trim();
       if (model) argv.push('--model', model);
-      return run(bin, argv, root, seatChildEnv(String(args.seat ?? 'cursor')));
+      return metOplevering(root, branch, basis, await run(bin, argv, root, seatChildEnv(String(args.seat ?? 'cursor'))));
     }
 
     default:
@@ -836,6 +840,20 @@ async function execute(payload) {
       // say so precisely, so it reads as "not built" rather than "refused".
       throw new Error(`'${tool}' is not implemented in this worker yet`);
   }
+}
+
+/* Punt 3: de git-feiten onder het antwoord van de agent. De VPS leest dit
+   blok (device_actions.oplevering) naast de drie kopjes van de agent zelf. */
+async function metOplevering(root, branch, basis, uit) {
+  if (!basis) return uit;
+  const veilig = async (...a) => { try { return (await git(root, ...a)).trim(); } catch { return ''; } };
+  const commits = await veilig('log', '--oneline', `${basis}..HEAD`);
+  const diff = await veilig('diff', '--stat', basis);
+  const open = await veilig('status', '--porcelain');
+  return `${uit}\n\n## Oplevering (Mac)\nbranch: ${branch}\nworktree: ${root}\n`
+    + `commits:\n${commits || '(geen commits)'}\n`
+    + (open ? `niet gecommit:\n${open}\n` : '')
+    + `diff:\n${diff || '(geen wijzigingen)'}\n`;
 }
 
 /* ── loop ───────────────────────────────────────────────────────────────── */

@@ -1,13 +1,13 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 62 klaar, 11 gebouwd maar nog niet bewezen, 84 open (van 157).
+**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 62 klaar, 12 gebouwd maar nog niet bewezen, 83 open (van 157).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
-| Eerst — één doorlopend systeem (audit 19 nov 2026) | 2 (14%) | 2 | 10 |
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 2 (14%) | 3 | 9 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (5%) | 8 | 11 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
@@ -48,7 +48,7 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
       ("bestanden gelezen", "tests draaien", "klaar, diff staat klaar").
       Statussen: planning / running / waiting_approval / verifying /
       completed / failed -- overal dezelfde (geen done naast completed).
-- [ ] **3. Coding-worker als interne medewerker**: manager geeft Claude Code /
+- [~] **3. Coding-worker als interne medewerker** (gebouwd 19 nov, nog niet live en nog niet met een echte opdracht gezien: elke `claude_code/codex/cursor.run` krijgt een vaste werkbon -- scope, "af is af", kopjes Samenvatting/Tests/Risico's -- in `device_actions.werkbon`; de Mac zet branch, commits, niet-gecommit en `git diff --stat` eronder; `device_actions.oplevering` maakt er één oplevering van met `compleet`; de manager meldt die aan Luka en noemt niets af zonder tests): manager geeft Claude Code /
       Codex een opdracht met scope en "af is af"; terug komen diff, tests,
       risico's; AXE vat samen; Luka keurt goed of vraagt aanpassing. (18 nov:
       `claude_code.run` zonder prompt faalde elk uur -- die poort staat nu.)

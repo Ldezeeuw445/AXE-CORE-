@@ -140,6 +140,79 @@ def ontbrekend(tool: str, args: dict[str, Any] | None) -> str | None:
     return None
 
 
+# ── Coding-worker als interne medewerker (BOUWLIJST "Eerst", punt 3) ─────────
+# Een manager geeft Claude Code / Codex / Cursor een opdracht. Zonder vaste
+# vorm kwam er ruwe JSON terug en wist niemand wat er af was. Nu: elke opdracht
+# krijgt dezelfde werkbon (scope + "af is af" + drie vaste kopjes), en wat
+# terugkomt wordt een oplevering: samenvatting, tests, risico's, plus de
+# git-feiten die de Mac er zelf onder zet (branch, commits, diff).
+AGENT_RUNS = frozenset({"claude_code.run", "codex.run", "cursor.run"})
+WERKBON_KOP = "## Werkbon van AXE"
+KOPJES = ("Samenvatting", "Tests", "Risico's")
+
+
+def werkbon(opdracht: str) -> str:
+    """De opdracht in de vaste vorm. Twee keer toepassen verandert niets."""
+    if WERKBON_KOP in (opdracht or ""):
+        return opdracht
+    opdracht = (opdracht or "").strip()
+    return (
+        f"{WERKBON_KOP}\n\n"
+        f"OPDRACHT:\n{opdracht}\n\n"
+        "SCOPE: raak alleen de bestanden aan die voor deze opdracht nodig zijn. Niets hernoemen, "
+        "opruimen of 'verbeteren' buiten de opdracht.\n\n"
+        "AF IS AF als: (1) het gevraagde werkt, (2) er een test is die het nieuwe gedrag bewijst, "
+        "(3) de bestaande tests van wat je raakte groen zijn en de typecheck geen nieuwe fouten geeft, "
+        "(4) alles gecommit is op de huidige branch. Niet mergen, niet deployen, niet pushen naar "
+        "orchestrator of main. Lukt iets niet, zeg dat eerlijk in plaats van het te verbergen.\n\n"
+        "EINDIG je antwoord met precies deze drie kopjes:\n"
+        "## Samenvatting\n(wat je veranderde, in gewone taal, 2-5 regels)\n"
+        "## Tests\n(welke commando's je draaide en de uitkomst, letterlijk)\n"
+        "## Risico's\n(wat er mis kan gaan of wat je niet kon controleren; 'geen' mag alleen als dat waar is)\n"
+    )
+
+
+def _tekst_van(output: Any) -> str:
+    """De leesbare tekst uit wat de Mac teruggeeft (claude -p geeft JSON)."""
+    t = str(output or "")
+    try:
+        d = json.loads(t.split("\n## Oplevering (Mac)")[0])
+        if isinstance(d, dict) and d.get("result"):
+            return str(d["result"])
+    except ValueError:
+        pass
+    return t
+
+
+def _sectie(tekst: str, kop: str) -> str:
+    import re
+    m = re.search(rf"^##\s*{re.escape(kop)}\s*$(.*?)(?=^##\s|\Z)", tekst, re.M | re.S | re.I)
+    return m.group(1).strip() if m else ""
+
+
+def oplevering(output: Any) -> dict[str, Any]:
+    """Samenvatting / tests / risico's van de agent + de git-feiten van de Mac."""
+    ruw = str(output or "")
+    tekst = _tekst_van(ruw)
+    mac = ruw.split("## Oplevering (Mac)", 1)[1] if "## Oplevering (Mac)" in ruw else ""
+    uit: dict[str, Any] = {k.lower().replace("'", ""): _sectie(tekst, k) for k in KOPJES}
+    for regel in mac.splitlines():
+        if ":" in regel and regel.split(":", 1)[0].strip() in ("branch", "worktree"):
+            k, v = regel.split(":", 1)
+            uit[k.strip()] = v.strip()
+    na_commits = mac.split("\ncommits:", 1)[1] if "\ncommits:" in mac else ""
+    uit["commits"] = na_commits.split("\ndiff:", 1)[0].split("\nniet gecommit:", 1)[0].strip()
+    open_ = mac.split("\nniet gecommit:", 1)[1].split("\ndiff:", 1)[0].strip() if "\nniet gecommit:" in mac else ""
+    if open_:
+        uit["niet_gecommit"] = open_  # "af is af" vraagt alles gecommit
+    uit["diff"] = mac.split("\ndiff:", 1)[1].strip() if "\ndiff:" in mac else ""
+    ontbreekt = [k for k in KOPJES if not uit[k.lower().replace("'", "")]]
+    uit["compleet"] = not ontbreekt and bool(uit.get("branch")) and not uit.get("niet_gecommit")
+    if ontbreekt:
+        uit["ontbreekt"] = ontbreekt
+    return uit
+
+
 def approval_key(device: str, tool: str, args: dict[str, Any]) -> str | None:
     """What Luka has to say yes to before this runs, or None if it may run.
 
@@ -226,6 +299,8 @@ def run_on_device(
     fout = ontbrekend(tool, args)
     if fout:
         return {"error": fout}
+    if tool in AGENT_RUNS:
+        args = {**args, "prompt": werkbon(str(args.get("prompt") or ""))}
     if workspace not in WORKSPACES:
         return {"error": f"unknown workspace {workspace!r}. Use one of {', '.join(WORKSPACES)}."}
 
@@ -278,8 +353,11 @@ def run_on_device(
             continue
         r = found[0]
         if r["status"] in ("completed", "done"):
-            return {"device": device, "tool": tool, "ok": True,
-                    "output": (r.get("result") or {}).get("output")}
+            uit = (r.get("result") or {}).get("output")
+            antwoord = {"device": device, "tool": tool, "ok": True, "output": uit}
+            if tool in AGENT_RUNS:
+                antwoord["oplevering"] = oplevering(uit)
+            return antwoord
         if r["status"] in ("failed", "cancelled"):
             return {"device": device, "tool": tool, "ok": False,
                     "error": (r.get("error") or {}).get("message") or r["status"]}
