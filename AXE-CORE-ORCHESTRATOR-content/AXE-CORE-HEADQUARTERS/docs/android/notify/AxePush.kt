@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
  * No FCM. No web-push. The HQ WebView posts immediately via [notifyNow];
  * [NotifyPollWorker] polls AXE Core API `/device/notifications` every 15
  * minutes when the WebView is gone (device token, never the anon key).
- * Same four events as `src/domain/nativeMelding.ts` — keep [isShadeEvent]
+ * Same three events as `src/domain/nativeMelding.ts` — keep [isShadeEvent]
  * in lockstep with that file.
  *
  * Drop this file next to `AxeWebView.kt`, add the JavascriptInterface methods
@@ -44,7 +44,7 @@ object AxePush {
         if (existing != null) return
         mgr.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "AXE Core", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Approvals, failed tasks, agent done, NorthSea needs-your-OK"
+                description = "Approvals, failed tasks, NorthSea needs-your-OK"
             },
         )
     }
@@ -136,7 +136,8 @@ object AxePush {
     }
 
     /**
-     * Same four events as HQ `nativeMeldingSoort`. Keep in lockstep.
+     * Same three events as HQ `nativeMeldingSoort`. Keep in lockstep.
+     * "Done" of an ordinary task does not buzz the phone (Luka, 19 nov 2026).
      */
     fun isShadeEvent(message: String): Boolean {
         val kop = message.substringBefore('\n').substringBefore(": ").trim()
@@ -144,7 +145,7 @@ object AxePush {
             || message.startsWith("Stuck:", ignoreCase = true)
             || message.startsWith("Failed:", ignoreCase = true)
         ) return true
-        if (kop.equals("Done", true) || message.startsWith("Done:", ignoreCase = true)) return true
+        if (kop.equals("Done", true) || message.startsWith("Done:", ignoreCase = true)) return false
         val lower = message.lowercase()
         val deal = Regex("""\bdeal-\d+\b""", RegexOption.IGNORE_CASE).containsMatchIn(message)
             || lower.contains("northsea")

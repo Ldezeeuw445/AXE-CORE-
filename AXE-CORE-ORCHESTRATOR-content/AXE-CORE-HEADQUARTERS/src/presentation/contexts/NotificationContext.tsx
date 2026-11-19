@@ -127,9 +127,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         // Ook buiten de bel laten weten wat er binnenkomt (Tauri: macOS;
         // Device Manager: NotificationManager). Welke wel en welke niet:
         // domain/systeemMelding.ts; op Android bovendien nativeMelding.ts.
-        const bron = isAndroidShellRuntime()
-          ? items.filter(i => isNativeSchaduwMelding(i.message))
-          : items;
+        // Alleen wat belangrijk is wordt een systeemmelding -- op de telefoon
+        // én op de Mac (Luka, 19 nov 2026). De rest staat in de bel.
+        const bron = items.filter(i => isNativeSchaduwMelding(i.message));
         const uit = kiesSysteemMeldingen(bron, systeemStand.current, Date.now());
         systeemStand.current = uit.stand;
         toonSysteemMeldingen(uit.tonen);

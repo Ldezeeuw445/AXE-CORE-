@@ -1,13 +1,13 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 18 gebouwd maar nog niet bewezen, 82 open (van 163).
+**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 19 gebouwd maar nog niet bewezen, 81 open (van 163).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
-| Eerst — één doorlopend systeem (audit 19 nov 2026) | 3 (17%) | 7 | 8 |
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 3 (17%) | 8 | 7 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (5%) | 10 | 11 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
@@ -73,9 +73,11 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
         model (gpt-4o-mini), niet met de echte manager en zijn draad.
   - [ ] **Managervenster op Home (AgentVensters) zelfde route als de desk**:
         start taken zonder `chat`, dus zonder voortgang in de draad.
-  - [ ] **Telefoon: "Done" van gewone taken stil?** Nu trilt de telefoon bij
-        elke klaar-taak (agent_done in nativeMelding.ts + AxePush.kt). Luka
-        beslist.
+  - [~] **Alleen belangrijke meldingen trillen** (Luka 19 nov: "alleen
+        belangrijk"; gebouwd, komt met de app-build): "Done" van een gewone
+        taak geeft geen systeemmelding meer, op de telefoon én de Mac. Wel:
+        goedkeuring nodig, taak mislukt, NorthSea needs-your-OK. De rest
+        staat in de bel en in het managergesprek.
 - [ ] **CLI-abonnementen als uitvoerders, niet als brein**: AXE's eigen lus is
       de baas; Claude/Codex/Cursor/OpenHands zijn workers of terugval.
 - [x] **Supabase (AXE) weer gezond** (19 nov, gemeten): na Luka's herstart

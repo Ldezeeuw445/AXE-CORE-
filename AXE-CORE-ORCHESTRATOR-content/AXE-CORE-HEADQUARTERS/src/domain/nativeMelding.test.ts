@@ -14,9 +14,10 @@ describe('nativeMeldingSoort', () => {
       .toBe('task_failed');
   });
 
-  it('herkent een klaar-agent zoals TaskCompletionToasts die schrijft', () => {
-    expect(nativeMeldingSoort('Done: NorthSea Desk Manager: NorthSea Desk Manager'))
-      .toBe('agent_done');
+  it('een gewone klaar-taak trilt niet (Luka, 19 nov: alleen belangrijk)', () => {
+    expect(nativeMeldingSoort('Done: NorthSea Desk Manager: NorthSea Desk Manager')).toBeNull();
+    // Ook niet als de taaktitel toevallig "goedkeuring" bevat.
+    expect(nativeMeldingSoort('Done: Goedkeuring nodig voor DEAL-002 opgeruimd')).toBeNull();
   });
 
   it('herkent NorthSea needs-your-OK zoals de crew die schrijft', () => {

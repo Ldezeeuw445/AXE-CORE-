@@ -3,12 +3,15 @@
  *
  * De bel toont alles. Het schaduwscherm van de A17 mag dat niet: 173 van de
  * eerste 186 rijen waren "provider weg", en dat is geen reden om het toestel
- * te laten trillen. Vier gebeurtenissen wel, en die schrijft de backend al:
+ * te laten trillen. Drie gebeurtenissen wel, en die schrijft de backend al:
  *
  *   - goedkeuring nodig (vraag_luka / schrijf_goedkeuring_melding)
  *   - taak mislukt (TaskCompletionToasts: "Stuck: …")
- *   - agent/taak klaar (TaskCompletionToasts: "Done: …")
  *   - NorthSea needs-your-OK ("Yes needed: DEAL-…")
+ *
+ * "Done: …" van een gewone taak trilt niet meer (Luka, 19 nov 2026: "alleen
+ * belangrijk"). Hij staat wel in de bel en in het gesprek van de manager.
+ * Geldt sinds die dag ook voor de Mac (NotificationContext.tsx).
  *
  * Zelfde regel in Kotlin (`docs/android/notify/AxePush.kt` isShadeEvent):
  * wijzig je hier een geval, dan daar ook, anders hoort de telefoon iets
@@ -16,7 +19,7 @@
  */
 import { notificationText } from '@/domain/notification';
 
-export type NativeMeldingSoort = 'approval' | 'task_failed' | 'agent_done' | 'northsea_ok';
+export type NativeMeldingSoort = 'approval' | 'task_failed' | 'northsea_ok';
 
 const DEAL = /\bdeal-\d+\b/i;
 
@@ -27,7 +30,7 @@ export function nativeMeldingSoort(message: string): NativeMeldingSoort | null {
   const alles = `${title}\n${detail}`;
 
   if (/^stuck:/i.test(raw) || /^failed:/i.test(raw) || /^(stuck|failed)$/i.test(kop)) return 'task_failed';
-  if (/^done:/i.test(raw) || /^done$/i.test(kop)) return 'agent_done';
+  if (/^done:/i.test(raw) || /^done$/i.test(kop)) return null;
 
   const deal = DEAL.test(alles) || /\bnorthsea\b/i.test(alles);
   const jaNodig = /\byes needed\b/i.test(alles)
