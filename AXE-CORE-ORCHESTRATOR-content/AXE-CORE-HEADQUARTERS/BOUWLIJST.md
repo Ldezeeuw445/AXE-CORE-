@@ -1,14 +1,14 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 19 gebouwd maar nog niet bewezen, 81 open (van 163).
+**Stand: 38% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 20 gebouwd maar nog niet bewezen, 84 open (van 167).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 3 (17%) | 8 | 7 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (5%) | 10 | 11 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 11 | 14 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
@@ -110,14 +110,22 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       gebouwd of bedacht is (computer use, eigen browser, "hey axe show me the
       map of New York", ...), per functie: werkt het echt, en kan Luka het met
       alleen zijn stem gebruiken.
+- [~] **AXE-chat antwoordt weer** (19 nov 23:30 Luka: "AXE Core is temporarily
+      unavailable"). Gemeten: snelle vragen gingen naar een Groq-model dat niet
+      meer bestaat (gerepareerd, `bae63792`); Groq zelf zat vanavond 7x aan zijn
+      limiet omdat de VPS-agents dezelfde Groq-organisatie gebruiken; reserves
+      leeg: Gemini (geen tegoed), OpenRouter (geen tegoed), Ollama (401). Alleen
+      OpenAI werkt, maar staat niet in de reserve-rij. Luka beslist: OpenAI als
+      reserve, of Groq/Gemini bijvullen, of agents een eigen Groq-sleutel.
 - [ ] **Praten zoals Rabbit OS3**: meerdere dingen zeggen, AXE blijft bij het
       gesprek en zet op de achtergrond taken uit over de managers. (Leunt op
       Eerst 2 en 8.)
 
 **De Macs**
-- [~] **Tweede scherm Mac mini: AXE pakt de focus niet meer** (18 nov,
-      `109779a8` notch, `d7453322` wekwoord volgt echte vensterfocus). Luka
-      heeft nog niet gezegd dat het weg is.
+- [ ] **Tweede scherm Mac mini: AXE pakt de focus niet meer** (18 nov
+      `109779a8` notch, `d7453322` wekwoord volgt echte vensterfocus).
+      19 nov 23:40 Luka: "op de mac mini pakt axe core nog steeds de focus" --
+      dus niet opgelost. Eerst meten wélk venster/proces de focus pakt.
 - [ ] **Notch helemaal tegen de bovenkant van het scherm.**
 - [ ] **Geen nieuwe witte AXE CORE naast de oude op de Mac mini** na een build.
 - [ ] **Beide Macs traag** (18 nov): oorzaak meten en weghalen.
@@ -130,9 +138,19 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
 **Portal (foto/bestand/klembord naar de Mac)**
 - [x] **Van de iPhone naar de Mac** (19 nov: Luka veegde een foto naar de Mac
       mini via de PWA en hij landde).
-- [ ] **Vanaf de Samsung**: kijken of de APK Portal al heeft (anders opnieuw
-      bouwen, adb op `~/Library/Android/sdk/platform-tools/adb`); klembord in
-      de WebView testen.
+- [ ] **Vanaf de Samsung** (19 nov Luka: "de device manager heeft ook niet die
+      portal"): Portal in de Device Manager zetten; klembord in de WebView testen.
+
+**Device Manager (Samsung)**
+- [ ] **Home weer schermvullend** (19 nov Luka): de schil op Home is kleiner en
+      er zit een zwart randje boven (tijd/batterij) en onder; eerst viel dat
+      over de achtergrond en was Home het hele scherm. Terug zoals het was,
+      tot de Device Manager echt beter wordt.
+- [ ] **De Device Manager echt veel beter** (Luka: "uiteindelijk sowieso"). Eerst
+      samen bepalen wat dat is.
+- [~] **Telefoon-update vanzelf** (19 nov): ophalen via SSH, bouwkopie altijd op
+      main, npm gevonden (`android_bijwerken.py`). Alleen de Mac mini heeft de
+      sleutel van de telefoon-app; bewezen als daar "updated" komt.
 - [~] **Portal-tegel op het Systeem-scherm** (19 nov, `381254ea`); wacht op een
       nieuwe PWA-build.
 
