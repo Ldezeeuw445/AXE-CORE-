@@ -1,14 +1,14 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 38% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 20 gebouwd maar nog niet bewezen, 84 open (van 167).
+**Stand: 38% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 21 gebouwd maar nog niet bewezen, 84 open (van 168).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 3 (17%) | 8 | 7 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 11 | 14 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 12 | 14 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
@@ -120,6 +120,11 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       komt nu altijd als laatste achter de drie (`CHAT_RESERVE`). In de preview
       bewezen: Groq en OpenRouter faalden, OpenAI antwoordde. Nog niet gezien
       in de echte app (volgende build).
+- [~] **Eigen gratis Groq voor de agents** (Luka 20 nov): de VPS-agents gebruiken
+      `GROQ_AGENTS_API_KEY` als die er is, anders de gedeelde `GROQ_API_KEY`.
+      Groq-limieten gelden per organisatie, dus het moet een sleutel van een
+      tweede (gratis) Groq-account zijn. Luka maakt dat account; dan zet ik de
+      sleutel op de VPS.
 - [ ] **Praten zoals Rabbit OS3**: meerdere dingen zeggen, AXE blijft bij het
       gesprek en zet op de achtergrond taken uit over de managers. (Leunt op
       Eerst 2 en 8.)
@@ -129,6 +134,11 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       `109779a8` notch, `d7453322` wekwoord volgt echte vensterfocus).
       19 nov 23:40 Luka: "op de mac mini pakt axe core nog steeds de focus" --
       dus niet opgelost. Eerst meten wélk venster/proces de focus pakt.
+      20 nov: alle bekende focus-pakkers in de code zijn al afgevangen (notch
+      niet-focusable, herstart na build op de achtergrond + focus terug). De
+      app logt elk focusmoment in ~/.axe/focus.log, maar dat stond buiten wat
+      de worker mag lezen. Nu: worker-actie `axe.focus_log` (alleen lezen) om
+      dat log + de app vooraan vanaf de VPS te lezen. Volgende: lezen, oorzaak.
 - [ ] **Notch helemaal tegen de bovenkant van het scherm.**
 - [ ] **Geen nieuwe witte AXE CORE naast de oude op de Mac mini** na een build.
 - [ ] **Beide Macs traag** (18 nov): oorzaak meten en weghalen.

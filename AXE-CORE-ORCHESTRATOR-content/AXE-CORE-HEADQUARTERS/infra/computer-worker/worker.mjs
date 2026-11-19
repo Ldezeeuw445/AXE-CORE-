@@ -632,6 +632,22 @@ async function execute(payload) {
   if (tool === 'app.focus') return JSON.stringify(await nativeComputerUse('app.focus', args));
   if (tool === 'window.list') return JSON.stringify(await nativeComputerUse('window.list', args));
   if (tool === 'camera.snapshot') return cameraSnapshot();
+  // 20 nov: "op de Mac mini pakt AXE nog steeds de focus". De app schrijft elk
+  // focusmoment van een AXE-venster naar ~/.axe/focus.log (lib.rs log_focus),
+  // maar dat log stond buiten wat de worker mag lezen. Alleen dit ene bestand,
+  // alleen de staart, alleen lezen -- plus welke app nu vooraan staat.
+  if (tool === 'axe.focus_log') {
+    const pad = join(homedir(), '.axe', 'focus.log');
+    let staart = '(geen focus.log)';
+    try {
+      const regels = (await readFile(pad, 'utf8')).trim().split('\n');
+      const n = Math.min(Math.max(Number(args.regels) || 60, 1), 400);
+      staart = regels.slice(-n).join('\n');
+    } catch { /* bestand ontbreekt: dan pakte AXE de focus hier nooit */ }
+    let vooraan = null;
+    try { vooraan = await nativeComputerUse('app.frontmost', {}); } catch { /* geen rechten */ }
+    return JSON.stringify({ nu: Math.floor(Date.now() / 1000), vooraan, focus_log: staart });
+  }
 
   // Machine-scoped reads must not depend on a git checkout. Personal Computer
   // Use is allowed to inspect these three explicit home folders even if this

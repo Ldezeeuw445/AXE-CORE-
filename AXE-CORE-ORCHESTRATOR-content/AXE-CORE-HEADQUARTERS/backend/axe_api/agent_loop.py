@@ -1335,7 +1335,10 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
     geen rode 'Taak mislukt'.
     """
     attempts: list[tuple[str, Any]] = []
-    groq_key = os.environ.get("GROQ_API_KEY")
+    # 20 nov (Luka): een eigen gratis Groq voor de agents, zodat ze de limiet van
+    # de chat niet meer leegtrekken. Groq-limieten gelden per organisatie, dus
+    # dit moet een sleutel van een ÁNDER Groq-account zijn. Zonder: als vroeger.
+    groq_key = os.environ.get("GROQ_AGENTS_API_KEY") or os.environ.get("GROQ_API_KEY")
     openai_key = os.environ.get("OPENAI_API_KEY")
     cerebras_key = os.environ.get("CEREBRAS_API_KEY")
     xai_key = os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY")

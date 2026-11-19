@@ -82,6 +82,7 @@ export const TOOL_TIERS: Record<string, RiskTier> = {
   'pointer.position': 'observe',
   'app.list': 'observe',
   'app.frontmost': 'observe',
+  'axe.focus_log': 'observe',
   'window.list': 'observe',
   'git.status': 'observe',
   'git.branch': 'observe',

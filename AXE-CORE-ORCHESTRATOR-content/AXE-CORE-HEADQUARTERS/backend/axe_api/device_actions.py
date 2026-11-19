@@ -38,6 +38,7 @@ TOOL_TIERS: dict[str, str] = {
     "pointer.position": "observe",
     "app.list": "observe",
     "app.frontmost": "observe",
+    "axe.focus_log": "observe",
     "window.list": "observe",
     "git.status": "observe",
     "git.branch": "observe",

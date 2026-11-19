@@ -183,7 +183,7 @@ def model_blokkade(http_get: Callable[[str, float], tuple[int, str]] | None = No
             ollama_fout = f"modelbox Ollama HTTP {status}"
     except Exception as exc:  # noqa: BLE001
         ollama_fout = f"modelbox Ollama unreachable ({str(exc)[:80]})"
-    if os.environ.get("GROQ_API_KEY"):
+    if os.environ.get("GROQ_AGENTS_API_KEY") or os.environ.get("GROQ_API_KEY"):
         return None
     return f"no model for the agent loop: {ollama_fout} and no GROQ_API_KEY"
 
