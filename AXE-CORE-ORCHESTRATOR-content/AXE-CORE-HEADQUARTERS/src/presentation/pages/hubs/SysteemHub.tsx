@@ -12,6 +12,7 @@ export default function SysteemHub() {
         { id: 'terminals', label: 'Terminals', note: 'Mac · iMac · VPS', badge: 'live', badgeTone: 'live', path: '/terminals' },
         { id: 'control', label: 'Control', note: 'Control plane', badge: 'stage', badgeTone: 'stage', path: '/control-plane' },
         { id: 'cron', label: 'Cron', note: 'Schedules', badge: 'docs', badgeTone: 'docs', path: '/cron-manager' },
+        { id: 'portal', label: 'Portal', note: 'Foto · bestand · klembord → Mac', badge: 'live', badgeTone: 'live', path: '/portal' },
         { id: 'device', label: 'Device', note: 'Phone + installs', badge: 'live', badgeTone: 'live', path: '/device' },
         { id: 'settings', label: 'Settings', note: 'Accounts · providers', path: '/settings' },
         { id: 'memory', label: 'Memory', note: 'Explore · Obsidian · KB', path: '/memory' },
