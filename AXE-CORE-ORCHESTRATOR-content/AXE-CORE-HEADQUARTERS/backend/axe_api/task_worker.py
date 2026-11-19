@@ -156,6 +156,19 @@ def terugzetten_na_stop(repo: TaskRepository, task: dict[str, Any], context: Any
         return False
 
 
+async def _taakverslag(task: dict[str, Any], status: str, result: dict[str, Any] | None = None,
+                       error: Any = None) -> None:
+    """Geheugen terugschrijven (taak_verslag.py). Nooit een reden om te falen."""
+    try:
+        import taak_verslag
+        from agent_loop import _db_voor_stoelen
+        db = _db_voor_stoelen()
+        if db is not None:
+            await asyncio.to_thread(taak_verslag.schrijf, db, task, status, result, error)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 class TaskContext:
     def __init__(self, repo: TaskRepository, task: dict[str, Any], lease_seconds: int):
         self.repo = repo
@@ -302,15 +315,10 @@ class TaskWorker:
                 checkpoint=context.task.get("checkpoint") or {},
                 result={**result, "verification": evidence},
             )
-            # 18 nov (Luka): elke AI-sessie eindigt met één regel in het gedeelde log.
-            try:
-                import gedeeld_log as _gl
-                from agent_loop import _db_voor_stoelen
-                db = _db_voor_stoelen()
-                if db is not None:
-                    await asyncio.to_thread(_gl.schrijf, db, *_gl.taak_regel(task, result))
-            except Exception:  # noqa: BLE001 -- een logregel mag een afgeronde taak nooit breken
-                pass
+            # 18 nov: elke AI-sessie eindigt met een regel in het gedeelde log.
+            # 19 nov (punt 4): dat is nu een verslag -- gedaan / werkte / faalde /
+            # besluit / volgende -- en het komt er ook bij een mislukte taak.
+            await _taakverslag(task, "completed", result)
         except ApprovalRequired:
             # The handler already parked this task in waiting_approval and gave
             # up its lease. Falling through to the generic branch below would
@@ -362,6 +370,8 @@ class TaskWorker:
                 checkpoint=latest_checkpoint,
                 error={"code": "handler_error", "message": str(exc)[:1000]},
             )
+            if target == "failed":
+                await _taakverslag(task, "failed", error={"code": "handler_error", "message": str(exc)[:1000]})
             if target == "retrying":
                 await asyncio.to_thread(
                     self.repo.transition,

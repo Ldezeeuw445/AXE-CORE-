@@ -40,3 +40,14 @@ def test_leesfout_blokkeert_nooit():
             raise RuntimeError("database weg")
     tekst = mc.lees_context(Kapot(), "northseamgr", NU)
     assert tekst.startswith("Jouw wereld nu (northsea)") and "geen" in tekst
+
+
+def test_taakverslagen_komen_terug_in_de_context():
+    tekst = mc.bouw_context("companion", [], [], [], [], NU, verslagen=[
+        {"body": "Taakverslag ✗ Alerts-tab | gedaan: Alerts-tab | faalde: tests rood", "created_at": "2026-11-19T09:00:00+00:00"}])
+    assert "Je laatste taakverslagen:" in tekst and "1 u geleden: ✗ Alerts-tab | gedaan" in tekst
+
+
+def test_bronnen_zeggen_welke_herinneringen_meetelden():
+    b = mc.bronnen([{"x": 1}], [], [{"x": 1}, {"x": 2}], [], [{"x": 1}])
+    assert b == {"open_taken": 1, "eigen_berichten": 2, "taakverslagen": 1}

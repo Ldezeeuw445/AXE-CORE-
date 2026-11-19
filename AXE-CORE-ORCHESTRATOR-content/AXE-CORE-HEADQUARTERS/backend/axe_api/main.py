@@ -3612,8 +3612,8 @@ async def lessen_lezen(limit: int = 50):
 async def manager_context_lezen(agent: str):
     """Eén managercontext (audit 19 nov): wat deze manager nu moet weten."""
     import manager_context as _mc
-    tekst = await asyncio.to_thread(_mc.lees_context, sb(), agent)
-    return {"agent": _mc.groep_van(agent)[0], "context": tekst}
+    tekst, bronnen = await asyncio.to_thread(_mc.lees_context_met_bronnen, sb(), agent)
+    return {"agent": _mc.groep_van(agent)[0], "context": tekst, "bronnen": bronnen}
 
 
 @app.post("/lessen", dependencies=[AUTH])

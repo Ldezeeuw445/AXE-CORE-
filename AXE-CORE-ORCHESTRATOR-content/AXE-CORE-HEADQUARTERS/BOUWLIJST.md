@@ -1,13 +1,13 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 62 klaar, 14 gebouwd maar nog niet bewezen, 83 open (van 159).
+**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 62 klaar, 15 gebouwd maar nog niet bewezen, 82 open (van 159).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
-| Eerst — één doorlopend systeem (audit 19 nov 2026) | 2 (14%) | 3 | 9 |
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 2 (14%) | 4 | 8 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (5%) | 10 | 11 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
@@ -52,7 +52,7 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
       Codex een opdracht met scope en "af is af"; terug komen diff, tests,
       risico's; AXE vat samen; Luka keurt goed of vraagt aanpassing. (18 nov:
       `claude_code.run` zonder prompt faalde elk uur -- die poort staat nu.)
-- [ ] **4. Geheugen terugschrijven na elke taak**: wat gedaan, wat werkte, wat
+- [~] **4. Geheugen terugschrijven na elke taak** (gebouwd 19 nov, nog niet live: `backend/axe_api/taak_verslag.py` schrijft na elke taak -- gelukt én mislukt -- een verslag gedaan/werkte/faalde/besluit/volgende in het gedeelde log, onder de manager van het gesprek; de managercontext leest zijn laatste 4 verslagen terug; onder elk managerantwoord staat "— op basis van: 2 open taken · 1 taakverslag · 4 lessen"): wat gedaan, wat werkte, wat
       faalde, welk besluit, volgende stap. (Deels: gedeeld log + lessen, 18 nov.)
       Zichtbaar maken welke herinneringen een antwoord stuurden.
 - [ ] **5. Eén agent-register**: `core_agents` is de enige bron; Agents-tab

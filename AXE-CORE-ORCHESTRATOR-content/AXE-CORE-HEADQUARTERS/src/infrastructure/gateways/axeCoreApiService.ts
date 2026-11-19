@@ -1354,7 +1354,7 @@ export async function schrijfLes(regel: string, waarom = '', toepassen = ''): Pr
 }
 
 /** Eén managercontext (audit 19 nov): wat deze manager nu moet weten, compact. */
-export async function leesManagerContext(agent: string): Promise<{ agent: string; context: string }> {
+export async function leesManagerContext(agent: string): Promise<{ agent: string; context: string; bronnen?: Record<string, number> }> {
   return call('GET', `/managers/${encodeURIComponent(agent)}/context`);
 }
 

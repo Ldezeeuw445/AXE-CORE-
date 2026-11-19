@@ -60,3 +60,23 @@ export function splitsAntwoord(ruw: string): { tekst: string; acties: string[] }
   }
   return { tekst, acties };
 }
+
+/* 19 nov (audit, punt 4): zichtbaar maken welke herinneringen een antwoord
+   stuurden. De VPS geeft per bron een aantal (manager_context.bronnen); hier
+   wordt dat één korte regel onder het antwoord, zodat Luka ziet waar de
+   manager op leunde -- en wanneer hij op niets leunde. */
+const BRON_NAMEN: Record<string, [string, string]> = {
+  open_taken: ['open taak', 'open taken'],
+  wacht_op_luka: ['vraag aan jou', 'vragen aan jou'],
+  mislukt: ['mislukte poging', 'mislukte pogingen'],
+  taakverslagen: ['taakverslag', 'taakverslagen'],
+  eigen_berichten: ['eigen bericht', 'eigen berichten'],
+  lessen: ['les', 'lessen'],
+};
+
+export function bronnenRegel(bronnen: Record<string, number> | null | undefined): string {
+  const delen = Object.entries(BRON_NAMEN)
+    .filter(([k]) => (bronnen?.[k] ?? 0) > 0)
+    .map(([k, [een, meer]]) => `${bronnen![k]} ${bronnen![k] === 1 ? een : meer}`);
+  return delen.length ? `— op basis van: ${delen.join(' · ')}` : '';
+}

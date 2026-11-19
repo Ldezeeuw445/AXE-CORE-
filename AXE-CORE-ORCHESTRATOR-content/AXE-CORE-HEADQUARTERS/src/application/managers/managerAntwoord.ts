@@ -6,39 +6,40 @@ import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { ABONNEMENT_PROVIDER } from '@/domain/abonnementChat';
 import { agentById, type AxeAgentId } from '@/domain/agents/roster';
 import { bewaarManagerChat, laadManagerChat, nieuwMsg } from '@/domain/agents/managerChatOpslag';
-import { bouwManagerBerichten, splitsAntwoord } from '@/domain/agents/managerAntwoord';
+import { bouwManagerBerichten, bronnenRegel, splitsAntwoord } from '@/domain/agents/managerAntwoord';
 import { MANAGER_DRAAD_EVT } from '@/infrastructure/persistence/managerDraadSync';
 import { leesLessen, leesManagerContext } from '@/infrastructure/gateways/axeCoreApiService';
 
 /* 18 nov: de lessen (Luka's correcties) gaan mee in elk antwoord van een
    manager; eens per minuut opgehaald. */
-let lessenCache: { t: number; tekst: string } = { t: 0, tekst: '' };
-async function lessenContext(): Promise<string> {
-  if (Date.now() - lessenCache.t < 60_000) return lessenCache.tekst;
+let lessenCache: { t: number; tekst: string; aantal: number } = { t: 0, tekst: '', aantal: 0 };
+async function lessenContext(): Promise<{ tekst: string; aantal: number }> {
+  if (Date.now() - lessenCache.t < 60_000) return lessenCache;
   try {
     const { lessen } = await leesLessen(25);
     const tekst = lessen.length
       ? `[Lessen van Luka -- volg ze altijd, nieuwste eerst:\n${lessen.map((l) => l.les).join('\n\n')}]`
       : '';
-    lessenCache = { t: Date.now(), tekst };
-  } catch { lessenCache = { t: Date.now(), tekst: '' }; }
-  return lessenCache.tekst;
+    lessenCache = { t: Date.now(), tekst, aantal: lessen.length };
+  } catch { lessenCache = { t: Date.now(), tekst: '', aantal: 0 }; }
+  return lessenCache;
 }
 
 /* 19 nov (audit, punt 1): de wereld van déze manager -- open taken, wat op
    Luka wacht, wat mislukte, wat hij zelf deed, wat hij mag. Per manager eens
    per minuut; geen verbinding = gewoon zonder. */
-const contextCache = new Map<string, { t: number; tekst: string }>();
-async function managerContext(agentId: string): Promise<string> {
+type Wereld = { t: number; tekst: string; bronnen: Record<string, number> };
+const contextCache = new Map<string, Wereld>();
+async function managerContext(agentId: string): Promise<Wereld> {
   const vorig = contextCache.get(agentId);
-  if (vorig && Date.now() - vorig.t < 60_000) return vorig.tekst;
-  let tekst: string;
+  if (vorig && Date.now() - vorig.t < 60_000) return vorig;
+  let w: Wereld;
   try {
-    const { context } = await leesManagerContext(agentId);
-    tekst = context ? `[${context}]` : '';
-  } catch { tekst = ''; }
-  contextCache.set(agentId, { t: Date.now(), tekst });
-  return tekst;
+    const { context, bronnen } = await leesManagerContext(agentId);
+    w = { t: Date.now(), tekst: context ? `[${context}]` : '', bronnen: bronnen ?? {} };
+  } catch { w = { t: Date.now(), tekst: '', bronnen: {} }; }
+  contextCache.set(agentId, w);
+  return w;
 }
 
 export const MANAGER_DENKT_EVT = 'axe-manager-denkt';
@@ -61,13 +62,14 @@ export async function laatManagerAntwoorden(
   meld(MANAGER_DENKT_EVT, { agent: agentId, aan: true });
   try {
     const [lessen, wereld] = await Promise.all([lessenContext(), managerContext(agentId)]);
-    const erbij = [wereld, lessen].filter(Boolean).join('\n\n');
+    const erbij = [wereld.tekst, lessen.tekst].filter(Boolean).join('\n\n');
     const berichten = bouwManagerBerichten({ naam: agent.name, rol: agent.role }, laadManagerChat(agentId),
       erbij ? `${vraag}\n\n${erbij}` : vraag);
     const ruw = await callProvider({ provider: ABONNEMENT_PROVIDER, key: '', model: 'claude' }, berichten);
     const { tekst, acties } = splitsAntwoord(ruw);
     if (!tekst) return false;
-    bewaarManagerChat(agentId, [...laadManagerChat(agentId), nieuwMsg('assistant', tekst)]);
+    const bron = bronnenRegel({ ...wereld.bronnen, lessen: lessen.aantal });
+    bewaarManagerChat(agentId, [...laadManagerChat(agentId), nieuwMsg('assistant', bron ? `${tekst}\n\n${bron}` : tekst)]);
     meld(MANAGER_DRAAD_EVT, 1);
     for (const actie of acties) startTaak(actie);
     return true;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bouwManagerBerichten, splitsAntwoord } from './managerAntwoord';
+import { bouwManagerBerichten, bronnenRegel, splitsAntwoord } from './managerAntwoord';
 import type { ManagerChatMsg } from './managerChatOpslag';
 
 const m = (role: ManagerChatMsg['role'], text: string, extra: Partial<ManagerChatMsg> = {}): ManagerChatMsg =>
@@ -27,5 +27,16 @@ describe('manager antwoordt als collega', () => {
 
   it('zonder acties blijft het antwoord zoals het is', () => {
     expect(splitsAntwoord('Alles loopt.')).toEqual({ tekst: 'Alles loopt.', acties: [] });
+  });
+});
+
+describe('bronnenRegel (punt 4: welke herinneringen stuurden dit antwoord)', () => {
+  it('noemt alleen wat meetelde, enkelvoud en meervoud goed', () => {
+    expect(bronnenRegel({ open_taken: 2, taakverslagen: 1, lessen: 4, mislukt: 0 }))
+      .toBe('— op basis van: 2 open taken · 1 taakverslag · 4 lessen');
+  });
+  it('niets = geen regel', () => {
+    expect(bronnenRegel({})).toBe('');
+    expect(bronnenRegel(undefined)).toBe('');
   });
 });

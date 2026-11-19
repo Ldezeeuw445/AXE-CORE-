@@ -79,6 +79,7 @@ def bouw_context(
     eigen: list[dict[str, Any]],
     wacht: list[dict[str, Any]],
     nu: datetime | None = None,
+    verslagen: list[dict[str, Any]] | None = None,
 ) -> str:
     """De context als korte tekst. Lege onderdelen vallen weg."""
     nu = nu or datetime.now(timezone.utc)
@@ -94,6 +95,12 @@ def bouw_context(
     if mislukt:
         delen.append("Al geprobeerd en mislukt (niet blind herhalen):\n" + "\n".join(
             f"- {_kort(t.get('title'), 70)}: {_fout(t.get('error'))}" for t in mislukt[:4]))
+    if verslagen:
+        # Punt 4 (19 nov): wat zijn vorige taken opleverden, zodat hij niet
+        # opnieuw begint of blind herhaalt (taak_verslag.py).
+        delen.append("Je laatste taakverslagen:\n" + "\n".join(
+            f"- {_leeftijd(v.get('created_at'), nu)} geleden: {_kort(str(v.get('body') or '').removeprefix('Taakverslag '), 220)}"
+            for v in verslagen[:4]))
     if eigen:
         delen.append("Wat je zelf laatst zei/deed:\n" + "\n".join(
             f"- {_leeftijd(m.get('created_at'), nu)} geleden: {_kort(m.get('body'), 120)}" for m in eigen[:5]))
@@ -102,11 +109,23 @@ def bouw_context(
     return tekst[:2500]
 
 
+def bronnen(taken: list, mislukt: list, eigen: list, wacht: list, verslagen: list) -> dict[str, int]:
+    """Welke herinneringen dit antwoord stuurden (zichtbaar in de chat)."""
+    return {k: len(v) for k, v in (("open_taken", taken[:6]), ("mislukt", mislukt[:4]),
+                                     ("eigen_berichten", eigen[:5]), ("wacht_op_luka", wacht[:3]),
+                                     ("taakverslagen", verslagen[:4])) if v}
+
+
 def lees_context(db: Any, agent: str | None, nu: datetime | None = None) -> str:
     """Haal alles op en bouw de context. Elke leesfout = dat stuk valt weg."""
+    return lees_context_met_bronnen(db, agent, nu)[0]
+
+
+def lees_context_met_bronnen(db: Any, agent: str | None,
+                             nu: datetime | None = None) -> tuple[str, dict[str, int]]:
     kern, namen = groep_van(agent)
     if not namen:
-        return ""
+        return "", {}
     nu = nu or datetime.now(timezone.utc)
 
     def lees(fn):
@@ -126,4 +145,8 @@ def lees_context(db: Any, agent: str | None, nu: datetime | None = None) -> str:
                  .order("created_at", desc=True).limit(5).execute().data)
     wacht = lees(lambda: db.table("core_approvals").select("title,created_at").eq("status", "pending")
                  .order("created_at", desc=True).limit(3).execute().data)
-    return bouw_context(kern, taken, mislukt, eigen, wacht, nu)
+    verslagen = lees(lambda: db.table("core_manager_messages").select("body,created_at")
+                     .eq("to_agent", "log").in_("from_agent", list(namen)).like("body", "Taakverslag%")
+                     .order("created_at", desc=True).limit(4).execute().data)
+    return (bouw_context(kern, taken, mislukt, eigen, wacht, nu, verslagen),
+            bronnen(taken, mislukt, eigen, wacht, verslagen))
