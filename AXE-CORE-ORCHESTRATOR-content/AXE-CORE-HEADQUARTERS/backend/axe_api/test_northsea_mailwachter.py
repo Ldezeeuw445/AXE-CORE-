@@ -102,6 +102,12 @@ def test_ronde_meldt_kaart_en_melding_en_nooit_twee_keer():
     assert tweede == {"nu": 0, "gewoon": 0, "al_gemeld": 2, "analyses": 0}
     assert len(db.rows("core_notifications")) == 2
 
+    # 20 nov: de belangrijke mail staat ook in het gesprek van de NorthSea
+    # Manager (als nieuw, geen read_at); een gewone niet. Niet opnieuw bij ronde 2.
+    gesprek = [r for r in db.rows("core_manager_messages") if r.get("to_agent") == "luka"]
+    assert len(gesprek) == 1 and gesprek[0]["from_agent"] == "northseamgr"
+    assert gesprek[0]["body"].startswith("Belangrijke mail: ") and not gesprek[0].get("read_at")
+
 
 def test_gateway_kent_de_leesactie_en_niets_schrijvends():
     import northsea_gateway as g

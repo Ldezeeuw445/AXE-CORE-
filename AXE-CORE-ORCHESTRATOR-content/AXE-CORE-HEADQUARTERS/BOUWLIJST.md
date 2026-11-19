@@ -1,14 +1,14 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 66 klaar, 23 gebouwd maar nog niet bewezen, 79 open (van 168).
+**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 66 klaar, 24 gebouwd maar nog niet bewezen, 78 open (van 168).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 6 (33%) | 10 | 2 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 12 | 14 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 13 | 13 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
@@ -195,7 +195,7 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       (`crew_loop._bundel_bij_open_vraag`). De 8 Pitsonel-vragen zijn er nu één
       met 8 kopers; "Yes needed" van 30 naar 3. Bewezen als een nieuwe koper
       bij een open vraag landt in plaats van een nieuwe te maken.
-- [ ] **Belangrijke mail = meteen een melding** aan Luka, in het gesprek.
+- [~] **Belangrijke mail = meteen een melding** aan Luka, in het gesprek (gebouwd 20 nov: melding + ok-vraag bestonden al; nu staat de mail ook als nieuw bericht in het gesprek van de NorthSea Manager, `northsea_mailwachter.in_gesprek`. Bewezen bij de eerste echte belangrijke mail).
 - [ ] **Mailroute support@** naar Resend (eigenaarsstap Luka; trade@ is klaar).
 - [~] **Een uitgelogde stoel geeft het werk door, met melding wie het overnam**
       (9 nov, `93dcdc3b`, `ca9feb3b`).

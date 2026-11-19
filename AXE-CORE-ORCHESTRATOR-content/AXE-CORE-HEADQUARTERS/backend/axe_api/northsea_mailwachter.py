@@ -218,6 +218,18 @@ def zet_analyse_klaar(db: Any, m: MailMelding, nu: datetime) -> bool:
         return False
 
 
+def in_gesprek(db: Any, m: MailMelding) -> bool:
+    """Een belangrijke mail ook in het gesprek van de NorthSea Manager (20 nov,
+    BOUWLIJST: "belangrijke mail = meteen een melding aan Luka, in het gesprek").
+    Niet op gelezen: dit hoort als nieuw te tellen. Best effort."""
+    try:
+        import manager_draad
+        detail = " ".join(str(m.detail or "").split())[:400]
+        return manager_draad.vertel_luka(db, "northseamgr", f"Belangrijke mail: {m.titel}. {detail}".strip())
+    except Exception:  # noqa: BLE001 -- de melding en de ok-vraag gaan hoe dan ook
+        return False
+
+
 def meld(db: Any, meldingen: list[MailMelding], claim: Claim) -> dict[str, int]:
     """Schrijf elke melding één keer. `claim` is de atomaire (job, sleutel)-claim
     uit main.py: bij meerdere uvicorn-workers meldt er precies één."""
@@ -229,6 +241,7 @@ def meld(db: Any, meldingen: list[MailMelding], claim: Claim) -> dict[str, int]:
             uit["al_gemeld"] += 1
             continue
         if m.niveau == "nu":
+            in_gesprek(db, m)
             if zet_analyse_klaar(db, m, datetime.now(timezone.utc)):
                 uit["analyses"] += 1
             taak = None
