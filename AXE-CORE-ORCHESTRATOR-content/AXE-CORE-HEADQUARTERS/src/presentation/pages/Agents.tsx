@@ -110,8 +110,14 @@ function loadCustomAgents(): CoreAgent[] {
 // "AXE Core", "AXE Intel" en "AXE Companion" allebei twee keer (één keer als
 // default, één keer als database-rij). Nu: zodra de database rijen teruggeeft
 // zijn de defaults alleen nog geschiedenis.
+//
+// 19 nov 2026 (BOUWLIJST punt 5, één agent-register): core_agents wordt nu op
+// de VPS gevuld uit exact wat de lus draait (agent_register.py). Dan is die
+// tabel de enige waarheid en tellen lokale bewerkingen niet meer mee -- die
+// bleven toch alleen in deze browser en veranderden niets aan de agent.
 function mergeAgents(remote: CoreAgent[]): CoreAgent[] {
-  const base: CoreAgent[] = remote.length > 0 ? remote : DEFAULT_AGENTS;
+  if (remote.length > 0) return remote;
+  const base: CoreAgent[] = DEFAULT_AGENTS;
   const byId = new Map<string, CoreAgent>();
   for (const a of base) byId.set(a.id, { ...a });
 
@@ -347,7 +353,7 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
       }
       try {
         const [{ data, error }, health] = await Promise.all([
-          sb.from('core_agents').select('*').order('role'),
+          sb.from('core_agents').select('*').eq('status', 'active').order('role'),
           agentLoopHealth().catch(() => [] as LoopHealth[]),
         ]);
         if (error) throw new Error(error.message);
@@ -511,7 +517,7 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
           },
           {
             titel: 'Actions',
-            items: [{ id: 'add', label: 'Add agent', icoon: <Plus size={13} />, onKies: addCustomAgent }],
+            items: usingFallback ? [{ id: 'add', label: 'Add agent', icoon: <Plus size={13} />, onKies: addCustomAgent }] : [],
           },
         ]}
       />
@@ -554,7 +560,7 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
           loading={activity.loading}
           now={now}
         />
-        {!managersOnly && (
+        {!managersOnly && usingFallback && (
         <button
           type="button"
           onClick={addCustomAgent}
@@ -692,8 +698,13 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
               >
                 <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                    <Cpu size={10} /> {agent.model_provider}/{agent.model_name?.split('/').pop()}
+                    <Cpu size={10} /> {agent.model_provider === 'provider_router' ? agent.model_name : `${agent.model_provider}/${agent.model_name?.split('/').pop()}`}
                   </span>
+                  {agent.memory_namespace && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                      mem · {agent.memory_namespace}
+                    </span>
+                  )}
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)' }}>
                     Tab · {tabTag(agent)}
                   </span>
@@ -740,7 +751,11 @@ export default function Agents({ managersOnly = true }: { managersOnly?: boolean
                       : `Learning loop: ${health.opened} episodes · ${Math.round(health.closeRate * 100)}% outcomes · ${health.applied}/${health.reinforceable} learned`}
                 </div>
 
-                {!editing ? (
+                {!usingFallback ? (
+                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    Live register: what this agent runs with. Change it in agent_workspace.py.
+                  </div>
+                ) : !editing ? (
                   <button type="button" onClick={() => startEdit(agent)} className="inline-flex items-center gap-1 text-[10px] font-medium" style={{ color: 'var(--accent-cyan)' }}>
                     <Pencil size={11} /> Edit prompt · tools · model
                   </button>

@@ -19,6 +19,7 @@ export const AGENT_TOOLS = [
   'run_on_device',
   'run_crew',
   'finish',
+  'northsea_read',
 ] as const;
 
 export type AgentToolId = (typeof AGENT_TOOLS)[number];
@@ -43,6 +44,9 @@ const VOL: readonly AgentToolId[] = [
 ];
 
 const MET_CREW: readonly AgentToolId[] = [...VOL, 'run_crew'];
+
+/** De NorthSea-desk leest de échte desk via de gateway (alleen leesacties). */
+const NORTHSEA: readonly AgentToolId[] = [...LEES, 'northsea_read'];
 
 /**
  * Eén werkplek per roster-id. Nieuwe agent in roster.ts? Compiler klaagt hier
@@ -74,7 +78,7 @@ export const AGENT_WORKSPACES: Record<AxeAgentId, AgentWorkspace> = {
     role: 'Commodity desk manager',
     systemPrompt:
       'You are the NorthSea Desk Manager, working for AXE: the commodity desk. You research counterparties, cargoes, offers and prices, and you report what you found.\nHARD LIMIT: this desk is READ-ONLY. You never send an email, a message or an offer, never write to the NorthSea database, and never switch on any automatic sending. Nothing leaves the desk without Luka. If a job needs something sent, say exactly what you would send and to whom, and stop there.',
-    tools: LEES,
+    tools: NORTHSEA,
     preferredDevice: null,
     memoryScope: 'agent',
     crew: [],
@@ -244,7 +248,7 @@ export const AGENT_WORKSPACES: Record<AxeAgentId, AgentWorkspace> = {
     role: 'Owns NorthSea Desk · first deal is the priority',
     systemPrompt:
       'You are Northsea Desk Manager. You own the NorthSea commodity desk; the first deal is the priority. HARD LIMIT: send only with Luka’s approval (is_human). Never flip auto_send_qualification, auto_reply_nonbinding or auto_send_followups. You may auto-send chases in existing threads only after Luka’s own yes. No deal go/no-go, stage move, close or identity disclosure without Luka. You are not is_human.',
-    tools: LEES,
+    tools: NORTHSEA,
     preferredDevice: null,
     memoryScope: 'agent',
     crew: [],

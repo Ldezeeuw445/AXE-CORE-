@@ -28,6 +28,29 @@ def test_elke_roster_agent_heeft_een_werkplek():
         assert "finish" in ws["tools"]
 
 
+def _ts_sets() -> dict[str, list[str]]:
+    sets: dict[str, list[str]] = {}
+    for naam, body in re.findall(r"const (\w+): readonly AgentToolId\[\] = \[([^\]]*)\]", TS_WS):
+        tools: list[str] = []
+        for deel in body.split(","):
+            deel = deel.strip()
+            if deel.startswith("..."):
+                tools += sets[deel[3:]]
+            elif deel:
+                tools.append(deel.strip("'"))
+        sets[naam] = tools
+    return sets
+
+
+def test_app_en_lus_geven_elke_agent_dezelfde_tools():
+    """Eén register (punt 5): wat de app toont = wat de lus mag."""
+    sets = _ts_sets()
+    for agent, ws in aw.AGENT_WORKSPACES.items():
+        blok = TS_WS.split(f"  {agent}: {{\n    agent: '{agent}',", 1)[1]
+        set_naam = re.search(r"tools: (\w+),", blok).group(1)
+        assert sorted(sets[set_naam]) == sorted(ws["tools"]), agent
+
+
 def test_lus_weiger_zonder_werkplek(monkeypatch):
     async def stil(*_a):
         pass

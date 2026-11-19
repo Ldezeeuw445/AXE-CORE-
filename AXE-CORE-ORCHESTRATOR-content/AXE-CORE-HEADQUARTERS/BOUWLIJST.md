@@ -1,13 +1,13 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 62 klaar, 15 gebouwd maar nog niet bewezen, 82 open (van 159).
+**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 62 klaar, 16 gebouwd maar nog niet bewezen, 81 open (van 159).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
-| Eerst — één doorlopend systeem (audit 19 nov 2026) | 2 (14%) | 4 | 8 |
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 2 (14%) | 5 | 7 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (5%) | 10 | 11 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
@@ -52,10 +52,10 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
       Codex een opdracht met scope en "af is af"; terug komen diff, tests,
       risico's; AXE vat samen; Luka keurt goed of vraagt aanpassing. (18 nov:
       `claude_code.run` zonder prompt faalde elk uur -- die poort staat nu.)
-- [~] **4. Geheugen terugschrijven na elke taak** (gebouwd 19 nov, nog niet live: `backend/axe_api/taak_verslag.py` schrijft na elke taak -- gelukt én mislukt -- een verslag gedaan/werkte/faalde/besluit/volgende in het gedeelde log, onder de manager van het gesprek; de managercontext leest zijn laatste 4 verslagen terug; onder elk managerantwoord staat "— op basis van: 2 open taken · 1 taakverslag · 4 lessen"): wat gedaan, wat werkte, wat
+- [~] **4. Geheugen terugschrijven na elke taak** (live 19 nov 18:23, reparatie 18:46 -- ook een taak die de database zelf op mislukt zet (worker weg, 20 van 44 mislukte taken) krijgt nu een verslag. Nog niet bewezen: er is nog geen echt verslag in het log, want de taken hangen op trage modellen (Groq-limiet, Ollama 5 min per stap): `backend/axe_api/taak_verslag.py` schrijft na elke taak -- gelukt én mislukt -- een verslag gedaan/werkte/faalde/besluit/volgende in het gedeelde log, onder de manager van het gesprek; de managercontext leest zijn laatste 4 verslagen terug; onder elk managerantwoord staat "— op basis van: 2 open taken · 1 taakverslag · 4 lessen"): wat gedaan, wat werkte, wat
       faalde, welk besluit, volgende stap. (Deels: gedeeld log + lessen, 18 nov.)
       Zichtbaar maken welke herinneringen een antwoord stuurden.
-- [ ] **5. Eén agent-register**: `core_agents` is de enige bron; Agents-tab
+- [~] **5. Eén agent-register** (gebouwd 19 nov, nog niet live: `backend/axe_api/agent_register.py` vult `core_agents` bij elke API-start uit precies wat de lus draait -- de 20 werkplekken met rol, tools, model (agent_tiers.json), geheugen-namespace en status; de 18 oude rijen uit juli/aug (claude-3.5-sonnet, lege toolsets) gaan op `retired` met `vervangen_door`, de testrij `poc34142-agent` gaat weg, capabilities die naar een oude naam wezen gaan naar de echte agent; `GET /agents/register` geeft de rijen plus `drift`; de Agents-tab leest alleen actieve rijen en bewaart geen lokale "bewerkingen" meer die niets deden; app en lus geven NorthSea nu allebei `northsea_read`, een test houdt de tools gelijk): `core_agents` is de enige bron; Agents-tab
       toont exact dat; testrij weg; per agent rol, tools, model,
       geheugen-namespace, status.
 - [ ] **6. Eén tool-register dat echt werkt**: test "welke tools heeft agent

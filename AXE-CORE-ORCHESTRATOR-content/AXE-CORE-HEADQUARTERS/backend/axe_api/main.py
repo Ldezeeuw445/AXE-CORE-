@@ -3608,6 +3608,28 @@ async def lessen_lezen(limit: int = 50):
     return {"lessen": [{"wie": r.get("from_agent"), "les": r.get("body"), "wanneer": r.get("created_at")} for r in rijen]}
 
 
+@app.get("/agents/register", dependencies=[AUTH])
+async def agent_register_lezen():
+    """Eén agent-register (audit 19 nov, punt 5): core_agents, gelijk aan wat de lus draait."""
+    import agent_register as _ar
+    return await asyncio.to_thread(_ar.lees, sb())
+
+
+@app.on_event("startup")
+async def _agent_register_sync():
+    """Bij elke start: core_agents gelijk aan de werkplekken waarop de lus draait."""
+    import agent_register as _ar
+
+    def _doe() -> None:
+        try:
+            uit = _ar.sync(sb())
+            log.info("[register] core_agents bijgewerkt: %s", uit)
+        except Exception as e:  # noqa: BLE001 -- een register mag de API nooit tegenhouden
+            log.warning("[register] sync mislukt: %s", e)
+
+    asyncio.get_running_loop().run_in_executor(None, _doe)
+
+
 @app.get("/managers/{agent}/context", dependencies=[AUTH])
 async def manager_context_lezen(agent: str):
     """Eén managercontext (audit 19 nov): wat deze manager nu moet weten."""
