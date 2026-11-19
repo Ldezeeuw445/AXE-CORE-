@@ -29,6 +29,7 @@ const BEWUST_VERBORGEN: Record<string, string> = {
   '/calendar': 'Primary nav (Calendar)',
   '/code-editor': 'Primary nav (Code)',
   '/tasks': 'Primary nav (Taken)',
+  '/portal': 'Portal-tegel op Systeem (SysteemHub) + telefoonmenu Phone + zoekbalk (19 nov)',
   '/wacht': 'Knop "Wacht op jou" in de Managers-kop, op Home, Taken en de telefoon (16-17 nov)',
   '/taken': 'Alleen een doorverwijzing naar /tasks (Nederlandse naam, 17 nov)',
   '/settings': 'Primary nav (Settings)',
