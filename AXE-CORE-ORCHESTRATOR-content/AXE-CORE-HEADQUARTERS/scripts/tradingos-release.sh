@@ -119,11 +119,33 @@ log "live is ${LIVE:-onbekend}, main is $DOEL — release (laagste prioriteit)"
 PRIO=(nice -n 15)
 # Schone omgeving: een oude SUPABASE_ACCESS_TOKEN in een shell wint anders van
 # `supabase login` (zie release-mac.sh).
+# Een eigen npm-cache: 18 nov 23:04 faalde `npm ci` in release-mac.sh op
+# "ENOENT: rename …/.npm/_cacache/tmp/…" — een ander proces op deze Mac (npx,
+# de Trading Team-job) schreef tegelijk in ~/.npm. AXE CORE's eigen build heeft
+# om dezelfde reden al een eigen cache. tradingos-desktop.sh deelt deze (de
+# autosync-slot laat die twee nooit tegelijk lopen).
+NPM_CACHE="$HOME/.cache/tradingos-npm"
+mkdir -p "$NPM_CACHE"
 RUN="$(mktemp "${TMPDIR:-/tmp}/tradingos-release.XXXXXX")"
-if (cd "$REPO" && ${PRIO[@]+"${PRIO[@]}"} env -i HOME="$HOME" USER="${USER:-}" LOGNAME="${USER:-}" SHELL=/bin/zsh \
+release() {
+  (cd "$REPO" && ${PRIO[@]+"${PRIO[@]}"} env -i HOME="$HOME" USER="${USER:-}" LOGNAME="${USER:-}" SHELL=/bin/zsh \
       TMPDIR="${TMPDIR:-/tmp}" PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
+      npm_config_cache="$NPM_CACHE" \
       /usr/bin/perl -e 'alarm shift @ARGV; exec @ARGV or die "exec: $!"' "${TRADINGOS_RELEASE_MAX_S:-2700}" \
-      /bin/bash scripts/release-mac.sh) > "$RUN" 2>&1; then
+      /bin/bash scripts/release-mac.sh) > "$RUN" 2>&1
+}
+GELUKT=0
+if release; then
+  GELUKT=1
+elif grep -qE 'npm (ERR!|error).*(ENOENT|EINTEGRITY|ECOMPROMISED|_cacache)' "$RUN"; then
+  # Eén nieuwe poging, en alleen voor een npm-cachefout; een echte test- of
+  # buildfout krijgt geen tweede ronde.
+  cat "$RUN" >> "$LOG"
+  log "npm struikelde over zijn cache — één nieuwe poging met een schone cache"
+  rm -rf "$NPM_CACHE" && mkdir -p "$NPM_CACHE"
+  release && GELUKT=1
+fi
+if [[ "$GELUKT" == "1" ]]; then
   cat "$RUN" >> "$LOG"; rm -f "$RUN"
   rm -f "$MISLUKT"
   echo "$DOEL" > "$GEDAAN"
