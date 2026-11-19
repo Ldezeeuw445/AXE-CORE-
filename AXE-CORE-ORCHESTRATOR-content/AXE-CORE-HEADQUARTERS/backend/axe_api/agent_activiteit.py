@@ -573,6 +573,15 @@ def dax_velden(computer: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+STIL_TTL = 300.0
+_STIL_CACHE: dict[tuple[str, int], tuple[float, list[dict[str, Any]]]] = {}
+
+
+def _monotoon() -> float:
+    import time
+    return time.monotonic()
+
+
 class Activiteit:
     def __init__(self, client_factory: Callable[[], Any]):
         self._client_factory = client_factory
@@ -616,6 +625,34 @@ class Activiteit:
             q = q.gt("created_at", sinds)
         return q.execute().data or []
 
+    def events_per_agent(self, agents: list[str], n: int) -> dict[str, list[dict[str, Any]]]:
+        """De laatste `n` events van elke agent, met één query in plaats van één per agent.
+
+        Was 20 queries per overzicht (19 nov 2026: ~120/min op de database met
+        één app open). Nu: één query voor de recentste events van iedereen.
+        Een agent die daar niet in zit is stil; zijn laatste events veranderen
+        niet tot hij weer iets doet -- en dat nieuwe event staat dan bovenaan
+        in de gezamenlijke query. Daarom mag zijn losse opvraging lang mee.
+        """
+        uit: dict[str, list[dict[str, Any]]] = {a: [] for a in agents}
+        rijen = (self._db().table("core_agent_events").select("*").in_("agent", agents)
+                 .order("created_at", desc=True).limit(max(50, min(len(agents) * n, 500))).execute().data or [])
+        for r in rijen:
+            lijst = uit.get(str(r.get("agent")))
+            if lijst is not None and len(lijst) < n:
+                lijst.append(r)
+        nu = _monotoon()
+        for a in agents:
+            if uit[a]:
+                continue
+            hit = _STIL_CACHE.get((a, n))
+            if hit and nu - hit[0] < STIL_TTL:
+                uit[a] = hit[1]
+                continue
+            uit[a] = self.events(a, n)
+            _STIL_CACHE[(a, n)] = (nu, uit[a])
+        return uit
+
     def overzicht(self, agents: Iterable[str], events_per_agent: int = 8) -> list[dict[str, Any]]:
         from agent_workspace import laad_workspace
         try:
@@ -645,9 +682,16 @@ class Activiteit:
                 per_agent.setdefault(wie, []).append(payload)
         except Exception:
             per_taak, per_agent = {}, {}
+        agents = list(agents)
+        try:
+            per_agent_events = self.events_per_agent(agents, events_per_agent)
+        except Exception:  # noqa: BLE001 -- val terug op de oude weg
+            per_agent_events = {}
         uit = []
         for agent in agents:
-            recent = self.events(agent, events_per_agent)
+            recent = per_agent_events.get(agent)
+            if recent is None:
+                recent = self.events(agent, events_per_agent)
             ws = laad_workspace(agent)
             computer = dax.get(str(ws.get("dax_computer") or ""))
             status = agent_status(
