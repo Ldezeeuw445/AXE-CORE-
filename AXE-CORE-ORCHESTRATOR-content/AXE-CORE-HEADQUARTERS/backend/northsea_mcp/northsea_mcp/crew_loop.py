@@ -483,6 +483,19 @@ async def _axe_stap(service: Any, opp: dict[str, Any], eval_: rules.DealEvaluati
             extra={"missing": reden, "deal_id": opp["id"]},
         )
 
+    if draft.saved_status == "waiting_standing_rule":
+        # Daglimiet of rust per adres: geen concept, geen vraag aan Luka. Volgende
+        # ronde opnieuw (19 nov: niet meer elke 30 min drie items in Wacht op jou).
+        return await _lege_run(
+            service.repo, kind=f"wacht-op-ruimte:{opp['id']}",
+            title=f"Desk run: first mail waits for room — {kaart.get('deal_code')}",
+            description=notice_body(
+                kaart, what_yes_does="No yes. The crews send it themselves when the standing rule has room.",
+                extra="; ".join(draft.notes[-1:]) or "daily limit reached",
+            ),
+            extra={"deal_id": opp["id"], "waiting": "standing_rule_room"},
+        )
+
     if draft.saved_status == "not_saved_no_email_thread" or not draft.saved_draft_id:
         extra = (
             f"First-touch cannot use the reply-only send path: no inbound mail from this counterparty. "

@@ -256,9 +256,19 @@ async def test_vaste_regel_houdt_zich_aan_daglimiet_en_rust_per_adres(repo, rese
     repo.t["reply_drafts"].extend({"id": f"x{i}", "approval_status": "not_required", "generated_by": "northsea-mcp",
                                    "created_at": nu, "to_email": f"iemand{i}@elders.com", "sent_at": nu}
                                   for i in range(svc.POLICY_PER_DAG))
+    ja_voor = [t for t in repo.t["deal_tasks"] if t.get("requires_approval")]
     uit = await finish_after_event(service, _event(), _ok())
     assert uit["sent"] == 0 and repo.sends == []
+    # Luka, 19 nov: boven de limiet geen concept en geen "Yes needed" -- het wacht op ruimte.
     eigen = [d for d in repo.t["reply_drafts"] if d.get("generated_by") == "northsea-mcp" and not str(d["id"]).startswith("x")]
-    assert eigen and eigen[-1]["approval_status"] == "pending"  # boven de limiet: gewoon naar Luka
+    assert eigen == []
+    assert [t for t in repo.t["deal_tasks"] if t.get("requires_approval")] == ja_voor
+    assert uit["notice"]["akkoord_nodig"] is False and "waits for room" in uit["notice"]["titel"]
+    # Ruimte terug (nieuwe dag): dan gaat de mail zelf.
+    for d in repo.t["reply_drafts"]:
+        if str(d["id"]).startswith("x"):
+            d["created_at"] = "2026-01-01T00:00:00+00:00"
+    uit2 = await finish_after_event(service, _event(event_id="auto-qualify-ruimte"), _ok())
+    assert uit2["sent"] == 1 and uit2.get("standing_rule") is True
     regel = await service._policy_ruimte("iemand0@elders.com")
     assert regel["allowed"] is False

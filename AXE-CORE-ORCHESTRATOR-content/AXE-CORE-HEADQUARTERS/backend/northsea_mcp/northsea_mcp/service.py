@@ -1410,6 +1410,20 @@ class NorthSeaService:
                 regel = None
                 if policy_allowed and eerste_contact and beleid not in ("review_required",):
                     regel = await self._policy_ruimte(primair["email"])
+                if regel and not regel.get("allowed"):
+                    # Luka, 19 nov: "een overlopende emmer". Een eerste vrijblijvende
+                    # mail die alleen op de daglimiet of de rust per adres wacht, is
+                    # geen vraag voor Luka: niet opslaan, de crew probeert het in een
+                    # volgende ronde opnieuw zodra er ruimte is.
+                    notes.append(f"Not saved: waiting for room under Luka's standing rule ({regel.get('reason')}).")
+                    return OutreachDraft(
+                        objective=objective, channel="email", template=template,
+                        recipient=party_view(company, kant, caller, contacts),
+                        to_email=primair.get("email") if caller.identity else None,
+                        subject=onderwerp, body=tekst, facts_used=feiten,
+                        unknowns=[o.replace("_", " ") for o in onbekend] or list(gaps[:3]),
+                        sensitive=gevoelig, approval_required=False, sent=False, saved_draft_id=None,
+                        saved_status="waiting_standing_rule", notes=notes)
                 rij = await self.repo.insert_reply_draft({
                     "communication_id": draad["id"] if draad else None, "company_id": company["id"], "contact_id": primair.get("id"),
                     "opportunity_id": (opp or {}).get("id"), "to_email": primair["email"], "subject": onderwerp[:300],
