@@ -35,7 +35,9 @@ HQ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STAAT = os.path.join(HOME, ".axe", "android.json")
 UIT = os.path.join(HOME, ".axe", "android-uit")
 REPO = os.environ.get("AXE_ANDROID_REPO") or os.path.join(HOME, "axe-core-android")
-REMOTE = "https://github.com/Ldezeeuw445/axe-core-android"
+# Via https vroeg git om een login die launchd niet heeft: sinds 19 nov ochtend
+# "fetch failed" en geen enkele update. SSH werkt op beide Macs.
+REMOTE = "git@github.com:Ldezeeuw445/axe-core-android.git"
 PAKKET = "com.axecore.core"
 STIL_S = 300
 WACHT_S = 6 * 3600
