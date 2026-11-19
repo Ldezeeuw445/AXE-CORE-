@@ -196,6 +196,23 @@ def machine() -> str:
     return socket.gethostname().split(".")[0]
 
 
+def bouw_pad(huidig: str) -> str:
+    """PATH voor build-web.sh: adb, en Node (npm) waar Homebrew hem neerzet.
+
+    19 nov, Mac mini: "npm: command not found". launchd geeft autosync een
+    kale PATH; de Mac-build zet daarom zelf /opt/homebrew/bin en
+    /usr/local/bin erin (axe-autosync.sh), deze stap deed dat niet.
+    """
+    delen = [os.path.join(sdk(), "platform-tools"), "/opt/homebrew/bin", "/usr/local/bin",
+             os.path.join(HOME, ".cargo", "bin")]
+    delen += [d for d in huidig.split(os.pathsep) if d]
+    gezien: list[str] = []
+    for d in delen:
+        if d not in gezien:
+            gezien.append(d)
+    return os.pathsep.join(gezien)
+
+
 def haal_op() -> subprocess.CompletedProcess:
     """De bouwkopie op origin/main zetten, wat er lokaal ook uitgecheckt stond.
 
@@ -280,7 +297,7 @@ def werk_bij(nu: float | None = None, forceren: bool | None = None) -> str:
 
     serieel = klaar[0]
     env = {**os.environ, "AXE_HQ": HQ, "JAVA_HOME": jdk, "ANDROID_HOME": sdk(), "ANDROID_SERIAL": serieel,
-           "PATH": os.path.join(sdk(), "platform-tools") + os.pathsep + os.environ.get("PATH", "")}
+           "PATH": bouw_pad(os.environ.get("PATH", ""))}
     print(f"{time.strftime('%Y-%m-%d %H:%M:%S')}  building the phone app from {commit} for {serieel}")
     try:
         bouw = draai(["nice", "-n", "19", "bash", "build-web.sh", "--apk"], cwd=REPO, env=env, timeout=3600)

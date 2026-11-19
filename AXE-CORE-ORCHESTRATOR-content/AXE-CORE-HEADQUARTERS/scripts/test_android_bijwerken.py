@@ -162,3 +162,13 @@ def test_lokale_wijzigingen_in_de_bouwkopie_blijven_staan(mac, monkeypatch):
     assert ab.werk_bij(nu=1000.0, forceren=True) == "fetch failed"
     assert not any("checkout" in a for a, _ in aanroepen)
 
+
+def test_bouw_vindt_npm_ook_met_de_kale_path_van_launchd(mac, monkeypatch):
+    """19 nov, Mac mini: npm: command not found. De bouw krijgt Homebrew mee."""
+    aanroepen, _ = mac
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    assert ab.werk_bij(nu=1000.0, forceren=True) == "updated"
+    pad = next(kw for a, kw in aanroepen if "build-web.sh" in a)["env"]["PATH"].split(os.pathsep)
+    assert "/opt/homebrew/bin" in pad and "/usr/local/bin" in pad and "/usr/bin" in pad
+    assert pad[0].endswith("platform-tools") and len(pad) == len(set(pad))
+
