@@ -1,13 +1,13 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 38% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 21 gebouwd maar nog niet bewezen, 84 open (van 168).
+**Stand: 38% klaar** `████████░░░░░░░░░░░░` -- 63 klaar, 22 gebouwd maar nog niet bewezen, 83 open (van 168).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
-| Eerst — één doorlopend systeem (audit 19 nov 2026) | 3 (17%) | 8 | 7 |
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 3 (17%) | 9 | 6 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 12 | 14 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
@@ -71,7 +71,7 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
       stroom; geen popups voor gewone voortgang; meldingen kort, geen spam.
   - [ ] **De notch-chat aan de managerdraad**: de notch praat nu met een los
         model (gpt-4o-mini), niet met de echte manager en zijn draad.
-  - [ ] **Managervenster op Home (AgentVensters) zelfde route als de desk**:
+  - [~] **Managervenster op Home (AgentVensters) zelfde route als de desk** (gebouwd 20 nov: één gedeelde `startManagerJob` in `presentation/store/managerJob.ts`, met `chat`; het Home-venster houdt de draad bij zolang het open is; komt met de app-build):
         start taken zonder `chat`, dus zonder voortgang in de draad.
   - [~] **Alleen belangrijke meldingen trillen** (Luka 19 nov: "alleen
         belangrijk"; gebouwd, komt met de app-build): "Done" van een gewone

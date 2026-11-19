@@ -117,7 +117,8 @@ describe('Managers tab wiring — shell composer vs ManagerChat', () => {
     const desk = bron('presentation/components/managers/ManagersDesk.tsx');
     const managerChat = bron('presentation/components/axe-core/ManagerChat.tsx');
     expect(desk).toContain('useManagersDeskStore');
-    expect(desk).toContain('managerChatRoute');
+    // De route zelf staat sinds 20 nov in één gedeelde module (desk + Home).
+    expect(bron('presentation/store/managerJob.ts')).toContain('managerChatRoute');
     expect(desk).toContain('startManagerJob');
     expect(desk).toContain('zetDesk');
     expect(desk).toContain('layout="desk"');

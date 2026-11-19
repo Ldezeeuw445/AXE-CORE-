@@ -12,7 +12,9 @@ describe('Home-agentvenster is een live draad', () => {
     expect(vensters).toMatch(/axe-home-rail-stapel/);
     expect(vensters).toMatch(/jobs=\{jobs\.filter/);
     expect(vensters).toMatch(/onOpvolging/);
-    expect(vensters).toMatch(/bron: 'followup'/);
+    // Zelfde route als de desk (20 nov): met `chat`, via de gedeelde module.
+    expect(vensters).toMatch(/startManagerJob\(open\.agent\.id/);
+    expect(vensters).toMatch(/syncManagerDraad/);
     expect(vensters).toMatch(/agentRegel/);
     expect(vensters).toMatch(/goedkeuringVanJob/);
   });

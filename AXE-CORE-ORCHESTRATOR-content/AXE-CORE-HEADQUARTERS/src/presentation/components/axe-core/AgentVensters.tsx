@@ -19,8 +19,8 @@ import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar'
 import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
 import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
 import { STAND } from '@/presentation/components/axe-core/managerStand';
-import { startAxeJobs } from '@/presentation/store/installTierRouter';
-import { classifyAxeTier } from '@/domain/tierRouter/axeRoute';
+import { startManagerJob } from '@/presentation/store/managerJob';
+import { syncManagerDraad } from '@/infrastructure/persistence/managerDraadSync';
 import { pauseMission, resumeMission } from '@/infrastructure/gateways/axeCoreApiService';
 import { agentLiveRegel, daxRegel, serverStand as bepaalServerStand, type ServerAgent } from '@/domain/agents/serverStatus';
 import './homeLive.css';
@@ -211,6 +211,17 @@ export function AgentVensters() {
     return () => clearInterval(t);
   }, [heeftKlare]);
 
+  // Is er een managervenster open, dan de gedeelde draad bijhouden zoals de
+  // desk doet: zo verschijnt wat de VPS over zijn taak meldt hier ook (punt 8).
+  const chatTaakLoopt = jobs.some((j) => j.chat === gekozen && (j.state === 'running' || j.state === 'queued' || j.state === 'waiting'));
+  useEffect(() => {
+    if (!gekozen) return;
+    const ronde = () => { void syncManagerDraad([gekozen]); };
+    ronde();
+    const t = setInterval(ronde, chatTaakLoopt ? 5_000 : 20_000);
+    return () => clearInterval(t);
+  }, [gekozen, chatTaakLoopt]);
+
   const alle = railRijen(jobs, nu);
   const { links, rechts } = railKolommen(alle);
   const kolommen = isMobile ? [{ id: 'links' as const, rijen: alle }] : [
@@ -314,22 +325,9 @@ export function AgentVensters() {
                   });
                   return;
                 }
-                startAxeJobs([{
-                  text: tekst,
-                  titel: tekst.slice(0, 60),
-                  device: open.job?.device ?? null,
-                  tab: open.job?.tab,
-                  bron: 'followup',
-                  route: {
-                    ...classifyAxeTier(tekst),
-                    tier: 3,
-                    kind: 'agent',
-                    agent: open.agent.id,
-                    skill: null,
-                    confident: true,
-                    reason: 'home:followup',
-                  },
-                }]);
+                // Zelfde route als de desk: met `chat`, zodat de voortgang in
+                // het gesprek van deze manager komt (punt 8, 20 nov).
+                startManagerJob(open.agent.id, tekst, { device: open.job?.device ?? null, tab: open.job?.tab });
               }}
               onGoedkeuring={(akkoord) => {
                 void beslisAgentOk({

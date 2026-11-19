@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
 import { Search } from 'lucide-react';
 import { agentById, type AxeAgent, type AxeAgentId } from '@/domain/agents/roster';
-import { isGrokManager, type GrokManagerId } from '@/domain/agents/grokManagers';
+import { type GrokManagerId } from '@/domain/agents/grokManagers';
 import {
   BOSS_ID,
   MANAGER_APP_GROEPEN,
@@ -28,13 +28,11 @@ import {
   isProjectsOrch,
   magDoorgeven,
   managersOnderProjects,
-  primaireRepoVoor,
   projectsOrchAgent,
 } from '@/domain/agents/bossRoute';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import type { Stemming } from '@/presentation/components/axe-core/AxeGezicht';
 import { syncManagerDraad, managerGelezen, MANAGER_DRAAD_EVT } from '@/infrastructure/persistence/managerDraadSync';
-import { GESPREK_CONTEXT } from '@/domain/tierRouter/agentDraad';
 import { laatManagerAntwoorden } from '@/application/managers/managerAntwoord';
 import { northseaOpruimenOk } from '@/infrastructure/gateways/axeCoreApiService';
 import { ManagerChat } from '@/presentation/components/axe-core/ManagerChat';
@@ -44,8 +42,7 @@ import { allesZin, isAllesGoedkeuren } from '@/domain/approvals/allesGoedkeuren'
 import { isCorrectie, lesBevestiging, lesRegel } from '@/domain/agents/lessen';
 import { schrijfLes } from '@/infrastructure/gateways/axeCoreApiService';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
-import { startAxeJobs } from '@/presentation/store/installTierRouter';
-import { managerChatRoute } from '@/domain/agents/managersComposerDoel';
+import { startManagerJob } from '@/presentation/store/managerJob';
 import { useManagersDeskStore } from '@/presentation/store/managersDeskStore';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
@@ -56,7 +53,6 @@ import { agentTierRegel } from '@/domain/agents/agentTiers';
 import {
   bewaarManagerChat,
   laadManagerChat,
-  gesprekContext,
   nieuwMsg,
   nieuwRelayMsg,
 } from '@/domain/agents/managerChatOpslag';
@@ -149,24 +145,6 @@ function previewTekst(agentId: string, srv?: ServerAgent): string {
   return SUBTITELS[agentId as AxeAgentId] || 'Open chat';
 }
 
-function startManagerJob(agentId: AxeAgentId, tekst: string, opts?: { device?: string | null; tab?: string }) {
-  const coding = isCodingOpdracht(tekst) && isGrokManager(agentId);
-  const repo = coding ? primaireRepoVoor(agentId as GrokManagerId) : null;
-  const basis = coding
-    ? `${tekst}\n\n[AXE manager coding] Repo: ${repo}. Produce a branch + PR only. Never merge, never deploy. Wait for Luka's approval.`
-    : tekst;
-  const goal = `${basis}${GESPREK_CONTEXT}${gesprekContext(agentById(agentId).name, laadManagerChat(agentId), tekst)}`;
-  startAxeJobs([{
-    text: goal,
-    titel: tekst.slice(0, 60),
-    device: (opts?.device as 'mac-mini' | 'imac' | 'vps' | null | undefined) ?? null,
-    tab: opts?.tab,
-    repo,
-    bron: 'followup',
-    chat: agentId,
-    route: managerChatRoute(agentId, tekst),
-  }]);
-}
 
 /**
  * `weergaveKnoppen` zijn de Chat/Activity/Memory-knoppen van Agents.tsx.
