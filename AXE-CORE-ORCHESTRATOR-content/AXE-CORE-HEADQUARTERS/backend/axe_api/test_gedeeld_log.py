@@ -6,7 +6,7 @@ import gedeeld_log as gl
 
 def test_logregel_en_context():
     r = gl.log_rij("claude-code", "  notch-fix   gepusht ")
-    assert r == {"from_agent": "claude-code", "to_agent": "log", "kind": "log", "body": "notch-fix gepusht"}
+    assert r == {"from_agent": "claude-code", "to_agent": "log", "kind": "report", "body": "notch-fix gepusht"}
     with pytest.raises(ValueError):
         gl.log_rij("x", "   ")
     ctx = gl.context_tekst([{"wie": "northseamgr", "tekst": "29 mails verstuurd", "wanneer": "2026-11-18T19:00:00"}])
@@ -33,3 +33,11 @@ def test_les_als_geheugen():
     assert "Datum: 2026-11-18." in r["body"] and "Waarom: een id zegt hem niets" in r["body"]
     assert gl.lessen_tekst([r]).startswith("Lessen van Luka")
     assert gl.is_correctie("voortaan eerst in gewone taal") and not gl.is_correctie("wat wacht er?")
+
+
+def test_les_heeft_een_soort_die_de_database_toestaat():
+    """core_manager_messages_kind_check: alleen directive/report/ask. Met "les"
+    werd elke les geweigerd (20 nov: 0 lessen in het log)."""
+    import gedeeld_log as gl
+    assert gl.les_rij("luka", "Nooit [x] zonder bewijs")["kind"] in ("directive", "report", "ask")
+    assert gl.log_rij("axe", "iets")["kind"] in ("directive", "report", "ask")

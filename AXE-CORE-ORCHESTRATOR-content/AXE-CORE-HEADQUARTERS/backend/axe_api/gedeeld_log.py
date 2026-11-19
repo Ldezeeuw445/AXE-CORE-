@@ -26,7 +26,10 @@ def log_rij(actor: str, tekst: str) -> dict[str, Any]:
     tekst = " ".join(str(tekst or "").split())[:MAX_TEKST]
     if not tekst:
         raise ValueError("lege logregel")
-    return {"from_agent": actor, "to_agent": LOG, "kind": LOG, "body": tekst}
+    # kind "report", niet LOG ("log"): de database staat alleen
+    # directive/report/ask toe. Tot 20 nov weigerde hij daarom ELKE logregel --
+    # het gedeelde log, de taakverslagen en de lessen hadden nul rijen.
+    return {"from_agent": actor, "to_agent": LOG, "kind": "report", "body": tekst}
 
 
 def als_regel(r: dict[str, Any]) -> dict[str, Any]:
@@ -91,7 +94,10 @@ def les_rij(actor: str, regel: str, waarom: str = "", toepassen: str = "", datum
         delen.append(f"Waarom: {' '.join(waarom.split())[:300]}")
     if toepassen.strip():
         delen.append(f"Hoe toepassen: {' '.join(toepassen.split())[:300]}")
-    return {"from_agent": " ".join(str(actor or 'luka').split())[:60], "to_agent": LESSEN, "kind": "les",
+    # kind "directive": de database staat alleen directive/report/ask toe
+    # (core_manager_messages_kind_check). Tot 20 nov stond hier "les", en dan
+    # weigerde de database ELKE les -- daarom stonden er nul in het log.
+    return {"from_agent": " ".join(str(actor or 'luka').split())[:60], "to_agent": LESSEN, "kind": "directive",
             "body": "\n".join(delen)}
 
 
