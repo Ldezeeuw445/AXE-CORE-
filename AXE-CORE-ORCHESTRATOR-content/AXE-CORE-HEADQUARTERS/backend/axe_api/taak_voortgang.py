@@ -167,12 +167,13 @@ def chat_manager(taak: dict[str, Any]) -> str | None:
 
 def ronde(db: Any, cursor: int, verteller: Verteller, niet_chat: set[str]) -> int:
     """Eén ronde. Geeft de nieuwe cursor (hoogste gelezen sequence) terug."""
-    rijen = (db.table("core_task_events").select("sequence,task_id,event_type,message,data")
+    rijen = (db.table("core_task_events").select("sequence,task_id,event_type,actor_type,message,data")
              .gt("sequence", cursor).in_("event_type", list(EVENTS))
              .order("sequence").limit(200).execute().data or [])
     if not rijen:
         return cursor
     nieuw = max(int(r.get("sequence") or cursor) for r in rijen)
+    systeem_verslagen(db, rijen)
     ids = sorted({str(r.get("task_id")) for r in rijen if r.get("task_id") and str(r.get("task_id")) not in niet_chat})
     taken: dict[str, dict[str, Any]] = {}
     if ids:
@@ -202,6 +203,34 @@ def ronde(db: Any, cursor: int, verteller: Verteller, niet_chat: set[str]) -> in
     if len(niet_chat) > 5000:
         niet_chat.clear()
     return nieuw
+
+
+def systeem_verslagen(db: Any, rijen: list[dict[str, Any]]) -> int:
+    """Taakverslag (punt 4) voor taken die de database zelf op mislukt zette.
+
+    Een taak waarvan de worker wegviel (herstart, crash) en die geen poging
+    meer over heeft, zet claim_next_core_task op 'failed' met actor_type
+    'system'. De worker ziet dat nooit, dus schreef niemand een verslag --
+    bijna de helft van alle mislukte taken. Deze lus ziet het event wel.
+    """
+    ids = sorted({str(r.get("task_id")) for r in rijen
+                  if r.get("event_type") == "task.failed" and r.get("actor_type") == "system" and r.get("task_id")})
+    if not ids:
+        return 0
+    import taak_verslag
+    berichten = {str(r.get("task_id")): r.get("message") for r in rijen if r.get("event_type") == "task.failed"}
+    n = 0
+    try:
+        taken = (db.table("core_tasks").select("id,title,status,result,error,metadata,assignee")
+                 .in_("id", ids).execute().data or [])
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[voortgang] systeemverslag: taken niet gelezen: %s", exc)
+        return 0
+    for t in taken:
+        fout = t.get("error") or {"code": "worker_lost", "message": berichten.get(str(t.get("id"))) or "worker viel weg"}
+        if taak_verslag.schrijf(db, t, "failed", t.get("result") if isinstance(t.get("result"), dict) else None, fout):
+            n += 1
+    return n
 
 
 def begin_cursor(db: Any) -> int:

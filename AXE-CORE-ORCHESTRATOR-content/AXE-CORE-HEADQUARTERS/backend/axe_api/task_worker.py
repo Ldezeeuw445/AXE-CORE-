@@ -266,6 +266,8 @@ class TaskWorker:
                 lease_token=task["lease_token"],
                 error={"code": "no_handler", "message": f"No handler for {task.get('capability') or 'general'}"},
             )
+            await _taakverslag(task, "failed", error={"code": "no_handler",
+                                                      "message": f"geen handler voor {task.get('capability') or 'general'}"})
             return True
 
         context = TaskContext(self.repo, task, self.lease_seconds)

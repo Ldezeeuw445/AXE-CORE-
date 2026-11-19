@@ -84,3 +84,19 @@ def test_klaar_en_mislukt():
     mis = tv.regel(ev(2, "task.failed"), {**TAAK, "error": {"message": "tests rood"}})
     assert mis == ("“Fix de login” lukte niet: tests rood", True, False)
     assert tv.regel(ev(3, "task.claimed", data={"attempt": 2}), TAAK) is None
+
+
+def test_database_zette_taak_op_mislukt_krijgt_toch_een_taakverslag():
+    """Worker viel weg (herstart): claim_next_core_task zet 'failed' als 'system'.
+    De worker ziet dat nooit; de voortgangslus schrijft dan het verslag (punt 4)."""
+    weg = {"id": "t3", "title": "Idea scan", "status": "failed", "result": None,
+           "error": None, "metadata": {}, "assignee": "thinktank"}
+    zelf = {**weg, "id": "t4", "title": "Door de worker zelf"}
+    sys_ev = {**ev(20, "task.failed", "Worker lost on last attempt", task="t3"), "actor_type": "system"}
+    wrk_ev = {**ev(21, "task.failed", task="t4"), "actor_type": "worker"}
+    db = DB([sys_ev, wrk_ev], [weg, zelf])
+    tv.ronde(db, 19, tv.Verteller(klok=lambda: 0.0), set())
+    log = [r for r in db.geschreven if r.get("to_agent") == "log"]
+    assert len(log) == 1  # alleen de systeemfout; de worker schreef zijn eigen verslag al
+    assert log[0]["body"].startswith("Taakverslag ✗ Idea scan")
+    assert "Worker lost" in log[0]["body"] and log[0]["from_agent"] == "thinktank"
