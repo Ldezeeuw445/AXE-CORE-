@@ -1,14 +1,14 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 42% klaar** `████████░░░░░░░░░░░░` -- 71 klaar, 30 gebouwd maar nog niet bewezen, 67 open (van 168).
+**Stand: 43% klaar** `█████████░░░░░░░░░░░` -- 72 klaar, 31 gebouwd maar nog niet bewezen, 65 open (van 168).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
-| Eerst — één doorlopend systeem (audit 19 nov 2026) | 8 (44%) | 8 | 2 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 16 | 10 |
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (50%) | 8 | 1 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 17 | 9 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 4 | 3 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 2 | 35 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
@@ -78,7 +78,7 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
         taak geeft geen systeemmelding meer, op de telefoon én de Mac. Wel:
         goedkeuring nodig, taak mislukt, NorthSea needs-your-OK. De rest
         staat in de bel en in het managergesprek.
-- [ ] **CLI-abonnementen als uitvoerders, niet als brein**: AXE's eigen lus is
+- [x] **CLI-abonnementen als uitvoerders, niet als brein** (gemeten 20 nov, 7 dagen core_tasks: het denkwerk van de eigen lus deden groq 56, ollama 44, openai 29 -- nul keer een abonnement; Claude Code/Codex liepen alleen als uitvoerder via claude_code.run op de Mac mini, 23 computer-use-taken): AXE's eigen lus is
       de baas; Claude/Codex/Cursor/OpenHands zijn workers of terugval.
 - [x] **Supabase (AXE) weer gezond** (19 nov, gemeten): na Luka's herstart
       inloggen 0,18 s en een query 0,10 s vanaf de VPS (was 15-40 s / time-out);
@@ -219,7 +219,7 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       (9 nov, `93dcdc3b`, `ca9feb3b`).
 - [~] **Keys per app in AXE, met de manager die meldt** (9 nov, `948420eb`,
       `139f070a`).
-- [ ] **Minder dure abonnementen**: managers en DAX blijven alles kunnen met
+- [~] **Minder dure abonnementen** (gemeten 20 nov: op de iMac deden de stoelen in 30 dagen 0 minuten echt werk -- alle 992 aanroepen waren loginchecks van 0,02 s; het echte coderen loopt via de Mac mini (23 taken/week). Opzeggen is Luka's keuze; hij gebruikt Claude Code zelf ook.): managers en DAX blijven alles kunnen met
       minder Claude/ChatGPT/Cursor-stoelen (eigen lus + goedkope API's/Ollama
       als basis, stoelen als terugval).
 - [~] **Agenda: de week is leesbaar** (9 nov, `59ad161d`).
