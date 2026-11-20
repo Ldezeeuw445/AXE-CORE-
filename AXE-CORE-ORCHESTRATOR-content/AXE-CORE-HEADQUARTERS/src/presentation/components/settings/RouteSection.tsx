@@ -147,7 +147,7 @@ export function RouteSection() {
     setDiensten(stand);
   };
 
-  useEffect(() => { void laad(); }, []);
+  useEffect(() => { void checkAllServices().finally(laad); }, []);
 
   const verversNu = async () => {
     setVerversen(true);

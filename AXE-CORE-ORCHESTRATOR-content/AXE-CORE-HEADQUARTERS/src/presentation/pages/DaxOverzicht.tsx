@@ -13,7 +13,7 @@ import {
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
 import { agentById, type AxeAgentId } from '@/domain/agents/roster';
 
-function Kaart({ rij, highlight }: { rij: DaxOverzichtRij; highlight: boolean }) {
+export function DaxBotKaart({ rij, highlight }: { rij: DaxOverzichtRij; highlight: boolean }) {
   const navigate = useNavigate();
   const agent = agentById(rij.agentId as AxeAgentId);
   const kleur = daxStandKleur(rij.stand);

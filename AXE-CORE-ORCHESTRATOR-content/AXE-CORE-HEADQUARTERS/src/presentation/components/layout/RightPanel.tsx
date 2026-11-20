@@ -1,3 +1,4 @@
+import { DaxBotKaart } from '@/presentation/pages/DaxOverzicht';
 import { ServerProviderSlots } from '@/presentation/components/settings/KeysPerAppSection';
 import { CodingSeatsSection } from '@/presentation/components/settings/CodingSeatsSection';
 import { useServerAgents } from '@/presentation/components/axe-core/useServerAgents';
@@ -643,11 +644,7 @@ export function RailDaxBots() {
     <details>
       <summary>DAX Bots</summary>
       {rows.length ? rows.map(row => (
-        <div key={row.computer} className="py-2 break-words">
-          <strong>{row.naam}</strong>
-          <div>{row.stand} · {row.heartbeatTekst}</div>
-          <div>{row.huidigeTaak || row.standTekst}</div>
-        </div>
+        <DaxBotKaart key={row.computer} rij={row} highlight={false} />
       )) : <p>No DAX heartbeat data</p>}
     </details>
   );

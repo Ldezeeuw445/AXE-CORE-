@@ -3197,9 +3197,11 @@ async def _check_vps_services() -> dict:
     # CrewAI heeft geen HTTP-bridge. De probe importeert de geïsoleerde runtime
     # en leest zijn versie; dat bewijst nog niet dat een crew-taak slaagt.
     crew_venv = os.environ.get("CREW_VENV_PY", "/opt/axe-crew-venv/bin/python3")
+    tags_url = os.environ.get("AXE_MODELBOX_URL", "https://ollama.axecompanion.com/api/tags")
+
     async def ollama_health():
         async with httpx.AsyncClient(timeout=4) as client:
-            return await http_health(client, "http://127.0.0.1:11434/api/tags", models=True)
+            return await http_health(client, tags_url, models=True)
 
     checked, runtimes, ollama = await asyncio.gather(
         asyncio.gather(*(check(tool, *AGENT_SERVICES[tool]) for tool in names)),
@@ -3211,17 +3213,17 @@ async def _check_vps_services() -> dict:
     # HERMES_URL historically pointed at .../v1/chat/completions, so the
     # generic "/health" derivation 404'd and the Models & Tests card stayed
     # Failed/Testing even while hermes3 answered through /proxy/ai. Derive
-    # reachability from local Ollama tags instead of that dead health URL.
+    # reachability from modelbox Ollama tags instead of that dead health URL.
     try:
         ollama_ok = bool(results.get("ollama", {}).get("reachable"))
         has_hermes = False
         if ollama_ok:
             async with httpx.AsyncClient(timeout=4) as client:
-                tags = await client.get("http://127.0.0.1:11434/api/tags")
+                tags = await client.get(tags_url)
                 if tags.is_success:
                     models = (tags.json() or {}).get("models") or []
                     has_hermes = any(
-                        str(m.get("name", "")).startswith("hermes3")
+                        str(m.get("name", "")).removesuffix(":latest") == "hermes3:8b"
                         for m in models
                         if isinstance(m, dict)
                     )
