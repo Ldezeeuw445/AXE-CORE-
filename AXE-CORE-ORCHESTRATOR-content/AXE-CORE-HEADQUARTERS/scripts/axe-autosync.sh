@@ -171,6 +171,19 @@ if [[ -f "$AXE_PL" ]] && /usr/libexec/PlistBuddy -c "Print :KeepAlive" "$AXE_PL"
   launchctl bootstrap "gui/$(id -u)" "$AXE_PL" 2>/dev/null || true
   log "com.axe.core: KeepAlive uit en open -g -- die pakte elke 10 s de focus"
 fi
+# De oude AXE Overlay (losse notch-app, sinds 9 nov in AXE zelf). Luka 20 nov:
+# "ja haal maar weg". Naar de Prullenmand, niet definitief: terug te zetten.
+OV_PL="$HOME/Library/LaunchAgents/nl.axe.overlay.plist"
+if [[ -f "$OV_PL" || -d "/Applications/AXE Overlay.app" ]]; then
+  launchctl bootout "gui/$(id -u)/nl.axe.overlay" 2>/dev/null || true
+  pkill -x axe-overlay 2>/dev/null || true
+  BAK="$HOME/.Trash/axe-overlay-$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$BAK"
+  for weg in "$OV_PL" "/Applications/AXE Overlay.app" /Applications/AXE\ Overlay.app.bak-*; do
+    [[ -e "$weg" ]] && mv "$weg" "$BAK/" 2>/dev/null
+  done
+  log "oude AXE Overlay naar de Prullenmand ($BAK)"
+fi
 # De onafhankelijke bewaker bijwerken, ook als de API al luistert of de app
 # deze ronde niet gebouwd wordt. De installer weigert een niet-agent-host.
 if [[ -x "$HIER/backend/axe_api/.venv-local/bin/python" && -f "$HIER/backend/axe_api/.env.local" ]]; then
