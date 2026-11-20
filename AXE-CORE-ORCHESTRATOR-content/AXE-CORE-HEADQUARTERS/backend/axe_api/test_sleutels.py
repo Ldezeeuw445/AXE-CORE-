@@ -171,3 +171,9 @@ def test_edge_namen_zichtbaar_en_rare_namen_kapot():
     assert "iemand@example.com" not in json.dumps(over)
     # zonder edge-namen blijft het eerlijk "unseen"
     assert _key(sl.status([], NU, {}), "NorthSea", "RESEND_API_KEY")["status"] == "unseen"
+
+
+def test_dax_server_storing_is_geen_sleutelprobleem():
+    over = sl.status([], NU, {}, dax=[{"id": "dax-trading-01", "status": "error", "last_error": "timeout"}])
+    assert _key(over, "AXE Core", "dax-trading-01 login")["status"] == "broken"
+    assert not any("dax-trading-01" in r for r in sl.problemen(over, "AXE Core"))

@@ -329,7 +329,11 @@ def problemen(overzicht: dict[str, Any], app: str) -> list[str]:
         if blok.get("app") == app:
             return [f"{r['name']} {'broken' if r['status'] == 'broken' else 'missing'} ({r['detail']})"
                     for r in blok.get("keys") or []
-                    if r["status"] == "broken" or (r["status"] == "missing" and r.get("need") == "required")]
+                    # DAX-rijen zijn geen sleutel maar een server (20 nov: Strato
+                    # onbereikbaar → 5x "sleutel werkt niet" → 5 zelf-fix-taken die
+                    # nooit konden slagen). DAX meldt zichzelf apart.
+                    if r.get("where") != PLEK_LABEL["dax"]
+                    and (r["status"] == "broken" or (r["status"] == "missing" and r.get("need") == "required"))]
     return []
 
 
