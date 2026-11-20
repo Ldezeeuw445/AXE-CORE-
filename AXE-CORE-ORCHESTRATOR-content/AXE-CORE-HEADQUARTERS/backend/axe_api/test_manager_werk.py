@@ -116,3 +116,28 @@ def test_gestopte_fouten_staan_apart():
     r = next(x for x in mw.metingen(db, "projectsmgr", NU) if x.startswith("Taken"))
     nu_deel, gestopt_deel = r.split("Gestopt")
     assert "verse fout" in nu_deel and "oude fout" not in nu_deel and "oude fout" in gestopt_deel
+
+
+def test_eigen_ronde_pakt_een_ding_op_en_wacht_dan_2_uur(monkeypatch):
+    monkeypatch.setattr(mw, "_context", lambda db, a: "context")
+    monkeypatch.setattr(mw, "metingen", lambda db, a, nu, http=None: ["Faalt NU: feed X"])
+    mw._RUSTIG.clear()
+    db = DB({"core_manager_messages": [], "core_tasks": []})
+    chat = lambda b: ('{"antwoord": "Feed X ververst niet.", "taken": ["Repareer feed X"]}', "groq")
+    assert mw.eigen_ronde(db, "tradingos", NU, chat=chat) == "Repareer feed X"
+    taak = db.data["core_tasks"][0]
+    assert taak["metadata"]["eigen_ronde"] and taak["assignee"] == "tradingos"
+    assert "Ik pak dit nu zelf op" in db.data["core_manager_messages"][0]["body"]
+    # open taak / binnen 2 uur: niet nog een
+    assert mw.eigen_ronde(db, "tradingos", NU + timedelta(minutes=30), chat=chat) is None
+
+
+def test_rustige_ronde_maakt_niets_en_meldt_niets(monkeypatch):
+    monkeypatch.setattr(mw, "_context", lambda db, a: "context")
+    monkeypatch.setattr(mw, "metingen", lambda db, a, nu, http=None: ["alles ok"])
+    mw._RUSTIG.clear()
+    db = DB({"core_manager_messages": [], "core_tasks": []})
+    chat = lambda b: ('{"antwoord": "rustig", "taken": []}', "groq")
+    assert mw.eigen_ronde(db, "axon", NU, chat=chat) is None
+    assert db.data["core_tasks"] == [] and db.data["core_manager_messages"] == []
+    assert mw.eigen_ronde(db, "axon", NU + timedelta(minutes=10), chat=lambda b: 1 / 0) is None  # niet opnieuw gevraagd

@@ -435,7 +435,79 @@ def run(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[s
         uit["beantwoord"].append({"agent": agent, "model": model, "taken": len(gestart)})
         uit["taken"] += len(gestart)
     uit["gemeld"] = meld_klaar(db, nu)
+    # Eén eigen ronde per run (max ~60 s), de managers om de beurt: elke 2 min één.
+    if not uit["beantwoord"]:
+        agent = MANAGERS[(nu.hour * 30 + nu.minute // 2) % len(MANAGERS)]
+        try:
+            if (gestart := eigen_ronde(db, agent, nu, chat=chat)):
+                uit["eigen_ronde"] = {"agent": agent, "taak": gestart[:120]}
+                uit["taken"] += 1
+        except Exception as e:  # noqa: BLE001
+            uit["fouten"].append(f"ronde {agent}: {e}"[:200])
     return uit
+
+
+# ── 4. eigen initiatief: zonder dat Luka iets vraagt ───────────────────────
+
+RONDE_ELKE = timedelta(hours=2)
+RONDE_VRAAG = ("Je eigen ronde (Luka vroeg niets): kijk naar je metingen. Is er iets dat NU faalt of "
+               "stuk is in jouw terrein en dat je zelf kunt oplossen? Pak dan precies één ding op als taak "
+               "en zeg in één zin wat en waarom. Is alles in orde of is niets van jou op te lossen, geef dan "
+               "\"taken\": [] en als antwoord alleen: \"rustig\".")
+
+
+def _laatste_ronde(db: Any, agent: str) -> datetime | None:
+    try:
+        rijen = (db.table("core_tasks").select("created_at,status,metadata").eq("requested_by", agent)
+                 .order("created_at", desc=True).limit(20).execute().data) or []
+    except Exception:  # noqa: BLE001
+        return datetime.now(timezone.utc)  # niet kunnen lezen = deze ronde overslaan
+    for r in rijen:
+        if (r.get("metadata") or {}).get("eigen_ronde"):
+            return _tijd(r.get("created_at"))
+    return None
+
+
+def _heeft_open_taak(db: Any, agent: str) -> bool:
+    try:
+        return bool((db.table("core_tasks").select("id").eq("requested_by", agent)
+                     .in_("status", list(OPEN)).limit(1).execute().data) or [])
+    except Exception:  # noqa: BLE001
+        return True
+
+
+def eigen_ronde(db: Any, agent: str, nu: datetime, chat: Callable[..., Any] | None = None) -> str | None:
+    """Eén initiatief-ronde. Geeft de gestarte taak, of None."""
+    laatst = max([t for t in (_laatste_ronde(db, agent), _RUSTIG.get(agent)) if t], default=None)
+    if laatst and nu - laatst < RONDE_ELKE:
+        return None
+    if _heeft_open_taak(db, agent) or _taken_vandaag(db, agent, nu) >= MAX_TAKEN_PER_DAG:
+        return None
+    antwoord, taken, _model = denk(db, agent, [{"body": RONDE_VRAAG}], [], chat=chat)
+    if not taken:
+        # Ook een rustige ronde telt, anders vraagt hij het elke 2 minuten opnieuw.
+        _markeer_ronde(db, agent, nu)
+        return None
+    taak = maak_taak(db, agent, taken[0], nu)
+    if not taak:
+        return None
+    if taak.get("id"):
+        try:
+            meta = {**(taak.get("metadata") or {}), "eigen_ronde": True}
+            db.table("core_tasks").update({"metadata": meta}).eq("id", taak["id"]).execute()
+        except Exception:  # noqa: BLE001
+            pass
+    zin = antwoord if antwoord and antwoord.lower() != "rustig" else "Ik zag iets dat ik zelf kan oplossen."
+    _zeg(db, agent, f"{zin}\n\nIk pak dit nu zelf op:\n- {taken[0][:200]}")
+    return taken[0]
+
+
+def _markeer_ronde(db: Any, agent: str, nu: datetime) -> None:
+    """Een rustige ronde vastleggen zonder een taak te maken: in de agent-events."""
+    _RUSTIG[agent] = nu
+
+
+_RUSTIG: dict[str, datetime] = {}
 
 
 def dienst() -> dict[str, Any]:
