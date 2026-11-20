@@ -351,7 +351,7 @@ export interface RoutingEvent{
 
 /** Shorten a raw error message to a concise label: "401", "429", "timeout", "network", etc. */
 
-export type PendingChatAction={kind:'navigate';path:string;label:string}|{kind:'open_url';url:string};
+export type PendingChatAction={kind:'navigate';path:string;label:string;expliciet?:boolean}|{kind:'open_url';url:string};
 
 /** A consequential action (VPS shell command, GitHub commit) AXE wants to
  *  take, waiting on Luka's explicit yes/no before the real backend ever

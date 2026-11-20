@@ -187,7 +187,9 @@ export function PlaatChat() {
     if (!action) return;
     if (action.kind === 'navigate') {
       const path = action.path || '';
-      if (/maps|trading|chart/i.test(path)) {
+      // Een expliciete "open trading" mag wel; alleen een afgeleide navigatie
+      // ("show BTC chart") blijft op Home, op de bol.
+      if (!action.expliciet && /maps|trading|chart/i.test(path)) {
         voice.clearPendingAction();
         return;
       }

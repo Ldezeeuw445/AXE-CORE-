@@ -5,6 +5,8 @@
  * en als parallelle jobs uitgezet. De chat wacht daar niet op.
  * NorthSea auto-send blijft hier buiten.
  */
+import { isKorteOpenOpdracht } from '@/domain/tierRouter/navigatieZin';
+import { detectChatAction } from '@/application/chat/chatActionService';
 import { useVoiceStore, getProviderKeySlot, writeConversationMemory, type ConversationMessage, type RoutingEvent } from '@/presentation/store/voiceStore';
 import { collectAllSlots } from '@/presentation/store/chatSlots';
 import { slotsVoorAgent } from '@/domain/agents/motorScope';
@@ -1072,6 +1074,24 @@ export function installTierRouter(): void {
       // werkelijkheden: gewone opdrachten gingen via de durable AXE-kernel,
       // expliciete Mac-opdrachten omzeilden juist die kernel. Vanaf hier is de
       // Mac gewoon een execution node van dezelfde agentic task.
+      // "open trading" opent de tab, geen taak (20 nov, functielijst).
+      if (isKorteOpenOpdracht(text)) {
+        try {
+          const actie = await detectChatAction(text);
+          if (actie && actie.kind === 'navigate') {
+            const antwoord = `${actie.label} staat open.`;
+            useVoiceStore.setState((s) => ({
+              conversation: [...s.conversation,
+                { role: 'user' as const, text, timestamp: Date.now() },
+                { role: 'axe' as const, text: antwoord, timestamp: Date.now() }],
+              response: antwoord, error: null,
+              pendingAction: { kind: 'navigate', path: actie.path, label: actie.label, expliciet: true },
+            }));
+            return;
+          }
+        } catch { /* geen tab gevonden: gewoon verder als altijd */ }
+      }
+
       const mac = detectMacRoute(text);
       if (mac) {
         const gerouteerd = classifyAxeTier(mac.prompt);
