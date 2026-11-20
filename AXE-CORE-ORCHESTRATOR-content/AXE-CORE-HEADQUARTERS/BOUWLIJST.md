@@ -1,14 +1,14 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 43% klaar** `█████████░░░░░░░░░░░` -- 72 klaar, 31 gebouwd maar nog niet bewezen, 65 open (van 168).
+**Stand: 42% klaar** `████████░░░░░░░░░░░░` -- 72 klaar, 32 gebouwd maar nog niet bewezen, 67 open (van 171).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (50%) | 8 | 1 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 17 | 9 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (3%) | 18 | 11 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 4 | 3 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 2 | 35 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
@@ -118,7 +118,10 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
 - [~] **Eén stem in de kamer** (9 nov, `/voice/claim`, ADR-01): Mac mini, iMac
       en Samsung horen tegelijk; AXE kiest er één en de rest zwijgt. Nog nooit
       met alle drie tegelijk in de kamer getest.
-- [ ] **Alle functies op één lijst, met hands-free**: alles wat ooit in AXE
+- [~] **Alle functies op één lijst, met hands-free** (20 nov: `FUNCTIES.md`, ~90 functies per gebied met werkt / stem / typen / klik en een voorbeeldzin. Meteen gerepareerd: getypt "open trading" opent nu de tab (was een taak), en de stem kan tabs, de Home-weergave en de notch openen (`open_tab`). Nog open, zie de gaten onderaan FUNCTIES.md.)
+  - [ ] **Getypt een afspraak toevoegen**: "zet vrijdag 19:30 diner in mijn agenda" leest nu alleen de agenda voor; de stem kan het wel (agenda_add).
+  - [ ] **Ruis wordt gesprek**: de live stem zette "umuyoruz.", "Zadnji.", "Mhm." als berichten van Luka in de chat (20 nov gezien) -- achtergrondgeluid als beurt.
+  - [ ] **Telefoon: het invoerveld neemt op elke tab meer dan de halve hoogte** (20 nov, 375 px); op Taken zie je daardoor maar een paar regels. alles wat ooit in AXE
       gebouwd of bedacht is (computer use, eigen browser, "hey axe show me the
       map of New York", ...), per functie: werkt het echt, en kan Luka het met
       alleen zijn stem gebruiken.
@@ -247,7 +250,7 @@ en me uit zichzelf helpt met alles en dingen echt makkelijker maakt."
 - [ ] **UI-ronde: alles nalopen.** Luka: "het is allemaal nog niet echt
       perfect en duidelijk". Elke tab langs: overlap, wat-is-dit, waar klik ik.
       Begint met inloggen in het browserpaneel (preview poort 5199).
-- [ ] **UI nog open (na ronde 1-3, 18 nov; 20 nov: `_backup_`/`_rollback_` verborgen in de boom via `codeStudio/boomFilter.ts`, en de app-tests weer groen -- dodeCode, nav/portal, architectuur):** bestandsboom in Code begint met
+- [ ] **UI nog open (na ronde 1-3, 18 nov; 20 nov: telefoon nagelopen op 375 px -- Managers-tab viel rechts weg, gerepareerd `c1a5f64a`; Home en NorthSea in orde;  `_backup_`/`_rollback_` verborgen in de boom via `codeStudio/boomFilter.ts`, en de app-tests weer groen -- dodeCode, nav/portal, architectuur):** bestandsboom in Code begint met
       tien `_backup_`/`_rollback_`-mappen; deal-link opent alleen deals uit de
       actieve lijst; telefoonweergave per tab nog niet nagelopen; 4 oude
       frontendtests rood (dodeCode, eeuwigGesprek).
