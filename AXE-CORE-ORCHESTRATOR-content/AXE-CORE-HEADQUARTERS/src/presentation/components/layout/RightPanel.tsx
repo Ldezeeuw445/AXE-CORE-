@@ -16,7 +16,7 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useIsTablet } from '@/presentation/hooks/use-tablet';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { ModelStatusWidget } from '@/presentation/components/widgets/ModelStatusWidget';
+import { CompactStatusRow, ModelStatusWidget } from '@/presentation/components/widgets/ModelStatusWidget';
 import { AxeAlgoWidget } from '@/presentation/components/widgets/AxeAlgoWidget';
 import {
   Sheet,
@@ -493,13 +493,15 @@ export function RightPanel() {
 
         {kamer === 'status' && (
           <>
-            <details><summary>Provider keys</summary><ServerProviderSlots /></details>
-            <details><summary>Coding seats</summary><CodingSeatsSection /></details>
-            <RailDaxBots />
             <CyanQuoteButtons />
             <ReplyLanguageWidget />
             <WidgetCard title="MODELS & TESTS">
               <ModelStatusWidget />
+            </WidgetCard>
+            <WidgetCard title="PROVIDER KEYS"><ServerProviderSlots compact /></WidgetCard>
+            <WidgetCard title="CODING SEATS"><CodingSeatsSection compact /></WidgetCard>
+            <WidgetCard title="DAX BOTS">
+              <RailDaxBots compact />
             </WidgetCard>
           </>
         )}
@@ -637,9 +639,14 @@ export function RightPanel() {
 }
 
 
-export function RailDaxBots() {
-  const { agents } = useServerAgents();
+export function RailDaxBots({ compact = false }: { compact?: boolean } = {}) {
+  const { agents, ok } = useServerAgents();
   const rows = daxOverzichtRijen(agents);
+  if (compact) return <>{rows.length ? rows.map(row => (
+    <CompactStatusRow key={row.computer} label={row.naam}
+      status={!ok ? 'Unverified' : ({ running: 'Connected', blocked: 'Blocked', offline: 'Offline', unknown: 'Unknown' })[row.stand]}
+      tone={!ok ? 'idle' : row.stand === 'running' ? 'ok' : row.stand === 'unknown' ? 'idle' : 'fail'} />
+  )) : <CompactStatusRow label="DAX Bots" status="No heartbeat data" tone="idle" />}</>;
   return (
     <details>
       <summary>DAX Bots</summary>

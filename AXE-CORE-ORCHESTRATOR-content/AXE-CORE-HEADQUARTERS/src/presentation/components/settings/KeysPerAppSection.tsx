@@ -1,3 +1,4 @@
+import { CompactStatusRow } from '@/presentation/components/widgets/ModelStatusWidget';
 /**
  * Settings → Keys per app: welke sleutel elke app gebruikt, waar hij woont,
  * en of hij werkt. Leest GET /keys/overview (backend/axe_api/sleutels.py).
@@ -122,7 +123,7 @@ export function KeysPerAppSection() {
   );
 }
 
-export function ServerProviderSlots() {
+export function ServerProviderSlots({ compact = false }: { compact?: boolean } = {}) {
   const slots = [
     ['Cerebras (VPS)', 'CEREBRAS_API_KEY'],
     ['Groq 2', 'GROQ_AGENTS_API_KEY'],
@@ -150,6 +151,13 @@ export function ServerProviderSlots() {
     const result = await testServerProviderKey(key).catch(() => ({ status: 'Test unavailable' }));
     setStatus(previous => ({ ...previous, [key]: result.status }));
   }
+  if (compact) return <>{slots.map(([label, key]) => {
+    const result = status[key];
+    const failed = result === 'Broken' || result === 'Rate limited' || result?.startsWith('Test failed');
+    return <CompactStatusRow key={key} label={label}
+      status={result === 'Works' ? 'Connected' : failed ? 'Failed' : result ?? 'Not checked'}
+      tone={result === 'Works' ? 'ok' : failed ? 'fail' : 'idle'} />;
+  })}</>;
   return (
     <KaartRaster>
       {slots.map(([label, key]) => (

@@ -61,6 +61,21 @@ function leesRegels(live: Partial<Record<string, KaartStand>> = {}): Regel[] {
   });
 }
 
+export function CompactStatusRow({ label, status, tone }: {
+  label: string; status: string; tone: KaartStand;
+}) {
+  const color = standKleur(tone, true);
+  return (
+    <div className="flex items-center justify-between gap-2 py-[3px]">
+      <span className="text-axe-meta min-w-0 truncate" title={label} style={{ color: 'var(--text-secondary)' }}>{label}</span>
+      <span className="text-axe-meta flex items-center gap-1.5 shrink-0" style={{ color }}>
+        {status}
+        <span aria-hidden="true" className="w-[6px] h-[6px] rounded-full" style={{ background: color }} />
+      </span>
+    </div>
+  );
+}
+
 export function ModelStatusWidget() {
   const [live, setLive] = useState<Partial<Record<string, KaartStand>>>({});
   // Telt op bij elke ronde en elke opslagwijziging; de regels lezen daarna de opslag opnieuw.

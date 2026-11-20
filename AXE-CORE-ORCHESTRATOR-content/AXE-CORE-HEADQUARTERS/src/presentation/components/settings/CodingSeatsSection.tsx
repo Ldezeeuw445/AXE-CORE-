@@ -1,3 +1,4 @@
+import { CompactStatusRow } from '@/presentation/components/widgets/ModelStatusWidget';
 /**
  * Settings → Subscriptions: één kaart per codeer-stoel.
  *
@@ -106,7 +107,7 @@ const ACCENT: Record<string, string> = {
   agy: '#60a5fa',
 };
 
-export function CodingSeatsSection() {
+export function CodingSeatsSection({ compact = false }: { compact?: boolean } = {}) {
   const [stoelen, setStoelen] = useState<CodingSeat[] | null>(null);
   const [heartbeatOk, setHeartbeatOk] = useState(false);
   const [verbruik, setVerbruik] = useState<Record<string, AbonnementVerbruik>>({});
@@ -172,6 +173,11 @@ export function CodingSeatsSection() {
       ? `Usable on ${groep.bruikbaarOp.join(', ')}`
       : gratis ? 'Availability unconfirmed' : 'No recent login confirmation';
     const geschiedenis = kaartMelding(kaart.geschiedenis ?? g?.last_limit_message);
+    if (compact) {
+      const { tekst, toon } = kaart.stand;
+      return <CompactStatusRow key={groep.key} label={motorNaam(label, { account: groep.email, ingelogd: stoel.logged_in })}
+        status={tekst === 'Online' ? 'Connected' : tekst} tone={toon === 'ok' ? 'ok' : toon === 'bad' ? 'fail' : 'idle'} />;
+    }
     return (
       <StatusKaart
         key={groep.key}
@@ -206,6 +212,10 @@ export function CodingSeatsSection() {
       />
     );
   };
+
+  if (compact) return <>{groepen.kaarten.length
+    ? groepen.kaarten.map(kaartVoor)
+    : <CompactStatusRow label="Coding seats" status={fout ? 'Unavailable' : 'Not checked'} tone="idle" />}</>;
 
   return (
     <div className="axe-motoren">
