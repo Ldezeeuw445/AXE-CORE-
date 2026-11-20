@@ -153,7 +153,7 @@ export default function DaxOverzicht() {
       ) : (
         <div className="axe-dax-grid">
           {rijen.map((rij) => (
-            <Kaart
+            <DaxBotKaart
               key={rij.computer}
               rij={rij}
               highlight={bot === rij.agentId || bot === rij.computer}
