@@ -39,6 +39,23 @@ def _read_json(path: Path) -> dict[str, Any]:
         return {}
 
 
+def _sleutel_uit_env() -> str:
+    """De sleutel die de app al heeft (20 nov): de Macs zetten hem als
+    AXE_CORE_API_KEY in de .env van HEADQUARTERS, niet als AXE_API_KEY in een
+    config-bestand. Zonder dit kon geen AI-sessie op een Mac `axe log` doen.
+    Leest alleen die ene regel; print niets."""
+    hq = Path(__file__).resolve().parents[2]
+    for env in (hq / ".env", Path.home() / "AXE-CORE-" / "AXE-CORE-ORCHESTRATOR-content" / "AXE-CORE-HEADQUARTERS" / ".env"):
+        try:
+            for regel in env.read_text(encoding="utf-8").splitlines():
+                naam, _, waarde = regel.partition("=")
+                if naam.strip() in ("AXE_API_KEY", "AXE_CORE_API_KEY") and waarde.strip():
+                    return waarde.strip().strip('"').strip("'")
+        except OSError:
+            continue
+    return ""
+
+
 def load_config(explicit: str | None = None) -> dict[str, Any]:
     file: dict[str, Any] = {}
     used = None
@@ -67,7 +84,7 @@ def load_config(explicit: str | None = None) -> dict[str, Any]:
 
     return {
         "api_url": str(pick("AXE_API_URL", "apiUrl", DEFAULTS["api_url"])).rstrip("/"),
-        "api_key": str(pick("AXE_API_KEY", "apiKey", "")),
+        "api_key": str(pick("AXE_API_KEY", "apiKey", "") or os.environ.get("AXE_CORE_API_KEY") or _sleutel_uit_env()),
         "user_id": str(pick("AXE_USER_ID", "userId", DEFAULTS["user_id"])),
         "actor": str(pick("AXE_ACTOR", "actor", DEFAULTS["actor"])),
         "memory_backend": "axon" if pick("AXE_MEMORY_BACKEND", "memoryBackend", "rag") == "axon" else "rag",

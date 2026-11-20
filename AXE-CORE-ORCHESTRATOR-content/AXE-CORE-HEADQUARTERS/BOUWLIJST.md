@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 66 klaar, 26 gebouwd maar nog niet bewezen, 76 open (van 168).
+**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 69 klaar, 27 gebouwd maar nog niet bewezen, 72 open (van 168).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -10,7 +10,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 6 (33%) | 10 | 2 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 13 | 13 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 2 | 5 |
-| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 2 | 35 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
@@ -275,16 +275,16 @@ Wat AXE ook moet kunnen, naar het voorbeeld van Spazio OS Pro:
 Het Spazio-patroon in drie stukken, maar dan in AXON en voor ALLE AI's (AXE,
 de managers, DAX, Claude Code, Codex, Cursor, Grok), zodat elke sessie weet
 wat de andere deed:
-- [ ] **Stappen**: één lijst in AXON met wat er nu komt, wie het doet (Luka of
+- [x] **Stappen** (20 nov bewezen: `cli/axe stappen` op de iMac gaf "jouw beurt" met de open vragen; `GET /stappen`): één lijst in AXON met wat er nu komt, wie het doet (Luka of
       welke AI) en wat die AI moet doen. Gedeeld, niet per app.
-- [ ] **Log**: elke sessie van elke AI schrijft aan het eind één regel (wat
+- [x] **Log** (20 nov bewezen: werkte nooit -- de database weigerde kind 'log', en de CLI vond de sleutel niet; beide gerepareerd, `cli/axe log` vanaf de iMac staat in core_manager_messages): elke sessie van elke AI schrijft aan het eind één regel (wat
       gevraagd, wat veranderd, waar gestopt). Zo weet de volgende altijd waar
       we zijn -- ook als het een andere AI op een ander apparaat is.
-- [ ] **Eén regel**: elke AI begint met "lees de stappen en het laatste log
+- [~] **Eén regel** (staat in AGENTS.md voor Claude Code/Codex/Cursor; de managers en DAX krijgen de laatste 10 logregels + lessen in hun prompt via agent_loop; nog niet gezien dat elke AI het echt doet): elke AI begint met "lees de stappen en het laatste log
       in AXON" en eindigt met "schrijf een logregel". Voor Claude Code via
       CLAUDE.md/AGENTS.md, voor de managers en DAX in hun systeemprompt, voor
       de rest via de AXON MCP.
-- [ ] Bouwt op wat er al is: core_manager_messages, memory (memory_schrijfhek,
+- [x] Bouwt op wat er al is (20 nov: log, lessen, verslagen en toestemming staan allemaal in core_manager_messages; geen tweede geheugen): core_manager_messages, memory (memory_schrijfhek,
       cap 120), de AXON-manager; niet een tweede geheugen ernaast.
 - [ ] **AXON blijft een eigen app** (later met abonnement), maar Luka's eigen
       AXE koppelt eraan zodra AXON goed genoeg is: dan is AXON dat ene
