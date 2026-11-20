@@ -80,7 +80,7 @@ export function CompactStatusRow({ label, status, tone, icon = 'Key', accent, co
   );
 }
 
-export function ModelStatusWidget() {
+export function ModelStatusWidget({ hideSummary = false }: { hideSummary?: boolean } = {}) {
   const [live, setLive] = useState<Partial<Record<string, KaartStand>>>({});
   // Telt op bij elke ronde en elke opslagwijziging; de regels lezen daarna de opslag opnieuw.
   const [ronde, setRonde] = useState(0);
@@ -117,6 +117,7 @@ export function ModelStatusWidget() {
 
   return (
     <div className="flex flex-col">
+      {!hideSummary && (
       <div className="flex items-baseline justify-between">
         <span className="text-axe-meta" style={{ color: 'var(--text-muted)' }}>
           {regels.length} providers
@@ -125,6 +126,7 @@ export function ModelStatusWidget() {
           {werkend} connected{stuk > 0 ? ` · ${stuk} failed` : ''}
         </span>
       </div>
+      )}
 
       {regels.map(r => (
         <CompactStatusRow key={r.id} label={r.naam} icon={r.icoonNaam} accent={r.accent}

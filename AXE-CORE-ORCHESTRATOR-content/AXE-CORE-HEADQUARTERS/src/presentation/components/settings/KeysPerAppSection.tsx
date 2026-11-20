@@ -125,6 +125,9 @@ export function KeysPerAppSection() {
   );
 }
 
+const SERVER_SLOT_TEST_EVENT = 'axe:server-slot-test';
+const serverSlotTests: Record<string, string> = {};
+
 export function ServerProviderSlots({ compact = false }: { compact?: boolean } = {}) {
   const slots = [
     ['Cerebras (VPS)', 'CEREBRAS_API_KEY'],
@@ -135,7 +138,7 @@ export function ServerProviderSlots({ compact = false }: { compact?: boolean } =
     ['OpenRouter 4', 'OPENROUTER4_API_KEY'],
     ['OpenRouter 5', 'OPENROUTER5_API_KEY'],
   ];
-  const [status, setStatus] = useState<Record<string, string>>({});
+  const [status, setStatus] = useState<Record<string, string>>(() => ({ ...serverSlotTests }));
   useEffect(() => {
     let active = true;
     void keysOverview().then(({ apps }) => {
@@ -146,12 +149,18 @@ export function ServerProviderSlots({ compact = false }: { compact?: boolean } =
         ...previous,
       }));
     }).catch(() => {});
-    return () => { active = false; };
+    const sync = () => setStatus(previous => ({ ...previous, ...serverSlotTests }));
+    window.addEventListener(SERVER_SLOT_TEST_EVENT, sync);
+    return () => {
+      active = false;
+      window.removeEventListener(SERVER_SLOT_TEST_EVENT, sync);
+    };
   }, []);
   async function test(key: string) {
     setStatus(previous => ({ ...previous, [key]: 'Testing…' }));
     const result = await testServerProviderKey(key).catch(() => ({ status: 'Test unavailable' }));
-    setStatus(previous => ({ ...previous, [key]: result.status }));
+    serverSlotTests[key] = result.status;
+    window.dispatchEvent(new Event(SERVER_SLOT_TEST_EVENT));
   }
   if (compact) return <>{slots.map(([label, key]) => {
     const result = status[key];
@@ -159,7 +168,7 @@ export function ServerProviderSlots({ compact = false }: { compact?: boolean } =
     return <CompactStatusRow key={key} label={label}
       icon={key.startsWith('OPENROUTER') ? 'Router' : key.startsWith('GROQ') ? 'Rocket' : 'Zap'}
       accent={key.startsWith('GROQ') ? '#ec4899' : '#f59e0b'}
-      status={result === 'Works' ? 'Connected' : failed ? 'Failed' : result ?? 'Not checked'}
+      status={result === 'Works' ? 'Connected' : result === 'Rate limited' ? 'Rate limited' : failed ? 'Failed' : result === 'Set' ? 'Not tested' : result ?? 'Not checked'}
       tone={result === 'Works' ? 'ok' : failed ? 'fail' : 'idle'} />;
   })}</>;
   return <>{slots.map(([label, key]) => {

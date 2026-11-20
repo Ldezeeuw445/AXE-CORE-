@@ -496,9 +496,9 @@ export function RightPanel() {
             <CyanQuoteButtons />
             <ReplyLanguageWidget />
             <WidgetCard title="MODELS & TESTS">
-              <ModelStatusWidget />
+              <ModelStatusWidget hideSummary />
+              <ServerProviderSlots compact />
             </WidgetCard>
-            <WidgetCard title="PROVIDER KEYS"><ServerProviderSlots compact /></WidgetCard>
             <WidgetCard title="CODING SEATS"><CodingSeatsSection compact /></WidgetCard>
             <WidgetCard title="DAX BOTS">
               <RailDaxBots compact />
