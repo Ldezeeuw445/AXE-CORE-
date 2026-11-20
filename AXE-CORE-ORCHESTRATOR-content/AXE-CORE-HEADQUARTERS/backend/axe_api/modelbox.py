@@ -41,8 +41,39 @@ def mag(methode: str, pad: str) -> bool:
     return (methode.upper(), pad.strip("/")) in TOEGESTAAN
 
 
+# Ollama op Strato herstarten (Luka 20 nov: "Give AXE that right"). Ollama
+# draait daar direct op de server; de sleutel axe-ollama-knop mag alleen
+# `status` en `restart` (infra/dax/ollama-knop-recht.sh). Een vaste lijst, zodat
+# hier nooit een ander woord naar die server gaat.
+OLLAMA_KNOP = ("status", "restart")
+
+
+async def ollama_knop(woord: str, timeout: float = 60.0) -> dict:
+    if woord not in OLLAMA_KNOP:
+        return {"ok": False, "uitvoer": f"alleen {', '.join(OLLAMA_KNOP)}"}
+    import asyncio
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-T", "strato-ollama", woord,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )
+        uit, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except (OSError, asyncio.TimeoutError) as exc:
+        return {"ok": False, "uitvoer": f"geen verbinding met Strato: {exc}"}
+    tekst = (uit or b"").decode(errors="replace").strip()[-800:]
+    return {"ok": proc.returncode == 0 and "actief=active" in tekst, "uitvoer": tekst}
+
+
 def maak_router() -> APIRouter:
     router = APIRouter()
+
+    @router.get("/ollama-knop/status")
+    async def ollama_status():
+        return await ollama_knop("status")
+
+    @router.post("/ollama-knop/restart")
+    async def ollama_herstart():
+        return await ollama_knop("restart", timeout=90.0)
 
     @router.api_route("/ollama/{pad:path}", methods=["GET", "POST"])
     async def naar_modelbox(pad: str, request: Request):
