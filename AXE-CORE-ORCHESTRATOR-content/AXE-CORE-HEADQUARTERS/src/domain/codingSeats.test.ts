@@ -178,7 +178,7 @@ describe('heartbeat-stand', () => {
   });
 
   it('groepeert per account-e-mail en laat logged_in=true winnen van een andere machine', () => {
-    const nu = Date.parse('2026-10-17T11:00:00Z');
+    const nu = Date.now();
     const vers = new Date(nu - 30_000).toISOString();
     const ouder = new Date(nu - 120_000).toISOString();
     const mini = (id: string, extra: Partial<CodingSeat> = {}) => stoel({
@@ -235,7 +235,7 @@ describe('heartbeat-stand', () => {
   });
 
   it('voegt een restant-login in ~/.claude samen met het echte account, geen vierde kaart', () => {
-    const vers = new Date(Date.parse('2026-10-17T11:00:00Z') - 30_000).toISOString();
+    const vers = new Date(Date.now() - 30_000).toISOString();
     const rijen = [
       stoel({ id: 'mini:claude2', seat_id: 'claude2', email: 'a@x.nl', logged_in: true, last_seen_at: vers, machine: 'mini-van-luka-5' }),
       stoel({ id: 'mini:claude3', seat_id: 'claude3', email: 'b@x.nl', logged_in: true, last_seen_at: vers, machine: 'mini-van-luka-5' }),

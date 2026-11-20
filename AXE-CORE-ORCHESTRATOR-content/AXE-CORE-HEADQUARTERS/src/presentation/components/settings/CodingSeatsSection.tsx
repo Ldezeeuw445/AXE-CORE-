@@ -170,7 +170,7 @@ export function CodingSeatsSection() {
     const label = MOTOR_LABEL[stoel.id as keyof typeof MOTOR_LABEL] || ({ agy: 'Google Antigravity', kilo: 'Kilo Auto Free', opencode: 'OpenCode Free' } as Record<string, string>)[stoel.id] || stoel.label;
     const machines = groep.bruikbaarOp.length
       ? `Usable on ${groep.bruikbaarOp.join(', ')}`
-      : gratis ? 'Availability unconfirmed' : 'Not logged in on any machine';
+      : gratis ? 'Availability unconfirmed' : 'No recent login confirmation';
     const geschiedenis = kaartMelding(kaart.geschiedenis ?? g?.last_limit_message);
     return (
       <StatusKaart

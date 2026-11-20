@@ -299,7 +299,7 @@ export function groepeerAbonnementen(stoelen: CodingSeat[]): { kaarten: Abonneme
     const getoondEmail = win.logged_in === true ? email : (nietGebruikt ? null : email);
     const seatIds = [...new Set(rijen.map(stoelSleutel))];
     const bruikbaarOp = [...new Set(
-      rijen.filter((s) => s.logged_in === true).map((s) => machineLabel(s.machine)),
+      rijen.filter((s) => s.logged_in === true && stoelIsVers(s.last_seen_at)).map((s) => machineLabel(s.machine)),
     )].sort((a, b) => {
       const rang = (x: string) => (x === 'Mac mini' ? 0 : x === 'iMac' ? 1 : 2);
       return rang(a) - rang(b) || a.localeCompare(b);
