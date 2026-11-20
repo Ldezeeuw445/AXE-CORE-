@@ -1,3 +1,5 @@
+import { Link } from 'react-router';
+import { bossAgent, projectsOrchAgent, managersOnderProjects } from '@/domain/agents/bossRoute';
 import { useServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 /**
  * Instellingen → Motoren per agent.
@@ -213,7 +215,7 @@ export function AgentMotorenSection() {
 
   return (
     <div className="axe-motoren">
-      <SectieKop titel="AXE Core" />
+      <SectieKop titel="Main agents" />
       <div className="axe-agent-raster">
         <StatusKaart
           naam="AXE Core"
@@ -237,9 +239,6 @@ export function AgentMotorenSection() {
             { label: 'Last', waarde: routingLog[0] ? geleden(routingLog[0].ts) : '—' },
           ]}
         />
-      </div>
-      <SectieKop titel="Managers" uitleg="Live task status, engine and coding seat per manager." />
-      <div className="axe-agent-raster">
         {HOOFD_AGENTS.map(agent => {
           const motor = toewijzing[agent];
           const live = activity.ok ? activity.agents[agent] : undefined;
@@ -273,6 +272,33 @@ export function AgentMotorenSection() {
                 ...(g && g.ok_7d + g.failed_7d > 0 ? [{ label: 'Success 7d', waarde: `${g.ok_7d}/${g.ok_7d + g.failed_7d}`, pct: (g.ok_7d / (g.ok_7d + g.failed_7d)) * 100, goed: true }] : []),
               ]}
               melding={live?.current_action || task?.title || g?.last_limit_message || undefined}
+            />
+          );
+        })}
+      </div>
+
+      <SectieKop titel="Managers" uitleg="The roster from the Managers tab." />
+      <div className="axe-agent-raster">
+        {[bossAgent(), projectsOrchAgent(), ...managersOnderProjects()].map(manager => {
+          const live = activity.ok ? activity.agents[manager.id] : undefined;
+          const status = live?.status;
+          const task = live?.task;
+          return (
+            <StatusKaart
+              key={manager.id}
+              naam={manager.name}
+              accent={manager.accent}
+              rol={manager.kort || manager.role}
+              stand={{
+                toon: status === 'ERROR' || status === 'BLOCKED' ? 'bad' : status === 'WORKING' ? 'info' : 'muted',
+                tekst: status ? status.toLowerCase().replaceAll('_', ' ') : 'Unknown',
+              }}
+              keuze={<Link to={`/managers?open=${encodeURIComponent(manager.id)}`}>Open manager ›</Link>}
+              stats={[
+                { label: 'Engine', waarde: task?.engine || '—' },
+                { label: 'Model', waarde: task?.model || '—' },
+              ]}
+              melding={live?.current_action || task?.title || undefined}
             />
           );
         })}
