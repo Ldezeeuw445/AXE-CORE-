@@ -107,7 +107,8 @@ Legenda: **stem** = met je stem te gebruiken · **typen** = getypt ·
 | Trading-agent (posities, onderzoek) | ja | stem + typen | "check mijn open posities" |
 | Echte orders, kill switch | ja | **klik** | |
 | Agenda voorlezen | ja | stem + typen | "wat staat er vandaag in mijn agenda?" |
-| Afspraak toevoegen/wijzigen | ja | stem; **getypt niet** (wordt voorlezen) | "zet vrijdag 19:30 diner in mijn agenda" |
+| Afspraak toevoegen | ja | stem + typen (**getypt sinds 20 nov**) | "zet vrijdag 19:30 diner in mijn agenda" |
+| Afspraak wijzigen/annuleren | ja | stem | "verzet het diner naar 20:00" |
 | Taak maken | ja | stem + typen | "maak een taak voor morgen: offerte sturen" |
 | Obsidian: notitie schrijven/zoeken | ja | stem | "schrijf een notitie over het Strato-plan" |
 | Telefoon bekijken/bedienen | ja, met goedkeuring | stem | "wat staat er op mijn telefoon?" |
@@ -119,7 +120,6 @@ Legenda: **stem** = met je stem te gebruiken · **typen** = getypt ·
 - Instellingen, inclusief het wekwoord aanzetten.
 - Portal: iets naar de Mac gooien.
 - Goedkeuren van ingrijpende dingen (bewust: klik).
-- Getypt een afspraak toevoegen (stem kan het wel).
 - Een workflow (n8n) bouwen en de directe GitHub-wijziging: de code is er,
   maar elke route komt er niet meer bij.
 
@@ -132,4 +132,6 @@ Legenda: **stem** = met je stem te gebruiken · **typen** = getypt ·
   Opgelost (`1f80a058`, tool `open_tab`): "agenda" opende Calendar,
   "terrain" zette Home op Terrain.
 - "zet vrijdag 19:30 diner in mijn agenda" getypt: alleen de agenda
-  voorgelezen (tier 1). Nog open.
+  voorgelezen (tier 1). Opgelost: in de preview gaf hij "Done: ... is in
+  your calendar" en de afspraak stond op vrijdag 19:30 (testafspraak daarna
+  weer weggehaald).

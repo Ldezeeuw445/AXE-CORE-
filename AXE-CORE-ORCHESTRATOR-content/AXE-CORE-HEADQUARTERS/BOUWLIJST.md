@@ -1,14 +1,14 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 42% klaar** `████████░░░░░░░░░░░░` -- 72 klaar, 32 gebouwd maar nog niet bewezen, 67 open (van 171).
+**Stand: 42% klaar** `████████░░░░░░░░░░░░` -- 72 klaar, 33 gebouwd maar nog niet bewezen, 66 open (van 171).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (50%) | 8 | 1 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (3%) | 18 | 11 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (3%) | 19 | 10 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 4 | 3 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 2 | 35 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
@@ -119,7 +119,7 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       en Samsung horen tegelijk; AXE kiest er één en de rest zwijgt. Nog nooit
       met alle drie tegelijk in de kamer getest.
 - [~] **Alle functies op één lijst, met hands-free** (20 nov: `FUNCTIES.md`, ~90 functies per gebied met werkt / stem / typen / klik en een voorbeeldzin. Meteen gerepareerd: getypt "open trading" opent nu de tab (was een taak), en de stem kan tabs, de Home-weergave en de notch openen (`open_tab`). Nog open, zie de gaten onderaan FUNCTIES.md.)
-  - [ ] **Getypt een afspraak toevoegen**: "zet vrijdag 19:30 diner in mijn agenda" leest nu alleen de agenda voor; de stem kan het wel (agenda_add).
+  - [~] **Getypt een afspraak toevoegen** (20 nov: `afspraakUitZin` + tier 1 `calendar_add`; in de preview opgeslagen op vrijdag 19:30. Bewezen zodra Luka het in de echte app doet.)
   - [ ] **Ruis wordt gesprek**: de live stem zette "umuyoruz.", "Zadnji.", "Mhm." als berichten van Luka in de chat (20 nov gezien) -- achtergrondgeluid als beurt.
   - [ ] **Telefoon: het invoerveld neemt op elke tab meer dan de halve hoogte** (20 nov, 375 px); op Taken zie je daardoor maar een paar regels. alles wat ooit in AXE
       gebouwd of bedacht is (computer use, eigen browser, "hey axe show me the

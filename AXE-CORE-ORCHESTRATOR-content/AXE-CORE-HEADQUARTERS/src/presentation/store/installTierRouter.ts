@@ -85,6 +85,7 @@ import { stappenUit } from '@/domain/tierRouter/agentVenster';
 import { saveRagMemory } from '@/infrastructure/persistence/ragMemoryService';
 import { beurtRegel, leesBeurt, markBeurt, startBeurtIndienNodig } from '@/domain/beurtKlok';
 import { geheugenVoorBeurt, onthoudInGesprek, warmGeheugen } from '@/application/memory/gespreksGeheugen';
+import { zetInAgenda } from '@/application/agenda/zetInAgenda';
 
 let installed = false;
 const taskMonitors = new Set<string>();
@@ -357,6 +358,12 @@ function tier1Tekst(
 }
 
 async function voerTier1Uit(text: string, keuze: AxeRouteKeuze): Promise<boolean> {
+  if (keuze.kind === 'calendar_add') {
+    const antwoord = await zetInAgenda(text);
+    publiceer(antwoord, { provider: 'rules', model: 'tier1/calendar_add' }, 'ack');
+    recordBeurt(text, antwoord, 'rules', 'tier1:calendar_add');
+    return true;
+  }
   const kijk = await haalTier1Kijk(keuze.kind);
   const antwoord = tier1Tekst(keuze.kind, kijk, useVoiceStore.getState().vpsOnline, keuze.skill);
   const label = keuze.skill ? `tier1/${keuze.skill}` : `tier1/${keuze.kind}`;

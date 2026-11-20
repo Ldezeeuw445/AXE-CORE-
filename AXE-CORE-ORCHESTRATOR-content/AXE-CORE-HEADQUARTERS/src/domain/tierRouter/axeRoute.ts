@@ -9,6 +9,7 @@
  * Regels eerst (geen netwerk). Een model mag alleen bij twijfel, en moet
  * binnen de timeout vallen — anders het huidige pad.
  */
+import { isAfspraakOpdracht } from '@/domain/agenda/afspraakUitZin';
 import { classifyChatIntent, isSocialChatTurn } from '@/domain/chatIntent';
 import { delegateFor, type AxeAgentId } from '@/domain/agents/roster';
 import { werkplekVanTekst } from '@/domain/obsidian/werkplek';
@@ -33,6 +34,7 @@ export type AxeRouteKind =
   | 'priorities'
   | 'tasks'
   | 'calendar'
+  | 'calendar_add'
   | 'quick'
   | 'agent'
   | 'unknown';
@@ -161,6 +163,20 @@ export function classifyAxeTier(text: string): AxeRoute {
       kind: 'status',
       via: 'rules',
       reason: 'status lookup',
+      agent: 'axe',
+      skill: null,
+      confident: true,
+    };
+  }
+
+  /* "zet vrijdag 19:30 diner in mijn agenda" is een opdracht, geen vraag: het
+     woord "agenda" liet hem hieronder als voorlezen vallen (FUNCTIES.md). */
+  if (isAfspraakOpdracht(t)) {
+    return {
+      tier: 1,
+      kind: 'calendar_add',
+      via: 'rules',
+      reason: 'calendar add',
       agent: 'axe',
       skill: null,
       confident: true,
