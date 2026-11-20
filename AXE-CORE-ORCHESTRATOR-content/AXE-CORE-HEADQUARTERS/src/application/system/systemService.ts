@@ -76,12 +76,18 @@ const SERVICE_DISPLAY_NAMES: Record<string, string> = {
 // reachability probe and this just reads the result — one shared open
 // (no key) VPS endpoint instead of six broken direct fetches.
 let _vpsAgentsCache: { at: number; data: Record<string, { configured: boolean; reachable: boolean; latency_ms?: number }> } | null = null;
+let vpsStatusPending: Promise<NonNullable<typeof _vpsAgentsCache>['data']> | undefined;
+
 async function fetchVpsAgentsStatus(): Promise<Record<string, { configured: boolean; reachable: boolean; latency_ms?: number }>> {
   if (_vpsAgentsCache && Date.now() - _vpsAgentsCache.at < 3000) return _vpsAgentsCache.data;
-  const res = await fetch(`${VPS_API_ORIGIN}/status/vps-agents`, { signal: AbortSignal.timeout(6000) });
-  const data = res.ok ? await res.json() : {};
-  _vpsAgentsCache = { at: Date.now(), data };
-  return data;
+  vpsStatusPending ??= (async () => {
+    const res = await fetch(`${VPS_API_ORIGIN}/status/vps-agents`, { signal: AbortSignal.timeout(12_000) });
+    if (!res.ok) throw new Error(`VPS status HTTP ${res.status}`);
+    const data = await res.json();
+    _vpsAgentsCache = { at: Date.now(), data };
+    return data;
+  })().finally(() => { vpsStatusPending = undefined; });
+  return vpsStatusPending;
 }
 /**
  * Gemini's models-list endpoint and its generateContent endpoint draw from

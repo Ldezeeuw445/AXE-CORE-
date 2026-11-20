@@ -45,8 +45,11 @@ async function modelbox(base: string | undefined, model: string): Promise<KaartS
 export async function meetVpsProviders(
   instelling: Partial<Record<LiveVpsProvider, { baseUrl?: string; model?: string }>>,
 ): Promise<Record<LiveVpsProvider, KaartStand>> {
-  const brug = async (id: 'openhands' | 'openclaw' | 'crewai'): Promise<KaartStand> =>
-    (await vpsAgentStatus(id)).ok ? 'ok' : 'fail';
+  const brug = async (id: 'openhands' | 'openclaw' | 'crewai'): Promise<KaartStand> => {
+    const result = await vpsAgentStatus(id);
+    if (result.ok) return 'ok';
+    return result.meta?.configured === true ? 'fail' : 'idle';
+  };
   const [ollama, hermes, openhands, openclaw, crewai] = await Promise.all([
     // Ollama zelf: de box antwoordt met modellen. Welk model de chat kiest is een tweede vraag.
     modelbox(instelling.ollama?.baseUrl, ''),

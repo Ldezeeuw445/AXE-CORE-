@@ -653,7 +653,7 @@ function ProviderKeysSection() {
         const result = await Promise.race([
           vpsAgentStatus(statusKey),
           new Promise<{ ok: boolean; latency: number }>((resolve) =>
-            setTimeout(() => resolve({ ok: false, latency: 8000 }), 8000),
+            setTimeout(() => resolve({ ok: false, latency: 13000 }), 13000),
           ),
         ]);
         bridgeOk = result.ok;
