@@ -199,7 +199,7 @@ codesign --verify --deep --strict "$APP" || stop "Gebouwde AXE CORE signature-ve
 # Nu, alleen vanuit de autosync (AXE_ACHTERGROND=1): wachten tot er een minuut
 # niets is aangeraakt, de app op de achtergrond starten, en de app die vooraan
 # stond daarna weer vooraan zetten. Met de hand bijwerken blijft zoals het was.
-stil_seconden() { ioreg -c IOHIDSystem 2>/dev/null | awk '/HIDIdleTime/ {print int($NF/1000000000); exit}'; }
+stil_seconden() { ioreg -c IOHIDSystem 2>/dev/null | awk '/HIDIdleTime/ && !seen {seconds = int($NF/1000000000); seen = 1} END {if (seen) print seconds; else exit 1}'; }
 vooraan_app() { lsappinfo info -only bundleid "$(lsappinfo front 2>/dev/null)" 2>/dev/null | sed -n 's/.*"CFBundleIdentifier"="\([^"]*\)".*/\1/p'; }
 ACHTERGROND="${AXE_ACHTERGROND:-0}"
 VOORAAN=""
