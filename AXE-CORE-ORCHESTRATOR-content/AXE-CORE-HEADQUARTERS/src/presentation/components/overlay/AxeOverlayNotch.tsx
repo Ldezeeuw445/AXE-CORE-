@@ -211,6 +211,58 @@ export function AxeOverlayNotch({
   const [listening, setListening] = useState(false);
   const [files, setFiles] = useState<GesleeptItem[]>([]);
   const [dragging, setDragging] = useState(false);
+  /* Ronde 2 (20 nov): gesleepte bestanden met hun echte pad, om om te zetten.
+     De HTML-drop geeft alleen een naam; Tauri's eigen drag-drop het pad. */
+  const [omzet, setOmzet] = useState<{ pad: string; naam: string; doelen: string[]; bezig?: string; klaar?: string; fout?: string }[]>([]);
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    let stop: (() => void) | undefined;
+    let weg = false;
+    void (async () => {
+      const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+      const { invoke } = await import('@tauri-apps/api/core');
+      const af = await getCurrentWebview().onDragDropEvent(async (e) => {
+        const p = e.payload as { type: string; paths?: string[] };
+        if (p.type === 'enter' || p.type === 'over') setDragging(true);
+        else if (p.type === 'leave') setDragging(false);
+        else if (p.type === 'drop') {
+          setDragging(false);
+          const paden = (p.paths ?? []).slice(0, 8);
+          if (!paden.length) return;
+          const rij = await Promise.all(paden.map(async (pad) => ({
+            pad,
+            naam: pad.split('/').pop() || pad,
+            // Niet naar zijn eigen formaat (docx -> docx, heic -> heic).
+            doelen: (await invoke<string[]>('omzet_doelen', { pad }).catch(() => [] as string[]))
+              .filter((d) => !zelfdeFormaat(pad, d)),
+          })));
+          setOmzet(rij);
+          set(true);
+          setTab('home');
+        }
+      });
+      if (weg) af(); else stop = af;
+    })().catch(() => undefined);
+    return () => { weg = true; stop?.(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const zelfdeFormaat = (pad: string, d: string) => {
+    const ext = (pad.split('.').pop() || '').toLowerCase().replace('jpg', 'jpeg').replace(/^tif$/, 'tiff').replace(/^aif$/, 'aiff').replace(/^htm$/, 'html');
+    return ext === d;
+  };
+  const zetOm = async (pad: string, naar: string) => {
+    setOmzet((r) => r.map((x) => (x.pad === pad ? { ...x, bezig: naar, klaar: undefined, fout: undefined } : x)));
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const nieuw = await invoke<string>('bestand_omzetten', { pad, naar });
+      setOmzet((r) => r.map((x) => (x.pad === pad ? { ...x, bezig: undefined, klaar: nieuw } : x)));
+    } catch (err) {
+      setOmzet((r) => r.map((x) => (x.pad === pad ? { ...x, bezig: undefined, fout: String(err).slice(0, 140) } : x)));
+    }
+  };
+  const naarAxe = (x: { pad: string; naam: string }) => {
+    neemSleepAan({ bestanden: [{ name: x.naam, size: 0 }], tekst: null, uriList: `file://${x.pad}` });
+  };
   const [approvals, setApprovals] = useState<DurableTaskApproval[]>([]);
   const [activity, setActivity] = useState<string[]>([]);
   const [activityWie, setActivityWie] = useState<string[]>([]);
@@ -826,6 +878,12 @@ export function AxeOverlayNotch({
       }}
     >
       <div className="axe-ov__stars" aria-hidden="true" />
+      {dragging && (
+        <div className="axe-ov__dropzone" aria-hidden="true">
+          <AxeGezicht kleur={AXE_CYAAN} stemming="werkt" size={36} label="AXE" levend />
+          <span>Drop here: ask AXE about it, or convert it to another format</span>
+        </div>
+      )}
       {/* Géén data-tauri-drag-region. Die stond hier en maakte de hele balk
           tot venstergreep, dus één onbedoelde sleep zette de notch uit het
           midden en niets zette hem terug — precies wat Luka op 5 nov zag. Een
@@ -939,6 +997,35 @@ export function AxeOverlayNotch({
 
           {tab === 'home' && (
             <div className="axe-ov__home">
+              {omzet.length > 0 && (
+                <div className="axe-ov__vlak axe-ov__omzet">
+                  <div className="axe-ov__omzet-kop">
+                    <b>{omzet.length === 1 ? 'Dropped file' : `${omzet.length} dropped files`}</b>
+                    <button type="button" onClick={() => setOmzet([])} aria-label="Close">×</button>
+                  </div>
+                  {omzet.map((x) => (
+                    <div key={x.pad} className="axe-ov__omzet-rij">
+                      <span className="axe-ov__omzet-naam" title={x.pad}>{x.naam}</span>
+                      <div className="axe-ov__omzet-knoppen">
+                        <button type="button" className="is-axe" onClick={() => naarAxe(x)}>Ask AXE</button>
+                        {x.doelen.map((d) => (
+                          <button key={d} type="button" disabled={Boolean(x.bezig)} onClick={() => void zetOm(x.pad, d)}>
+                            {x.bezig === d ? '…' : d === 'web' ? 'web (small jpg)' : d === 'pdf' && /\.(docx?|rtf|odt|html?|md|txt)$/i.test(x.naam) ? 'pdf (text)' : d}
+                          </button>
+                        ))}
+                      </div>
+                      {x.klaar && (
+                        <button type="button" className="axe-ov__omzet-klaar" onClick={() => void import('@tauri-apps/api/core').then(({ invoke }) => invoke('portal_toon', { pad: x.klaar }))}>
+                          Saved as {x.klaar.split('/').pop()} · Show in Finder
+                        </button>
+                      )}
+                      {x.fout && <span className="axe-ov__omzet-fout">{x.fout}</span>}
+                      {x.doelen.length === 0 && !x.klaar && <span className="axe-ov__omzet-fout is-rustig">This type can't be converted; AXE can still read it.</span>}
+                    </div>
+                  ))}
+                  <p className="axe-ov__omzet-voet">The original always stays. The new file goes next to it.</p>
+                </div>
+              )}
               {/* Het eiland (Luka 20 nov, ronde 1): links AXE groot met wat hij
                   doet, rechts wie er nog meer bezig is. Bij geen verbinding één
                   foutkaart in plaats van tellers die oud kunnen zijn. */}

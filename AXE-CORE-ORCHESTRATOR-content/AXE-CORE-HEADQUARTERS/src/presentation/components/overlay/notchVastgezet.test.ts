@@ -84,7 +84,11 @@ describe('de notch zit tegen de bovenrand, niet eronder', () => {
     // visibleFrame begint ONDER de menubalk. Op NSStatusWindowLevel (25) mag
     // een venster daar juist bovenop staan, en dat is het hele punt.
     expect(rust).toContain('setLevel: 25_i64');
-    const inDock = rust.slice(rust.indexOf('fn dock_notch_frame_inner'));
+    // Alleen deze functie: elders mag visibleFrame wel (focus-vangnet: staat
+    // de muis op het Dock of de menubalk).
+    const start = rust.indexOf('fn dock_notch_frame_inner');
+    const volgende = rust.indexOf('\nfn ', start + 10);
+    const inDock = rust.slice(start, volgende > 0 ? volgende : undefined);
     expect(inDock).not.toContain('visibleFrame');
     expect(inDock).toMatch(/let top_y = sf\.origin\.y \+ sf\.size\.height;/);
   });

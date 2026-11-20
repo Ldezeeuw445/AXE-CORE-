@@ -5,6 +5,8 @@
 mod diensten;
 #[cfg(desktop)]
 mod launchd;
+#[cfg(desktop)]
+mod omzetten;
 mod gesture_lock;
 
 use std::fs;
@@ -711,6 +713,22 @@ fn worker_dienst_herstart(id: String) -> Result<String, String> {
 /// zat. Op de Mac mini met het tweede scherm betekende dat: halverwege een
 /// zin op dat scherm sta je ineens in AXE op het hoofdscherm (Luka, 6 nov).
 /// Eerst opruimen wat stil kan; wie dan nog focus pakt, staat in focus.log.
+/// Een gesleept bestand omzetten (notch, ronde 2). Zie omzetten.rs.
+#[cfg(desktop)]
+#[tauri::command]
+fn bestand_omzetten(pad: String, naar: String) -> Result<String, String> {
+    omzetten::zet_om(std::path::Path::new(&pad), &naar).map(|p| p.to_string_lossy().into_owned())
+}
+
+/// Naar welke formaten dit bestand kan, voor de knopjes in de notch.
+#[cfg(desktop)]
+#[tauri::command]
+fn omzet_doelen(pad: String) -> Vec<String> {
+    omzetten::soort_van(std::path::Path::new(&pad))
+        .map(|s| omzetten::doelen(s).iter().map(|d| d.to_string()).collect())
+        .unwrap_or_default()
+}
+
 #[cfg(desktop)]
 #[tauri::command]
 fn toon_hoofdvenster_stil(app: tauri::AppHandle) {
@@ -900,6 +918,8 @@ pub fn run() {
         portal_bewaar,
         portal_klembord,
         portal_toon,
+        bestand_omzetten,
+        omzet_doelen,
         toon_hoofdvenster_stil,
         consume_overlay_open_route,
         platform_info,

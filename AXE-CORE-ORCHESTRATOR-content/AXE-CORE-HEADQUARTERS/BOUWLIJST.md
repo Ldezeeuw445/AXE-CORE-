@@ -367,8 +367,7 @@ nuttiger maakt op de Macs, in volgorde van waarde:
 - [ ] Claude Code live in het eiland, schakelen AXE / Claude; vragen van
       Claude (en managers) als keuzeknoppen in het eiland, goedkeuren met
       Weigeren / Altijd / Toestaan en sneltoetsen vanuit elke app.
-- [ ] Bestand naar de notch slepen = "gaat mee naar AXE/Claude" (of naar het
-      bakje); paperclip met aantal tot het opgepakt is.
+- [~] Bestand naar de notch slepen (ronde 2, 20 nov): drop-zone met AXE-gezicht; per bestand "Ask AXE" of omzetten met wat macOS meebrengt -- afbeelding png/jpeg/heic/tiff/pdf/web (sips), document pdf(tekst)/docx/txt/rtf/html/odt (textutil+cupsfilter), audio m4a/wav/aiff (afconvert), video mp4/mov/m4a (avconvert); origineel blijft, nieuw bestand ernaast, "Show in Finder". Getest: echte png->jpeg in de Rust-test. Komt met de app-build.
 - [ ] Peeks: app open/dicht, oplader, batterij 20%/10%, DND, en "manager
       klaar met X" -- zonder over de menubalk te gaan.
 - [ ] Vergadering: vanaf 5 min ervoor camera + minuten in de pil, open met
