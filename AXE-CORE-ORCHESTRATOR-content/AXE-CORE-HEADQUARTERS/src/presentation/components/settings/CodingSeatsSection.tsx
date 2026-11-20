@@ -167,7 +167,7 @@ export function CodingSeatsSection() {
     const actie = watMoetLukaDoen(getoond);
     const rood = stoelHeeftActie(getoond) && !stoelNietGebruikt(getoond) && kaart.stand.tekst !== 'Online' && kaart.stand.tekst !== 'Running' && kaart.stand.tekst !== 'Not used';
     const reset = vensterReset(v?.sessie?.reset || v?.week?.reset) || resetTekst(getoond);
-    const label = MOTOR_LABEL[stoel.id as keyof typeof MOTOR_LABEL] || stoel.label;
+    const label = MOTOR_LABEL[stoel.id as keyof typeof MOTOR_LABEL] || ({ agy: 'Google Antigravity', kilo: 'Kilo Auto Free', opencode: 'OpenCode Free' } as Record<string, string>)[stoel.id] || stoel.label;
     const machines = groep.bruikbaarOp.length
       ? `Usable on ${groep.bruikbaarOp.join(', ')}`
       : gratis ? 'Availability unconfirmed' : 'Not logged in on any machine';

@@ -104,7 +104,7 @@ function DienstRegel({ dienst, dienstStand }: {
   dienstStand: ServiceState | undefined;
 }) {
   const stand = dienstStand?.status;
-  const kleur = stand === 'online' ? 'var(--success)' : stand ? 'var(--error)' : 'var(--text-muted)';
+  const kleur = stand === 'online' ? 'var(--success)' : stand === 'offline' ? 'var(--error)' : 'var(--text-muted)';
   return (
     <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg"
       style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>

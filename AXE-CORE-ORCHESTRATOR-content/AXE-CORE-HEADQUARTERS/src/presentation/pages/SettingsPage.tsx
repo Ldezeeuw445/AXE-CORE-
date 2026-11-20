@@ -1,3 +1,4 @@
+import { RailDaxBots } from '@/presentation/components/layout/RightPanel';
 import { loadLocalFirstEnabled, setLocalFirstEnabled } from '@/domain/providers';
 import { axeVoiceHealth } from '@/infrastructure/gateways/axeCoreApiService';
 import { OPENAI_STEMMEN, getOpenAiStem, setOpenAiStem, isOpenAiTtsConfigured, type OpenAiStem } from '@/infrastructure/gateways/openAiTtsService';
@@ -797,7 +798,7 @@ function ProviderKeysSection() {
 
   const builtinIds = new Set<string>(PROVIDER_KEY_CATALOGUE.map(p => p.id));
   const allCatalogue = [
-    ...PROVIDER_KEY_CATALOGUE,
+    ...PROVIDER_KEY_CATALOGUE.filter(p => p.id !== 'abonnement'),
     ...customProviders.filter(c => !builtinIds.has(c.id)).map(c => ({ ...c, icon: Plug, free: false, docsUrl: c.baseUrl })),
   ];
 
@@ -867,7 +868,9 @@ function ProviderKeysSection() {
         </div>
       )}
 
+      <RailDaxBots />
       <ServerProviderSlots />
+      <CodingSeatsSection />
 
       {/* Provider cards grid — gelijke kolommen, geen 1fr-rek. */}
       <KaartRaster>
@@ -1469,7 +1472,7 @@ function RemoteTerminalSection() {
                 <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>(VPS)</span>
               </div>
               <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                {service?.status ?? 'unknown'}{service?.latency_ms ? ` · ${service.latency_ms}ms` : ''}{service?.version ? ` · ${service.version}` : ''}
+                {service?.status === 'unknown' ? 'Unverified' : (service?.status ?? 'Unverified')}{service?.latency_ms ? ` · ${service.latency_ms}ms` : ''}{service?.version ? ` · ${service.version}` : ''}
               </p>
             </div>
             <div className="flex items-center gap-2">

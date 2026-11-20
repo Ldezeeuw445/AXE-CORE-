@@ -255,7 +255,7 @@ export type AbonnementGroep = {
  * config_exists=false verdwijnt. Nooit ingelogd en geen identiteit → 'not used'.
  */
 export function groepeerAbonnementen(stoelen: CodingSeat[]): { kaarten: AbonnementGroep[]; ongebruikt: AbonnementGroep[] } {
-  const zichtbaar = stoelen.filter((s) => !verbergStoel(s) && stoelSleutel(s));
+  const zichtbaar = stoelen.filter((s) => s.provider !== 'xai' && !verbergStoel(s) && stoelSleutel(s));
   const groepen = new Map<string, CodingSeat[]>();
   const rest: CodingSeat[] = [];
 

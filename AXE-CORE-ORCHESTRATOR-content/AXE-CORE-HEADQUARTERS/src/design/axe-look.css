@@ -2199,6 +2199,8 @@ html:root[data-look][data-ios-pwa],
 
 :root[data-look] .axe-schuifbalk {
   height: 100%;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
   padding: 12px;
   display: flex;

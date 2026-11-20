@@ -176,7 +176,7 @@ export function AgentMotorenSection() {
     if (motor === 'sleutels') {
       if (coreRuntime == null) return { toon: 'muted', tekst: 'Checking' };
       return coreRuntime.online
-        ? { toon: 'ok', tekst: 'Online' }
+        ? { toon: 'info', tekst: 'API reachable' }
         : { toon: 'bad', tekst: 'Offline' };
     }
     const stoel = stoelen?.[motor];

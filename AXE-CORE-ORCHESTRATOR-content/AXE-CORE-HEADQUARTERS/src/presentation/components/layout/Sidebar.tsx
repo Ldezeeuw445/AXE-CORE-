@@ -343,7 +343,7 @@ export function Sidebar() {
   };
 
   const content = (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full w-full min-w-0 flex flex-col overflow-hidden">
       {/* axe-railhead: op één plaat is deze onderlijn weer een kolomscheiding.
           De klasse bestaat omdat de regel in axe-look.css een Tailwind-utility
           per element moet verslaan — zelfde patroon als axe-bottomnav. */}

@@ -266,7 +266,7 @@ describe('heartbeat-stand', () => {
     expect(verspildeStoelen(tweeMachines)).toEqual([]);
   });
 
-  it('houdt Cursor en xAI zonder e-mail als echte kaarten, niet als Not used', () => {
+  it('houdt Cursor zichtbaar en verbergt xAI', () => {
     const vers = new Date().toISOString();
     const rijen = [
       stoel({ id: 'mini:cursor', seat_id: 'cursor', provider: 'cursor', logged_in: false, last_seen_at: vers, machine: 'mini-van-luka-5' }),
@@ -274,7 +274,7 @@ describe('heartbeat-stand', () => {
     ];
     const { kaarten, ongebruikt } = groepeerAbonnementen(rijen);
     expect(ongebruikt).toHaveLength(0);
-    expect(kaarten.map((k) => k.stoel.id).sort()).toEqual(['cursor', 'xai']);
+    expect(kaarten.map((k) => k.stoel.id).sort()).toEqual(['cursor']);
   });
 });
 
@@ -302,7 +302,7 @@ describe('wat Luka moet doen', () => {
 });
 
 describe('Settings toont Accounts', () => {
-  it('heeft één Subscriptions-sectie, geen tweede kaartgrid onder Providers', () => {
+  it('toont coding seats in Accounts en Providers', () => {
     const settings = readFileSync(new URL('../presentation/pages/SettingsPage.tsx', import.meta.url), 'utf8');
     // Settings v3 (8de4bcd8): de rail heet Accounts en Usage; de kaart zelf
     // heet nog steeds Subscriptions (CodingSeatsSection titel).
@@ -310,7 +310,7 @@ describe('Settings toont Accounts', () => {
     expect(settings).toMatch(/sectie === 'accounts' && \([\s\S]{0,120}<CodingSeatsSection \/>/);
     expect(settings).toMatch(/id: 'usage', label: 'Usage'/);
     expect(settings).toMatch(/sectie === 'usage' && <UsageCreditsSection \/>/);
-    expect(settings.match(/<CodingSeatsSection \/>/g)?.length).toBe(1);
+    expect(settings.match(/<CodingSeatsSection \/>/g)?.length).toBe(2);
     expect(settings).not.toMatch(/HomeView|NeuralBrain|MemoryTerrain/);
     const seats = readFileSync(new URL('../presentation/components/settings/CodingSeatsSection.tsx', import.meta.url), 'utf8');
     const motoren = readFileSync(new URL('../presentation/components/settings/AgentMotorenSection.tsx', import.meta.url), 'utf8');

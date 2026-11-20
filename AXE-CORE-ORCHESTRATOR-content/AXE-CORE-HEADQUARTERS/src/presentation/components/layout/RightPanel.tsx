@@ -1,3 +1,7 @@
+import { ServerProviderSlots } from '@/presentation/components/settings/KeysPerAppSection';
+import { CodingSeatsSection } from '@/presentation/components/settings/CodingSeatsSection';
+import { useServerAgents } from '@/presentation/components/axe-core/useServerAgents';
+import { daxOverzichtRijen } from '@/domain/agents/daxOverzicht';
 import { TERMINAL_TASK_STATUSES } from '@/domain/tasks/taskStatus';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
@@ -488,6 +492,9 @@ export function RightPanel() {
 
         {kamer === 'status' && (
           <>
+            <details><summary>Provider keys</summary><ServerProviderSlots /></details>
+            <details><summary>Coding seats</summary><CodingSeatsSection /></details>
+            <RailDaxBots />
             <CyanQuoteButtons />
             <ReplyLanguageWidget />
             <WidgetCard title="MODELS & TESTS">
@@ -625,5 +632,23 @@ export function RightPanel() {
       <div id="axe-rail-rechts" className="axe-rail-host" />
       {opHome && <div className="axe-rail-standaard flex-1 min-h-0 flex flex-col overflow-hidden"><LadeKaart kant="rechts">{content}</LadeKaart></div>}
     </aside>
+  );
+}
+
+
+export function RailDaxBots() {
+  const { agents } = useServerAgents();
+  const rows = daxOverzichtRijen(agents);
+  return (
+    <details>
+      <summary>DAX Bots</summary>
+      {rows.length ? rows.map(row => (
+        <div key={row.computer} className="py-2 break-words">
+          <strong>{row.naam}</strong>
+          <div>{row.stand} · {row.heartbeatTekst}</div>
+          <div>{row.huidigeTaak || row.standTekst}</div>
+        </div>
+      )) : <p>No DAX heartbeat data</p>}
+    </details>
   );
 }

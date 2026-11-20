@@ -30,11 +30,11 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
-APPS = ("AXE Core", "AXE Companion", "Trading OS", "NorthSea")
+APPS = ("AXE Core", "AXE Companion", "Trading OS", "NorthSea", "AXON Memory")
 
 # Manager die over de sleutels van een app rapporteert (grok_managers).
 MANAGER = {"AXE Core": "projectsmgr", "AXE Companion": "companionmgr",
-           "Trading OS": "tradingos", "NorthSea": "northseamgr"}
+           "Trading OS": "tradingos", "NorthSea": "northseamgr", "AXON Memory": "memory"}
 
 PLEK_LABEL = {
     "vps": "VPS (axe-core-api)",
@@ -94,6 +94,7 @@ CATALOGUS: tuple[dict[str, Any], ...] = (
     _k("CURSOR2_API_KEY", (A,), "mac", "Cursor seat 2 (agent runner on the Mac)", nodig="optional"),
     _k("BROWSER_USE_API_KEY", (A,), "vps", "Browser Use cloud (only for the cloud version)", nodig="optional"),
     # ── AXE Core zelf ───────────────────────────────────────────────────────
+    _k("AXON_API_KEY", ("AXON Memory",), "vps", "AXON Memory API connection", nodig="optional"),
     _k("AXE_API_KEY", (A,), "vps", "Apps calling the AXE Core API"),
     _k("CRON_SECRET", (A,), "vps", "The minute tick that runs every schedule"),
     _k("GITHUB_TOKEN", (A,), "vps", "Pushing build branches and PRs"),
