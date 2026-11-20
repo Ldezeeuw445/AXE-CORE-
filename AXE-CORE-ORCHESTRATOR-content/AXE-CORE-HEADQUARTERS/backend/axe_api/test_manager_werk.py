@@ -96,3 +96,12 @@ def test_metingen_zijn_feiten_en_breken_niet():
     class Kapot:
         def table(self, n): raise RuntimeError("weg")
     assert mw.metingen(Kapot(), "projectsmgr", NU)
+
+
+def test_eigen_oude_verslagen_gaan_niet_mee():
+    ctx = ("Jouw wereld nu (companion):\n\nJouw open taken: geen.\n\nWacht op Luka (1):\n- iets\n\n"
+           "Je laatste taakverslagen:\n- 7 u geleden: Companion draait niet\n\n"
+           "Wat je zelf laatst zei/deed:\n- 1 u geleden: database leeg\n\nZelf doen (niet vragen): lezen")
+    uit = mw.zonder_eigen_verslagen(ctx)
+    assert "draait niet" not in uit and "database leeg" not in uit
+    assert "Wacht op Luka" in uit and "Zelf doen" in uit

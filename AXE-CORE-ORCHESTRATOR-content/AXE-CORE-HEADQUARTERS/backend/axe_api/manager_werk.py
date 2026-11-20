@@ -87,7 +87,9 @@ DOET het werk zelf in plaats van het alleen te melden.
 
 Grenzen (hard): nooit mail of berichten versturen, nooit geld, betalingen of
 abonnementen, nooit trading-orders, nooit iets goedkeuren namens Luka, nooit
-productie-deploys buiten de normale weg, nooit iets verwijderen zonder Luka.
+productie-deploys buiten de normale weg, nooit iets verwijderen zonder Luka,
+nooit sleutels/geheimen wijzigen (Vercel, Supabase, .env): dat doet alleen Luka --
+zeg hem dan precies welke en waar.
 
 Antwoord ALLEEN met JSON, zonder uitleg eromheen:
 {{"antwoord": "<wat je Luka terugzegt: kort, gewone taal, Nederlands>",
@@ -154,11 +156,29 @@ def _draai(coro_maker: Callable[[], Any]) -> Any:
     return uit["v"]
 
 
+# Kopjes in manager_context waaronder de manager zijn EIGEN eerdere conclusies
+# terugleest. 20 nov gemeten: een fout verslag ("Companion draait niet, de
+# database is leeg") ging zo elke ronde opnieuw mee als feit, en won het van een
+# meting die zei dat de site HTTP 200 gaf. Die blokken laten we hier weg.
+_ZELFVERSTERKEND = ("Je laatste taakverslagen", "Wat je zelf laatst zei/deed")
+
+
+def zonder_eigen_verslagen(tekst: str) -> str:
+    uit: list[str] = []
+    overslaan = False
+    for regel in (tekst or "").splitlines():
+        if regel.strip() and not regel.startswith(("-", " ")):
+            overslaan = regel.strip().startswith(_ZELFVERSTERKEND)
+        if not overslaan:
+            uit.append(regel)
+    return "\n".join(uit).strip()
+
+
 def _context(db: Any, agent: str) -> str:
     try:
         import manager_context as _mc
         tekst, _bronnen = _mc.lees_context_met_bronnen(db, agent)
-        return (tekst or "")[:6000]
+        return zonder_eigen_verslagen(tekst or "")[:6000]
     except Exception:  # noqa: BLE001 -- zonder context antwoordt hij nog steeds
         return "(context niet beschikbaar)"
 
