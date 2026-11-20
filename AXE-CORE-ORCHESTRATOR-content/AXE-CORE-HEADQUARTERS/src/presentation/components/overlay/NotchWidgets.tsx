@@ -26,6 +26,7 @@ const STANDAARD_PLEK: Plek = { naam: 'Amsterdam', lat: 52.37, lon: 4.9 };
 
 interface Muziek { app: string; titel: string; artiest: string; speelt: boolean }
 interface Geluid { volume: number; stil: boolean }
+interface Schakelaars { donker: boolean; iconen: boolean; wakker: boolean }
 
 export function NotchWidgets({ open }: { open: boolean }) {
   const echt = isTauriRuntime();
@@ -100,12 +101,15 @@ export function NotchWidgets({ open }: { open: boolean }) {
   /* ── Muziek en geluid (alleen echte app) ── */
   const [muziek, setMuziek] = useState<Muziek | null>(null);
   const [geluid, setGeluid] = useState<Geluid | null>(null);
+  const [schak, setSchak] = useState<Schakelaars | null>(null);
+  const schakel = (woord: string) => void roep<Schakelaars>('mac_schakelaars', { woord }).then(setSchak).catch(() => undefined);
   useEffect(() => {
     if (!open || !echt) return;
     let weg = false;
     const laad = () => {
       void roep<Muziek | null>('muziek_stand').then((m) => { if (!weg) setMuziek(m); }).catch(() => undefined);
       void roep<Geluid>('mac_geluid', { volume: null }).then((g) => { if (!weg) setGeluid(g); }).catch(() => undefined);
+      void roep<Schakelaars>('mac_schakelaars', { woord: null }).then((x) => { if (!weg) setSchak(x); }).catch(() => undefined);
     };
     laad();
     const id = window.setInterval(laad, 5000);
@@ -221,6 +225,14 @@ export function NotchWidgets({ open }: { open: boolean }) {
           </button>
           <input type="range" min={0} max={100} value={geluid.stil ? 0 : geluid.volume} aria-label="Volume" onChange={(e) => zetVolume(Number(e.target.value))} />
           <button type="button" title="Screen off" aria-label="Screen off" onClick={() => void roep('mac_knop', { actie: 'scherm-uit' })}>🌙</button>
+        </div>
+      )}
+
+      {echt && schak && (
+        <div className="axe-ov__vlak axe-ov__w axe-ov__schak">
+          <button type="button" aria-pressed={schak.donker} onClick={() => schakel(schak.donker ? 'licht' : 'donker')}>🌗 Dark</button>
+          <button type="button" aria-pressed={!schak.iconen} onClick={() => schakel(schak.iconen ? 'iconen-weg' : 'iconen-terug')}>🗂 Hide icons</button>
+          <button type="button" aria-pressed={schak.wakker} title="Keeps this Mac awake for 8 hours" onClick={() => schakel(schak.wakker ? 'slapen-mag' : 'wakker')}>☕ Stay awake</button>
         </div>
       )}
 

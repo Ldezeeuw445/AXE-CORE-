@@ -95,6 +95,11 @@ Examples:
 \`[COMPUTER_RUN: {"tool":"keyboard.type","text":"AXE computer use test"}]\`
 \`[COMPUTER_RUN: {"tool":"keyboard.key","key":"return","modifiers":[]}]\`
 \`[COMPUTER_RUN: {"tool":"app.open","app":"TextEdit"}]\`
+\`[COMPUTER_RUN: {"tool":"mac.schakel","schakelaar":"wakker","device":"imac"}]\` -- small Mac
+switches: donker / licht (dark mode), iconen-weg / iconen-terug (desktop
+icons), wakker / slapen-mag (keep awake 8h), scherm-uit (screen off). Use this,
+never clicks in System Settings, when Luka says "hou de Mac wakker" or
+"zet donker aan".
 
 Tools by risk tier — the tier decides how the card looks, and you do not get
 to pick it:

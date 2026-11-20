@@ -102,7 +102,8 @@ const ARGS: Record<string, { properties: Record<string, unknown>; required: stri
                                    text: str('Text for keyboard.type. Optional.'),
                                    key: str('Key name for keyboard.key. Optional.'),
                                    modifiers: strArr('Modifier names for keyboard.key: command, shift, option, control, fn. Optional.'),
-                                   app: str('Application name or bundle id for app.open/app.focus. Optional.')
+                                   app: str('Application name or bundle id for app.open/app.focus. Optional.'),
+                                   schakelaar: str('For mac.schakel: donker, licht, iconen-weg, iconen-terug, wakker (keep the Mac awake 8h), slapen-mag, scherm-uit. Optional.')
                                  },
                      required: ['tool'] },
   local_write:     { properties: { path: str('Absolute path to write.'),

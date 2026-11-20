@@ -775,6 +775,17 @@ async fn mac_geluid(volume: Option<u8>) -> Result<notchknoppen::Geluid, String> 
 
 #[cfg(desktop)]
 #[tauri::command]
+async fn mac_schakelaars(woord: Option<String>) -> Result<notchknoppen::Schakelaars, String> {
+    tauri::async_runtime::spawn_blocking(move || match woord {
+        Some(w) => notchknoppen::schakel(&w),
+        None => Ok(notchknoppen::schakelaars()),
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[cfg(desktop)]
+#[tauri::command]
 async fn mac_knop(actie: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || notchknoppen::mac(&actie)).await.map_err(|e| e.to_string())?
 }
@@ -985,6 +996,7 @@ pub fn run() {
         muziek_knop,
         mac_geluid,
         mac_knop,
+        mac_schakelaars,
         toon_hoofdvenster_stil,
         consume_overlay_open_route,
         platform_info,

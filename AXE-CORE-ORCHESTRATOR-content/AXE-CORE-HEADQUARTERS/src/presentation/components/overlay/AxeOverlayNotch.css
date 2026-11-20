@@ -940,3 +940,9 @@ button.axe-ov__pil { cursor: pointer; }
 .axe-ov__taak-weg { background: none; border: 0; color: rgba(255,255,255,.3); cursor: pointer; font-size: 14px; opacity: 0; }
 .axe-ov__taken li:hover .axe-ov__taak-weg { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .axe-ov__join-knop { animation: none !important; } }
+.axe-ov__widgets > .axe-ov__schak { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; gap: 6px; }
+.axe-ov__schak button {
+  flex: 1; min-width: 0; border-radius: 12px; padding: 7px 8px; cursor: pointer; font: 500 11.5px inherit;
+  border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.05); color: rgba(255,255,255,.78);
+}
+.axe-ov__schak button[aria-pressed="true"] { border-color: var(--axe-notch-accent); color: var(--axe-notch-accent); background: color-mix(in srgb, var(--axe-notch-accent) 12%, transparent); }

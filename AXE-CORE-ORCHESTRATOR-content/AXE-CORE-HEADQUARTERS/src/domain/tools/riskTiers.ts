@@ -101,6 +101,7 @@ export const TOOL_TIERS: Record<string, RiskTier> = {
   'pointer.move': 'safe_execute',
   'app.open': 'safe_execute',
   'app.focus': 'safe_execute',
+  'mac.schakel': 'safe_execute',
 
   // ── write ──────────────────────────────────────────────────────────────
   'files.write': 'write',
@@ -154,6 +155,7 @@ export const DEVICE_SCOPED_TOOLS = new Set<string>([
   'app.frontmost',
   'app.open',
   'app.focus',
+  'mac.schakel',
   'window.list',
 ]);
 

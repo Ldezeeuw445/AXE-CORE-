@@ -55,6 +55,7 @@ TOOL_TIERS: dict[str, str] = {
     "pointer.move": "safe_execute",
     "app.open": "safe_execute",
     "app.focus": "safe_execute",
+    "mac.schakel": "safe_execute",
     "files.write": "write",
     "terminal.install": "write",
     "claude_code.run": "write",

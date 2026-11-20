@@ -103,6 +103,90 @@ pub fn mac(actie: &str) -> Result<(), String> {
     }
 }
 
+
+/* ── Schakelaars (20 nov): donker, bureaublad-iconen, wakker houden ──────
+   Zelfde woorden en zelfde pid-bestand als infra/computer-worker/
+   macSchakelaars.mjs, zodat de notch ziet wat de stem aanzette. */
+
+#[derive(serde::Serialize, Debug)]
+pub struct Schakelaars {
+    pub donker: bool,
+    pub iconen: bool,
+    pub wakker: bool,
+}
+
+fn wakker_pid_pad() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".axe").join("wakker.pid"))
+}
+
+fn leeft(pid: u32) -> bool {
+    Command::new("/bin/kill").args(["-0", &pid.to_string()]).status().map(|s| s.success()).unwrap_or(false)
+}
+
+fn wakker_pid() -> Option<u32> {
+    let pid: u32 = std::fs::read_to_string(wakker_pid_pad()?).ok()?.trim().parse().ok()?;
+    leeft(pid).then_some(pid)
+}
+
+fn lees_default(args: &[&str]) -> Option<String> {
+    let uit = Command::new("/usr/bin/defaults").args(args).output().ok()?;
+    uit.status.success().then(|| String::from_utf8_lossy(&uit.stdout).trim().to_string())
+}
+
+pub fn schakelaars() -> Schakelaars {
+    Schakelaars {
+        donker: lees_default(&["read", "-g", "AppleInterfaceStyle"]).as_deref() == Some("Dark"),
+        iconen: !matches!(lees_default(&["read", "com.apple.finder", "CreateDesktop"]).as_deref(), Some("0") | Some("false")),
+        wakker: wakker_pid().is_some(),
+    }
+}
+
+pub fn schakel(woord: &str) -> Result<Schakelaars, String> {
+    match woord {
+        "donker" | "licht" => {
+            osa(&format!(
+                "tell application \"System Events\" to tell appearance preferences to set dark mode to {}",
+                woord == "donker"
+            ))?;
+        }
+        "iconen-weg" | "iconen-terug" => {
+            let aan = if woord == "iconen-terug" { "true" } else { "false" };
+            Command::new("/usr/bin/defaults")
+                .args(["write", "com.apple.finder", "CreateDesktop", "-bool", aan])
+                .status()
+                .map_err(|e| e.to_string())?;
+            let _ = Command::new("/usr/bin/killall").arg("Finder").status();
+        }
+        "wakker" => {
+            if wakker_pid().is_none() {
+                let kind = Command::new("/usr/bin/caffeinate")
+                    .args(["-dis", "-t", "28800"])
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn()
+                    .map_err(|e| e.to_string())?;
+                let pad = wakker_pid_pad().ok_or("HOME niet gezet")?;
+                if let Some(map) = pad.parent() {
+                    let _ = std::fs::create_dir_all(map);
+                }
+                std::fs::write(pad, kind.id().to_string()).map_err(|e| e.to_string())?;
+            }
+        }
+        "slapen-mag" => {
+            if let Some(pid) = wakker_pid() {
+                let _ = Command::new("/bin/kill").arg(pid.to_string()).status();
+            }
+            if let Some(p) = wakker_pid_pad() {
+                let _ = std::fs::remove_file(p);
+            }
+        }
+        "scherm-uit" => mac("scherm-uit")?,
+        _ => return Err("onbekende schakelaar".into()),
+    }
+    Ok(schakelaars())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,5 +206,6 @@ mod tests {
         assert!(knop("Terminal", "playpause").is_err());
         assert!(knop("Music", "do shell script").is_err());
         assert!(mac("rm -rf").is_err());
+        assert!(schakel("killall Dock").is_err());
     }
 }

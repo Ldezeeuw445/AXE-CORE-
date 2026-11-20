@@ -37,6 +37,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { reportCodingSeats } from './codingSeats.mjs';
 import { maakLeesWeigering } from './leesRegels.mjs';
+import { schakel as macSchakel } from './macSchakelaars.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -665,6 +666,8 @@ async function execute(payload) {
   if (tool === 'app.focus') return JSON.stringify(await nativeComputerUse('app.focus', args));
   if (tool === 'window.list') return JSON.stringify(await nativeComputerUse('window.list', args));
   if (tool === 'camera.snapshot') return cameraSnapshot();
+  // 20 nov: "AXE, hou de Mac wakker" -- vaste woorden, zie macSchakelaars.mjs.
+  if (tool === 'mac.schakel') return JSON.stringify(await macSchakel(String(args.schakelaar ?? '')));
   // 20 nov: "op de Mac mini pakt AXE nog steeds de focus". De app schrijft elk
   // focusmoment van een AXE-venster naar ~/.axe/focus.log (lib.rs log_focus),
   // maar dat log stond buiten wat de worker mag lezen. Alleen dit ene bestand,
