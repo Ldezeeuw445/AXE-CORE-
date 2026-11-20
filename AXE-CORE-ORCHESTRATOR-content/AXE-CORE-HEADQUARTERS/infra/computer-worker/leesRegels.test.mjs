@@ -29,3 +29,15 @@ test('buiten thuismap, Programma\'s en schijven niet', () => {
     assert.notEqual(nee(p), null, p);
   }
 });
+
+import { naarDezeMac } from './leesRegels.mjs';
+
+test('pad van de andere Mac wordt geldig op deze', () => {
+  const root = '/Users/luka/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS';
+  assert.equal(naarDezeMac(root, '/Users/lukadezeeuw/Library/LaunchAgents', '/Users/luka'), '/Users/luka/Library/LaunchAgents');
+  assert.equal(naarDezeMac(root, '/Users/luka/x', '/Users/luka'), '/Users/luka/x');
+  assert.equal(naarDezeMac(root, 'AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/AGENTS.md', '/Users/luka'), 'AGENTS.md');
+  assert.equal(naarDezeMac(root, 'AXE-CORE-HEADQUARTERS', '/Users/luka'), '.');
+  assert.equal(naarDezeMac(root, 'src/app.ts', '/Users/luka'), 'src/app.ts');
+  assert.equal(naarDezeMac(root, '/Applications', '/Users/luka'), '/Applications');
+});

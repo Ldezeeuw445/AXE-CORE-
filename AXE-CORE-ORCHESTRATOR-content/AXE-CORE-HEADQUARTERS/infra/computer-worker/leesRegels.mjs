@@ -37,3 +37,28 @@ export function maakLeesWeigering({ home, denyPaths = [], denyNames = /$^/ }) {
     return null;
   };
 }
+
+/**
+ * Een pad dat AXE op de ándere Mac bedacht, geldig maken op deze (20 nov,
+ * gemeten in de mislukte taken):
+ * - /Users/lukadezeeuw/... op de Mac mini (daar is de thuismap /Users/luka)
+ *   → dezelfde plek onder de thuismap van DEZE Mac;
+ * - een relatief pad dat de werkmap zelf nog eens herhaalt
+ *   ("AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/AGENTS.md" terwijl de
+ *   werkmap al .../AXE-CORE-HEADQUARTERS is) → die herhaling eraf.
+ * Verandert nooit wat er mag; leesWeigering/safePath beslissen daarna gewoon.
+ */
+export function naarDezeMac(root, p, home) {
+  let s = String(p ?? '').trim();
+  const m = s.match(/^\/Users\/([^/]+)(\/.*)?$/);
+  if (m && `/Users/${m[1]}` !== home && home.startsWith('/Users/')) s = home + (m[2] ?? '');
+  if (s && !s.startsWith('/') && !s.startsWith('~')) {
+    const delen = String(root).split('/').filter(Boolean);
+    for (let k = delen.length; k >= 1; k--) {
+      const staart = delen.slice(-k).join('/');
+      if (s === staart) { s = '.'; break; }
+      if (s.startsWith(staart + '/')) { s = s.slice(staart.length + 1); break; }
+    }
+  }
+  return s;
+}

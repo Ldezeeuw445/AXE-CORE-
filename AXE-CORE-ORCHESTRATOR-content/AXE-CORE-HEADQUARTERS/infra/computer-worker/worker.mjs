@@ -36,7 +36,7 @@ import { homedir, hostname, tmpdir } from 'node:os';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { reportCodingSeats } from './codingSeats.mjs';
-import { maakLeesWeigering } from './leesRegels.mjs';
+import { maakLeesWeigering, naarDezeMac } from './leesRegels.mjs';
 import { schakel as macSchakel } from './macSchakelaars.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -171,6 +171,8 @@ const READ_ONLY = new Set([
   'git.status', 'git.branch', 'git.diff', 'git.log',
   'camera.snapshot', 'computer.permissions', 'screen.displays', 'screen.observe',
   'pointer.position', 'app.list', 'app.frontmost', 'window.list',
+  // Leest alleen ~/.axe/focus.log; faalde 44x op 'protected branch' (20 nov).
+  'axe.focus_log',
 ]);
 
 /**
@@ -454,6 +456,8 @@ async function emit(taskId, type, detail) {
 
 /* ── path safety ────────────────────────────────────────────────────────── */
 function safePath(root, p) {
+  // Pad van de andere Mac (andere thuismap, herhaalde werkmap) eerst geldig maken.
+  p = naarDezeMac(root, p, homedir());
   const abs = resolve(root, String(p ?? '').replace(/^~/, homedir()));
   if (abs !== root && !abs.startsWith(root + sep)) {
     throw new Error(`path escapes the workspace: ${abs}`);
@@ -480,6 +484,7 @@ const leesWeigering = maakLeesWeigering({ home: homedir(), denyPaths: DENY_PATHS
 
 /** Leespad: binnen de werkmap de gewone regels, daarbuiten leesWeigering. */
 async function leesPad(root, p) {
+  p = naarDezeMac(root, p ?? '.', homedir());
   const ruw = resolve(root, String(p ?? '.').replace(/^~/, homedir()));
   if (ruw === root || ruw.startsWith(root + sep)) return safePath(root, p ?? '.');
   let echt;
