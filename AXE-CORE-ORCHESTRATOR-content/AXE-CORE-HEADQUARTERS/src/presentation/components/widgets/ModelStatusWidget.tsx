@@ -61,17 +61,21 @@ function leesRegels(live: Partial<Record<string, KaartStand>> = {}): Regel[] {
   });
 }
 
-export function CompactStatusRow({ label, status, tone }: {
-  label: string; status: string; tone: KaartStand;
+export function CompactStatusRow({ label, status, tone, icon = 'Key', accent, color }: {
+  label: string; status: string; tone: KaartStand; icon?: string; accent?: string; color?: string;
 }) {
-  const color = standKleur(tone, true);
+  const Icon = providerIcoon(icon);
+  const statusColor = color ?? standKleur(tone, true);
   return (
-    <div className="flex items-center justify-between gap-2 py-[3px]">
-      <span className="text-axe-meta min-w-0 truncate" title={label} style={{ color: 'var(--text-secondary)' }}>{label}</span>
-      <span className="text-axe-meta flex items-center gap-1.5 shrink-0" style={{ color }}>
-        {status}
-        <span aria-hidden="true" className="w-[6px] h-[6px] rounded-full" style={{ background: color }} />
-      </span>
+    <div className="grid min-w-0 items-center gap-x-2 py-[3px]" style={{ gridTemplateColumns: 'minmax(0, 1fr) max-content', minHeight: 28 }}>
+      <div className="grid min-w-0 items-center gap-x-2" style={{ gridTemplateColumns: '11px minmax(0, 1fr)' }}>
+        <Icon size={11} aria-hidden="true" style={{ color: accent ?? 'var(--accent-cyan)' }} />
+        <span className="text-axe-meta truncate" title={label} style={{ color: 'var(--text-secondary)' }}>{label}</span>
+      </div>
+      <div className="grid items-center gap-x-1.5 whitespace-nowrap" style={{ gridTemplateColumns: 'max-content 6px', color: statusColor }}>
+        <span className="text-axe-meta">{status}</span>
+        <span aria-hidden="true" className="w-[6px] h-[6px] rounded-full" style={{ background: statusColor }} />
+      </div>
     </div>
   );
 }
@@ -112,7 +116,7 @@ export function ModelStatusWidget() {
   const stuk = regels.filter(r => r.stand === 'fail').length;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col">
       <div className="flex items-baseline justify-between">
         <span className="text-axe-meta" style={{ color: 'var(--text-muted)' }}>
           {regels.length} providers
@@ -122,26 +126,10 @@ export function ModelStatusWidget() {
         </span>
       </div>
 
-      {regels.map(r => {
-        const Icoon = providerIcoon(r.icoonNaam);
-        const kleur = standKleur(r.stand, r.ingesteld);
-        return (
-          <div key={r.id} className="flex items-center justify-between gap-2 py-[3px]">
-            <div className="flex items-center gap-2 min-w-0">
-              <Icoon size={11} style={{ color: r.accent }} className="shrink-0" />
-              <span className="text-axe-meta truncate" style={{ color: 'var(--text-secondary)' }}>
-                {r.naam}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-axe-meta" style={{ color: kleur }}>
-                {standTekst(r.stand, r.ingesteld)}
-              </span>
-              <span className="w-[6px] h-[6px] rounded-full block" style={{ background: kleur }} />
-            </div>
-          </div>
-        );
-      })}
+      {regels.map(r => (
+        <CompactStatusRow key={r.id} label={r.naam} icon={r.icoonNaam} accent={r.accent}
+          tone={r.stand} color={standKleur(r.stand, r.ingesteld)} status={standTekst(r.stand, r.ingesteld)} />
+      ))}
     </div>
   );
 }

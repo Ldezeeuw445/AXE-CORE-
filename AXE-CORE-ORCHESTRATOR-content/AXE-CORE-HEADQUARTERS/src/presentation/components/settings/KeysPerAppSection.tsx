@@ -155,6 +155,8 @@ export function ServerProviderSlots({ compact = false }: { compact?: boolean } =
     const result = status[key];
     const failed = result === 'Broken' || result === 'Rate limited' || result?.startsWith('Test failed');
     return <CompactStatusRow key={key} label={label}
+      icon={key.startsWith('OPENROUTER') ? 'Router' : key.startsWith('GROQ') ? 'Rocket' : 'Zap'}
+      accent={key.startsWith('GROQ') ? '#ec4899' : '#f59e0b'}
       status={result === 'Works' ? 'Connected' : failed ? 'Failed' : result ?? 'Not checked'}
       tone={result === 'Works' ? 'ok' : failed ? 'fail' : 'idle'} />;
   })}</>;

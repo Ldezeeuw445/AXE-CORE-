@@ -643,7 +643,7 @@ export function RailDaxBots({ compact = false }: { compact?: boolean } = {}) {
   const { agents, ok } = useServerAgents();
   const rows = daxOverzichtRijen(agents);
   if (compact) return <>{rows.length ? rows.map(row => (
-    <CompactStatusRow key={row.computer} label={row.naam}
+    <CompactStatusRow key={row.computer} label={row.naam} icon="Bot" accent={row.accent}
       status={!ok ? 'Unverified' : ({ running: 'Connected', blocked: 'Blocked', offline: 'Offline', unknown: 'Unknown' })[row.stand]}
       tone={!ok ? 'idle' : row.stand === 'running' ? 'ok' : row.stand === 'unknown' ? 'idle' : 'fail'} />
   )) : <CompactStatusRow label="DAX Bots" status="No heartbeat data" tone="idle" />}</>;

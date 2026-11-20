@@ -175,7 +175,7 @@ export function CodingSeatsSection({ compact = false }: { compact?: boolean } = 
     const geschiedenis = kaartMelding(kaart.geschiedenis ?? g?.last_limit_message);
     if (compact) {
       const { tekst, toon } = kaart.stand;
-      return <CompactStatusRow key={groep.key} label={motorNaam(label, { account: groep.email, ingelogd: stoel.logged_in })}
+      return <CompactStatusRow key={groep.key} icon="Terminal" accent={ACCENT[groep.provider]} label={motorNaam(label, { account: groep.email, ingelogd: stoel.logged_in })}
         status={tekst === 'Online' ? 'Connected' : tekst} tone={toon === 'ok' ? 'ok' : toon === 'bad' ? 'fail' : 'idle'} />;
     }
     return (
