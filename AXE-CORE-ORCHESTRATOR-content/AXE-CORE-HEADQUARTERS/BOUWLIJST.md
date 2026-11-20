@@ -459,8 +459,16 @@ Niet namaken -- AXE heeft al Taken, Home en de managers. Wat erbij moet:
 - [ ] **Bureau**: mappen met links (sites, tools, methodes) met één regel
       waarom ze ertoe doen.
 
-- [ ] **Managers als Grok Bot**: zelf doen, onderling overleggen, alleen
-      vragen wat echt van Luka is.
+- [~] **Managers als Grok Bot**: zelf doen, onderling overleggen, alleen
+      vragen wat echt van Luka is. 20 nov: `manager_werk.py`, staande dienst elke
+      2 min op de VPS (gratis modellen): (1) jouw bericht zonder antwoord na 3 min
+      → de manager antwoordt, ook met de app dicht; (2) werk → agent-taak op zijn
+      naam; (3) klaar/mislukt → bericht terug (eerste ronde meldde er 3); (4) eigen
+      initiatief elke 2 uur per manager: één ding dat NU faalt. Elke denkstap begint
+      met METINGEN (feeds, site, MCP, falende taken met 'laatst', commits, sleutels);
+      eigen oude verslagen gaan niet meer mee (die hielden 'Companion draait niet'
+      in leven). Open: onderling overleggen; bewezen zodra een eigen-ronde-taak echt
+      iets repareert.
 - [ ] Deal-specifieke mails door een model; abonnementen samenvoegen;
       stem-punten; device manager.
 
