@@ -241,14 +241,25 @@ def metingen(db: Any, agent: str, nu: datetime, http: Callable[[str], str] | Non
                 m = " ".join(str((e.get("message") if isinstance(e, dict) else e) or "?").split())[:90]
                 if (t := _tijd(r.get("created_at"))):
                     oorzaken.setdefault(m, []).append(t)
-            top = sorted(oorzaken.items(), key=lambda x: -len(x[1]))[:3]
+            # Hard, niet aan het model overgelaten (20 nov: Groq bleef een fout
+            # 'oplossen' die al 21 uur niet meer voorkwam): wat > 3 uur stil is,
+            # heet gestopt en staat apart.
+            actief = {m: ts for m, ts in oorzaken.items() if nu - max(ts) <= timedelta(hours=3)}
+            gestopt = {m: ts for m, ts in oorzaken.items() if nu - max(ts) > timedelta(hours=3)}
+            top = sorted(actief.items(), key=lambda x: -len(x[1]))[:3]
 
             def geleden(t: datetime) -> str:
                 u = int((nu - t).total_seconds() // 3600)
                 return f"{u} u geleden" if u else f"{int((nu - t).total_seconds() // 60)} min geleden"
-            return (f"Taken laatste 24 uur: {', '.join(f'{k} {v}' for k, v in sorted(tel.items()))}"
-                    + ("; meest mislukt: " + " | ".join(f"{len(ts)}x {m} (laatst {geleden(max(ts))})" for m, ts in top)
-                       if top else ""))
+            uit = (f"Taken laatste 24 uur: {', '.join(f'{k} {v}' for k, v in sorted(tel.items()))}. "
+                   + ("Faalt NU (laatste 3 uur): " + " | ".join(
+                       f"{len(ts)}x {m} (laatst {geleden(max(ts))})" for m, ts in top) if top
+                      else "Faalt NU: niets in de laatste 3 uur."))
+            if gestopt:
+                uit += (" Gestopt (al > 3 uur niet meer, vermoedelijk opgelost -- NIET opnieuw repareren): "
+                        + " | ".join(f"{m[:60]} (laatst {geleden(max(ts))})" for m, ts in
+                                     sorted(gestopt.items(), key=lambda x: -len(x[1]))[:3]))
+            return uit
         meet(taken)
 
         def commits() -> str | None:

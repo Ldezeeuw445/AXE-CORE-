@@ -105,3 +105,14 @@ def test_eigen_oude_verslagen_gaan_niet_mee():
     uit = mw.zonder_eigen_verslagen(ctx)
     assert "draait niet" not in uit and "database leeg" not in uit
     assert "Wacht op Luka" in uit and "Zelf doen" in uit
+
+
+def test_gestopte_fouten_staan_apart():
+    db = DB({"core_tasks": [
+        {"status": "failed", "error": {"message": "oude fout"}, "created_at": t(60 * 20)},
+        {"status": "failed", "error": {"message": "oude fout"}, "created_at": t(60 * 21)},
+        {"status": "failed", "error": {"message": "verse fout"}, "created_at": t(10)},
+    ]})
+    r = next(x for x in mw.metingen(db, "projectsmgr", NU) if x.startswith("Taken"))
+    nu_deel, gestopt_deel = r.split("Gestopt")
+    assert "verse fout" in nu_deel and "oude fout" not in nu_deel and "oude fout" in gestopt_deel
