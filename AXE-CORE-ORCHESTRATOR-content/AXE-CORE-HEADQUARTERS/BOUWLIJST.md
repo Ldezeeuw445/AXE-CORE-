@@ -163,6 +163,13 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       de focus zonder klik/toets/Cmd-Tab/Dock van Luka, dan geeft AXE hem meteen
       terug aan de vorige app ([NSApp deactivate]) en schrijft "teruggegeven"
       in focus.log. Uit: `touch ~/.axe/focus-vangnet-uit`.
+      20 nov middag, log Mac mini na de build: de notch pakt niets meer, maar het
+      HOOFDvenster kreeg elke ~10 s de focus en het vangnet liet een deel staan:
+      een klik in een ándere app (tweede scherm) telde als "Luka wil AXE", en
+      Shift loslaten tijdens typen telde als Cmd-Tab. Nu: een klik telt alleen
+      op een AXE-venster, het Dock of de menubalk; Cmd-Tab binnen 0,3 s. Het
+      log schrijft ook `aanroep=` als AXE-code het venster naar voren haalt, zodat
+      de bron van de 10 s zichtbaar wordt.
       20 nov: alle bekende focus-pakkers in de code zijn al afgevangen (notch
       niet-focusable, herstart na build op de achtergrond + focus terug). De
       app logt elk focusmoment in ~/.axe/focus.log, maar dat stond buiten wat

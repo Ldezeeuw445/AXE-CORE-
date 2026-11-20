@@ -396,6 +396,8 @@ fn get_axe_look() -> LookState {
 
 #[tauri::command]
 fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(desktop)]
+    log_regel("focus.log", "aanroep=show_main_window");
     if let Some(win) = app.get_webview_window("main") {
         win.show().map_err(|e| e.to_string())?;
         win.set_focus().map_err(|e| e.to_string())?;
@@ -712,6 +714,7 @@ fn worker_dienst_herstart(id: String) -> Result<String, String> {
 #[cfg(desktop)]
 #[tauri::command]
 fn toon_hoofdvenster_stil(app: tauri::AppHandle) {
+    log_regel("focus.log", "aanroep=toon_hoofdvenster_stil");
     toon_sneltoets_venster(&app);
 }
 
@@ -794,14 +797,55 @@ fn focus_teruggeven_als_niet_van_luka() {
     let sinds = |soort: u32| -> f64 { unsafe { CGEventSourceSecondsSinceLastEventType(1, soort) } };
     let klik = sinds(1).min(sinds(3)).min(sinds(25)); // left/right/other mouse down
     let cmd_tab = sinds(12); // flags changed (Cmd los na Cmd-Tab)
-    let van_luka = klik < 1.0 || cmd_tab < 0.6;
+    // 20 nov middag, focus.log Mac mini: het hoofdvenster kreeg elke ~10 s de
+    // focus en het vangnet liet een deel staan. Twee gaten:
+    //  1. Een klik telde altijd -- ook een klik in een ándere app op het tweede
+    //     scherm. Nu telt een klik alleen als de muis op een AXE-venster staat,
+    //     of op het Dock / de menubalk (buiten visibleFrame).
+    //  2. "flags changed" is ook Shift loslaten tijdens gewoon typen. Cmd-Tab
+    //     activeert binnen ~0,1 s na het loslaten; 0,3 s laat typen er bijna
+    //     nooit meer onder vallen.
+    let (op_axe, op_rand) = unsafe { muis_op_axe_of_rand() };
+    let van_luka = (klik < 1.0 && (op_axe || op_rand)) || cmd_tab < 0.3;
     if !van_luka {
         unsafe {
             let app: id = msg_send![class!(NSApplication), sharedApplication];
             let _: () = msg_send![app, deactivate];
         }
-        log_regel("focus.log", &format!("teruggegeven: geen klik/Cmd-Tab van Luka (klik {klik:.1}s, cmd {cmd_tab:.1}s geleden)"));
+        log_regel("focus.log", &format!(
+            "teruggegeven: niet van Luka (klik {klik:.1}s, cmd {cmd_tab:.1}s geleden, muis op AXE {op_axe}, op dock/menubalk {op_rand})"
+        ));
     }
+}
+
+/// Staat de muis nu op een venster van AXE, of op het Dock / de menubalk?
+#[cfg(target_os = "macos")]
+unsafe fn muis_op_axe_of_rand() -> (bool, bool) {
+    use cocoa::base::{id, nil};
+    use cocoa::foundation::{NSPoint, NSRect};
+    use objc::{class, msg_send, sel, sel_impl};
+    let muis: NSPoint = msg_send![class!(NSEvent), mouseLocation];
+    let nummer: isize = msg_send![class!(NSWindow), windowNumberAtPoint: muis belowWindowWithWindowNumber: 0isize];
+    let app: id = msg_send![class!(NSApplication), sharedApplication];
+    let eigen: id = msg_send![app, windowWithWindowNumber: nummer];
+    let op_axe = eigen != nil;
+    let mut op_rand = false;
+    let schermen: id = msg_send![class!(NSScreen), screens];
+    if schermen != nil {
+        let n: usize = msg_send![schermen, count];
+        for i in 0..n {
+            let sch: id = msg_send![schermen, objectAtIndex: i];
+            let f: NSRect = msg_send![sch, frame];
+            let binnen = |r: NSRect| muis.x >= r.origin.x && muis.x <= r.origin.x + r.size.width
+                && muis.y >= r.origin.y && muis.y <= r.origin.y + r.size.height;
+            if binnen(f) {
+                let v: NSRect = msg_send![sch, visibleFrame];
+                op_rand = !binnen(v);
+                break;
+            }
+        }
+    }
+    (op_axe, op_rand)
 }
 
 #[cfg(target_os = "macos")]
