@@ -1,14 +1,14 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 42% klaar** `████████░░░░░░░░░░░░` -- 71 klaar, 28 gebouwd maar nog niet bewezen, 69 open (van 168).
+**Stand: 42% klaar** `████████░░░░░░░░░░░░` -- 71 klaar, 30 gebouwd maar nog niet bewezen, 67 open (van 168).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 8 (44%) | 8 | 2 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 14 | 12 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 16 | 10 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 4 | 3 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 2 | 35 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
@@ -181,11 +181,11 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
 **Portal (foto/bestand/klembord naar de Mac)**
 - [x] **Van de iPhone naar de Mac** (19 nov: Luka veegde een foto naar de Mac
       mini via de PWA en hij landde).
-- [ ] **Vanaf de Samsung** (19 nov Luka: "de device manager heeft ook niet die
+- [~] **Vanaf de Samsung** (20 nov: Portal staat sinds de telefoon-update van 00:51 in het menu onder Phone; de hoofd-WebView kon geen bestanden kiezen -- `onShowFileChooser` toegevoegd, axe-core-android `485b19b`. Bewezen als Luka vanaf de Samsung iets naar de Mac gooit.) (19 nov Luka: "de device manager heeft ook niet die
       portal"): Portal in de Device Manager zetten; klembord in de WebView testen.
 
 **Device Manager (Samsung)**
-- [ ] **Home weer schermvullend** (19 nov Luka): de schil op Home is kleiner en
+- [~] **Home weer schermvullend** (gebouwd 20 nov, axe-core-android `88dc74c`: de Wacht-op-jou-overlay van 15 nov schoof de Home-plaat omlaag met status-/navigatiebalkmarges; weg, de web-Home toont Wacht op jou zelf. Komt met de volgende telefoon-update via de Mac mini.) (19 nov Luka): de schil op Home is kleiner en
       er zit een zwart randje boven (tijd/batterij) en onder; eerst viel dat
       over de achtergrond en was Home het hele scherm. Terug zoals het was,
       tot de Device Manager echt beter wordt.
