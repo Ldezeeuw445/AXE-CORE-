@@ -262,8 +262,12 @@ en me uit zichzelf helpt met alles en dingen echt makkelijker maakt."
       hadden geen knop. Nu (NorthSea 1.5.15, live): `/human/items/decide`,
       taak -> "Approve step / Cancel step", ingekomen mail -> "Mark reviewed /
       Dismiss", één voor één (niet in "alles goedkeuren"). Dealbeslissingen (3)
-      en betaalde acties (2) blijven bewust in de Deal Desk. Nep-token = 401
-      gecontroleerd; nog niet door Luka zelf aangeklikt.
+      en betaalde acties (2) blijven bewust in de Deal Desk. NorthSea-server en
+      VPS-API zijn bijgewerkt; nep-token = 401 gecontroleerd. Maar: elk
+      `/northsea/...`-verzoek gaat via de agent-tunnel naar de lokale API op de
+      Mac mini, en die laadt nieuwe code pas als de AXE-app daar herstart (na
+      de volgende build). Tot dan geven de nieuwe knoppen 404. Nog niet door
+      Luka zelf aangeklikt.
 - [~] **Vaste vervolgmails onder de vaste regel** (max 5/dag, 14 dagen rust,
       alleen het sjabloon). Luka 20 nov: "Ja, onder de regel". Live 20 nov 01:26 (NorthSea 1.5.14, `68997438`): max 5 per dag, niemand binnen 14 dagen twee keer, boven de limiet wacht hij tot morgen in plaats van een concept bij Luka. 15 overloop-concepten teruggezet in de rij. Noodknop: `auto_send_followups` uit in deal_automation_policy.
 - [ ] **UI-ronde: alles nalopen.** Luka: "het is allemaal nog niet echt
