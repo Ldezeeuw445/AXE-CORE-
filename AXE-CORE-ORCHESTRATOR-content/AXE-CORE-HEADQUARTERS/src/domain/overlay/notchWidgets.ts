@@ -152,3 +152,25 @@ export function voegToe(lijst: Taakje[], tekst: string, id = `${Date.now()}`): T
 export function geordend(lijst: Taakje[]): Taakje[] {
   return [...lijst.filter((t) => !t.af), ...lijst.filter((t) => t.af)];
 }
+
+/* ── Tijd bij een bericht (Luka 20 nov: "dat je een tijd ziet en alles") ── */
+
+/** "23:14" vandaag, "yesterday 21:04", anders "18 Nov 09:02". */
+export function berichtTijd(at: number, nu = new Date()): string {
+  if (!at || Number.isNaN(at)) return '';
+  const d = new Date(at);
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  if (d.toDateString() === nu.toDateString()) return hm;
+  const gisteren = new Date(nu);
+  gisteren.setDate(nu.getDate() - 1);
+  if (d.toDateString() === gisteren.toDateString()) return `yesterday ${hm}`;
+  const maand = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
+  return `${d.getDate()} ${maand} ${hm}`;
+}
+
+/** Datum + tijd rechts in de bovenbalk, zoals op de foto ("Fri 20 Nov 23:17"). */
+export function balkTijd(nu = new Date()): string {
+  const dag = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][nu.getDay()];
+  const maand = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][nu.getMonth()];
+  return `${dag} ${nu.getDate()} ${maand} ${String(nu.getHours()).padStart(2, '0')}:${String(nu.getMinutes()).padStart(2, '0')}`;
+}

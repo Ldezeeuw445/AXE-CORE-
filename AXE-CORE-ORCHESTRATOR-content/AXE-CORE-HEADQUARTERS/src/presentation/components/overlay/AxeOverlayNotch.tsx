@@ -4,8 +4,9 @@
  * Expanded: chat history, composer, drop zone, live activity, approvals.
  * Icons are wired; body always fills the window when open (no empty glass).
  */
+import { berichtTijd, balkTijd } from '@/domain/overlay/notchWidgets';
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
-import { Bot, CheckCircle2, ChevronUp, Home, MessageSquare, Mic, Plus, Settings, Users, Paperclip, X } from 'lucide-react';
+import { Bot, CheckCircle2, ChevronUp, Home, LayoutGrid, MessageSquare, Mic, Plus, Settings, Users, Paperclip, X } from 'lucide-react';
 import { claudeLive, klok, leesStand, type ClaudeLive } from '@/domain/overlay/claudeLive';
 import { vpsAuthHeaders, isTauriRuntime, VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 import {
@@ -34,7 +35,7 @@ import { calendarJobs, gedeeldeStappen, type GedeeldeStap } from '@/infrastructu
 import { EEN_DING_SLEUTEL, datumSleutel, kiesEenDing, type EigenDing } from '@/domain/overlay/eenDing';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
-type Tab = 'chat' | 'approvals' | 'settings' | 'claude' | 'home';
+type Tab = 'chat' | 'approvals' | 'settings' | 'claude' | 'home' | 'widgets';
 
 /**
  * Claude Code live (18 nov): leest ~/.axe/claude-live.json via de Tauri-
@@ -676,6 +677,14 @@ export function AxeOverlayNotch({
     await saveSetting(EEN_DING_SLEUTEL(new Date()), d).catch(() => undefined);
   };
   const [homeNu, setHomeNu] = useState(() => new Date());
+  // De klok rechts in de balk loopt op elke tab (Home ververst alleen zichzelf).
+  const [balkNu, setBalkNu] = useState(() => new Date());
+  useEffect(() => {
+    if (!open) return;
+    setBalkNu(new Date());
+    const id = window.setInterval(() => setBalkNu(new Date()), 15_000);
+    return () => window.clearInterval(id);
+  }, [open]);
   useEffect(() => {
     if (!(open && tab === 'home')) return;
     let weg = false;
@@ -739,6 +748,20 @@ export function AxeOverlayNotch({
       >
         <MessageSquare size={15} strokeWidth={1.7} />
       </button>
+      {/* Tweede pagina, zoals op Luka's foto: muziek, geluid, schakelaars, weer. */}
+      <button
+        type="button"
+        className="axe-ov__ico"
+        aria-label="Widgets"
+        aria-pressed={open && tab === 'widgets'}
+        title="Music, sound, switches"
+        onClick={() => {
+          set(true);
+          setTab('widgets');
+        }}
+      >
+        <LayoutGrid size={15} strokeWidth={1.7} />
+      </button>
       <button
         type="button"
         className="axe-ov__ico"
@@ -760,6 +783,7 @@ export function AxeOverlayNotch({
   );
   const iconsRight = (
     <>
+      {open && <span className="axe-ov__balktijd" aria-label="Date and time">{balkTijd(balkNu)}</span>}
       {/* Uit AXE Overlay (9 nov): goedkeuringen en agents horen in deze ene notch. */}
       <button
         type="button"
@@ -962,16 +986,22 @@ export function AxeOverlayNotch({
 
       {open && (
         <div className="axe-ov__body">
-          <div className="axe-ov__manager">
-            <button type="button" className="axe-ov__mgr-btn" onClick={() => setManagerIdx((i) => (i - 1 + MANAGERS.length) % MANAGERS.length)} aria-label="Vorige manager">‹</button>
-            <span>{manager.label}</span>
-            <button type="button" className="axe-ov__mgr-btn" onClick={() => setManagerIdx((i) => (i + 1) % MANAGERS.length)} aria-label="Volgende manager">›</button>
-            {approvals.length > 0 && (
-              <button type="button" className="axe-ov__appr-badge" onClick={() => setTab('approvals')}>
-                {approvals.length} approval{approvals.length === 1 ? '' : 's'}
-              </button>
-            )}
-          </div>
+          {/* Wie je spreekt: alleen in de chat (op Home/widgets was dit een
+              tweede balk die de foto's niet hebben). Goedkeuringen hebben hun
+              teller al op het icoon bovenin. */}
+          {tab === 'widgets' && (
+            <div className="axe-ov__home">
+              <NotchWidgets open={open && tab === 'widgets'} pagina="mac" />
+            </div>
+          )}
+
+          {tab === 'chat' && (
+            <div className="axe-ov__manager">
+              <button type="button" className="axe-ov__mgr-btn" onClick={() => setManagerIdx((i) => (i - 1 + MANAGERS.length) % MANAGERS.length)} aria-label="Vorige manager">‹</button>
+              <span>{manager.label}</span>
+              <button type="button" className="axe-ov__mgr-btn" onClick={() => setManagerIdx((i) => (i + 1) % MANAGERS.length)} aria-label="Volgende manager">›</button>
+            </div>
+          )}
 
           {/* Op Home staan ze als pillen in het eiland; niet dubbel. */}
           {((activity.length > 0 && tab !== 'home') || dragging) && (
@@ -1075,11 +1105,12 @@ export function AxeOverlayNotch({
                   </div>
                 </div>
               )}
-              <NotchWidgets open={open && tab === 'home'} />
-              <div className="axe-ov__vlak axe-ov__dag">
+              {/* 20 nov, naar Luka's foto: één rij gelijke kaarten (Vandaag ·
+                  Taken · Focus · Weer) in plaats van een lange pagina. */}
+              <NotchWidgets open={open && tab === 'home'} pagina="werk" vandaag={(
+              <div className="axe-ov__vlak axe-ov__w axe-ov__dag">
               <div className="axe-ov__home-kop">
-                <b>{home.groet}, Luka</b>
-                <span>{home.datum}</span>
+                <span className="axe-ov__w-label">{home.groet} · Today</span>
               </div>
               <div className={`axe-ov__eending axe-ov__eending--${eenDing.bron}${eenDing.klaar ? ' is-klaar' : ''}`}>
                 <span className="axe-ov__eending-label">Eén ding vandaag</span>
@@ -1164,6 +1195,7 @@ export function AxeOverlayNotch({
                 Open AXE CORE
               </button>
               </div>
+              )} />
             </div>
           )}
 
@@ -1175,9 +1207,20 @@ export function AxeOverlayNotch({
                     AXE always on your side — vraag iets, sleep bestanden, of PTT via de speaker.
                   </p>
                 )}
-                {messages.map((m, i) => (
-                  <div key={i} className={`axe-ov__msg axe-ov__msg--${m.role}`}>{m.content}</div>
-                ))}
+                {/* 20 nov (Luka): "dat je een tijd ziet en alles" -- wie en wanneer
+                    bij elk bericht, net als op de Managers-tab. */}
+                {messages.map((m, i) => {
+                  const wie = m.role === 'user' ? { naam: 'You', kleur: 'rgba(255,255,255,.55)' } : m.role === 'system' ? { naam: 'AXE', kleur: AXE_CYAAN } : gezichtVoor(manager.agent);
+                  return (
+                    <div key={i} className={`axe-ov__msg-rij axe-ov__msg-rij--${m.role}`}>
+                      <div className="axe-ov__msg-kop">
+                        <b style={{ color: wie.kleur }}>{wie.naam}</b>
+                        {m.at ? <time dateTime={new Date(m.at).toISOString()}>{berichtTijd(m.at)}</time> : null}
+                      </div>
+                      <div className={`axe-ov__msg axe-ov__msg--${m.role}`}>{m.content}</div>
+                    </div>
+                  );
+                })}
                 {busy && (
                   <div className="axe-ov__dots" aria-label="Bezig">
                     <span /><span /><span />

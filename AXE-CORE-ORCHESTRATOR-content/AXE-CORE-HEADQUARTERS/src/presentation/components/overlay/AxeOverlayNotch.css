@@ -287,6 +287,14 @@ html[data-axe-notch] {
   font-size: 13px; line-height: 1.4; padding: 8px 12px; border-radius: 14px; max-width: 95%;
   white-space: pre-wrap; word-break: break-word;
 }
+.axe-ov__msg-rij { display: flex; flex-direction: column; gap: 3px; max-width: 95%; }
+.axe-ov__msg-rij--user { align-self: flex-end; align-items: flex-end; }
+.axe-ov__msg-rij--assistant { align-self: flex-start; align-items: flex-start; }
+.axe-ov__msg-rij--system { align-self: center; align-items: center; }
+.axe-ov__msg-rij .axe-ov__msg { max-width: 100%; }
+.axe-ov__msg-kop { display: flex; gap: 8px; align-items: baseline; padding: 0 4px; font-size: 10.5px; }
+.axe-ov__msg-kop b { font-weight: 600; letter-spacing: .01em; }
+.axe-ov__msg-kop time { color: rgba(255,255,255,.38); font-variant-numeric: tabular-nums; }
 .axe-ov__msg--user { align-self: flex-end; background: rgba(34,211,238,.18); }
 .axe-ov__msg--assistant { align-self: flex-start; background: rgba(255,255,255,.06); }
 .axe-ov__msg--system { align-self: center; font-size: 11px; color: rgba(255,255,255,.45); background: transparent; }
@@ -868,14 +876,30 @@ button.axe-ov__pil { cursor: pointer; }
 .axe-ov__omzet-voet { margin: 0; font-size: 11px; color: rgba(255,255,255,.4); }
 
 /* ── Ronde 3: widgets (20 nov) ──────────────────────────────────────────── */
+/* 20 nov, naar Luka's foto's: één rij gelijke kaarten naast elkaar (Vandaag ·
+   Taken · Focus · Weer / Muziek · Geluid · Schakelaars · Weer), geen lange
+   pagina. Join staat erboven over de hele breedte. Smal venster: 2 kolommen. */
 .axe-ov__widgets {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: minmax(150px, auto); align-items: stretch;
   gap: 10px; margin-top: 10px;
 }
-.axe-ov__widgets > .axe-ov__join,
-.axe-ov__widgets > .axe-ov__muziek,
-.axe-ov__widgets > .axe-ov__mac,
-.axe-ov__widgets > .axe-ov__blok { grid-column: 1 / -1; }
+.axe-ov__widgets > .axe-ov__join { grid-column: 1 / -1; min-height: 0; }
+.axe-ov__widgets > .axe-ov__vlak { margin: 0; }
+@media (max-width: 760px) {
+  .axe-ov__widgets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.axe-ov__balktijd {
+  font: 500 12px/1 inherit; color: rgba(255,255,255,.72); white-space: nowrap;
+  font-variant-numeric: tabular-nums; padding: 0 6px; letter-spacing: .01em;
+}
+/* Vandaag-kaart: compact, de regels klein. */
+.axe-ov__widgets > .axe-ov__dag { overflow: hidden; }
+.axe-ov__widgets > .axe-ov__dag .axe-ov__home-regels li:nth-child(n+3) { display: none; }
+.axe-ov__widgets > .axe-ov__dag .axe-ov__home-open { margin-top: auto; }
+/* Geluid en schakelaars als kaart, knoppen onder elkaar. */
+.axe-ov__widgets > .axe-ov__mac { flex-direction: column; justify-content: center; }
+.axe-ov__widgets > .axe-ov__muziek { justify-content: space-between; }
 .axe-ov__w { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .axe-ov__w-label { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.42); }
 .axe-ov__w-sub { font-size: 11.5px; color: rgba(255,255,255,.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -940,9 +964,24 @@ button.axe-ov__pil { cursor: pointer; }
 .axe-ov__taak-weg { background: none; border: 0; color: rgba(255,255,255,.3); cursor: pointer; font-size: 14px; opacity: 0; }
 .axe-ov__taken li:hover .axe-ov__taak-weg { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .axe-ov__join-knop { animation: none !important; } }
-.axe-ov__widgets > .axe-ov__schak { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; gap: 6px; }
+.axe-ov__widgets > .axe-ov__schak { flex-direction: column; gap: 6px; justify-content: center; }
 .axe-ov__schak button {
   flex: 1; min-width: 0; border-radius: 12px; padding: 7px 8px; cursor: pointer; font: 500 11.5px inherit;
   border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.05); color: rgba(255,255,255,.78);
 }
 .axe-ov__schak button[aria-pressed="true"] { border-color: var(--axe-notch-accent); color: var(--axe-notch-accent); background: color-mix(in srgb, var(--axe-notch-accent) 12%, transparent); }
+
+/* Focus en weer zoals de foto's: groot getal, rustige knoppen. */
+.axe-ov__widgets .axe-ov__focus { align-items: center; justify-content: center; text-align: center; }
+.axe-ov__widgets .axe-ov__focus .axe-ov__w-label { align-self: flex-start; }
+.axe-ov__widgets .axe-ov__focus-tijd { font-size: 38px; font-weight: 300; letter-spacing: .02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.axe-ov__widgets .axe-ov__focus-balk { width: 100%; }
+.axe-ov__focus-start { display: flex; gap: 8px; align-items: center; }
+.axe-ov__focus-start button {
+  width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06); color: rgba(255,255,255,.8); cursor: pointer; font: 500 14px/1 inherit;
+}
+.axe-ov__focus-start button:disabled { opacity: .35; cursor: default; }
+.axe-ov__focus-start button.is-start { width: auto; padding: 0 16px; background: rgba(255,255,255,.92); color: #0b0b0b; border-color: transparent; font-size: 12.5px; font-weight: 600; }
+.axe-ov__widgets .axe-ov__weer-nu b { font-size: 34px; font-weight: 300; }
+.axe-ov__widgets .axe-ov__weer-nu span { font-size: 22px; }

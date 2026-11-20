@@ -59,3 +59,16 @@ describe('weer en taken', () => {
     expect(geordend(l).map((t) => t.tekst)).toEqual(['b', 'a']);
   });
 });
+
+import { balkTijd, berichtTijd } from './notchWidgets';
+
+describe('tijden in de notch', () => {
+  const nu = new Date(2026, 10, 20, 23, 17);
+  it('bericht: vandaag, gisteren, eerder', () => {
+    expect(berichtTijd(new Date(2026, 10, 20, 23, 14).getTime(), nu)).toBe('23:14');
+    expect(berichtTijd(new Date(2026, 10, 19, 21, 4).getTime(), nu)).toBe('yesterday 21:04');
+    expect(berichtTijd(new Date(2026, 10, 18, 9, 2).getTime(), nu)).toBe('18 Nov 09:02');
+    expect(berichtTijd(0, nu)).toBe('');
+  });
+  it('balk', () => { expect(balkTijd(nu)).toBe('Fri 20 Nov 23:17'); });
+});

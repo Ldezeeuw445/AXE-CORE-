@@ -5,7 +5,7 @@
  * Taken, notitie en timer staan in user_settings: iMac en Mac mini zien hetzelfde.
  * Muziek en Mac-knoppen bestaan alleen in de echte app (Tauri), niet in de browser.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { AFSPRAKEN_EVENT, laadAfspraken } from '@/infrastructure/persistence/afsprakenService';
@@ -28,8 +28,15 @@ interface Muziek { app: string; titel: string; artiest: string; speelt: boolean 
 interface Geluid { volume: number; stil: boolean }
 interface Schakelaars { donker: boolean; iconen: boolean; wakker: boolean }
 
-export function NotchWidgets({ open }: { open: boolean }) {
+/**
+ * pagina "werk" (Home): Join als er iets aankomt, dan één rij -- Vandaag, Taken,
+ * Focus, Weer. pagina "mac" (rastericoon): Muziek, Geluid, Schakelaars, Weer.
+ * Zoals Luka's foto's (20 nov): gelijke kaarten naast elkaar, geen lange pagina.
+ */
+export function NotchWidgets({ open, pagina = 'werk', vandaag }: { open: boolean; pagina?: 'werk' | 'mac'; vandaag?: ReactNode }) {
   const echt = isTauriRuntime();
+  const [duurIdx, setDuurIdx] = useState(1); // 25 min
+  const duurKeuze = FOCUS_DUREN[duurIdx];
   const [nu, setNu] = useState(() => Date.now());
   useEffect(() => {
     if (!open) return;
@@ -148,46 +155,8 @@ export function NotchWidgets({ open }: { open: boolean }) {
   const w = weer ? weerWoord(weer.code) : null;
   const openTaken = taken.filter((t) => !t.af).length;
 
-  return (
-    <div className="axe-ov__widgets">
-      {volgende && (
-        <div className={`axe-ov__vlak axe-ov__join${volgende.nu ? ' is-nu' : ''}`}>
-          <div className="axe-ov__join-tekst">
-            <span>{volgende.nu ? 'Starting' : 'Next'} · {volgende.tijd} · {overTekst(volgende.over)}</span>
-            <b>{volgende.titel}</b>
-          </div>
-          {volgende.link && (
-            <button type="button" className="axe-ov__join-knop" onClick={() => {
-              const link = volgende.link as string;
-              if (echt) void roep('open_link', { url: link }).catch(() => undefined);
-              else window.open(link, '_blank', 'noopener');
-            }}>Join</button>
-          )}
-        </div>
-      )}
-
-      <div className={`axe-ov__vlak axe-ov__w axe-ov__focus${fs?.klaar ? ' is-klaar' : ''}`}>
-        <span className="axe-ov__w-label">Focus</span>
-        {fs ? (
-          <>
-            <b className="axe-ov__focus-tijd">{fs.klaar ? 'Done ✓' : fs.tekst}</b>
-            <div className="axe-ov__focus-balk"><i style={{ width: `${Math.round(fs.deel * 100)}%` }} /></div>
-            <div className="axe-ov__w-knoppen">
-              {!fs.klaar && (
-                <button type="button" onClick={() => focus && zetFocus(fs.loopt ? pauzeer(focus) : hervat(focus))}>{fs.loopt ? 'Pause' : 'Resume'}</button>
-              )}
-              <button type="button" onClick={() => zetFocus(null)}>{fs.klaar ? 'Close' : 'Stop'}</button>
-            </div>
-          </>
-        ) : (
-          <div className="axe-ov__w-knoppen">
-            {FOCUS_DUREN.map((m) => (
-              <button key={m} type="button" onClick={() => zetFocus(nieuweFocus(m))}>{m} min</button>
-            ))}
-          </div>
-        )}
-      </div>
-
+  const weerKaart = (
+    <>
       <div className="axe-ov__vlak axe-ov__w axe-ov__weer">
         <span className="axe-ov__w-label">{plek.naam}</span>
         {plekKiezen ? (
@@ -203,6 +172,12 @@ export function NotchWidgets({ open }: { open: boolean }) {
         <span className="axe-ov__w-sub">{weer && w ? `${w.woord} · ${Math.round(weer.max)}° / ${Math.round(weer.min)}°` : 'No weather right now'}</span>
       </div>
 
+    </>
+  );
+
+  if (pagina === 'mac') {
+    return (
+      <div className="axe-ov__widgets">
       {echt && muziek && (
         <div className="axe-ov__vlak axe-ov__w axe-ov__muziek">
           <div className="axe-ov__muziek-tekst">
@@ -236,6 +211,36 @@ export function NotchWidgets({ open }: { open: boolean }) {
         </div>
       )}
 
+        {!echt && (
+          <div className="axe-ov__vlak axe-ov__w">
+            <span className="axe-ov__w-label">Mac</span>
+            <span className="axe-ov__w-sub">Music, sound and switches work in the AXE app on your Mac.</span>
+          </div>
+        )}
+        {weerKaart}
+      </div>
+    );
+  }
+
+  return (
+    <div className="axe-ov__widgets">
+      {volgende && (
+        <div className={`axe-ov__vlak axe-ov__join${volgende.nu ? ' is-nu' : ''}`}>
+          <div className="axe-ov__join-tekst">
+            <span>{volgende.nu ? 'Starting' : 'Next'} · {volgende.tijd} · {overTekst(volgende.over)}</span>
+            <b>{volgende.titel}</b>
+          </div>
+          {volgende.link && (
+            <button type="button" className="axe-ov__join-knop" onClick={() => {
+              const link = volgende.link as string;
+              if (echt) void roep('open_link', { url: link }).catch(() => undefined);
+              else window.open(link, '_blank', 'noopener');
+            }}>Join</button>
+          )}
+        </div>
+      )}
+
+      {vandaag}
       <div className="axe-ov__vlak axe-ov__w axe-ov__blok">
         <div className="axe-ov__blok-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={blad === 'taken'} onClick={() => setBlad('taken')}>Tasks{openTaken ? ` · ${openTaken}` : ''}</button>
@@ -261,6 +266,34 @@ export function NotchWidgets({ open }: { open: boolean }) {
           <textarea value={notitie} onChange={(e) => schrijfNotitie(e.target.value)} placeholder="Quick note… (saved on both Macs)" rows={4} maxLength={4000} />
         )}
       </div>
+      <div className={`axe-ov__vlak axe-ov__w axe-ov__focus${fs?.klaar ? ' is-klaar' : ''}`}>
+        <span className="axe-ov__w-label">Focus</span>
+        {fs ? (
+          <>
+            <b className="axe-ov__focus-tijd">{fs.klaar ? 'Done ✓' : fs.tekst}</b>
+            <div className="axe-ov__focus-balk"><i style={{ width: `${Math.round(fs.deel * 100)}%` }} /></div>
+            <div className="axe-ov__w-knoppen">
+              {!fs.klaar && (
+                <button type="button" onClick={() => focus && zetFocus(fs.loopt ? pauzeer(focus) : hervat(focus))}>{fs.loopt ? 'Pause' : 'Resume'}</button>
+              )}
+              <button type="button" onClick={() => zetFocus(null)}>{fs.klaar ? 'Close' : 'Stop'}</button>
+            </div>
+          </>
+        ) : (
+          /* Zoals de foto: grote tijd, dan − Start +. */
+          <>
+            <b className="axe-ov__focus-tijd">{`${duurKeuze}:00`}</b>
+            <div className="axe-ov__focus-balk"><i style={{ width: '0%' }} /></div>
+            <div className="axe-ov__focus-start">
+              <button type="button" aria-label="Shorter" disabled={duurIdx === 0} onClick={() => setDuurIdx((i) => Math.max(0, i - 1))}>−</button>
+              <button type="button" className="is-start" onClick={() => zetFocus(nieuweFocus(duurKeuze))}>Start</button>
+              <button type="button" aria-label="Longer" disabled={duurIdx === FOCUS_DUREN.length - 1} onClick={() => setDuurIdx((i) => Math.min(FOCUS_DUREN.length - 1, i + 1))}>+</button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {weerKaart}
     </div>
   );
 }
