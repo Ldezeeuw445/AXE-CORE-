@@ -36,6 +36,7 @@ import re
 import logging
 import subprocess
 import time
+from itertools import cycle
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
@@ -940,6 +941,7 @@ def _trim_contents(
 # Sleutel = de naam uit de attempts-lijst, waarde = monotone tijd waarop hij
 # weer meedoet.
 _AFKOELING: dict[str, float] = {}
+_OPENROUTER_FREE_START = cycle((0, 1, 2))
 
 # Credits zijn niet aan een dag gebonden: die komen terug als Luka bijvult.
 # Zes uur is lang genoeg om de taak niet te vertragen en kort genoeg dat een
@@ -1430,7 +1432,9 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
         attempts.append((f"xai/{XAI_MODEL}", lambda: _call_openai_compat(contents, _XAI_URL, xai_key, XAI_MODEL)))
     if gratis or api_aan("openrouter"):
         seen_free_keys = set()
-        for slot in (3, 4, 5):
+        first = next(_OPENROUTER_FREE_START)
+        for offset in range(3):
+            slot = 3 + (first + offset) % 3
             key = os.environ.get(f"OPENROUTER{slot}_API_KEY", "").strip()
             if not key or key in seen_free_keys:
                 continue
