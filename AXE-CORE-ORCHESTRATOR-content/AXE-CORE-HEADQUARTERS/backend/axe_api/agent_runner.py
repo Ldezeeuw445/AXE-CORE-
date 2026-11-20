@@ -208,7 +208,7 @@ def _cursor_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str, model
     return cmd
 
 
-FREE_MODELS = {"opencode": "opencode/deepseek-v4.1-flash-free", "kilo": "kilo/kilo-auto/free"}
+FREE_MODELS = {"opencode": "opencode/beam-free", "kilo": "kilo/kilo-auto/free"}
 
 
 def _free_cmd(name):

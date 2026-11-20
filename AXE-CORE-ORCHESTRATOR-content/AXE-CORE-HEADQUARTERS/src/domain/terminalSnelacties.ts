@@ -62,7 +62,7 @@ const REPO_MAC = '~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTER
  * Alleen op een Mac: daar staat het script en is er een browser.
  */
 const EXTRA_LOGINS = (repo: string): Snelactie[] => [
-  { label: 'OpenCode Free', cmd: `cd ${repo} && opencode --pure -m opencode/deepseek-v4.1-flash-free`, uitleg: 'Start DeepSeek Flash Free in deze checkout', groep: 'agents' },
+  { label: 'OpenCode Free', cmd: `cd ${repo} && opencode --pure -m opencode/beam-free`, uitleg: 'Start Beam Free in deze checkout', groep: 'agents' },
   { label: 'Kilo Auto Free', cmd: `cd ${repo} && kilo -m kilo/kilo-auto/free`, uitleg: 'Start Kilo met de gratis modelkeuze', groep: 'agents' },
   { label: 'Google Antigravity', cmd: `cd ${repo} && agy`, uitleg: 'Start de Google-agent en meld je aan met je persoonlijke account', groep: 'agents' },
   { label: 'Gratis agents installeren', cmd: 'npm i -g opencode-ai @kilocode/cli && curl -fsSL https://antigravity.google/cli/install.sh | bash', uitleg: 'Installeer de drie extra agents op deze Mac', groep: 'agents' },
