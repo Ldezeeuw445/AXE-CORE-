@@ -7,6 +7,8 @@ mod diensten;
 mod launchd;
 #[cfg(desktop)]
 mod omzetten;
+#[cfg(desktop)]
+mod notchknoppen;
 mod gesture_lock;
 
 use std::fs;
@@ -720,6 +722,63 @@ fn bestand_omzetten(pad: String, naar: String) -> Result<String, String> {
     omzetten::zet_om(std::path::Path::new(&pad), &naar).map(|p| p.to_string_lossy().into_owned())
 }
 
+/// Een omgezet bestand laten zien in Finder. portal_toon mag alleen AXE
+/// Portal, en een omzetting landt naast het origineel -- dus hier: alles
+/// binnen je thuismap dat bestaat (alleen tonen, niets openen).
+#[cfg(desktop)]
+#[tauri::command]
+fn toon_in_finder(pad: String) -> Result<(), String> {
+    let home = std::env::var_os("HOME").ok_or("HOME niet gezet")?;
+    let echt = PathBuf::from(&pad).canonicalize().map_err(|e| e.to_string())?;
+    let thuis = PathBuf::from(home).canonicalize().map_err(|e| e.to_string())?;
+    if !echt.starts_with(&thuis) && !echt.starts_with("/Volumes") {
+        return Err("buiten je thuismap".into());
+    }
+    std::process::Command::new("/usr/bin/open").arg("-R").arg(&echt).spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Join-knop in de notch: een https-link openen in je gewone browser.
+#[cfg(desktop)]
+#[tauri::command]
+fn open_link(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") || url.len() > 2000 || url.chars().any(|c| c.is_whitespace()) {
+        return Err("alleen een https-link".into());
+    }
+    std::process::Command::new("/usr/bin/open").arg(&url).spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Notch ronde 3: wat er speelt (Spotify of Muziek). Zie notchknoppen.rs.
+#[cfg(desktop)]
+#[tauri::command]
+async fn muziek_stand() -> Option<notchknoppen::Muziek> {
+    tauri::async_runtime::spawn_blocking(notchknoppen::stand).await.ok().flatten()
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+async fn muziek_knop(app: String, actie: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || notchknoppen::knop(&app, &actie)).await.map_err(|e| e.to_string())?
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+async fn mac_geluid(volume: Option<u8>) -> Result<notchknoppen::Geluid, String> {
+    tauri::async_runtime::spawn_blocking(move || match volume {
+        Some(v) => notchknoppen::zet_volume(v),
+        None => notchknoppen::geluid(),
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+async fn mac_knop(actie: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || notchknoppen::mac(&actie)).await.map_err(|e| e.to_string())?
+}
+
 /// Naar welke formaten dit bestand kan, voor de knopjes in de notch.
 #[cfg(desktop)]
 #[tauri::command]
@@ -920,6 +979,12 @@ pub fn run() {
         portal_toon,
         bestand_omzetten,
         omzet_doelen,
+        toon_in_finder,
+        open_link,
+        muziek_stand,
+        muziek_knop,
+        mac_geluid,
+        mac_knop,
         toon_hoofdvenster_stil,
         consume_overlay_open_route,
         platform_info,

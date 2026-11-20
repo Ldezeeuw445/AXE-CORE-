@@ -19,6 +19,7 @@ import { beoordeelNotch } from '@/domain/overlay/notchLeven';
 import { projectieUitVraag } from '@/application/sphere/vraagRouter';
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 import { NotchResultaat } from './NotchResultaat';
+import { NotchWidgets } from './NotchWidgets';
 import { AXE_CYAAN, AxeGezicht, CLAUDE_KORAAL, type Stemming } from '@/presentation/components/axe-core/AxeGezicht';
 import { AXE_AGENTS, type AxeAgentId } from '@/domain/agents/roster';
 import { bewaarManagerChat, laadManagerChat, nieuwMsg } from '@/domain/agents/managerChatOpslag';
@@ -1015,7 +1016,7 @@ export function AxeOverlayNotch({
                         ))}
                       </div>
                       {x.klaar && (
-                        <button type="button" className="axe-ov__omzet-klaar" onClick={() => void import('@tauri-apps/api/core').then(({ invoke }) => invoke('portal_toon', { pad: x.klaar }))}>
+                        <button type="button" className="axe-ov__omzet-klaar" onClick={() => void import('@tauri-apps/api/core').then(({ invoke }) => invoke('toon_in_finder', { pad: x.klaar }))}>
                           Saved as {x.klaar.split('/').pop()} · Show in Finder
                         </button>
                       )}
@@ -1074,6 +1075,7 @@ export function AxeOverlayNotch({
                   </div>
                 </div>
               )}
+              <NotchWidgets open={open && tab === 'home'} />
               <div className="axe-ov__vlak axe-ov__dag">
               <div className="axe-ov__home-kop">
                 <b>{home.groet}, Luka</b>

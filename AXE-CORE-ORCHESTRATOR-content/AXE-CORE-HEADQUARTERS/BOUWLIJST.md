@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 41 gebouwd maar nog niet bewezen, 62 open (van 176).
+**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 43 gebouwd maar nog niet bewezen, 61 open (van 177).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -10,7 +10,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (50%) | 8 | 1 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 27 | 6 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 4 | 3 |
-| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 2 | 35 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 4 | 34 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
@@ -367,7 +367,8 @@ nuttiger maakt op de Macs, in volgorde van waarde:
 - [ ] Claude Code live in het eiland, schakelen AXE / Claude; vragen van
       Claude (en managers) als keuzeknoppen in het eiland, goedkeuren met
       Weigeren / Altijd / Toestaan en sneltoetsen vanuit elke app.
-- [~] Bestand naar de notch slepen (ronde 2, 20 nov): drop-zone met AXE-gezicht; per bestand "Ask AXE" of omzetten met wat macOS meebrengt -- afbeelding png/jpeg/heic/tiff/pdf/web (sips), document pdf(tekst)/docx/txt/rtf/html/odt (textutil+cupsfilter), audio m4a/wav/aiff (afconvert), video mp4/mov/m4a (avconvert); origineel blijft, nieuw bestand ernaast, "Show in Finder". Getest: echte png->jpeg in de Rust-test. Komt met de app-build.
+- [~] Bestand naar de notch slepen (ronde 2, 20 nov): drop-zone met AXE-gezicht; per bestand "Ask AXE" of omzetten met wat macOS meebrengt -- afbeelding png/jpeg/heic/tiff/pdf/web (sips), document pdf(tekst)/docx/txt/rtf/html/odt (textutil+cupsfilter), audio m4a/wav/aiff (afconvert), video mp4/mov/m4a (avconvert); origineel blijft, nieuw bestand ernaast, "Show in Finder" (sinds ronde 3 via toon_in_finder: portal_toon mocht alleen AXE Portal, dus die knop deed niets). Getest: echte png->jpeg in de Rust-test. Komt met de app-build.
+- [~] Notch-widgets (ronde 3, 20 nov, naar Luka's foto's): onder het eiland een Join-kaart voor de volgende afspraak van vandaag (4 min vooraf groot en groen, Join opent de Meet/Zoom/Teams-link uit plaats of notitie), focus-timer 15/25/50 met pauze, weer (open-meteo, stad aan te klikken), muziek van Spotify/Apple Music met vorige/play/volgende, volume + mute + scherm uit, en taken + notitie die op beide Macs hetzelfde zijn. Muziek/geluid alleen in de echte app (vaste AppleScript-woorden, nooit vrije script). In de preview gezien: timer, weer, taak toevoegen/weg. Komt met de app-build; macOS vraagt één keer toestemming om Spotify/Muziek te bedienen.
 - [ ] Peeks: app open/dicht, oplader, batterij 20%/10%, DND, en "manager
       klaar met X" -- zonder over de menubalk te gaan.
 - [ ] Vergadering: vanaf 5 min ervoor camera + minuten in de pil, open met

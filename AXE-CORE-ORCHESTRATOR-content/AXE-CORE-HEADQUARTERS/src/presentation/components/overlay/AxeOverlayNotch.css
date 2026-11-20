@@ -866,3 +866,77 @@ button.axe-ov__pil { cursor: pointer; }
 .axe-ov__omzet-fout { font-size: 11.5px; color: #f87171; }
 .axe-ov__omzet-fout.is-rustig { color: rgba(255,255,255,.45); }
 .axe-ov__omzet-voet { margin: 0; font-size: 11px; color: rgba(255,255,255,.4); }
+
+/* ── Ronde 3: widgets (20 nov) ──────────────────────────────────────────── */
+.axe-ov__widgets {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px; margin-top: 10px;
+}
+.axe-ov__widgets > .axe-ov__join,
+.axe-ov__widgets > .axe-ov__muziek,
+.axe-ov__widgets > .axe-ov__mac,
+.axe-ov__widgets > .axe-ov__blok { grid-column: 1 / -1; }
+.axe-ov__w { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.axe-ov__w-label { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.42); }
+.axe-ov__w-sub { font-size: 11.5px; color: rgba(255,255,255,.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-ov__w-knoppen { display: flex; flex-wrap: wrap; gap: 6px; }
+.axe-ov__w-knoppen button, .axe-ov__blok-tabs button {
+  border-radius: 999px; padding: 4px 11px; font: 500 11.5px inherit; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.05); color: rgba(255,255,255,.82);
+}
+.axe-ov__w-knoppen button:hover { border-color: var(--axe-notch-accent); color: var(--axe-notch-accent); }
+
+.axe-ov__join { flex-direction: row; display: flex; align-items: center; gap: 12px; }
+.axe-ov__join-tekst { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.axe-ov__join-tekst span { font-size: 11px; color: rgba(255,255,255,.5); }
+.axe-ov__join-tekst b { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-ov__join-knop {
+  border: 0; border-radius: 999px; padding: 7px 18px; cursor: pointer;
+  background: #22c55e; color: #04130a; font: 700 12.5px inherit;
+}
+.axe-ov__join.is-nu { border-color: rgba(34,197,94,.55); box-shadow: 0 0 0 1px rgba(34,197,94,.25), 0 0 24px rgba(34,197,94,.18); }
+.axe-ov__join.is-nu .axe-ov__join-tekst b { font-size: 15.5px; }
+.axe-ov__join.is-nu .axe-ov__join-knop { animation: axe-join 1.6s ease-in-out infinite; }
+@keyframes axe-join { 50% { box-shadow: 0 0 0 6px rgba(34,197,94,.18); } }
+
+.axe-ov__focus-tijd { font: 600 26px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: rgba(255,255,255,.92); }
+.axe-ov__focus-balk { height: 4px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; }
+.axe-ov__focus-balk i { display: block; height: 100%; background: var(--axe-notch-accent); transition: width 1s linear; }
+.axe-ov__focus.is-klaar { border-color: rgba(34,211,238,.5); }
+.axe-ov__focus.is-klaar .axe-ov__focus-tijd { color: var(--axe-notch-accent); }
+
+.axe-ov__weer-nu { display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; cursor: pointer; color: inherit; text-align: left; }
+.axe-ov__weer-nu span { font-size: 24px; }
+.axe-ov__weer-nu b { font: 600 26px/1 inherit; color: rgba(255,255,255,.92); }
+.axe-ov__weer input, .axe-ov__blok input, .axe-ov__blok textarea {
+  width: 100%; box-sizing: border-box; border-radius: 10px; padding: 6px 9px;
+  border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.9); font: 12.5px inherit; outline: none; resize: none;
+}
+.axe-ov__weer input:focus, .axe-ov__blok input:focus, .axe-ov__blok textarea:focus { border-color: var(--axe-notch-accent); }
+
+.axe-ov__muziek { flex-direction: row; align-items: center; gap: 12px; }
+.axe-ov__muziek-tekst { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.axe-ov__muziek-tekst b { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-ov__muziek-knoppen { display: flex; align-items: center; gap: 6px; }
+.axe-ov__muziek-knoppen button, .axe-ov__mac button {
+  width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 13px;
+  border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.06); color: rgba(255,255,255,.88);
+}
+.axe-ov__muziek-knoppen button.is-groot { width: 40px; height: 40px; font-size: 15px; background: rgba(255,255,255,.14); }
+.axe-ov__mac { flex-direction: row; align-items: center; gap: 10px; }
+.axe-ov__mac input[type=range] { flex: 1; accent-color: var(--axe-notch-accent); }
+
+.axe-ov__blok-tabs { display: flex; gap: 6px; }
+.axe-ov__blok-tabs button[aria-selected="true"] { border-color: var(--axe-notch-accent); color: var(--axe-notch-accent); }
+.axe-ov__taken { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.axe-ov__taken li { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: rgba(255,255,255,.86); }
+.axe-ov__taken li > span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-ov__taken li.is-af > span { text-decoration: line-through; color: rgba(255,255,255,.35); }
+.axe-ov__taak-vink {
+  width: 16px; height: 16px; flex: none; border-radius: 5px; padding: 0; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.3); background: none; color: var(--axe-notch-accent); font-size: 11px; line-height: 1;
+}
+.axe-ov__taak-weg { background: none; border: 0; color: rgba(255,255,255,.3); cursor: pointer; font-size: 14px; opacity: 0; }
+.axe-ov__taken li:hover .axe-ov__taak-weg { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .axe-ov__join-knop { animation: none !important; } }
