@@ -202,7 +202,7 @@ export function CodingSeatsSection() {
           ...(planner?.dagbudget ? [{ label: 'Planner today', waarde: `${vandaag}/${planner.dagbudget}`, pct: (vandaag / planner.dagbudget) * 100 }] : []),
           ...(g && g.ok_7d + g.failed_7d > 0 ? [{ label: 'Success 7d', waarde: `${g.ok_7d}/${g.ok_7d + g.failed_7d}`, pct: (g.ok_7d / (g.ok_7d + g.failed_7d)) * 100, goed: true }] : []),
         ]}
-        melding={geschiedenis ?? undefined}
+        melding={stoel.current_task || geschiedenis || undefined}
       />
     );
   };

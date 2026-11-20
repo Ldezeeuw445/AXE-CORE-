@@ -30,7 +30,7 @@ async function probeFree(seat, env, home) {
     const args = model
       ? ['run', '--pure', '--agent', 'plan', '--format', 'json', '-m', model, '--', prompt]
       : ['--sandbox', '--mode', 'plan', '--print-timeout', '15s', '-p', prompt];
-    const { stdout } = await execFileP(seat.id, args, { cwd: dir, env: childEnv, timeout: 22_000 });
+    const { stdout } = await execFileP(seat.id, args, { cwd: dir, env: childEnv, timeout: 55_000 });
     loggedIn = model ? /"type":"text"/.test(stdout) : stdout.trim() === 'OK';
   } catch (err) {
     if (/eligibility check failed|not logged in|verify your account/i.test(err.stderr || '')) loggedIn = false;
