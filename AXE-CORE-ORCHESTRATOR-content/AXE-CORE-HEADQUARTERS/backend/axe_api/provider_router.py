@@ -499,9 +499,9 @@ KETEN: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
     ("gemini", "paid", "gemini", ("GEMINI_API_KEY", "GOOGLE_API_KEY")),
     ("deepseek", "paid", "deepseek", ("DEEPSEEK_API_KEY",)),
     ("perplexity", "paid", "perplexity", ("PERPLEXITY_API_KEY",)),
-    ("groq", "free", "groq", ("GROQ_AGENTS_API_KEY", "GROQ_LIGHT_API_KEY", "GROQ_API_KEY")),
+    ("groq", "free", "groq", ("GROQ_AGENTS_API_KEY", "GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY", "GROQ_API_KEY")),
     ("cerebras", "free", "cerebras", ("CEREBRAS_API_KEY",)),
-    ("openrouter", "free", "openrouter", ("OPENROUTER_API_KEY",)),
+    ("openrouter", "free", "openrouter", ("OPENROUTER_API_KEY", "OPENROUTER2_API_KEY", "OPENROUTER3_API_KEY", "OPENROUTER4_API_KEY", "OPENROUTER5_API_KEY")),
     ("openhands", "vps", "openhands", ("OLLAMA_BASE_URL", "OLLAMA_URL", "VPS_HOST")),
     ("ollama", "vps", "ollama", ("OLLAMA_BASE_URL", "OLLAMA_URL", "OLLAMA_HOST", "LOCAL_OLLAMA_URL", "VPS_HOST")),
 )

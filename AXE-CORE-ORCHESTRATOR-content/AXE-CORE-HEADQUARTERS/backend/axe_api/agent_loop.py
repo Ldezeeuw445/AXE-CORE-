@@ -1387,6 +1387,10 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
             # Eigen limietemmer bij Groq: als 120b op zijn tokens-per-minuut zit, past 20b vaak nog.
             attempts.append((f"groq/{GROQ_KLEIN_MODEL}",
                              lambda: _call_openai_compat(contents, _GROQ_URL, groq_key, GROQ_KLEIN_MODEL)))
+    groq_reserve_key = os.environ.get("GROQ_RESERVE_API_KEY")
+    if groq_reserve_key and api_aan("groq"):
+        attempts.append((f"groq/reserve/{GROQ_KLEIN_MODEL}",
+                         lambda: _call_openai_compat(contents, _GROQ_URL, groq_reserve_key, GROQ_KLEIN_MODEL)))
     if cerebras_key and api_aan("cerebras"):
         attempts.append((f"cerebras/{CEREBRAS_MODEL}",
                          lambda: _call_openai_compat(contents, _CEREBRAS_URL, cerebras_key, CEREBRAS_MODEL)))
@@ -1397,6 +1401,17 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
         attempts.append((f"openai/{OPENAI_MODEL}", lambda: _call_openai_compat(contents, _OPENAI_URL, openai_key, OPENAI_MODEL)))
     if xai_key and not gratis and api_aan("xai"):
         attempts.append((f"xai/{XAI_MODEL}", lambda: _call_openai_compat(contents, _XAI_URL, xai_key, XAI_MODEL)))
+    if gratis or api_aan("openrouter"):
+        seen_free_keys = set()
+        for slot in (3, 4, 5):
+            key = os.environ.get(f"OPENROUTER{slot}_API_KEY", "").strip()
+            if not key or key in seen_free_keys:
+                continue
+            seen_free_keys.add(key)
+            attempts.append((
+                f"openrouter/{slot}/free",
+                lambda key=key: _call_openai_compat(contents, _OPENROUTER_URL, key, "openrouter/free"),
+            ))
     openrouter_key = (
         os.environ.get("OPENROUTER_API_KEY")
         or os.environ.get("OPENROUTER2_API_KEY")
