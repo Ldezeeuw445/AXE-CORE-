@@ -778,30 +778,36 @@ fn focus_oorzaak() -> String {
 /// Uit: `touch ~/.axe/focus-vangnet-uit`.
 #[cfg(target_os = "macos")]
 fn focus_teruggeven_als_niet_van_luka() {
-    use cocoa::base::{id, nil};
+    use cocoa::base::id;
     use objc::{class, msg_send, sel, sel_impl};
     if let Some(home) = std::env::var_os("HOME") {
         if PathBuf::from(home).join(".axe").join("focus-vangnet-uit").exists() {
             return;
         }
     }
-    unsafe {
-        let app: id = msg_send![class!(NSApplication), sharedApplication];
-        let ev: id = msg_send![app, currentEvent];
-        let van_luka = if ev == nil {
-            false
-        } else {
-            let t: u64 = msg_send![ev, type];
-            // mouse down (1, 3, 25), mouse up (2, 4, 26), key down/up (10, 11),
-            // flags (12), AppKitDefined = activatie via Cmd-Tab/Dock (13),
-            // scroll (22), gestures (29-32).
-            matches!(t, 1 | 2 | 3 | 4 | 10 | 11 | 12 | 13 | 22 | 25 | 26 | 29 | 30 | 31 | 32)
-        };
-        if !van_luka {
+    // 20 nov, focus.log Mac mini met oorzaak: de focus kwam tijdens muis-
+    // bewegingen (type5/6/8/21) en als app-activatie ("systeem", type 13) --
+    // dat laatste ziet er voor macOS hetzelfde uit als Cmd-Tab, dus het event
+    // van dat moment zegt niet wie het wilde. Wat Luka fysiek deed wel: een
+    // klik (op AXE of het Dock) of het loslaten van Cmd na Cmd-Tab, in de
+    // laatste seconde. Alleen typen in een andere app telt niet.
+    let sinds = |soort: u32| -> f64 { unsafe { CGEventSourceSecondsSinceLastEventType(1, soort) } };
+    let klik = sinds(1).min(sinds(3)).min(sinds(25)); // left/right/other mouse down
+    let cmd_tab = sinds(12); // flags changed (Cmd los na Cmd-Tab)
+    let van_luka = klik < 1.0 || cmd_tab < 0.6;
+    if !van_luka {
+        unsafe {
+            let app: id = msg_send![class!(NSApplication), sharedApplication];
             let _: () = msg_send![app, deactivate];
-            log_regel("focus.log", "teruggegeven: niet van Luka, vorige app weer vooraan");
         }
+        log_regel("focus.log", &format!("teruggegeven: geen klik/Cmd-Tab van Luka (klik {klik:.1}s, cmd {cmd_tab:.1}s geleden)"));
     }
+}
+
+#[cfg(target_os = "macos")]
+#[link(name = "CoreGraphics", kind = "framework")]
+extern "C" {
+    fn CGEventSourceSecondsSinceLastEventType(state_id: i32, event_type: u32) -> f64;
 }
 
 #[cfg(all(desktop, not(target_os = "macos")))]
