@@ -208,6 +208,18 @@ def _cursor_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str, model
     return cmd
 
 
+FREE_MODELS = {"opencode": "opencode/inkling-2-small-free", "kilo": "kilo/kilo-auto/free"}
+
+
+def _free_cmd(name):
+    def command(binary, prompt, mode, _output, _model=""):
+        if name == "agy":
+            return [binary, "--sandbox", "--mode", "plan" if mode == "plan" else "accept-edits", "-p", prompt]
+        agent = "plan" if mode == "plan" else ("code" if name == "kilo" else "build")
+        return [binary, "run", "--format", "json", "--agent", agent, "-m", FREE_MODELS[name], "--", prompt]
+    return command
+
+
 ENGINES = {
     "claude": {
         "label": "Claude Code",
@@ -373,6 +385,19 @@ ENGINES = {
 DEFAULT_ENGINE = "claude"
 
 
+for _name, _label, _install in (
+    ("opencode", "OpenCode Free", "npm i -g opencode-ai"),
+    ("kilo", "Kilo Auto Free", "npm i -g @kilocode/cli"),
+    ("agy", "Google Antigravity", "curl -fsSL https://antigravity.google/cli/install.sh | bash"),
+):
+    ENGINES[_name] = {
+        "label": _label, "bin_env": _name.upper() + "_BIN", "bin_default": _name,
+        "blocked_env": ("GOOGLE_API_KEY", "GEMINI_API_KEY", "GOOGLE_GENAI_USE_VERTEXAI"),
+        "cmd": _free_cmd(_name), "leest_bestand": False, "alleen_lezen": True,
+        "install": _install, "login": _name,
+    }
+
+
 def _repos() -> dict:
     """De whitelist: "naam=/abs/pad,ander=/abs/pad".
 
@@ -511,6 +536,8 @@ def _branch_uit_head(repo_path: str) -> str | None:
 def _binary(engine: dict) -> str | None:
     naam = os.environ.get(engine["bin_env"], engine["bin_default"])
     gevonden = shutil.which(naam)
+    if not gevonden and engine["bin_default"] in (*FREE_MODELS, "agy") and naam == engine["bin_default"]:
+        gevonden = shutil.which(naam, path=os.path.expanduser("~/.local/bin"))
     if gevonden:
         return gevonden
     return naam if os.path.isabs(naam) and os.path.exists(naam) else None
@@ -575,14 +602,14 @@ _AUTH_FOUT = re.compile(
     re.I,
 )
 _LIMIET_KLOK = re.compile(r"try again at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?", re.I)
-SEAT_VOLGORDE = ("claude", "claude2", "claude3", "claude4", "codex", "codex2", "codex3", "cursor", "cursor2")
+SEAT_VOLGORDE = ("claude", "claude2", "claude3", "claude4", "codex", "codex2", "codex3", "cursor", "cursor2", "kilo", "opencode", "agy")
 _SEAT_BUSY: dict[str, dict] = {}
 _SEAT_LIMIT: dict[str, dict] = {}
 _SEAT_SNAP = os.path.expanduser(os.environ.get("AXE_CODING_SEATS_FILE", "~/.axe/coding-seats.json"))
 
 
 def _auth_fout(tekst: str) -> bool:
-    return bool(_AUTH_FOUT.search(tekst or ""))
+    return bool(_AUTH_FOUT.search(tekst or "")) or "eligibility check failed" in (tekst or "").lower()
 
 
 # Een stoel die het model weigert ("The 'gpt-5-codex' model is not supported when
@@ -1117,6 +1144,27 @@ def _run_agent_stoel(
             + f"{motor['label']} eindigde met {proc.returncode}. stderr: {_stderr_staart(proc.stderr)}"
         ).strip()
 
+    if motornaam == "agy" and "eligibility check failed" in (proc.stderr + stdout).lower():
+        return finish({**basis, "status": "error", "error": "Eligibility check failed: verifieer je Google-account via agy."})
+
+    if motornaam in FREE_MODELS:
+        parts = []
+        for line in stdout.splitlines():
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            if event.get("type") == "error":
+                return finish({**basis, "status": "error", "error": str(event.get("error"))[:1000]})
+            if event.get("type") == "text":
+                parts.append(str((event.get("part") or {}).get("text") or ""))
+        answer = "".join(parts).strip()
+        if proc.returncode or not answer:
+            return finish({**basis, "status": "error", "error": foutzin()})
+        return finish({**basis, "status": "ok", "result": answer[:8000]})
+
     if leest_bestand:
         if proc.returncode != 0 and not uitvoer:
             return finish({**basis, "status": "error", "error": foutzin()})
@@ -1499,6 +1547,8 @@ def _account_van(naam: str, motor: dict, binary: str | None) -> dict:
             uit = {"ingelogd": None, "account": None, "org_id": None}
     elif naam.startswith("codex"):
         uit = _codex_account(motor)
+    elif naam in (*FREE_MODELS, "agy"):
+        uit = {"ingelogd": None, "account": None, "org_id": None}
     else:
         uit = _cursor_account(naam, motor, binary)
     _ACCOUNT_CACHE[naam] = (nu, uit)
