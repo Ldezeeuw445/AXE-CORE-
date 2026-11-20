@@ -10,7 +10,7 @@
  */
 import { isLimietFout, limietTijdstip, STANDAARD_KOELING_MS } from './gebruikslimiet';
 
-export type CodingProvider = 'claude' | 'codex' | 'cursor' | 'openhands' | 'xai';
+export type CodingProvider = 'claude' | 'codex' | 'cursor' | 'openhands' | 'xai' | 'opencode' | 'kilo' | 'agy';
 
 export interface CodingSeat {
   id: string;
@@ -189,7 +189,7 @@ export function machineLabel(machine: string | null | undefined): string {
 }
 
 function providerVanSeat(seatId: string, provider?: string | null): CodingProvider {
-  if (provider === 'claude' || provider === 'codex' || provider === 'cursor' || provider === 'openhands' || provider === 'xai') {
+  if (provider === 'claude' || provider === 'codex' || provider === 'cursor' || provider === 'openhands' || provider === 'xai' || provider === 'opencode' || provider === 'kilo' || provider === 'agy') {
     return provider;
   }
   if (seatId.startsWith('codex')) return 'codex';
@@ -221,6 +221,8 @@ export function winnendeStoel<T extends Pick<CodingSeat, 'logged_in' | 'last_see
     return Number.isNaN(t) ? 0 : t;
   };
   return [...rijen].sort((a, b) => {
+    const fresh = Number(stoelIsVers(a.last_seen_at)) - Number(stoelIsVers(b.last_seen_at));
+    if (fresh) return -fresh;
     const la = a.logged_in === true ? 2 : a.logged_in === false ? 1 : 0;
     const lb = b.logged_in === true ? 2 : b.logged_in === false ? 1 : 0;
     if (lb !== la) return lb - la;
@@ -477,6 +479,7 @@ export function watMoetLukaDoen(stoel: Pick<CodingSeat, 'provider' | 'id' | 'log
     return `Install the CLI on ${machine}, then ${stoel.login_command || 'log in'}.`;
   }
   if (stoel.logged_in !== true) {
+    if (sid === 'kilo' || sid === 'opencode') return null;
     if (sid === 'cursor2' || sid.startsWith('cursor') && sid !== 'cursor') {
       return `On ${machine}: bash scripts/zet_cursor2_sleutel.sh (Cursor key of your hotmail account)`;
     }

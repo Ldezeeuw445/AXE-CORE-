@@ -101,6 +101,9 @@ const ACCENT: Record<string, string> = {
   cursor: '#60a5fa',
   openhands: '#fb923c',
   xai: '#1DA1F2',
+  opencode: '#a78bfa',
+  kilo: '#facc15',
+  agy: '#60a5fa',
 };
 
 export function CodingSeatsSection() {
@@ -146,6 +149,7 @@ export function CodingSeatsSection() {
     const stoel = groep.stoel;
     const v = groep.seatIds.map((id) => verbruik[id]).find(Boolean);
     const g = somGebruik(groep.seatIds, gebruik);
+    const gratis = ['opencode', 'kilo', 'agy'].includes(stoel.id);
     const tokens = g ? g.input_tokens_7d + g.output_tokens_7d : 0;
     const vandaag = groep.seatIds.reduce((n, id) => n + (planner?.gebruik_vandaag[id] ?? 0), 0);
     const door = gebruiktDoor(groep.seatIds);
@@ -166,7 +170,7 @@ export function CodingSeatsSection() {
     const label = MOTOR_LABEL[stoel.id as keyof typeof MOTOR_LABEL] || stoel.label;
     const machines = groep.bruikbaarOp.length
       ? `Usable on ${groep.bruikbaarOp.join(', ')}`
-      : 'Not logged in on any machine';
+      : gratis ? 'Availability unconfirmed' : 'Not logged in on any machine';
     const geschiedenis = kaartMelding(kaart.geschiedenis ?? g?.last_limit_message);
     return (
       <StatusKaart
@@ -178,7 +182,7 @@ export function CodingSeatsSection() {
           nietGebruikt: groep.nietGebruikt,
         })}
         accent={ACCENT[groep.provider] || 'var(--text-secondary)'}
-        rol={`${v?.plan ? `${v.plan} plan · ` : ''}${machines}${door.length ? ` · ${door.join(', ')}` : ''}`}
+        rol={`${gratis ? 'Free CLI · ' : ''}${v?.plan ? `${v.plan} plan · ` : ''}${machines}${door.length ? ` · ${door.join(', ')}` : ''}`}
         stand={stoelen == null ? { toon: 'muted', tekst: 'Checking' } : (groep.nietGebruikt ? { toon: 'muted', tekst: 'Not used' } : kaart.stand)}
         keuze={(rood || actie) && !groep.nietGebruikt ? (
           <code
@@ -188,8 +192,9 @@ export function CodingSeatsSection() {
         ) : undefined}
         stats={[
           { label: 'Runs 24h', waarde: g ? String(g.runs_24h) : '—' },
-          { label: 'Runs 7d', waarde: g ? String(g.runs_7d) : '—' },
+          { label: 'Runs 7d', waarde: g ? String(g.runs_7d) : String(stoel.runs_7d ?? '—') },
           { label: 'Tokens 7d', waarde: tokens ? kort(tokens) : '—' },
+          ...(gratis ? [{ label: 'Provider quota left', waarde: 'Unavailable' }] : []),
           { label: 'Last run', waarde: g?.last_run_at ? geleden(g.last_run_at * 1000) : (reset || '—') },
         ]}
         balken={[

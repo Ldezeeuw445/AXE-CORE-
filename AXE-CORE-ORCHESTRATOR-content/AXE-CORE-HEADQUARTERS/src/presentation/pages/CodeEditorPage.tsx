@@ -67,7 +67,7 @@ import { extractCodeOutline } from '@/domain/codeStudio/codeOutline';
  * kan worden: de oude toggle schreef dezelfde sleutel, en een waarde die we
  * niet kennen hoort terug te vallen in plaats van een picker te tonen waarin
  * niets aan staat. */
-const AGENT_ENGINES = ['native', 'openhands', 'claude', 'claude2', 'claude3', 'claude4', 'codex', 'codex2', 'codex3', 'cursor', 'cursor2'] as const;
+const AGENT_ENGINES = ['native', 'openhands', 'claude', 'claude2', 'claude3', 'claude4', 'codex', 'codex2', 'codex3', 'cursor', 'cursor2', 'opencode', 'kilo', 'agy'] as const;
 type AgentEngine = (typeof AGENT_ENGINES)[number];
 type CliMotor = Exclude<AgentEngine, 'native' | 'openhands'>;
 
@@ -80,8 +80,8 @@ type CliMotor = Exclude<AgentEngine, 'native' | 'openhands'>;
  * twee losse takken in elke `if`; een derde erbij is dan één regel.
  */
 
-const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'claude2', 'claude3', 'claude4', 'codex', 'codex2', 'codex3', 'cursor', 'cursor2']);
-const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', claude2: 'Claude 2', claude3: 'Claude 3', claude4: 'Claude 4', codex: 'Codex', codex2: 'Codex 2', codex3: 'Codex 3', cursor: 'Cursor', cursor2: 'Cursor 2' };
+const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'claude2', 'claude3', 'claude4', 'codex', 'codex2', 'codex3', 'cursor', 'cursor2', 'opencode', 'kilo', 'agy']);
+const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', claude2: 'Claude 2', claude3: 'Claude 3', claude4: 'Claude 4', codex: 'Codex', codex2: 'Codex 2', codex3: 'Codex 3', cursor: 'Cursor', cursor2: 'Cursor 2', opencode: 'OpenCode Free', kilo: 'Kilo Auto Free', agy: 'Google Antigravity' };
 
 /** De knoppen in de motorkiezer, in de volgorde waarin ze op het scherm staan. */
 const CLI_MOTOR_KNOPPEN: ReadonlyArray<{ id: AgentEngine; uitleg: string }> = [

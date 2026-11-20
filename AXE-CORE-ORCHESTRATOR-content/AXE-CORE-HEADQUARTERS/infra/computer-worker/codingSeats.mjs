@@ -7,14 +7,43 @@
  */
 import { execFile } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileP = promisify(execFile);
 
+const FREE_MODELS = { opencode: 'opencode/beam-free', kilo: 'kilo/kilo-auto/free', agy: null };
+const freeChecks = new Map();
+
+async function probeFree(seat, env, home) {
+  const cached = freeChecks.get(seat.id);
+  if (cached && Date.now() - cached.at < 30 * 60_000) return cached.login;
+  const dir = await mkdtemp(join(tmpdir(), 'axe-seat-'));
+  const childEnv = withCliPath({ ...env, PATH: join(home, '.local/bin') + ':' + (env.PATH || '') });
+  for (const key of ['GOOGLE_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GENAI_USE_VERTEXAI']) delete childEnv[key];
+  let loggedIn = null;
+  try {
+    const model = FREE_MODELS[seat.id];
+    const prompt = 'Reply with OK only. Do not use any tools.';
+    const args = model
+      ? ['run', '--pure', '--agent', 'plan', '--format', 'json', '-m', model, '--', prompt]
+      : ['--sandbox', '--mode', 'plan', '--print-timeout', '15s', '-p', prompt];
+    const { stdout } = await execFileP(seat.id, args, { cwd: dir, env: childEnv, timeout: 22_000 });
+    loggedIn = model ? /"type":"text"/.test(stdout) : stdout.trim() === 'OK';
+  } catch (err) {
+    if (/eligibility check failed|not logged in|verify your account/i.test(err.stderr || '')) loggedIn = false;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+  const login = { loggedIn, email: null };
+  freeChecks.set(seat.id, { at: Date.now(), login });
+  return login;
+}
+
 export const SEATS = [
+  ...Object.keys(FREE_MODELS).map(id => ({ id, provider: id, login: id === 'agy' ? 'agy' : '' })),
   { id: 'claude',  provider: 'claude', login: 'claude auth login', configDir: '~/.claude' },
   { id: 'claude2', provider: 'claude', login: '~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/scripts/prive-login.sh claude ~/.claude-tweede', configDir: '~/.claude-tweede' },
   { id: 'claude3', provider: 'claude', login: '~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/scripts/prive-login.sh claude ~/.claude-derde', configDir: '~/.claude-derde' },
@@ -127,6 +156,7 @@ export function seatConfigured(seat, home = homedir(), env = process.env) {
   // Beide Cursor-kaarten blijven zichtbaar: zonder sleutel/login ziet Luka
   // wat hij moet doen, in plaats van dat de tweede stoel verdwijnt.
   if (seat.provider === 'cursor') return true;
+  if (Object.hasOwn(FREE_MODELS, seat.id)) return existsSync(join(home, '.local/bin', seat.id));
   const dir = expandHome(seat.configDir || seat.home, home);
   return existsSync(dir);
 }
@@ -251,6 +281,7 @@ export async function collectSeats({ env = process.env, home = homedir() } = {})
     if (configured) {
       if (seat.provider === 'claude') login = await probeClaude(seat, env);
       else if (seat.provider === 'codex') login = await probeCodex(seat);
+      else if (Object.hasOwn(FREE_MODELS, seat.id)) login = await probeFree(seat, env, home);
       else login = await probeCursor(seat, env);
     }
 

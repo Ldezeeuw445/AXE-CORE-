@@ -58,7 +58,7 @@ GEHEUGEN_AGENT = {"axe-core": "global", "code-agent": "axe_code", "axe-algo": "a
                   "maps-agent": "global"}
 STANDAARD_MOTOREN = {"axe-core": "claude", "code-agent": "cursor", "axe-algo": "codex",
                      "maps-agent": "sleutels"}
-ABONNEMENTEN = ("claude", "claude2", "claude3", "claude4", "codex", "codex2", "codex3", "cursor", "cursor2")
+ABONNEMENTEN = ("claude", "claude2", "claude3", "claude4", "codex", "codex2", "codex3", "cursor", "cursor2", "opencode", "kilo", "agy")
 
 STAAT_PAD = os.path.expanduser(os.environ.get("AXE_PLANNER_STAAT", "~/.axe/planner.json"))
 INTERVAL_S = max(60, int(os.environ.get("AXE_PLANNER_INTERVAL_S", "300")))

@@ -37,13 +37,16 @@ export const MODEL_SUGGESTIES: Record<AgentEngine, readonly string[]> = {
   codex2: ['gpt-5-codex', 'o3'],
   codex3: ['gpt-5-codex', 'o3'],
   cursor: ['gpt-5', 'sonnet-4-thinking'],
+  opencode: [],
+  kilo: [],
+  agy: [],
   cursor2: ['gpt-5', 'sonnet-4-thinking'],
 };
 
 /** De vlag waarmee deze motor zijn model aanneemt. Alleen ter uitleg in de UI. */
 export const MODEL_VLAG: Record<AgentEngine, string> = {
   claude: '--model', claude2: '--model', claude3: '--model', claude4: '--model',
-  codex: '-m', codex2: '-m', codex3: '-m', cursor: '--model', cursor2: '--model',
+  codex: '-m', codex2: '-m', codex3: '-m', cursor: '--model', cursor2: '--model', opencode: '-m', kilo: '-m', agy: '--model',
 };
 
 const schoon = (v: unknown): string | undefined => {
