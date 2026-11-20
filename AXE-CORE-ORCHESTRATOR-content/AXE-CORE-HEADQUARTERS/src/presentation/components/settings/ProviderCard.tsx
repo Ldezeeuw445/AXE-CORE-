@@ -138,10 +138,10 @@ export function ProviderCard({
   isPrimair: boolean;
   aangepast: boolean;
   gebruik?: ProviderUsageSnapshot | null;
-  onSleutel: (waarde: string) => void;
-  onModel: (model: string) => void;
+  onSleutel?: (waarde: string) => void;
+  onModel?: (model: string) => void;
   onTest: () => void;
-  onToonSleutel: () => void;
+  onToonSleutel?: () => void;
   onVerwijder?: () => void;
 }) {
   const Icoon = kaart.icon;
@@ -212,7 +212,7 @@ export function ProviderCard({
         <div className="flex items-baseline justify-between gap-3">
           <span className="text-axe-meta shrink-0" style={{ color: 'var(--text-muted)' }}>Key</span>
           <div className="flex items-center gap-1.5 min-w-0">
-            {kaart.needsKey || sleutelOptioneel ? (
+            {onSleutel && (kaart.needsKey || sleutelOptioneel) ? (
               <>
                 <input
                   value={sleutel}
@@ -233,7 +233,7 @@ export function ProviderCard({
               </>
             ) : (
               <span className="text-axe-meta" style={{ color: 'var(--text-muted)' }}>
-                {opServer ? 'on the server' : 'not needed'}
+                {opServer ? 'on the server' : kaart.needsKey ? kaart.placeholder : 'not needed'}
               </span>
             )}
           </div>
@@ -263,7 +263,7 @@ export function ProviderCard({
           return (
             <button
               key={m}
-              onClick={() => onModel(m)}
+              onClick={() => onModel?.(m)}
               className="axe-chip !text-[10px] !py-1 !px-2 !bg-transparent !border-transparent"
               style={aan ? { color: kaart.accent } : undefined}
               aria-pressed={aan}

@@ -869,11 +869,11 @@ function ProviderKeysSection() {
       )}
 
       <RailDaxBots />
-      <ServerProviderSlots />
       <CodingSeatsSection />
 
       {/* Provider cards grid — gelijke kolommen, geen 1fr-rek. */}
       <KaartRaster>
+        <ServerProviderSlots />
         {allCatalogue.map(cat => {
           const conn = keys[cat.id] ?? {};
           const isCustom = customProviders.some(p => p.id === cat.id);

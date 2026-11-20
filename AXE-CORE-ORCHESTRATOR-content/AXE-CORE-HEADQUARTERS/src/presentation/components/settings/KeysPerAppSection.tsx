@@ -1,3 +1,5 @@
+import { ProviderCard } from './ProviderCard';
+import { providerIcoon } from './providerIcoon';
 import { CompactStatusRow } from '@/presentation/components/widgets/ModelStatusWidget';
 /**
  * Settings → Keys per app: welke sleutel elke app gebruikt, waar hij woont,
@@ -160,19 +162,22 @@ export function ServerProviderSlots({ compact = false }: { compact?: boolean } =
       status={result === 'Works' ? 'Connected' : failed ? 'Failed' : result ?? 'Not checked'}
       tone={result === 'Works' ? 'ok' : failed ? 'fail' : 'idle'} />;
   })}</>;
-  return (
-    <KaartRaster>
-      {slots.map(([label, key]) => (
-        <Kaart key={key} titel={label}>
-          <code className="text-xs break-all">{key}</code>
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <span aria-live="polite">{status[key] ?? 'Not checked'}</span>
-            <button type="button" disabled={status[key] === 'Testing…'} onClick={() => void test(key)}>
-              Test connection
-            </button>
-          </div>
-        </Kaart>
-      ))}
-    </KaartRaster>
-  );
+  return <>{slots.map(([label, key]) => {
+    const result = status[key];
+    const router = key.startsWith('OPENROUTER');
+    const groq = key.startsWith('GROQ');
+    const defaultModel = router ? 'openrouter/free' : groq
+      ? (key === 'GROQ_AGENTS_API_KEY' ? 'openai/gpt-oss-120b' : 'openai/gpt-oss-20b')
+      : 'gpt-oss-120b';
+    const failed = result === 'Broken' || result === 'Rate limited' || result?.startsWith('Test failed');
+    const stand = result === 'Works' ? 'ok' : failed ? 'fail' : result === 'Testing…' ? 'testing' : 'idle';
+    return <ProviderCard key={key}
+      kaart={{ id: key, name: label, icon: providerIcoon(router ? 'Router' : groq ? 'Rocket' : 'Zap'),
+        accent: groq ? '#ec4899' : '#f59e0b', defaultModel, placeholder: key,
+        docsUrl: router ? 'https://openrouter.ai/keys' : groq ? 'https://console.groq.com/keys' : 'https://cloud.cerebras.ai/',
+        needsKey: true }}
+      stand={stand} sleutel="" model="" fout={failed ? result : undefined}
+      sleutelZichtbaar={false} opServer={Boolean(result && !['Optional', 'Missing', 'Not configured', 'Not visible'].includes(result))}
+      modellen={[]} isPrimair={false} aangepast={false} onTest={() => void test(key)} />;
+  })}</>;
 }

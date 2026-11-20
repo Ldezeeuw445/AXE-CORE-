@@ -213,7 +213,7 @@ export function AgentMotorenSection() {
 
   return (
     <div className="axe-motoren">
-      <SectieKop titel="Main agents" uitleg="Each subscription belongs to one manager, so they never fight over the same limit. Subtasks always run on API keys." />
+      <SectieKop titel="AXE Core" />
       <div className="axe-agent-raster">
         <StatusKaart
           naam="AXE Core"
@@ -237,6 +237,9 @@ export function AgentMotorenSection() {
             { label: 'Last', waarde: routingLog[0] ? geleden(routingLog[0].ts) : '—' },
           ]}
         />
+      </div>
+      <SectieKop titel="Managers" uitleg="Live task status, engine and coding seat per manager." />
+      <div className="axe-agent-raster">
         {HOOFD_AGENTS.map(agent => {
           const motor = toewijzing[agent];
           const live = activity.ok ? activity.agents[agent] : undefined;
