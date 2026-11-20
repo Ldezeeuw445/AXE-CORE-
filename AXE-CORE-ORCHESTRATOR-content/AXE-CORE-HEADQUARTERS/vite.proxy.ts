@@ -47,7 +47,10 @@ export function devProxy(): Record<string, ProxyOptions> {
     '/proxy/groq': {
       target: 'https://api.groq.com',
       changeOrigin: true,
-      rewrite: (p) => p.replace(/^\/proxy\/groq/, ''),
+      // toProxied() vervangt https://api.groq.com/openai/v1 door /proxy/groq,
+      // dus /openai/v1 moet hier terug -- anders "Unknown request URL" en
+      // stond Groq in dev op Failing terwijl hij werkt (20 nov).
+      rewrite: (p) => p.replace(/^\/proxy\/groq/, '/openai/v1'),
     },
     '/proxy/openrouter': {
       target: 'https://openrouter.ai',

@@ -27,6 +27,7 @@ import {
   type CodingSeatStatus,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { motorNaam, type MotorStatus } from '@/domain/motorNaam';
+import { motorOpties, zonderFalende } from '@/domain/motorOpties';
 import { abonnementKaartStand, stoelSleutel, winnendeStoel } from '@/domain/codingSeats';
 import { type AbonnementVerbruik } from '@/domain/abonnementVerbruik';
 import { useCoreStatusStore } from '@/presentation/store/coreStatusStore';
@@ -225,7 +226,7 @@ export function AgentMotorenSection() {
 
   return (
     <div className="axe-motoren">
-      <SectieKop titel="Main agents" />
+      <SectieKop titel="Main agents" uitleg="What each agent runs on, whether it is online, and what it used. Only logged-in accounts and working providers are offered." />
       <div className="axe-agent-raster">
         <StatusKaart
           naam="AXE Core"
@@ -239,7 +240,7 @@ export function AgentMotorenSection() {
           keuze={
             <select value={axeHuidig ? `${axeHuidig.provider}:${axeHuidig.model}` : ''} onChange={e => kiesAxe(e.target.value)} aria-label="Model for AXE Core">
               <option value="">AXE Native (chooses itself)</option>
-              {axeKeuzes.map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
+              {zonderFalende(axeKeuzes, verbindingen, axeHuidig ? `${axeHuidig.provider}:${axeHuidig.model}` : null).map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
             </select>
           }
           stats={[
@@ -254,7 +255,8 @@ export function AgentMotorenSection() {
           const live = activity.ok ? activity.agents[agent] : undefined;
           const task = live?.task;
           const actualEngine = [task?.engine, task?.model].filter(Boolean).join(' · ');
-          const opties = kiesbaar(toewijzing, agent);
+          // Geen dubbel account, geen niet-ingelogde stoel (domain/motorOpties.ts).
+          const opties = motorOpties(kiesbaar(toewijzing, agent), motorAccounts, motor);
           const g = motor !== 'sleutels' ? abonnementGebruik[motor] : undefined;
           const lat = agentLatency(agent);
           const tokens = g ? g.input_tokens_7d + g.output_tokens_7d : 0;
@@ -311,7 +313,7 @@ export function AgentMotorenSection() {
                   <select value={voorkeur ? `${voorkeur.provider}:${voorkeur.model}` : ''}
                     onChange={e => kiesOverride(manager.id, e.target.value)} aria-label={`Chat model for ${manager.name}`}>
                     <option value="">Claude CLI (default)</option>
-                    {managerKeuzes.map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
+                    {zonderFalende(managerKeuzes, verbindingen, voorkeur ? `${voorkeur.provider}:${voorkeur.model}` : null).map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
                   </select>
                   <Link to={`/managers?open=${encodeURIComponent(manager.id)}`}>Open manager ›</Link>
                 </div>
@@ -343,7 +345,7 @@ export function AgentMotorenSection() {
               keuze={
                 <select value={ov ? `${ov.provider}:${ov.model}` : ''} onChange={e => kiesOverride(agent.id, e.target.value)} aria-label={`Model for ${agent.name}`}>
                   <option value="">choose a model (min. gpt-4o-mini)</option>
-                  {keuzesVoor(agent).map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
+                  {zonderFalende(keuzesVoor(agent), verbindingen, ov ? `${ov.provider}:${ov.model}` : null).map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
                 </select>
               }
               stats={[
@@ -390,7 +392,7 @@ export function AgentMotorenSection() {
               keuze={
                 <select value={ov ? `${ov.provider}:${ov.model}` : ''} onChange={e => kiesOverride(agent.id, e.target.value)} aria-label={`Engine for ${agent.name}`}>
                   <option value="">Auto (races)</option>
-                  {keuzesVoor(agent).map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
+                  {zonderFalende(keuzesVoor(agent), verbindingen, ov ? `${ov.provider}:${ov.model}` : null).map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
                 </select>
               }
             />

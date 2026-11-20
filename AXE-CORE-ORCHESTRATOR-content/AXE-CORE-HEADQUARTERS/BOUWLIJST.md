@@ -237,6 +237,16 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
 - [ ] **Mailroute support@** naar Resend (eigenaarsstap Luka; trade@ is klaar).
 - [~] **Een uitgelogde stoel geeft het werk door, met melding wie het overnam**
       (9 nov, `93dcdc3b`, `ca9feb3b`).
+- [~] **Settings klopt: per agent zien en kiezen wat hij gebruikt, online, usage**
+      (Luka 20 nov: "geen dubbele agents of dingen die niet kloppen ... ik moest het
+      100 keer vragen"). Gedaan: (1) core_coding_seats had 9 machinenamen voor 2
+      Macs; spooknamen tellen niet meer mee (`stoelen_actueel.py`, server + router)
+      -- van 80 naar 25 rijen; (2) eigen sectie **Agents** bovenaan, abonnementen
+      en agents stonden dubbel in Accounts én Providers; (3) keuzelijsten: geen
+      dubbel account, geen niet-ingelogde stoel, geen provider die bij de test
+      faalt (huidige keuze blijft zichtbaar); (4) dev-proxy brak de Groq-test.
+      Bewezen in de preview. Open: Cursor/Claude op de iMac geeft "onbekend"
+      (hartslag leest het niet); usage per abonnement is nog leeg (used_week).
 - [~] **Keys per app in AXE, met de manager die meldt** (9 nov, `948420eb`,
       `139f070a`). 20 nov: Settings-sleutels (Exa, ElevenLabs) en de Vercel-env van
       Companion en Trading OS zijn nu zichtbaar (alleen namen, via VERCEL_TOKEN);

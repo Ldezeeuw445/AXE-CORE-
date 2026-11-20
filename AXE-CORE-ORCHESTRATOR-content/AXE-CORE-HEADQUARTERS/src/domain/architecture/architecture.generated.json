@@ -1057,6 +1057,21 @@
       ]
     },
     {
+      "id": "coding-seat:agy",
+      "kind": "coding-seat",
+      "label": "agy",
+      "appId": "app:axe_code",
+      "description": "CLI coding seat (agy)",
+      "details": {
+        "engine": "agy",
+        "family": "agy",
+        "mode": "plan-in-chat"
+      },
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
       "id": "coding-seat:claude",
       "kind": "coding-seat",
       "label": "claude",
@@ -1185,6 +1200,36 @@
       "details": {
         "engine": "cursor2",
         "family": "cursor",
+        "mode": "plan-in-chat"
+      },
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "coding-seat:kilo",
+      "kind": "coding-seat",
+      "label": "kilo",
+      "appId": "app:axe_code",
+      "description": "CLI coding seat (kilo)",
+      "details": {
+        "engine": "kilo",
+        "family": "kilo",
+        "mode": "plan-in-chat"
+      },
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "coding-seat:opencode",
+      "kind": "coding-seat",
+      "label": "opencode",
+      "appId": "app:axe_code",
+      "description": "CLI coding seat (opencode)",
+      "details": {
+        "engine": "opencode",
+        "family": "opencode",
         "mode": "plan-in-chat"
       },
       "sources": [
@@ -4467,6 +4512,16 @@
       ]
     },
     {
+      "id": "has-seat:app:axe_code:coding-seat:agy",
+      "source": "app:axe_code",
+      "target": "coding-seat:agy",
+      "relation": "has-seat",
+      "label": "has-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
       "id": "has-seat:app:axe_code:coding-seat:claude",
       "source": "app:axe_code",
       "target": "coding-seat:claude",
@@ -4550,6 +4605,26 @@
       "id": "has-seat:app:axe_code:coding-seat:cursor2",
       "source": "app:axe_code",
       "target": "coding-seat:cursor2",
+      "relation": "has-seat",
+      "label": "has-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "has-seat:app:axe_code:coding-seat:kilo",
+      "source": "app:axe_code",
+      "target": "coding-seat:kilo",
+      "relation": "has-seat",
+      "label": "has-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "has-seat:app:axe_code:coding-seat:opencode",
+      "source": "app:axe_code",
+      "target": "coding-seat:opencode",
       "relation": "has-seat",
       "label": "has-seat",
       "sources": [
@@ -6536,6 +6611,16 @@
       ]
     },
     {
+      "id": "uses-seat:agent:developer:coding-seat:agy",
+      "source": "agent:developer",
+      "target": "coding-seat:agy",
+      "relation": "uses-seat",
+      "label": "uses-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
       "id": "uses-seat:agent:developer:coding-seat:claude",
       "source": "agent:developer",
       "target": "coding-seat:claude",
@@ -6619,6 +6704,26 @@
       "id": "uses-seat:agent:developer:coding-seat:cursor2",
       "source": "agent:developer",
       "target": "coding-seat:cursor2",
+      "relation": "uses-seat",
+      "label": "uses-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "uses-seat:agent:developer:coding-seat:kilo",
+      "source": "agent:developer",
+      "target": "coding-seat:kilo",
+      "relation": "uses-seat",
+      "label": "uses-seat",
+      "sources": [
+        "src/domain/abonnementChat.ts"
+      ]
+    },
+    {
+      "id": "uses-seat:agent:developer:coding-seat:opencode",
+      "source": "agent:developer",
+      "target": "coding-seat:opencode",
       "relation": "uses-seat",
       "label": "uses-seat",
       "sources": [

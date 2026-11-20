@@ -3471,8 +3471,11 @@ async def list_coding_seats():
     try:
         rijen = (
             sb().table("core_coding_seats").select("*")
-            .order("last_seen_at", desc=True).limit(40).execute().data
+            .order("last_seen_at", desc=True).limit(300).execute().data
         ) or []
+        # Spooknamen van de Macs eruit (stoelen_actueel.py, 20 nov).
+        from stoelen_actueel import actuele_stoelen
+        rijen = actuele_stoelen(rijen)
     except Exception as exc:
         raise HTTPException(503, f"Could not read coding seats: {exc}") from exc
     try:
@@ -3499,8 +3502,11 @@ async def usage_credits():
     try:
         rijen = (
             sb().table("core_coding_seats").select("*")
-            .order("last_seen_at", desc=True).limit(40).execute().data
+            .order("last_seen_at", desc=True).limit(300).execute().data
         ) or []
+        # Spooknamen van de Macs eruit (stoelen_actueel.py, 20 nov).
+        from stoelen_actueel import actuele_stoelen
+        rijen = actuele_stoelen(rijen)
     except Exception as exc:
         raise HTTPException(503, f"Could not read coding seats: {exc}") from exc
     try:

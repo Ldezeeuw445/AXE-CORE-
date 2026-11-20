@@ -804,7 +804,8 @@ function ProviderKeysSection() {
 
   return (
     <div>
-      <AgentMotorenSection />
+      {/* Agents, DAX en abonnementen stonden hier ÓÓK (dubbel met Accounts);
+          sinds 20 nov hebben ze hun eigen sectie "Agents". Hier alleen sleutels. */}
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-body font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
@@ -867,9 +868,6 @@ function ProviderKeysSection() {
           </div>
         </div>
       )}
-
-      <RailDaxBots />
-      <CodingSeatsSection />
 
       {/* Provider cards grid — gelijke kolommen, geen 1fr-rek. */}
       <KaartRaster>
@@ -2039,7 +2037,7 @@ export default function SettingsPage() {
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
   const [clapEnabled, setClapEnabled] = useState(false);
   const [wakeEnabled, setWakeEnabled] = useState(false);
-  const [sectie, setSectie] = useState('accounts');
+  const [sectie, setSectie] = useState('agents');
   // Eén sectie tegelijk, zoals de Browser: de lade kiest, het vak toont die
   // ene sectie als dashboard in kaarten (25 sep).
   const kiesSectie = (id: string) => {
@@ -2083,6 +2081,7 @@ export default function SettingsPage() {
   }, [voice.micPermission]);
 
   const SETTINGS_NAV: { id: string; label: string }[] = [
+    { id: 'agents', label: 'Agents' },
     { id: 'accounts', label: 'Accounts' },
     { id: 'usage', label: 'Usage' },
     { id: 'providers', label: 'Providers' },
@@ -2124,6 +2123,14 @@ export default function SettingsPage() {
             API key while signed out looks identical to pasting one that worked,
             and every background agent keeps using the old value. */}
         <UnsyncedSettingsBanner />
+
+        {sectie === 'agents' && (
+        <SectieBlok id="agents" titel="AGENTS">
+          {/* Eén plek: per agent wat hij gebruikt, of hij online is, en kiezen. */}
+          <AgentMotorenSection />
+          <RailDaxBots />
+        </SectieBlok>
+        )}
 
         {sectie === 'accounts' && (
         <SectieBlok id="accounts" titel="ACCOUNTS">

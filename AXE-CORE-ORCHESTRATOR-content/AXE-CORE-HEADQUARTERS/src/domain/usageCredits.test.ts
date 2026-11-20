@@ -60,12 +60,13 @@ describe('Settings houdt Subscriptions én Usage & Credits', () => {
   it('zet Usage & Credits naast Subscriptions, zonder die te vervangen', () => {
     const settings = readFileSync(new URL('../presentation/pages/SettingsPage.tsx', import.meta.url), 'utf8');
     // Settings v3 (8de4bcd8): eigen railknoppen Accounts en Usage. Usage
-    // vervangt Accounts niet: beide staan in de rail, Accounts opent eerst.
+    // vervangt Accounts niet: beide staan in de rail. Sinds 20 nov opent
+    // Agents eerst (wie gebruikt wat, online, kiezen).
     expect(settings).toMatch(/id: 'accounts', label: 'Accounts'/);
     expect(settings).toMatch(/<CodingSeatsSection \/>/);
     expect(settings).toMatch(/id: 'usage', label: 'Usage'/);
     expect(settings).toMatch(/sectie === 'usage' && <UsageCreditsSection \/>/);
-    expect(settings).toMatch(/useState\('accounts'\)/);
+    expect(settings).toMatch(/useState\('agents'\)/);
   });
 
   it('de view gebruikt SectieBlok en KaartRaster, geen 1fr-rek', () => {

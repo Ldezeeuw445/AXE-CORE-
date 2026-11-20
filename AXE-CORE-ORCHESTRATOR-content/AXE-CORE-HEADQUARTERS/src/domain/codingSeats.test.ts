@@ -302,7 +302,7 @@ describe('wat Luka moet doen', () => {
 });
 
 describe('Settings toont Accounts', () => {
-  it('toont coding seats in Accounts en Providers', () => {
+  it('toont coding seats één keer, in Accounts (20 nov: stond dubbel in Providers)', () => {
     const settings = readFileSync(new URL('../presentation/pages/SettingsPage.tsx', import.meta.url), 'utf8');
     // Settings v3 (8de4bcd8): de rail heet Accounts en Usage; de kaart zelf
     // heet nog steeds Subscriptions (CodingSeatsSection titel).
@@ -310,7 +310,8 @@ describe('Settings toont Accounts', () => {
     expect(settings).toMatch(/sectie === 'accounts' && \([\s\S]{0,120}<CodingSeatsSection \/>/);
     expect(settings).toMatch(/id: 'usage', label: 'Usage'/);
     expect(settings).toMatch(/sectie === 'usage' && <UsageCreditsSection \/>/);
-    expect(settings.match(/<CodingSeatsSection \/>/g)?.length).toBe(2);
+    expect(settings.match(/<CodingSeatsSection \/>/g)?.length).toBe(1);
+    expect(settings.match(/<AgentMotorenSection \/>/g)?.length).toBe(1);
     expect(settings).not.toMatch(/HomeView|NeuralBrain|MemoryTerrain/);
     const seats = readFileSync(new URL('../presentation/components/settings/CodingSeatsSection.tsx', import.meta.url), 'utf8');
     const motoren = readFileSync(new URL('../presentation/components/settings/AgentMotorenSection.tsx', import.meta.url), 'utf8');

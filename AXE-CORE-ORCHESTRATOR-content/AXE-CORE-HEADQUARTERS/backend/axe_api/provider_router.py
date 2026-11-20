@@ -315,10 +315,12 @@ def lees_stoelen(db: Any) -> list[dict[str, Any]]:
     if db is None:
         return []
     try:
-        return list(
+        from stoelen_actueel import actuele_stoelen  # spooknamen eruit (20 nov)
+
+        return actuele_stoelen(list(
             db.table("core_coding_seats").select("*")
-            .order("last_seen_at", desc=True).limit(40).execute().data or []
-        )
+            .order("last_seen_at", desc=True).limit(300).execute().data or []
+        ))
     except Exception as exc:  # noqa: BLE001
         log.warning("core_coding_seats lezen faalde: %s", exc)
         return []
