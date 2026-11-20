@@ -1343,6 +1343,14 @@ export async function northseaMensGoedkeuren(draftIds: string[]): Promise<{
   return call('POST', '/northsea/mens/goedkeuren', { draft_ids: draftIds, user_token: await northseaMensToken() });
 }
 
+/** Taken en ingekomen mails uit Wacht op jou, met Luka's eigen inlog (20 nov). */
+export async function northseaMensItems(
+  items: { kind: string; id: string }[],
+  action: 'approve' | 'reject',
+): Promise<{ results: { id: string; ok: boolean; code?: string; message?: string; status?: string }[]; ok: number }> {
+  return call('POST', '/northsea/mens/items', { items, action, user_token: await northseaMensToken() });
+}
+
 export async function northseaMensBeslis(
   draftIds: string[],
   action: 'approve' | 'reject' | 'send',

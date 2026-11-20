@@ -4,7 +4,7 @@ import pytest
 
 from northsea_mcp.server import create_app
 from tests.conftest import PUBLIC, USER
-from tests.fakes import DRAFT_PENDING
+from tests.fakes import DRAFT_PENDING, OPP as OPP_ID, TASK
 
 GOED, ANDER = "luka-sessie", "iemand-anders"
 
@@ -88,3 +88,34 @@ async def test_decide_zonder_mens_keurt_niet_goed(h, repo, monkeypatch):
     assert r.json()["results"][0]["code"] == "human_approval_required"
     d = next(x for x in repo.t["reply_drafts"] if x["id"] == DRAFT_PENDING)
     assert d["approval_status"] == "pending"
+
+
+# ── Taken en ingekomen mails (20 nov) ──
+INBOUND = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+
+
+async def test_taak_en_inbound_als_luka(h, repo):
+    repo.t["email_intelligence"].append({"id": INBOUND, "status": "new", "requires_human_approval": True})
+    for t in repo.t["deal_tasks"]:
+        if t["id"] == TASK:
+            t["requires_approval"] = True
+    r = await h.post("/human/items/decide", headers={"Authorization": f"Bearer {GOED}"}, json={
+        "action": "approve",
+        "items": [{"kind": "deal_tasks_approval", "id": TASK}, {"kind": "inbound_needs_human_review", "id": INBOUND}]})
+    assert r.status_code == 200, r.text
+    uit = r.json()
+    assert uit["ok"] == 2, uit
+    assert next(t for t in repo.t["deal_tasks"] if t["id"] == TASK)["status"] == "completed"
+    assert next(e for e in repo.t["email_intelligence"] if e.get("id") == INBOUND)["status"] == "approved"
+
+
+async def test_items_alleen_voor_luka_en_niet_voor_deals(h, repo):
+    r = await h.post("/human/items/decide", headers={"Authorization": f"Bearer {ANDER}"},
+                     json={"action": "approve", "items": [{"kind": "deal_tasks_approval", "id": TASK}]})
+    assert r.status_code == 401
+    r = await h.post("/human/items/decide", headers={"Authorization": f"Bearer {GOED}"},
+                     json={"action": "approve", "items": [{"kind": "deal_decision", "id": OPP_ID}]})
+    assert r.json()["results"][0]["code"] == "not_here"
+    r = await h.post("/human/items/decide", headers={"Authorization": f"Bearer {GOED}"},
+                     json={"action": "send", "items": [{"kind": "deal_tasks_approval", "id": TASK}]})
+    assert r.status_code == 400

@@ -221,6 +221,16 @@ async def mens_keurt_goed(draft_ids: list[str], user_token: str) -> dict[str, An
     return _mens_antwoord(r)
 
 
+async def mens_beslist_items(items: list[dict], action: str, user_token: str) -> dict[str, Any]:
+    """Taken en ingekomen mails uit "Wacht op jou" (20 nov). Zelfde doorgeefluik:
+    de NorthSea-server controleert Luka's token en weigert de rest."""
+    if action not in ("approve", "reject"):
+        raise NorthSeaGatewayError("invalid_action", "Action must be approve or reject.")
+    schoon = [{"kind": str(i.get("kind") or ""), "id": str(i.get("id") or "")} for i in items[:120] if isinstance(i, dict)]
+    r = await _mens_post("/human/items/decide", {"items": schoon, "action": action}, user_token)
+    return _mens_antwoord(r)
+
+
 async def mens_beslist(draft_ids: list[str], action: str, user_token: str) -> dict[str, Any]:
     """Approve/reject/send, los van elkaar. Approve wacht niet op Resend."""
     if action not in ("approve", "reject", "send"):

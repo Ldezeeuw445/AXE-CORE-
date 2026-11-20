@@ -96,3 +96,57 @@ async def beslis(service: Any, uid: str, draft_id: str, actie: str,
     return {"draft_id": draft_id, "ok": False, "action": actie, "code": "invalid_action",
             "message": "Action must be approve, reject or send."}
 
+
+
+# ── Taken en ingekomen mails (20 nov) ───────────────────────────────────────
+# "Wacht op jou" had alleen een knop voor mailconcepten; 18 van de 22 open
+# vragen waren taken en ingekomen mails waar Luka niets mee kon. Hier alleen
+# de twee soorten waar ja/nee eenduidig is. Een dealbeslissing (verplaatsen,
+# parkeren, stoppen) en een betaalde actie (action_queue) blijven in de Deal
+# Desk: daar hoort een echte keuze bij, geen knopje.
+
+ITEM_SOORTEN = ("deal_tasks_approval", "inbound_needs_human_review")
+INBOUND_OPEN_NIET = ("resolved", "done", "closed", "approved", "rejected", "dismissed")
+
+
+async def beslis_item(service: Any, uid: str, soort: str, item_id: str, actie: str) -> dict[str, Any]:
+    """approve/reject voor één taak of ingekomen mail, als Luka. Nooit iets versturen."""
+    uit = {"id": item_id, "kind": soort, "action": actie}
+    if soort not in ITEM_SOORTEN:
+        return {**uit, "ok": False, "code": "not_here", "message": "Decide this one in the Deal Desk."}
+    if actie not in ("approve", "reject"):
+        return {**uit, "ok": False, "code": "invalid_action", "message": "Action must be approve or reject."}
+    caller = _caller(uid)
+    try:
+        if soort == "deal_tasks_approval":
+            taak = await service.update_task(caller, task_id=item_id,
+                                             status="completed" if actie == "approve" else "cancelled",
+                                             result_note=f"{'Approved' if actie == 'approve' else 'Rejected'} by Luka in AXE")
+            return {**uit, "ok": True, "status": taak.status}
+        repo = service.repo
+        rij = await repo.get_inbound_review(item_id)
+        if not rij:
+            raise NotFound("inbound")
+        if str(rij.get("status") or "").lower() in INBOUND_OPEN_NIET:
+            return {**uit, "ok": True, "status": rij.get("status"), "message": "Already closed."}
+        nieuw = "approved" if actie == "approve" else "dismissed"
+        rijen = await repo.engine_patch("email_intelligence", {"id": f"eq.{item_id}"},
+                                        {"status": nieuw, "updated_at": _nu()})
+        if not rijen:
+            raise NotFound("inbound")
+        try:
+            await repo.engine_insert("northsea_audit_events", {
+                "actor_type": "human", "actor": CLIENT_ID, "action": f"inbound_{nieuw}",
+                "details": {"id": item_id, "from": rij.get("status"), "to": nieuw, "principal": uid}})
+        except Exception:  # noqa: BLE001 -- audit mag de beslissing niet tegenhouden
+            log.warning("audit inbound %s mislukt", item_id)
+        return {**uit, "ok": True, "status": nieuw}
+    except PolicyDenied as e:
+        return {**uit, "ok": False, "code": e.code, "message": e.message}
+    except NotFound:
+        return {**uit, "ok": False, "code": "not_found", "message": "Not found (already handled?)."}
+
+
+def _nu() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()

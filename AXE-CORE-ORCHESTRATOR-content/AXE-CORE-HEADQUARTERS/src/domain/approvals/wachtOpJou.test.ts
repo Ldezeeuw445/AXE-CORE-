@@ -62,7 +62,7 @@ describe('wacht op jou', () => {
     expect(auto[0].beleid?.marksHumanApproved).toBe(false);
   });
 
-  it('toont Approve alleen op reply_draft, niet op deal_decision of inbound', () => {
+  it('knop op mail, taak en ingekomen mail; niet op een dealbeslissing (20 nov)', () => {
     const ns = vanNorthsea([
       { approval_id: 'd1', kind: 'reply_draft', subject: 'Follow up', created_at: '2026-11-01T10:00:00Z' },
       { approval_id: 'd2', kind: 'deal_decision', subject: 'Move to negotiation', created_at: '2026-11-02T10:00:00Z' },
@@ -70,7 +70,8 @@ describe('wacht op jou', () => {
     ]);
     expect(ns.find((i) => i.approvalId === 'd1')?.kanHierBeslissen).toBe(true);
     expect(ns.find((i) => i.approvalId === 'd2')?.kanHierBeslissen).toBe(false);
-    expect(ns.find((i) => i.approvalId === 'd3')?.kanHierBeslissen).toBe(false);
+    expect(ns.find((i) => i.approvalId === 'd3')?.kanHierBeslissen).toBe(true);
+    expect(ns.find((i) => i.approvalId === 'd3')?.kanVersturen).toBe(false);
   });
 
   it('houdt threadId en messageId bij zodat fase-2 dezelfde record sluit', () => {

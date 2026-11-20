@@ -135,6 +135,16 @@ const NORTHSEA_SOORT: Record<string, { wat: string; doet: string; waarom: string
   },
 };
 
+/** NorthSea-soorten met een ja/nee-knop in Wacht op jou. */
+export const NORTHSEA_HIER = new Set(['reply_draft', 'deal_tasks_approval', 'inbound_needs_human_review']);
+
+/** Wat de knoppen zeggen per soort: ja/nee betekent niet overal "versturen". */
+export function knopTekst(soort?: string): { ja: string; nee: string } {
+  if (soort === 'deal_tasks_approval') return { ja: 'Approve step', nee: 'Cancel step' };
+  if (soort === 'inbound_needs_human_review') return { ja: 'Mark reviewed', nee: 'Dismiss' };
+  return { ja: 'Approve', nee: 'Reject' };
+}
+
 export function kenmerkVanNorthsea(r: NorthseaVraag): Kenmerk {
   return {
     kind: r.kind,
@@ -207,7 +217,10 @@ export function vanNorthsea(rijen: NorthseaVraag[], regels: BeleidRegel[] = STAN
       sinds: r.created_at || r.updated_at || '',
       // Alleen reply_draft heeft /human/drafts/decide. Deal/inbound-ids daarheen
       // sturen geeft not_found en een dode knop (Vercel-review, 18 nov).
-      kanHierBeslissen: r.kind === 'reply_draft',
+      // 20 nov: taken en ingekomen mails hebben nu ook een mens-route
+      // (/human/items/decide). Dealbeslissingen en betaalde acties niet: die
+      // vragen een echte keuze in de Deal Desk.
+      kanHierBeslissen: NORTHSEA_HIER.has(r.kind),
       dealId: r.deal_id || undefined,
       soort: r.kind,
       approvalId: r.approval_id,

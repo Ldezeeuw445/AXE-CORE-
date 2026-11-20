@@ -285,6 +285,9 @@ class FakeRepo:
         rows = self._find("deal_tasks", opportunity_id=uid(oid))
         return [r for r in rows if not open_only or r["status"] in ("open", "waiting", "in_progress")]
 
+    async def get_inbound_review(self, i):
+        return self._by_id("email_intelligence", i)
+
     async def get_task(self, i):
         return self._by_id("deal_tasks", i)
 

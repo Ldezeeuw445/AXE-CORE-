@@ -5538,6 +5538,23 @@ async def northsea_mens_beslis(req: NorthseaMensBeslisRequest):
         raise HTTPException(status, f"{e.code}: {e.message}")
 
 
+class NorthseaMensItemsRequest(BaseModel):
+    items: list[dict]
+    action: str
+    user_token: str
+
+
+@app.post("/northsea/mens/items", dependencies=[AUTH])
+async def northsea_mens_items(req: NorthseaMensItemsRequest):
+    """Taken en ingekomen mails afhandelen vanuit "Wacht op jou" (20 nov)."""
+    try:
+        return await _gateway.mens_beslist_items(req.items, req.action, req.user_token)
+    except _gateway.NorthSeaGatewayError as e:
+        status = {"not_signed_in": 401, "upstream_unreachable": 502, "invalid_action": 400,
+                  "rate_limited": 429}.get(e.code, 502)
+        raise HTTPException(status, f"{e.code}: {e.message}")
+
+
 # Three read-only NorthSea MCP tools, each as its own GET endpoint rather than
 # going through /northsea/action/{action} — App Manager (AppsPage.tsx) wants
 # these on load, the same way it already calls /vps/status and /build/status,

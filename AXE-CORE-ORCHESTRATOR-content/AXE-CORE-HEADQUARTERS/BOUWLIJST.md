@@ -256,11 +256,14 @@ en me uit zichzelf helpt met alles en dingen echt makkelijker maakt."
       gaat, en schrijft elke 3 uur een overzicht: wat er wacht, waar, en wat de
       managers zelf deden (`backend/axe_api/axe_overzicht.py`).
 - [x] **Geen 53x dezelfde managervraag**; betaling/login blijft bij Luka.
-- [ ] **NorthSea-mails goedkeuren in AXE zelf.** Er is nu nergens in AXE een
-      knop: de desk is alleen-lezen en de NorthSea-server neemt een ja alleen
-      aan van een ingelogde mens, niet van AXE's sleutel. Daarom "44 wachten
-      ergens". Nodig: één knop in "Wacht op jou" (met de tekst erbij en "alle
-      veilige in één keer") die met Luka's eigen inlog goedkeurt.
+- [~] **NorthSea-mails goedkeuren in AXE zelf.** Mails kon al sinds 17 nov
+      (`d40c3706`, met Luka's eigen inlog, plus "alles goedkeuren"). 20 nov
+      gemeten: 22 open, waarvan maar 4 mails -- 6 taken en 7 ingekomen mails
+      hadden geen knop. Nu (NorthSea 1.5.15, live): `/human/items/decide`,
+      taak -> "Approve step / Cancel step", ingekomen mail -> "Mark reviewed /
+      Dismiss", één voor één (niet in "alles goedkeuren"). Dealbeslissingen (3)
+      en betaalde acties (2) blijven bewust in de Deal Desk. Nep-token = 401
+      gecontroleerd; nog niet door Luka zelf aangeklikt.
 - [~] **Vaste vervolgmails onder de vaste regel** (max 5/dag, 14 dagen rust,
       alleen het sjabloon). Luka 20 nov: "Ja, onder de regel". Live 20 nov 01:26 (NorthSea 1.5.14, `68997438`): max 5 per dag, niemand binnen 14 dagen twee keer, boven de limiet wacht hij tot morgen in plaats van een concept bij Luka. 15 overloop-concepten teruggezet in de rij. Noodknop: `auto_send_followups` uit in deal_automation_policy.
 - [ ] **UI-ronde: alles nalopen.** Luka: "het is allemaal nog niet echt

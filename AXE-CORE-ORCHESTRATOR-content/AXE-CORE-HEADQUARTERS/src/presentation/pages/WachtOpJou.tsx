@@ -9,11 +9,11 @@ import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { TabRuimte, Kaart, SectieBlok, SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import { CATEGORIE_LABEL, type ApprovalCategorie } from '@/domain/approvals/beleid';
 import { laadRegels, logBesluit, zetCategorieVrij } from '@/domain/approvals/beleidOpslag';
-import { filterItems, hoeLang, type WachtItem } from '@/domain/approvals/wachtOpJou';
+import { filterItems, hoeLang, knopTekst, type WachtItem } from '@/domain/approvals/wachtOpJou';
 import { gelukt, klik, leegStand, mislukt, ververs, type InboxStand } from '@/domain/approvals/optimistisch';
 import { haalWachtOpJou } from '@/application/approvals/wachtOpJou';
 import { beslisApproval } from '@/application/approvals/beslisAgentOk';
-import { northseaActie, northseaMensBeslis } from '@/infrastructure/gateways/axeCoreApiService';
+import { northseaActie, northseaMensBeslis, northseaMensItems } from '@/infrastructure/gateways/axeCoreApiService';
 
 type Concept = { to?: string; subject?: string; body?: string };
 
@@ -31,6 +31,13 @@ async function voerUit(item: WachtItem, actie: 'approve' | 'reject' | 'send'): P
     return;
   }
   if (!item.approvalId) throw new Error('Missing draft.');
+  if (item.soort && item.soort !== 'reply_draft') {
+    if (actie === 'send') throw new Error('Nothing to send.');
+    const r = await northseaMensItems([{ kind: item.soort, id: item.approvalId }], actie);
+    const eerste = r.results[0];
+    if (!eerste?.ok) throw new Error(eerste?.message ?? eerste?.code ?? 'NorthSea refused.');
+    return;
+  }
   const r = await northseaMensBeslis([item.approvalId], actie);
   const eerste = r.results[0];
   if (!eerste?.ok) throw new Error(eerste?.message ?? eerste?.code ?? 'NorthSea refused.');
@@ -81,16 +88,16 @@ function Rij({ item, onBesluit, onOpen }: {
             <button type="button" onClick={() => onBesluit(item, 'approve')}
               className="flex items-center gap-1 rounded-md px-3 py-1 text-[12px] font-medium"
               style={{ background: 'var(--tint)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
-              <Check size={13} /> Approve
+              <Check size={13} /> {knopTekst(item.soort).ja}
             </button>
             <button type="button" onClick={() => onBesluit(item, 'reject')}
               className="flex items-center gap-1 rounded-md px-3 py-1 text-[12px] font-medium"
               style={{ color: 'var(--text-secondary)', border: '1px solid rgba(255,255,255,0.15)' }}>
-              <X size={13} /> Reject
+              <X size={13} /> {knopTekst(item.soort).nee}
             </button>
           </>
         )}
-        {item.approvalId && (
+        {item.approvalId && (!item.soort || item.soort === 'reply_draft') && (
           <button type="button" onClick={() => void toon()}
             className="flex items-center gap-1 rounded-md px-3 py-1 text-[12px] font-medium"
             style={{ border: '1px solid rgba(255,255,255,0.15)', color: 'var(--text-primary)' }}>
@@ -171,7 +178,9 @@ export default function WachtOpJou() {
     const zichtbaar = filterItems(stand.pending as WachtItem[], {
       manager: manager === 'all' ? undefined : manager,
       category: category === 'all' ? undefined : category,
-    }).filter((i) => i.kanHierBeslissen);
+    // "Alles goedkeuren" blijft mails en AXE-vragen; een taak of ingekomen mail
+    // keur je één voor één (20 nov).
+    }).filter((i) => i.kanHierBeslissen && (!i.soort || i.soort === 'reply_draft'));
     if (!zichtbaar.length) return;
     for (const i of zichtbaar) besluit(i, 'approve');
   };

@@ -376,6 +376,10 @@ class SupabaseRepository:
             params["status"] = "in.(open,waiting,in_progress)"
         return await self._get("deal_tasks", params)
 
+    async def get_inbound_review(self, item_id: str) -> dict | None:
+        """Eén email_intelligence-rij op id (Wacht op jou, 20 nov)."""
+        return await self._one("email_intelligence", {"id": f"eq.{uid(item_id, 'id')}", "select": "id,status,opportunity_id"})
+
     async def get_task(self, task_id: str) -> dict | None:
         return await self._one("deal_tasks", {"id": f"eq.{uid(task_id, 'task_id')}", "select": "*"})
 
