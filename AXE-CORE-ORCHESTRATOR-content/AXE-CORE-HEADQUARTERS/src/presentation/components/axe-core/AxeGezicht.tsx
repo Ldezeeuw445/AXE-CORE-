@@ -14,6 +14,8 @@
  * Bewust zonder animatie: de notch staat 24/7 boven alles, met blur erachter,
  * en elk animatieframe kostte beide Macs CPU (18 nov).
  */
+import './AxeGezicht.css';
+
 export type Stemming = 'rust' | 'werkt' | 'wacht' | 'fout' | 'klaar';
 
 /** AXE Core: zijn eigen cyaan uit roster.ts. */
@@ -63,11 +65,15 @@ export function AxeGezicht({
   stemming = 'rust',
   size = 28,
   label,
+  levend = false,
 }: {
   kleur?: string;
   stemming?: Stemming;
   size?: number;
   label?: string;
+  /** Knipperen, en rondkijken als hij werkt. Alleen waar hij groot staat
+   *  (de notch); in lijsten met tien gezichten wordt het onrustig. */
+  levend?: boolean;
 }) {
   return (
     <svg
@@ -77,6 +83,8 @@ export function AxeGezicht({
       role="img"
       aria-label={label ? `${label} · ${stemming}` : stemming}
       data-stemming={stemming}
+      data-levend={levend ? '' : undefined}
+      className="axe-gezicht"
       style={{
         flexShrink: 0,
         display: 'block',
@@ -86,7 +94,11 @@ export function AxeGezicht({
       }}
     >
       <path d={DRIEHOEK} fill={kleur} />
-      <Ogen stemming={stemming} />
+      <g className="axe-gezicht__kijk">
+        <g className="axe-gezicht__knipper">
+          <Ogen stemming={stemming} />
+        </g>
+      </g>
       {stemming === 'werkt' && (
         <g>
           <circle cx="12" cy="14" r="9" fill="#3B82F6" stroke="#0B0D12" strokeWidth="2" />

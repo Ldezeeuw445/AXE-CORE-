@@ -1,0 +1,28 @@
+/* Levende ogen (notch, 20 nov): knipperen om de paar seconden, en als hij
+   werkt kijkt hij heen en weer -- zoals de mascotte in Luka's voorbeelden,
+   maar met de AXE-driehoek. Geen beweging als het systeem minder beweging
+   vraagt. */
+.axe-gezicht[data-levend] .axe-gezicht__knipper {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: axe-knipper 5.2s infinite;
+}
+.axe-gezicht[data-levend][data-stemming='werkt'] .axe-gezicht__kijk {
+  animation: axe-kijk 3.4s ease-in-out infinite;
+}
+.axe-gezicht[data-levend][data-stemming='wacht'] .axe-gezicht__knipper {
+  animation-duration: 3.1s;
+}
+@keyframes axe-knipper {
+  0%, 93%, 100% { transform: scaleY(1); }
+  95.5% { transform: scaleY(0.12); }
+}
+@keyframes axe-kijk {
+  0%, 100% { transform: translateX(0); }
+  25%, 40% { transform: translateX(-2.6px); }
+  65%, 80% { transform: translateX(2.6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .axe-gezicht[data-levend] .axe-gezicht__knipper,
+  .axe-gezicht[data-levend] .axe-gezicht__kijk { animation: none; }
+}

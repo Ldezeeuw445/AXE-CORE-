@@ -914,7 +914,8 @@ export function AxeOverlayNotch({
             )}
           </div>
 
-          {(activity.length > 0 || dragging) && (
+          {/* Op Home staan ze als pillen in het eiland; niet dubbel. */}
+          {((activity.length > 0 && tab !== 'home') || dragging) && (
             <div className="axe-ov__activity">
               {dragging && <div className="axe-ov__drop-hint">Drop → AXE</div>}
               {activity.map((line, i) => {
@@ -938,6 +939,55 @@ export function AxeOverlayNotch({
 
           {tab === 'home' && (
             <div className="axe-ov__home">
+              {/* Het eiland (Luka 20 nov, ronde 1): links AXE groot met wat hij
+                  doet, rechts wie er nog meer bezig is. Bij geen verbinding één
+                  foutkaart in plaats van tellers die oud kunnen zijn. */}
+              {leven.toestand === 'onbereikbaar' ? (
+                <div className="axe-ov__vlak axe-ov__fout">
+                  <div className="axe-ov__gloed" data-toestand="fout" aria-hidden="true" />
+                  <AxeGezicht kleur={AXE_CYAAN} stemming="fout" size={56} label="AXE" levend />
+                  <div className="axe-ov__fout-tekst">
+                    <b>AXE can't reach the server</b>
+                    <span>The VPS isn't answering, so what you see here may be old. Your managers keep working there; this view catches up when it's back.</span>
+                  </div>
+                  <button type="button" className="axe-ov__fout-opnieuw" aria-label="Try again" title="Try again" onClick={() => window.location.reload()}>↻</button>
+                </div>
+              ) : (
+                <div className="axe-ov__eiland">
+                  <div className="axe-ov__vlak axe-ov__held">
+                    <div className="axe-ov__gloed" data-toestand={leven.toestand} aria-hidden="true" />
+                    <button type="button" className="axe-ov__held-gezicht" onClick={() => setTab(leven.toestand === 'wacht' ? 'approvals' : 'chat')} title={leven.uitleg}>
+                      <AxeGezicht kleur={AXE_CYAAN} stemming={AXE_STEMMING[leven.toestand] ?? 'rust'} size={64} label="AXE" levend />
+                    </button>
+                    <ul className="axe-ov__stappen" aria-label="What AXE is doing">
+                      {activity[1] && <li className="is-vorig">{activity[1].replace(/\s·\s[^·]*$/, '')}</li>}
+                      <li className="is-nu">{activity[0] ? activity[0].replace(/\s·\s[^·]*$/, '') : leven.uitleg}</li>
+                      {eenDing.tekst && <li className="is-volgend">Next · {eenDing.tekst}</li>}
+                    </ul>
+                  </div>
+                  <div className="axe-ov__vlak axe-ov__pillen">
+                    {claude && (
+                      <button type="button" className="axe-ov__pil" style={{ ['--chip' as string]: CLAUDE_KORAAL }} onClick={() => setTab('claude')} title={`Claude · ${claude.nu}`}>
+                        <AxeGezicht kleur={CLAUDE_KORAAL} stemming={CLAUDE_STEMMING[claude.toestand]} size={24} label="Claude" />
+                        <span>{claude.nu}</span>
+                      </button>
+                    )}
+                    {activity.slice(0, claude ? 3 : 4).map((line, i) => {
+                      const g = gezichtVoor(activityWie[i]);
+                      return (
+                        <div key={i} className="axe-ov__pil" style={{ ['--chip' as string]: g.kleur }} title={`${g.naam} · ${line}`}>
+                          <AxeGezicht kleur={g.kleur} stemming={/waiting/i.test(line) ? 'wacht' : 'werkt'} size={24} label={g.naam} />
+                          <span>{line.replace(/\s·\s[^·]*$/, '')}</span>
+                        </div>
+                      );
+                    })}
+                    {!claude && activity.length === 0 && (
+                      <p className="axe-ov__pillen-leeg">Managers are quiet. Ask AXE anything.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="axe-ov__vlak axe-ov__dag">
               <div className="axe-ov__home-kop">
                 <b>{home.groet}, Luka</b>
                 <span>{home.datum}</span>
@@ -1017,25 +1067,6 @@ export function AxeOverlayNotch({
                   </li>
                 ))}
               </ul>
-              {(claude || activity.length > 0) && (
-                <div className="axe-ov__wie">
-                  {claude && (
-                    <button type="button" className="axe-ov__wie-chip" style={{ ['--chip' as string]: CLAUDE_KORAAL }} onClick={() => setTab('claude')}>
-                      <AxeGezicht kleur={CLAUDE_KORAAL} stemming={CLAUDE_STEMMING[claude.toestand]} size={26} label="Claude" />
-                      <span><b>Claude</b>{claude.nu}</span>
-                    </button>
-                  )}
-                  {activity.map((line, i) => {
-                    const g = gezichtVoor(activityWie[i]);
-                    return (
-                      <div key={i} className="axe-ov__wie-chip" style={{ ['--chip' as string]: g.kleur }}>
-                        <AxeGezicht kleur={g.kleur} stemming={/waiting/i.test(line) ? 'wacht' : 'werkt'} size={26} label={g.naam} />
-                        <span><b>{g.naam}</b>{line.replace(/\s·\s[^·]*$/, '')}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
               <button
                 type="button"
                 className="axe-ov__home-open"
@@ -1043,6 +1074,7 @@ export function AxeOverlayNotch({
               >
                 Open AXE CORE
               </button>
+              </div>
             </div>
           )}
 

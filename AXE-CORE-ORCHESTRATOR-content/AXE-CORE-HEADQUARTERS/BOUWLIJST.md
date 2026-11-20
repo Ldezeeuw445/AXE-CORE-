@@ -181,8 +181,7 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
 - [~] **AXE Overlay in de ene notch bovenaan** (9 nov, `580ac272`).
 - [~] **Driehoek-avatars met eigen kleur, ook in de notch** (19 nov,
       `370d0bd0`); de staten (rust / werkt / wacht) nog niet in het echt gezien.
-- [ ] **Notch luxer en levendiger**: AXE en Claude elk met een eigen gezicht,
-      zodat je ziet wie wat doet.
+- [~] **Notch luxer en levendiger** (ronde 1, 20 nov, naar Luka's voorbeelden): Home in de notch is nu een eiland met kaarten -- links AXE groot met gloed in de kleur van zijn toestand en zijn stappen (vorige / nu / volgende), rechts Claude en de managers als gekleurde pillen, daaronder de dag; geen verbinding = één foutkaart met opnieuw-knop; de gezichten knipperen en kijken rond als ze werken. In de preview gezien; komt met de app-build. Ronde 2 bestanden, ronde 3 widgets.
 
 **Portal (foto/bestand/klembord naar de Mac)**
 - [x] **Van de iPhone naar de Mac** (19 nov: Luka veegde een foto naar de Mac
