@@ -155,6 +155,22 @@ if ! FOUT="$(git merge -q --ff-only origin/orchestrator 2>&1)"; then
   done < <(printf '%s\n' "$FOUT" | sed -n 's/^\t//p')
   git merge -q --ff-only origin/orchestrator 2>/dev/null || log "merge met orchestrator lukt niet: $(printf '%s' "$FOUT" | head -2 | tr '\n' ' ')"
 fi
+# De focus-dief van de Mac mini (20 nov, gemeten in ~/.axe/focus.log): een met
+# de hand gezette LaunchAgent com.axe.core met KeepAlive=true rond
+# `open -a "AXE CORE.app"`. `open` stopt meteen, launchd start hem na 10 s
+# opnieuw, en elke `open -a` activeert AXE -- dus elke ~10 s je toetsenbord
+# kwijt, midden in een zin op het tweede scherm. Repareren waar hij staat:
+# KeepAlive uit, `open -g` (op de achtergrond), één keer herladen.
+AXE_PL="$HOME/Library/LaunchAgents/com.axe.core.plist"
+if [[ -f "$AXE_PL" ]] && /usr/libexec/PlistBuddy -c "Print :KeepAlive" "$AXE_PL" 2>/dev/null | grep -q true; then
+  launchctl bootout "gui/$(id -u)/com.axe.core" 2>/dev/null || true
+  /usr/libexec/PlistBuddy -c "Set :KeepAlive false" "$AXE_PL"
+  if ! /usr/libexec/PlistBuddy -c "Print :ProgramArguments" "$AXE_PL" | grep -qE '^[[:space:]]+-g$'; then
+    /usr/libexec/PlistBuddy -c "Add :ProgramArguments:1 string -g" "$AXE_PL"
+  fi
+  launchctl bootstrap "gui/$(id -u)" "$AXE_PL" 2>/dev/null || true
+  log "com.axe.core: KeepAlive uit en open -g -- die pakte elke 10 s de focus"
+fi
 # De onafhankelijke bewaker bijwerken, ook als de API al luistert of de app
 # deze ronde niet gebouwd wordt. De installer weigert een niet-agent-host.
 if [[ -x "$HIER/backend/axe_api/.venv-local/bin/python" && -f "$HIER/backend/axe_api/.env.local" ]]; then

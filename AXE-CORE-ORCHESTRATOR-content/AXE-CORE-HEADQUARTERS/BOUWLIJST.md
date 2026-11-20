@@ -170,6 +170,11 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       op een AXE-venster, het Dock of de menubalk; Cmd-Tab binnen 0,3 s. Het
       log schrijft ook `aanroep=` als AXE-code het venster naar voren haalt, zodat
       de bron van de 10 s zichtbaar wordt.
+      20 nov 17u, de BRON gevonden: op de Mac mini een met de hand gezette
+      LaunchAgent `com.axe.core` met KeepAlive=true rond `open -a "AXE CORE.app"`
+      -- `open` stopt meteen, launchd start hem na 10 s opnieuw, en elke
+      `open -a` activeert AXE. De autosync zet nu KeepAlive uit en maakt er
+      `open -g` van (op elke Mac waar hij staat). Bewezen als focus.log stil blijft.
       20 nov: alle bekende focus-pakkers in de code zijn al afgevangen (notch
       niet-focusable, herstart na build op de achtergrond + focus terug). De
       app logt elk focusmoment in ~/.axe/focus.log, maar dat stond buiten wat
