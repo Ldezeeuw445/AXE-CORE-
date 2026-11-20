@@ -1367,6 +1367,7 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
     # de chat niet meer leegtrekken. Groq-limieten gelden per organisatie, dus
     # dit moet een sleutel van een ÁNDER Groq-account zijn. Zonder: als vroeger.
     groq_key = os.environ.get("GROQ_AGENTS_API_KEY") or os.environ.get("GROQ_API_KEY")
+    groq_light_key = os.environ.get("GROQ_LIGHT_API_KEY")
     openai_key = os.environ.get("OPENAI_API_KEY")
     cerebras_key = os.environ.get("CEREBRAS_API_KEY")
     xai_key = os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY")
@@ -1377,9 +1378,12 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
     def api_aan(naam: str) -> bool:
         return naam in toegestaan
 
+    if gratis and groq_light_key and api_aan("groq"):
+        attempts.append((f"groq/light/{GROQ_KLEIN_MODEL}",
+                         lambda: _call_openai_compat(contents, _GROQ_URL, groq_light_key, GROQ_KLEIN_MODEL)))
     if groq_key and api_aan("groq"):
         attempts.append((f"groq/{GROQ_MODEL}", lambda: _call_openai_compat(contents, _GROQ_URL, groq_key, GROQ_MODEL)))
-        if gratis and GROQ_KLEIN_MODEL != GROQ_MODEL:
+        if gratis and not groq_light_key and GROQ_KLEIN_MODEL != GROQ_MODEL:
             # Eigen limietemmer bij Groq: als 120b op zijn tokens-per-minuut zit, past 20b vaak nog.
             attempts.append((f"groq/{GROQ_KLEIN_MODEL}",
                              lambda: _call_openai_compat(contents, _GROQ_URL, groq_key, GROQ_KLEIN_MODEL)))

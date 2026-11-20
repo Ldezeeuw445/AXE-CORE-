@@ -72,6 +72,7 @@ CATALOGUS: tuple[dict[str, Any], ...] = (
     # ── AI-providers voor de agents ─────────────────────────────────────────
     _k("GROQ_API_KEY", (A,), "vps", "Agent thinking, 1st choice (free tier)", provider="groq"),
     _k("GROQ_AGENTS_API_KEY", (A,), "vps", "Own free Groq for the agents (a second Groq account), so they stop using up the chat's limit", nodig="optional", provider="groq"),
+    _k("GROQ_LIGHT_API_KEY", (A,), "vps", "Groq 3: light agent tasks (GPT-OSS 20B by default)", nodig="optional", provider="groq"),
     _k("GEMINI_API_KEY", (A,), "vps", "Agent thinking, 2nd choice", provider="google"),
     _k("OPENAI_API_KEY", (A, C), "vps", "Agent thinking, 3rd choice; Companion AI", provider="openai"),
     _k("ANTHROPIC_API_KEY", (A,), "vps", "Pay-per-use Claude; you use subscriptions instead",
