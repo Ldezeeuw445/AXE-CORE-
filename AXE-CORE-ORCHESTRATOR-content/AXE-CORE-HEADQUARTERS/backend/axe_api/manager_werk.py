@@ -278,6 +278,22 @@ def metingen(db: Any, agent: str, nu: datetime, http: Callable[[str], str] | Non
             return ("Al gedaan op orchestrator (24 u, staat binnen ~30 min op beide Macs): "
                     + " | ".join(kop)) if kop else None
         meet(commits)
+    if agent in ("projectsmgr", "axemanager"):
+        def strato() -> str:
+            # 20 nov: de eerste eigen ronde wilde "de sleutel dax-northsea-01
+            # repareren" terwijl de hele DAX-server onbereikbaar was.
+            import os, socket
+            host = (os.environ.get("AXE_DAX_DOCKER_HOST_STRATO") or "").split("@")[-1].split(":")[0].strip("/")
+            if not host:
+                return "DAX-server (Strato): niet ingesteld"
+            try:
+                socket.create_connection((host, 22), timeout=5).close()
+                return "DAX-server (Strato): bereikbaar"
+            except OSError:
+                return ("DAX-server (Strato): ONBEREIKBAAR. Alle DAX-fouten (docker inspect, dax-*-logins) "
+                        "komen hiervandaan; alleen Luka kan hem herstarten in het Strato-paneel. "
+                        "Repareer niets aan DAX zelf.")
+        meet(strato)
     app = APP_VAN.get(agent)
     if app:
         def sleutels() -> str:
