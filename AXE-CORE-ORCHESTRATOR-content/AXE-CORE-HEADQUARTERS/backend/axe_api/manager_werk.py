@@ -108,6 +108,9 @@ kunnen fout zijn, en spreken ze een meting tegen, dan geldt de meting):
 
 - Een taak is een DOEL in gewone zinnen ("Zoek uit waarom feed X sinds gisteren
   niet ververst en repareer het"), nooit een los shell-commando.
+- Staat een fout al bij "Al gedaan op orchestrator", of was hij lang niet meer
+  (zie "laatst ... geleden"), dan is hij waarschijnlijk opgelost: maak er hooguit
+  een korte controle-taak van, geen nieuwe reparatie.
 - Beweer niets over je terrein dat niet in de metingen of je context staat; weet je
   het niet, maak er dan een uitzoek-taak van.
 
@@ -225,20 +228,27 @@ def metingen(db: Any, agent: str, nu: datetime, http: Callable[[str], str] | Non
         meet(lambda: f"NorthSea-server (MCP): {http('http://127.0.0.1:8040/health', 5.0)}")
     if agent in ("projectsmgr", "axemanager"):
         def taken() -> str:
-            rijen = (db.table("core_tasks").select("status,error,title")
+            rijen = (db.table("core_tasks").select("status,error,created_at")
                      .gte("created_at", (nu - timedelta(hours=24)).isoformat()).limit(500).execute().data) or []
             tel: dict[str, int] = {}
             for r in rijen:
                 tel[str(r.get("status"))] = tel.get(str(r.get("status")), 0) + 1
-            mis = [r for r in rijen if r.get("status") == "failed"]
-            oorzaken: dict[str, int] = {}
-            for r in mis:
+            oorzaken: dict[str, list[datetime]] = {}
+            for r in rijen:
+                if r.get("status") != "failed":
+                    continue
                 e = r.get("error")
-                m = (e.get("message") if isinstance(e, dict) else str(e or "")) or "?"
-                oorzaken[" ".join(str(m).split())[:90]] = oorzaken.get(" ".join(str(m).split())[:90], 0) + 1
-            top = sorted(oorzaken.items(), key=lambda x: -x[1])[:3]
+                m = " ".join(str((e.get("message") if isinstance(e, dict) else e) or "?").split())[:90]
+                if (t := _tijd(r.get("created_at"))):
+                    oorzaken.setdefault(m, []).append(t)
+            top = sorted(oorzaken.items(), key=lambda x: -len(x[1]))[:3]
+
+            def geleden(t: datetime) -> str:
+                u = int((nu - t).total_seconds() // 3600)
+                return f"{u} u geleden" if u else f"{int((nu - t).total_seconds() // 60)} min geleden"
             return (f"Taken laatste 24 uur: {', '.join(f'{k} {v}' for k, v in sorted(tel.items()))}"
-                    + ("; meest mislukt: " + " | ".join(f"{n}x {m}" for m, n in top) if top else ""))
+                    + ("; meest mislukt: " + " | ".join(f"{len(ts)}x {m} (laatst {geleden(max(ts))})" for m, ts in top)
+                       if top else ""))
         meet(taken)
 
         def commits() -> str | None:
