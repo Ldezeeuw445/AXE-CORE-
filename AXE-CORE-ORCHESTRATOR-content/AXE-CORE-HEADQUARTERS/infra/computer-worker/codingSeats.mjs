@@ -16,12 +16,12 @@ const execFileP = promisify(execFile);
 
 export const SEATS = [
   { id: 'claude',  provider: 'claude', login: 'claude auth login', configDir: '~/.claude' },
-  { id: 'claude2', provider: 'claude', login: 'CLAUDE_CONFIG_DIR=~/.claude-tweede claude auth login', configDir: '~/.claude-tweede' },
-  { id: 'claude3', provider: 'claude', login: 'CLAUDE_CONFIG_DIR=~/.claude-derde claude auth login', configDir: '~/.claude-derde' },
-  { id: 'claude4', provider: 'claude', login: 'CLAUDE_CONFIG_DIR=~/.claude-vierde claude auth login', configDir: '~/.claude-vierde' },
+  { id: 'claude2', provider: 'claude', login: '~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/scripts/prive-login.sh claude ~/.claude-tweede', configDir: '~/.claude-tweede' },
+  { id: 'claude3', provider: 'claude', login: '~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/scripts/prive-login.sh claude ~/.claude-derde', configDir: '~/.claude-derde' },
+  { id: 'claude4', provider: 'claude', login: '~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/scripts/prive-login.sh claude ~/.claude-vierde', configDir: '~/.claude-vierde' },
   { id: 'codex',   provider: 'codex',  login: 'codex login', home: '~/.codex' },
-  { id: 'codex2',  provider: 'codex',  login: 'CODEX_HOME=~/.codex-tweede codex login', home: '~/.codex-tweede' },
-  { id: 'codex3',  provider: 'codex',  login: 'CODEX_HOME=~/.codex-derde codex login', home: '~/.codex-derde' },
+  { id: 'codex2',  provider: 'codex',  login: '~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/scripts/prive-login.sh codex ~/.codex-tweede', home: '~/.codex-tweede' },
+  { id: 'codex3',  provider: 'codex',  login: '~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/scripts/prive-login.sh codex ~/.codex-derde', home: '~/.codex-derde' },
   { id: 'cursor',  provider: 'cursor', login: 'cursor-agent login', apiKeyEnv: 'CURSOR_API_KEY' },
   { id: 'cursor2', provider: 'cursor', login: 'bash scripts/zet_cursor2_sleutel.sh (Cursor key of your hotmail account)', apiKeyEnv: 'CURSOR2_API_KEY' },
 ];

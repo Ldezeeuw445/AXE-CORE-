@@ -55,6 +55,33 @@ const REPO_MAC = '~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTER
 
 /** Inloggen op de abonnementen. Op elke machine hetzelfde, en op elke machine
  *  apart nodig -- een sessie verhuist niet mee. */
+/**
+ * Extra abonnementen (Luka 20 nov: "een sneltoets voor allemaal, ook Claude
+ * login 2 en 3"). Elk gaat naar zijn eigen map, en de inlogpagina opent in een
+ * privévenster -- in je gewone browser keurde hij meteen account 1 goed.
+ * Alleen op een Mac: daar staat het script en is er een browser.
+ */
+const EXTRA_LOGINS = (repo: string): Snelactie[] => [
+  ...(['tweede', 'derde', 'vierde'] as const).map((n, i) => ({
+    label: `Claude login ${i + 2}`,
+    cmd: `${repo}/scripts/prive-login.sh claude ~/.claude-${n}`,
+    uitleg: `Claude-account ${i + 2} -- privévenster, kies daar het andere account`,
+    groep: 'agents' as const,
+  })),
+  ...(['tweede', 'derde'] as const).map((n, i) => ({
+    label: `Codex login ${i + 2}`,
+    cmd: `${repo}/scripts/prive-login.sh codex ~/.codex-${n}`,
+    uitleg: `ChatGPT-account ${i + 2} -- privévenster, typ daar de code die hier staat`,
+    groep: 'agents' as const,
+  })),
+  {
+    label: 'Cursor 2',
+    cmd: `bash ${repo}/scripts/zet_cursor2_sleutel.sh`,
+    uitleg: 'Tweede Cursor-account: zet de sleutel van dat account',
+    groep: 'agents',
+  },
+];
+
 const AGENT_ACTIES = (cd: string): Snelactie[] => [
   {
     label: 'Welke agents',
@@ -404,7 +431,7 @@ const ONBEKEND: Snelactie[] = [
  */
 export function snelactiesVoor(hostId: string): Snelactie[] {
   const metAgentsEnGit = (eigen: Snelactie[], cd: string, pad: string) =>
-    [...eigen, ...AGENT_ACTIES(cd), ...GIT_ACTIES(pad)];
+    [...eigen, ...AGENT_ACTIES(cd), ...EXTRA_LOGINS(pad), ...GIT_ACTIES(pad)];
 
   if (hostId === 'deze-mac') return metAgentsEnGit(MAC_REPO, `cd ${REPO_MAC}`, REPO_MAC);
   if (hostId === 'mac-api') return metAgentsEnGit(MAC_API, `cd ${REPO_MAC}`, REPO_MAC);

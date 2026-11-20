@@ -679,7 +679,11 @@ async function execute(payload) {
     } catch { /* bestand ontbreekt: dan pakte AXE de focus hier nooit */ }
     let vooraan = null;
     try { vooraan = await nativeComputerUse('app.frontmost', {}); } catch { /* geen rechten */ }
-    return JSON.stringify({ nu: Math.floor(Date.now() / 1000), vooraan, focus_log: staart });
+    // Ook de notch-plaatsing (20 nov): "tegen de bovenrand?" kon op de Mac
+    // mini niemand meten, want ~/.axe is verborgen en dus niet leesbaar.
+    let notch = '(geen notch.log)';
+    try { notch = (await readFile(join(homedir(), '.axe', 'notch.log'), 'utf8')).trim().split('\n').slice(-8).join('\n'); } catch { /* nog nooit geplaatst */ }
+    return JSON.stringify({ nu: Math.floor(Date.now() / 1000), vooraan, focus_log: staart, notch_log: notch });
   }
 
   // Machine-scoped reads must not depend on a git checkout. Personal Computer

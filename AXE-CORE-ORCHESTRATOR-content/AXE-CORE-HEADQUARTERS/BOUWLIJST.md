@@ -1,14 +1,14 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 42% klaar** `████████░░░░░░░░░░░░` -- 72 klaar, 33 gebouwd maar nog niet bewezen, 66 open (van 171).
+**Stand: 42% klaar** `████████░░░░░░░░░░░░` -- 72 klaar, 35 gebouwd maar nog niet bewezen, 66 open (van 173).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (50%) | 8 | 1 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (3%) | 19 | 10 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (3%) | 21 | 10 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 4 | 3 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 2 | 35 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
@@ -122,6 +122,7 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
   - [~] **Getypt een afspraak toevoegen** (20 nov: `afspraakUitZin` + tier 1 `calendar_add`; in de preview opgeslagen op vrijdag 19:30. Bewezen zodra Luka het in de echte app doet.)
   - [~] **AXE leest de hele Mac** (Luka 20 nov): `files.list/read/search` ook buiten de werkmap -- thuismap, /Applications, /Volumes. Nooit: verborgen mappen, sleutelhanger, cookies, browserprofielen, wachtwoordmanagers, vault, .env/*.key (`leesRegels.mjs`, getest). Schrijven/verwijderen blijft in de werkmap met een ok. Bewezen zodra AXE op de Mac mini `/Applications` laat zien.
   - [~] **Claude-account 1 'not connected' terwijl hij ingelogd was** (20 nov): de controle zette zelf CLAUDE_CONFIG_DIR=~/.claude; gerepareerd `7afae4dc`, op de iMac gemeten true.
+  - [~] **Login-knoppen voor elk account** (20 nov: Claude login 2/3/4, Codex login 2/3, Cursor 2 onder de terminal; `scripts/prive-login.sh` opent de inlogpagina in een Chrome-privévenster, want de gewone browser keurde meteen account 1 goed. Bewezen als Luka account 2 inlogt en de kaart een ander e-mailadres toont.)
   - [ ] **Ruis wordt gesprek**: de live stem zette "umuyoruz.", "Zadnji.", "Mhm." als berichten van Luka in de chat (20 nov gezien) -- achtergrondgeluid als beurt.
   - [ ] **Telefoon: het invoerveld neemt op elke tab meer dan de halve hoogte** (20 nov, 375 px); op Taken zie je daardoor maar een paar regels. alles wat ooit in AXE
       gebouwd of bedacht is (computer use, eigen browser, "hey axe show me the
@@ -166,7 +167,7 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       app logt elk focusmoment in ~/.axe/focus.log, maar dat stond buiten wat
       de worker mag lezen. Nu: worker-actie `axe.focus_log` (alleen lezen) om
       dat log + de app vooraan vanaf de VPS te lezen. Volgende: lezen, oorzaak.
-- [ ] **Notch helemaal tegen de bovenkant van het scherm.**
+- [~] **Notch helemaal tegen de bovenkant van het scherm.** (20 nov: het venster stond al op y=0 -- notch.log 243x `venster_top = scherm_top` op de iMac -- maar las als grijs hangend paneel. Nu: bovenrand massief zwart dat in het glas overloopt, en holle schoudertjes links/rechts zoals een MacBook-notch. Komt met de app-build. Mac mini: `axe.focus_log` stuurt nu ook notch.log mee om daar te meten.)
 - [ ] **Geen nieuwe witte AXE CORE naast de oude op de Mac mini** na een build.
 - [~] **Beide Macs traag** (18 nov): oorzaak meten en weghalen. 20 nov gemeten
       op de iMac (8 GB, 8 kernen): AXE's eigen webview ~57% CPU continu (WebKit

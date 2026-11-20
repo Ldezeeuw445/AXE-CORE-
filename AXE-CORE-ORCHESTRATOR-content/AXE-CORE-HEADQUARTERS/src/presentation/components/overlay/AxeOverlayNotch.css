@@ -671,3 +671,56 @@ button.axe-ov__wie-chip { cursor: pointer; }
 .axe-ov__peek--portal { animation: axe-ov-portal-in 420ms cubic-bezier(.2,.9,.25,1.15) both; }
 .axe-ov__peek--portal .axe-ov__peek-titel { color: #a78bfa; }
 @keyframes axe-ov-portal-in { from { opacity: 0; transform: translateX(-60px) scale(.96); } to { opacity: 1; transform: none; } }
+
+/* ── Eén vorm met de schermrand (Luka 20 nov: "helemaal tegen de bovenkant") ──
+ * Het venster stond al op y=0 (notch.log: venster_top = scherm_top), maar de
+ * plaat las als een grijs paneel dat eronder hangt: glas van 0,72 wordt grijs
+ * boven een licht bureaublad, en de bovenhoeken waren recht afgesneden.
+ *
+ * Twee dingen, het glas zelf blijft (keuze van 5 nov):
+ * 1. Bovenaan loopt de plaat in massief zwart over, zodat de bovenrand één is
+ *    met de schermrand en de menubalk erachter, en pas lager glas wordt.
+ * 2. Holle schoudertjes links en rechts bovenaan, zoals de hardware-notch van
+ *    een MacBook: de plaat groeit uit de rand in plaats van eraan te hangen.
+ *    Ze staan binnen het venster, daarom schuift de plaat zelf een schouder-
+ *    breedte naar binnen. */
+html[data-axe-notch] { --axe-notch-schouder: 10px; }
+html[data-axe-notch] body::before,
+html[data-axe-notch] body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  width: var(--axe-notch-schouder);
+  height: var(--axe-notch-schouder);
+  pointer-events: none;
+  z-index: 5;
+}
+html[data-axe-notch] body::before {
+  left: 0;
+  background: radial-gradient(circle at 0 100%, transparent calc(var(--axe-notch-schouder) - 0.5px), #000 var(--axe-notch-schouder));
+}
+html[data-axe-notch] body::after {
+  right: 0;
+  background: radial-gradient(circle at 100% 100%, transparent calc(var(--axe-notch-schouder) - 0.5px), #000 var(--axe-notch-schouder));
+}
+html[data-axe-notch] .axe-ov,
+html[data-axe-notch] .axe-ov__handvat {
+  margin: 0 var(--axe-notch-schouder);
+  width: calc(100% - 2 * var(--axe-notch-schouder));
+}
+html[data-axe-notch] .axe-ov__handvat { width: calc(100vw - 2 * var(--axe-notch-schouder)); }
+html[data-axe-notch] .axe-ov { border-left-color: transparent; border-right-color: transparent; }
+.axe-ov::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: min(30px, 40%);
+  background: linear-gradient(#000 0, #000 30%, rgba(0, 0, 0, 0));
+  pointer-events: none;
+  /* Onder de inhoud, boven de plaat: .axe-ov is zijn eigen stapel. */
+  z-index: -1;
+}
+.axe-ov { isolation: isolate; }
+.axe-ov__handvat {
+  background: linear-gradient(#000 0, #000 45%, rgba(10, 10, 10, 0.72)) !important;
+}
