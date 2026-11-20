@@ -124,7 +124,7 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
   - [~] **Claude-account 1 'not connected' terwijl hij ingelogd was** (20 nov): de controle zette zelf CLAUDE_CONFIG_DIR=~/.claude; gerepareerd `7afae4dc`, op de iMac gemeten true.
   - [~] **Login-knoppen voor elk account** (20 nov: Claude login 2/3/4, Codex login 2/3, Cursor 2 onder de terminal; `scripts/prive-login.sh` opent de inlogpagina in een Chrome-privévenster, want de gewone browser keurde meteen account 1 goed. Bewezen als Luka account 2 inlogt en de kaart een ander e-mailadres toont.)
   - [~] **AXE mag Ollama op Strato herstarten** (Luka 20 nov): eigen sleutel `axe-ollama-knop` op de VPS (alleen `status` en `restart`), `/ollama-knop/status|restart` in de API. Wacht op Luka: `infra/dax/ollama-knop-recht.sh` één keer als root op Strato draaien. Gemeten 20 nov: Ollama bereikbaar maar elk antwoord >170 s (rij vol door DAX-bots op CPU). Volgende: bots naar Groq als de Ollama-rij vol is.
-  - [ ] **Ruis wordt gesprek**: de live stem zette "umuyoruz.", "Zadnji.", "Mhm." als berichten van Luka in de chat (20 nov gezien) -- achtergrondgeluid als beurt.
+  - [~] **Ruis wordt gesprek** (20 nov: far_field-ruisonderdrukking, taalhint NL/EN voor de transcriptie, drempel 0,6, en `isRuis`: een los bromgeluid of vreemd los woord komt niet in de chat en AXE breekt zijn antwoord erop af. Bewezen als Luka een dag praat zonder rommel in de chat.)
   - [ ] **Telefoon: het invoerveld neemt op elke tab meer dan de halve hoogte** (20 nov, 375 px); op Taken zie je daardoor maar een paar regels. alles wat ooit in AXE
       gebouwd of bedacht is (computer use, eigen browser, "hey axe show me the
       map of New York", ...), per functie: werkt het echt, en kan Luka het met

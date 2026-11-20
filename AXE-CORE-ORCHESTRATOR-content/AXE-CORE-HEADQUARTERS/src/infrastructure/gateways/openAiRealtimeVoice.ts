@@ -13,6 +13,7 @@
  * route on Tauri, iPad and iPhone; only that ephemeral value is sent from the
  * device to OpenAI for the WebRTC handshake.
  */
+import { isRuis } from '@/domain/voice/isRuis';
 import { axeCoreApiExtraHeaders, axeCoreApiUrl } from '@/infrastructure/config/apiUrl';
 import { createRealtimeUsageGuard, REALTIME_IDLE_MS, REALTIME_MAX_SESSION_MS } from './realtimeUsageGuard';
 
@@ -124,10 +125,18 @@ export function realtimeSessionUpdate(opts: {
       truncation: { type: 'retention_ratio', retention_ratio: 0.8, token_limits: { post_instructions: 8000 } },
       audio: {
         input: {
-          transcription: { model: 'gpt-4o-mini-transcribe' },
+          // Ruis (20 nov: "umuyoruz.", "Zadnji." als berichten van Luka): de Macs
+          // staan op een bureau, dus de mic hoort de kamer -- far_field filtert
+          // dat; de prompt zegt in welke talen Luka praat, zodat geluid geen
+          // woord in een willekeurige taal wordt; en de drempel iets hoger.
+          noise_reduction: { type: 'far_field' },
+          transcription: {
+            model: 'gpt-4o-mini-transcribe',
+            prompt: 'Luka talks to his assistant AXE in Dutch or English. Ignore background noise.',
+          },
           turn_detection: {
             type: 'server_vad',
-            threshold: 0.5,
+            threshold: 0.6,
             prefix_padding_ms: 250,
             silence_duration_ms: 550,
             create_response: true,
@@ -296,7 +305,17 @@ export async function openRealtimeVoice(
       liveItem = '';
       liveTekst = '';
       const text = typeof msg.transcript === 'string' ? msg.transcript : '';
-      if (text.trim()) handlers.onUserTranscript?.(text.trim());
+      // Ruis: niet in de chat, en het antwoord dat de server er al op begon
+      // meteen afbreken; het item uit het gesprek halen zodat het model er
+      // later ook niet op terugkomt.
+      if (isRuis(text)) {
+        send({ type: 'response.cancel' });
+        send({ type: 'output_audio_buffer.clear' });
+        const itemId = typeof msg.item_id === 'string' ? msg.item_id : '';
+        if (itemId) send({ type: 'conversation.item.delete', item_id: itemId });
+        return;
+      }
+      handlers.onUserTranscript?.(text.trim());
       return;
     }
     if (type === 'response.created') {
