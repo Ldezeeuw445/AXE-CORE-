@@ -29,3 +29,15 @@ describe('followupIsAfwijzing', () => {
     expect(followupIsAfwijzing('you can give it my OK')).toBe(false);
   });
 });
+
+describe('altijd: ja en vastzetten (Luka 17 nov)', () => {
+  it('herkent "ja altijd" als akkoord én altijd', async () => {
+    const { followupIsAltijd, followupIsAkkoord } = await import('./goedkeuringFollowup');
+    for (const t of ['ja, altijd', 'mag altijd', 'voortaan goed', 'yes, always']) {
+      expect(followupIsAltijd(t)).toBe(true);
+      expect(followupIsAkkoord(t)).toBe(true);
+    }
+    expect(followupIsAltijd('ok')).toBe(false);
+    expect(followupIsAltijd('nee, nooit, niet altijd')).toBe(false);
+  });
+});

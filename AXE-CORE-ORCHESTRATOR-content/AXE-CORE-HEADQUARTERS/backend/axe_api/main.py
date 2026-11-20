@@ -377,6 +377,9 @@ class TaskApprovalDecision(BaseModel):
     approved: bool
     decided_by: str = "luka"
     reason: Optional[str] = None
+    # "Altijd" (vaste_toestemming.py): dit precieze commando hoeft niet meer
+    # gevraagd te worden. Nooit voor push/verwijderen/geld/versturen.
+    altijd: bool = False
 
 class MemoryEntry(BaseModel):
     user_id: str
@@ -699,11 +702,34 @@ async def decide_task_approval(
         raise HTTPException(409, str(exc)) from exc
     if approval.get("already_decided"):
         return {"approval": approval}
+    vast = None
+    if req.approved and req.altijd:
+        import vaste_toestemming as _vt
+        cmd = ((approval.get("metadata") or {}).get("command")) if isinstance(approval, dict) else None
+        vast = (await asyncio.to_thread(_vt.geef, sb(), str(cmd or ""), req.decided_by or "luka")
+                if cmd else {"ok": False, "reden": "deze vraag heeft geen commando om vast te zetten"})
     await audit("approval_decision", task_id, {
         "approval_id": approval_id, "approved": req.approved,
-        "decided_by": req.decided_by,
+        "decided_by": req.decided_by, "altijd": bool(req.altijd),
     }, request.client.host if request.client else "")
-    return {"approval": approval}
+    return {"approval": approval, **({"vast": vast} if vast is not None else {})}
+
+
+@app.get("/toestemming", dependencies=[AUTH])
+async def vaste_toestemmingen():
+    """Wat AXE zonder vragen mag (Luka zei "altijd")."""
+    import vaste_toestemming as _vt
+    return {"toestemmingen": list(await asyncio.to_thread(_vt.lees, sb()))}
+
+
+class ToestemmingIntrekken(BaseModel):
+    sleutel: str
+
+
+@app.post("/toestemming/intrekken", dependencies=[AUTH])
+async def vaste_toestemming_intrekken(body: ToestemmingIntrekken):
+    import vaste_toestemming as _vt
+    return {"ok": await asyncio.to_thread(_vt.trek_in, sb(), body.sleutel)}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MISSIES, AGENT-ACTIVITEIT, DAX, OBSERVABILITY — zie missie_api.py

@@ -40,10 +40,10 @@ function nietMeerPending(e: unknown): boolean {
   return /AXE API 404\b/.test(e instanceof Error ? e.message : String(e));
 }
 
-export function beslisApproval(taskId: string, approvalId: string, akkoord: boolean, reden?: string): Promise<void> {
+export function beslisApproval(taskId: string, approvalId: string, akkoord: boolean, reden?: string, altijd?: boolean): Promise<void> {
   const bezig = besluiten.get(approvalId);
   if (bezig) return bezig;
-  const besluit = decideDurableTaskApproval(taskId, approvalId, akkoord, reden)
+  const besluit = decideDurableTaskApproval(taskId, approvalId, akkoord, reden, akkoord && altijd)
     .then(() => undefined)
     .catch(async (e: unknown) => {
       if (nietMeerPending(e)) {
@@ -60,6 +60,8 @@ export function beslisApproval(taskId: string, approvalId: string, akkoord: bool
 export async function beslisAgentOk(in_: {
   akkoord: boolean;
   reden?: string;
+  /** Ja, en zet dit vast (zie followupIsAltijd). */
+  altijd?: boolean;
   agent?: ServerAgent | null;
   job?: Pick<AxeJob, 'taskId' | 'approvalId' | 'title' | 'approvalVraag'> | null;
   rij?: GoedkeuringsRij | null;
@@ -67,16 +69,16 @@ export async function beslisAgentOk(in_: {
   const reden = in_.reden
     ?? (in_.akkoord ? 'Approved by Luka.' : 'Declined by Luka.');
   if (in_.rij?.id && in_.rij.taskId) {
-    await beslisApproval(in_.rij.taskId, in_.rij.id, in_.akkoord, reden);
+    await beslisApproval(in_.rij.taskId, in_.rij.id, in_.akkoord, reden, in_.altijd);
     return true;
   }
   if (in_.job?.taskId && in_.job.approvalId) {
-    await beslisApproval(in_.job.taskId, in_.job.approvalId, in_.akkoord, reden);
+    await beslisApproval(in_.job.taskId, in_.job.approvalId, in_.akkoord, reden, in_.altijd);
     return true;
   }
   const rijen = await rijenNu(in_.agent, in_.job);
   const eerste = rijen[0];
   if (!eerste) return false;
-  await beslisApproval(eerste.taskId, eerste.id, in_.akkoord, reden);
+  await beslisApproval(eerste.taskId, eerste.id, in_.akkoord, reden, in_.altijd);
   return true;
 }

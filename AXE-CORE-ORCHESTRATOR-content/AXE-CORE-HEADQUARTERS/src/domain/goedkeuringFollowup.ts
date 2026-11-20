@@ -15,11 +15,24 @@ function normaal(tekst: string): string {
   return (tekst || '').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * "Ja, altijd" / "mag altijd" / "voortaan goed": ja, en zet dit vast zodat
+ * dezelfde vraag niet terugkomt (vaste_toestemming.py op de VPS). Luka 17 nov:
+ * "als ik zeg dat het mag, dan mag het".
+ */
+const ALTIJD = /\b(altijd|always|voortaan|vanaf nu|elke keer goed|hoef je niet meer te vragen)\b/i;
+
+export function followupIsAltijd(tekst: string): boolean {
+  const t = normaal(tekst);
+  return !!t && ALTIJD.test(t) && !followupIsAfwijzing(t) && !/\b(nee|no|nooit|never|niet altijd|not always)\b/i.test(t);
+}
+
 /** True als deze follow-up de pending goedkeuring van díe manager is. */
 export function followupIsAkkoord(tekst: string): boolean {
   const t = normaal(tekst);
   if (!t) return false;
   if (followupIsAfwijzing(t)) return false;
+  if (followupIsAltijd(t)) return true;
   if (AKKOORD.test(t)) return true;
   if (/^(ja|yes|yep|yeah|ok|okay|oke|oké|prima|akkoord|approve)\b[.!?]*$/i.test(t)) return true;
   return false;

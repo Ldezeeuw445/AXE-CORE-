@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 66 klaar, 24 gebouwd maar nog niet bewezen, 78 open (van 168).
+**Stand: 39% klaar** `████████░░░░░░░░░░░░` -- 66 klaar, 26 gebouwd maar nog niet bewezen, 76 open (van 168).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -9,7 +9,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 6 (33%) | 10 | 2 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 13 | 13 |
-| Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 0 | 7 |
+| Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 2 | 5 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 3 (7%) | 1 | 39 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
@@ -243,10 +243,10 @@ en me uit zichzelf helpt met alles en dingen echt makkelijker maakt."
       "dat is een bedrijf wat geautomatiseerd moet lopen". Vervolg op eigen
       draad, vast sjabloon, max N/dag. Raakt service.send_policy_allowed EN de
       databasecontrole (alleen eerste-contact-doelen) -> migratie + deploy.
-- [ ] **Managers vragen in hun eigen gesprek** (zoals Claude/Grok): een vraag
+- [~] **Managers vragen in hun eigen gesprek** (20 nov nagelopen: het staat er al -- de VPS zet "Ik wacht op je ok: ... Zeg ok of nee hier" in het gesprek, het managervenster toont elke open vraag van die manager met Approve/Decline (rijenVoorAgent + GoedkeuringActie), en "ok"/"ja altijd" in het gesprek beslist hem. Bewezen zodra Luka er een in het echt zo afhandelt.) (zoals Claude/Grok): een vraag
       komt als bericht met ja/nee-knoppen in de chat van die manager, niet als
       losse kaart elders. "Ja" in het gesprek voert hem uit.
-- [ ] **AXE voert uit wat Luka toestaat.** "Als ik zeg dat het mag, dan mag
+- [~] **AXE voert uit wat Luka toestaat.** (gebouwd 20 nov: zeg "ja, altijd" / "mag altijd" / "voortaan goed" op een vraag in het managergesprek -> goedgekeurd én vastgezet in `vaste_toestemming.py` (rijen to_agent='toestemming'); de task-worker geeft die commando's mee als al goedgekeurd. Nooit vast: push/merge/PR, verwijderen, sudo, betalen, handelen, versturen, terminal.free -- die blijven elke keer vragen. Lijst: `GET /toestemming`, intrekken: `POST /toestemming/intrekken`.) "Als ik zeg dat het mag, dan mag
       het": een staande toestemming per soort actie, vastgelegd en terug te
       draaien, zodat dezelfde vraag niet terugkomt.
 

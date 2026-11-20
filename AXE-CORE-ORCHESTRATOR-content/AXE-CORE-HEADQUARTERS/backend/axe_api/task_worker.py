@@ -474,6 +474,15 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
             "axe.progress",
             f"Resuming with {len(approved)} approved command(s).",
         )
+    # Vaste toestemming (Luka zei "altijd"): die commando's vraagt AXE niet meer.
+    try:
+        import vaste_toestemming
+        from agent_loop import _db_voor_stoelen
+        _db = _db_voor_stoelen()
+        if _db is not None:
+            approved = approved + await asyncio.to_thread(vaste_toestemming.lees, _db)
+    except Exception:  # noqa: BLE001 -- zonder lijst vraagt AXE gewoon, zoals voorheen
+        pass
 
     # Annuleren moet ONDERWEG aankomen. Zonder dit loopt een taak van een half
     # uur gewoon door nadat hij is afgezet, en pas aan het eind blijkt dat er

@@ -28,7 +28,7 @@ import { daxRegel, eventTijd, missieVoortgang, serverStand as bepaalServerStand,
 import { rijenVoorAgent, wachtOpOk } from '@/domain/agents/pendingApproval';
 import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
 import type { GoedkeuringsRij } from '@/domain/agents/pendingApproval';
-import { followupIsAkkoord, followupIsAfwijzing } from '@/domain/goedkeuringFollowup';
+import { followupIsAkkoord, followupIsAfwijzing, followupIsAltijd } from '@/domain/goedkeuringFollowup';
 import { taakFoutVan } from '@/domain/taken/taakFout';
 import { MANAGER_DRAAD_EVT } from '@/infrastructure/persistence/managerDraadSync';
 import { MANAGER_DENKT_EVT } from '@/application/managers/managerAntwoord';
@@ -244,7 +244,7 @@ export function ManagerChat({
   jobs?: AxeJob[];
   onSluit?: () => void;
   onOpvolging?: (tekst: string) => void;
-  onGoedkeuring?: (akkoord: boolean) => void;
+  onGoedkeuring?: (akkoord: boolean, altijd?: boolean) => void;
   extraGoedkeuringen?: Array<{ id: string; task_id?: string; wat?: string | null; waarom?: string | null; title?: string; detail?: string }>;
   server?: ServerAgent;
   onMissie?: (missieId: string, actie: 'pause' | 'resume') => void;
@@ -388,7 +388,7 @@ export function ManagerChat({
     const t = (basis + bijlage).trim();
     if (!t || !onOpvolging) return;
     if (wacht && onGoedkeuring && (followupIsAkkoord(basis) || followupIsAfwijzing(basis))) {
-      onGoedkeuring(followupIsAkkoord(basis));
+      onGoedkeuring(followupIsAkkoord(basis), followupIsAltijd(basis));
       setOpvolging('');
       setAttachments([]);
       return;

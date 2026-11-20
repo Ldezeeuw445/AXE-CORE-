@@ -46,7 +46,7 @@ import { startManagerJob } from '@/presentation/store/managerJob';
 import { useManagersDeskStore } from '@/presentation/store/managersDeskStore';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
-import { followupIsAkkoord, followupIsAfwijzing } from '@/domain/goedkeuringFollowup';
+import { followupIsAkkoord, followupIsAfwijzing, followupIsAltijd } from '@/domain/goedkeuringFollowup';
 import { wachtOpOk } from '@/domain/agents/pendingApproval';
 import { pauseMission, resumeMission } from '@/infrastructure/gateways/axeCoreApiService';
 import { agentTierRegel } from '@/domain/agents/agentTiers';
@@ -330,6 +330,7 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
     if ((akkoord || afwijs) && wachtOpOk(srv, job?.state === 'waiting')) {
       void beslisAgentOk({
         akkoord,
+        altijd: akkoord && followupIsAltijd(tekst),
         agent: srv,
         job,
         reden: akkoord ? 'Approved in Managers chat.' : 'Declined in Managers chat.',
@@ -580,9 +581,10 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
               void (actie === 'pause' ? pauseMission(id) : resumeMission(id)).then(verversServerAgents);
             }}
             onOpvolging={stuurNaarGekozen}
-            onGoedkeuring={(akkoord) => {
+            onGoedkeuring={(akkoord, altijd) => {
               void beslisAgentOk({
                 akkoord,
+                altijd,
                 agent: server.agents[agent.id],
                 job,
                 reden: akkoord ? 'Approved in Managers chat.' : 'Declined in Managers chat.',

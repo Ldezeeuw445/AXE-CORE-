@@ -385,11 +385,13 @@ export async function decideDurableTaskApproval(
   approvalId: string,
   approved: boolean,
   reason?: string,
-): Promise<{ approval: DurableTaskApproval }> {
+  /** "Altijd": de VPS zet dit commando vast (nooit push/verwijderen/geld). */
+  altijd?: boolean,
+): Promise<{ approval: DurableTaskApproval; vast?: { ok: boolean; reden?: string } }> {
   return call(
     'POST',
     `/tasks/${encodeURIComponent(taskId)}/approvals/${encodeURIComponent(approvalId)}/decision`,
-    { approved, decided_by: 'luka', reason },
+    { approved, decided_by: 'luka', reason, ...(altijd ? { altijd: true } : {}) },
   );
 }
 
