@@ -70,6 +70,11 @@ meld_vast() {  # $1 = reden, $2 = wat te doen
 }
 niet_meer_vast() { rm -f "$VAST_MAP"/autosync-vast-{reden,sinds,gemeld}; }
 
+# Eén keer per dag: veilige caches opruimen en waarschuwen bij weinig ruimte
+# (20 nov: beide Macs op 98%). Vóór de tak-controles, zodat het ook draait als
+# de autosync om een andere reden stilstaat.
+bash "$HIER/scripts/schijf-onderhoud.sh" 2>/dev/null || true
+
 TAK="$(git rev-parse --abbrev-ref HEAD)"
 # Een helper die de hoofdmap op zijn eigen tak liet staan (1 nov: de Mac mini op
 # feat/notch-big-scale, al gemerged) legde de autosync dagen stil. Kost het niets,
