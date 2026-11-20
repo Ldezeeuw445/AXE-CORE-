@@ -405,6 +405,70 @@ const VPS: Snelactie[] = [
   ...GIT_ACTIES(REPO_VPS),
 ];
 
+/**
+ * De Strato-box met Ollama en de DAX-computers (host-id 'vps-hetzner').
+ *
+ * Kreeg tot 20 nov de knoppen van de API-VPS (Deploy, Herstart alles --
+ * diensten die hier niet bestaan). Nu eigen knoppen: Ollama, de containers, en
+ * per DAX-bot inloggen. Zonder login konden de bots hun abonnement niet
+ * gebruiken (Keys per app: "dax-…-01 login MISSING"). In een container is er
+ * geen browser: Claude geeft een link en vraagt om de code, Codex geeft een
+ * link en een code (device-auth). Open de link in een privévenster als je een
+ * ander account wilt dan dat van je browser.
+ */
+const DAX_BOTS = ['developer', 'trading', 'northsea', 'thinktank', 'browser'] as const;
+
+const STRATO: Snelactie[] = [
+  {
+    label: 'Ollama',
+    cmd: 'systemctl --no-pager status ollama --lines=3; echo; curl -s localhost:11434/api/ps | head -c 400; echo',
+    uitleg: 'Draait Ollama, en welk model zit er nu in',
+    groep: 'machine',
+    leestAlleen: true,
+  },
+  {
+    label: 'Ollama herstarten',
+    cmd: 'systemctl restart ollama && sleep 3 && systemctl is-active ollama',
+    uitleg: 'Leegt de rij als elk antwoord blijft hangen',
+    groep: 'machine',
+  },
+  {
+    label: 'DAX-containers',
+    cmd: 'docker ps --format "table {{.Names}}\t{{.Status}}"',
+    uitleg: 'De vijf DAX-computers van de agents',
+    groep: 'machine',
+    leestAlleen: true,
+  },
+  {
+    label: 'DAX-logins',
+    cmd: 'for c in $(docker ps --format "{{.Names}}" | grep ^dax-); do printf "%-18s claude:%s codex:%s\\n" "$c" "$(docker exec $c sh -c \'test -f ~/.claude/.credentials.json && echo ja || echo nee\')" "$(docker exec $c sh -c \'test -f ~/.codex/auth.json && echo ja || echo nee\')"; done',
+    uitleg: 'Per DAX-bot: is Claude en Codex ingelogd',
+    groep: 'agents',
+    leestAlleen: true,
+  },
+  ...DAX_BOTS.flatMap((b): Snelactie[] => [
+    {
+      label: `${b} · Claude`,
+      cmd: `docker exec -it dax-${b}-01 claude auth login`,
+      uitleg: `DAX ${b}: Claude inloggen -- open de link, kies het account, plak de code hier`,
+      groep: 'agents',
+    },
+    {
+      label: `${b} · Codex`,
+      cmd: `docker exec -it dax-${b}-01 codex login --device-auth`,
+      uitleg: `DAX ${b}: Codex inloggen -- open de link en typ de code die hier staat`,
+      groep: 'agents',
+    },
+  ]),
+  {
+    label: 'Schijf & geheugen',
+    cmd: 'df -h / | tail -1; echo; free -h | head -2',
+    uitleg: 'Ruimte en geheugen van de Strato-box',
+    groep: 'machine',
+    leestAlleen: true,
+  },
+];
+
 /** Wat er op een machine staat die we niet kennen: het minimum dat overal werkt,
  *  plus de agents en git -- die zijn niet machinegebonden. */
 const ONBEKEND: Snelactie[] = [
@@ -443,6 +507,7 @@ export function snelactiesVoor(hostId: string): Snelactie[] {
   if (hostId === 'mac-git') return metAgentsEnGit(MAC_GIT, `cd ${REPO_MAC}`, REPO_MAC);
   // De iMac is een Mac zonder eigen rol: de bouwcommando's zijn daar hetzelfde.
   if (hostId === 'imac') return metAgentsEnGit(MAC_REPO, `cd ${REPO_MAC}`, REPO_MAC);
+  if (hostId === 'vps-hetzner') return STRATO;
   if (hostId.startsWith('vps')) return VPS;
   return ONBEKEND;
 }

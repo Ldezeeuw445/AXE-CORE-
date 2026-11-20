@@ -1,14 +1,14 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 42% klaar** `████████░░░░░░░░░░░░` -- 72 klaar, 35 gebouwd maar nog niet bewezen, 66 open (van 173).
+**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 41 gebouwd maar nog niet bewezen, 62 open (van 176).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (50%) | 8 | 1 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (3%) | 21 | 10 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 27 | 6 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 4 | 3 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 2 | 35 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
@@ -124,6 +124,7 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
   - [~] **Claude-account 1 'not connected' terwijl hij ingelogd was** (20 nov): de controle zette zelf CLAUDE_CONFIG_DIR=~/.claude; gerepareerd `7afae4dc`, op de iMac gemeten true.
   - [~] **Login-knoppen voor elk account** (20 nov: Claude login 2/3/4, Codex login 2/3, Cursor 2 onder de terminal; `scripts/prive-login.sh` opent de inlogpagina in een Chrome-privévenster, want de gewone browser keurde meteen account 1 goed. Bewezen als Luka account 2 inlogt en de kaart een ander e-mailadres toont.)
   - [~] **AXE mag Ollama op Strato herstarten** (Luka 20 nov): eigen sleutel `axe-ollama-knop` op de VPS (alleen `status` en `restart`), `/ollama-knop/status|restart` in de API. Wacht op Luka: `infra/dax/ollama-knop-recht.sh` één keer als root op Strato draaien. Gemeten 20 nov: Ollama bereikbaar maar elk antwoord >170 s (rij vol door DAX-bots op CPU). Volgende: bots naar Groq als de Ollama-rij vol is.
+  - [~] **DAX-bots inloggen vanuit AXE** (20 nov): Strato-terminal heeft eigen knoppen (Ollama, containers, DAX-logins, per bot Claude/Codex inloggen); kreeg eerst de knoppen van de API-VPS. Bewezen als Keys per app de bots op Works zet.
   - [~] **Ruis wordt gesprek** (20 nov: far_field-ruisonderdrukking, taalhint NL/EN voor de transcriptie, drempel 0,6, en `isRuis`: een los bromgeluid of vreemd los woord komt niet in de chat en AXE breekt zijn antwoord erop af. Bewezen als Luka een dag praat zonder rommel in de chat.)
   - [ ] **Telefoon: het invoerveld neemt op elke tab meer dan de halve hoogte** (20 nov, 375 px); op Taken zie je daardoor maar een paar regels. alles wat ooit in AXE
       gebouwd of bedacht is (computer use, eigen browser, "hey axe show me the
@@ -149,7 +150,7 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       Eerst 2 en 8.)
 
 **De Macs**
-- [ ] **Tweede scherm Mac mini: AXE pakt de focus niet meer** (18 nov
+- [x] **Tweede scherm Mac mini: AXE pakt de focus niet meer** (BEWEZEN 20 nov 17:36: na de reparatie van de LaunchAgent 15 min focus.log gemeten -- 0 focusmomenten, daarvoor elke ~10 s) (18 nov
       `109779a8` notch, `d7453322` wekwoord volgt echte vensterfocus).
       19 nov 23:40 Luka: "op de mac mini pakt axe core nog steeds de focus" --
       dus niet opgelost. Eerst meten wélk venster/proces de focus pakt.
