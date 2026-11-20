@@ -1,15 +1,15 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 42% klaar** `████████░░░░░░░░░░░░` -- 71 klaar, 24 gebouwd maar nog niet bewezen, 73 open (van 168).
+**Stand: 42% klaar** `████████░░░░░░░░░░░░` -- 71 klaar, 27 gebouwd maar nog niet bewezen, 70 open (van 168).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 8 (44%) | 8 | 2 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 12 | 14 |
-| Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 2 | 5 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 13 | 13 |
+| Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 4 | 3 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 2 | 35 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
@@ -184,7 +184,7 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       per deal (samen met AXE), geen 90 goedkeuringen; deals komen echt
       dichter bij sluiten; de desk is overzichtelijk. Professioneel: er tekenen
       al bedrijven terug.
-- [ ] **Geen overlopende emmer bij NorthSea** (20 nov GEMETEN: NIET opgelost -- 21 -> 37. Oorzaak: 18 vervolgmail-concepten met hetzelfde sjabloon ("Following up on our previous message") voor kopers van 20 dagen terug, in batches van de NorthSea-engine (16:30, 16:45, 22:15); de fix van 19 nov dekte alleen eerste mails. Per nieuwe deal twee keer "Yes needed" (action_queue + deal_tasks): opgelost 20 nov (`070b66bd`, live NorthSea 1.5.14; 2 dubbele opgeruimd). Echte oplossing = vervolgmails onder de vaste regel vanzelf laten gaan -> wacht op Luka's ja.) (live 19 nov, `6f5df5c6`): een eerste
+- [~] **Geen overlopende emmer bij NorthSea** (20 nov 01:27: vervolgmails onder de regel live (`68997438`), stapel 37 -> 20. Bewezen als hij morgen niet weer groeit. Eerder, 20 nov GEMETEN: NIET opgelost -- 21 -> 37. Oorzaak: 18 vervolgmail-concepten met hetzelfde sjabloon ("Following up on our previous message") voor kopers van 20 dagen terug, in batches van de NorthSea-engine (16:30, 16:45, 22:15); de fix van 19 nov dekte alleen eerste mails. Per nieuwe deal twee keer "Yes needed" (action_queue + deal_tasks): opgelost 20 nov (`070b66bd`, live NorthSea 1.5.14; 2 dubbele opgeruimd). Echte oplossing = vervolgmails onder de vaste regel vanzelf laten gaan -> wacht op Luka's ja.) (live 19 nov, `6f5df5c6`): een eerste
       mail boven de daglimiet (5/dag) wacht nu op ruimte in plaats van een
       concept + twee keer "Yes needed" bij Luka. Stapel opgeruimd van 48 naar
       ~21 (1 concept, 10 Yes needed waarvan 7 dezelfde Pitsonel-vraag, 3
@@ -224,8 +224,8 @@ en me uit zichzelf helpt met alles en dingen echt makkelijker maakt."
       aan van een ingelogde mens, niet van AXE's sleutel. Daarom "44 wachten
       ergens". Nodig: één knop in "Wacht op jou" (met de tekst erbij en "alle
       veilige in één keer") die met Luka's eigen inlog goedkeurt.
-- [ ] **Vaste vervolgmails onder de vaste regel** (max 5/dag, 14 dagen rust,
-      alleen het sjabloon). Wacht op Luka's ja.
+- [~] **Vaste vervolgmails onder de vaste regel** (max 5/dag, 14 dagen rust,
+      alleen het sjabloon). Luka 20 nov: "Ja, onder de regel". Live 20 nov 01:26 (NorthSea 1.5.14, `68997438`): max 5 per dag, niemand binnen 14 dagen twee keer, boven de limiet wacht hij tot morgen in plaats van een concept bij Luka. 15 overloop-concepten teruggezet in de rij. Noodknop: `auto_send_followups` uit in deal_automation_policy.
 - [ ] **UI-ronde: alles nalopen.** Luka: "het is allemaal nog niet echt
       perfect en duidelijk". Elke tab langs: overlap, wat-is-dit, waar klik ik.
       Begint met inloggen in het browserpaneel (preview poort 5199).
@@ -239,7 +239,7 @@ en me uit zichzelf helpt met alles en dingen echt makkelijker maakt."
 - [x] **codex.run/claude_code.run faalden altijd** ("protected branch
       orchestrator"): de werker maakt nu zelf een worktree op axe/<datum>-<id>.
       En de agent weet dat git en GitHub op de Macs staan, niet op de VPS.
-- [ ] **NorthSea draait zelf: vervolgmails onder de vaste regel.** Luka 18 nov:
+- [~] **NorthSea draait zelf: vervolgmails onder de vaste regel.** (zelfde als hierboven, live 20 nov) Luka 18 nov:
       "dat is een bedrijf wat geautomatiseerd moet lopen". Vervolg op eigen
       draad, vast sjabloon, max N/dag. Raakt service.send_policy_allowed EN de
       databasecontrole (alleen eerste-contact-doelen) -> migratie + deploy.
