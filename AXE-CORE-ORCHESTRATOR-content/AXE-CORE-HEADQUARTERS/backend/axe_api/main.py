@@ -3563,7 +3563,7 @@ async def keys_overview():
 async def provider_key_test(key: str):
     groq = {"GROQ_AGENTS_API_KEY", "GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY"}
     openrouter = {f"OPENROUTER{slot}_API_KEY" for slot in (3, 4, 5)}
-    if key not in groq | openrouter:
+    if key not in groq | openrouter | {"CEREBRAS_API_KEY"}:
         raise HTTPException(404, "Unknown provider slot")
     secret = os.environ.get(key, "").strip()
     if not secret:
@@ -3571,6 +3571,9 @@ async def provider_key_test(key: str):
     if key in groq:
         url = "https://api.groq.com/openai/v1/chat/completions"
         model = "openai/gpt-oss-120b" if key == "GROQ_AGENTS_API_KEY" else "openai/gpt-oss-20b"
+    elif key == "CEREBRAS_API_KEY":
+        url = "https://api.cerebras.ai/v1/chat/completions"
+        model = os.environ.get("AXE_AGENT_CEREBRAS_MODEL", "gpt-oss-120b")
     else:
         url = "https://openrouter.ai/api/v1/chat/completions"
         model = "openrouter/free"

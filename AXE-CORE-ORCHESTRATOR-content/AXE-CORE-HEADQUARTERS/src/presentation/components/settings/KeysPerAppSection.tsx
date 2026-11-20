@@ -124,6 +124,7 @@ export function KeysPerAppSection() {
 
 export function ServerProviderSlots() {
   const slots = [
+    ['Cerebras (VPS)', 'CEREBRAS_API_KEY'],
     ['Groq 2', 'GROQ_AGENTS_API_KEY'],
     ['Groq 3', 'GROQ_LIGHT_API_KEY'],
     ['Groq 4', 'GROQ_RESERVE_API_KEY'],
