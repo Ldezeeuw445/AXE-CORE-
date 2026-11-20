@@ -173,6 +173,8 @@ async function probeClaude(seat, env) {
     CLAUDE_CONFIG_DIR: dir,
     ANTHROPIC_API_KEY: '', ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: '', CLAUDECODE: '',
   });
+  // Eerste stoel: zonder map, net als `claude auth login` zonder map (zie SEAT_ENV in worker.mjs).
+  if (seat.id === 'claude') delete childEnv.CLAUDE_CONFIG_DIR;
   const restant = claudeOauthEmail(dir);
   try {
     const { stdout, stderr } = await execFileP(bin, ['auth', 'status'], {

@@ -464,7 +464,12 @@ function safePath(root, p) {
 }
 
 const SEAT_ENV = {
-  claude:  { CLAUDE_CONFIG_DIR: join(homedir(), '.claude') },
+  // Geen CLAUDE_CONFIG_DIR voor de eerste stoel: `claude auth login` zonder map
+  // bewaart de login in de sleutelhanger onder "Claude Code-credentials". Zet je
+  // de map expliciet op ~/.claude, dan zoekt Claude onder een ándere naam (met
+  // een hash van de map) en zegt hij "niet ingelogd" -- gemeten 20 nov op de
+  // iMac: zonder map loggedIn true, met ~/.claude loggedIn false.
+  claude:  {},
   claude2: { CLAUDE_CONFIG_DIR: join(homedir(), '.claude-tweede') },
   claude3: { CLAUDE_CONFIG_DIR: join(homedir(), '.claude-derde') },
   claude4: { CLAUDE_CONFIG_DIR: join(homedir(), '.claude-vierde') },
@@ -482,6 +487,7 @@ function seatChildEnv(seatId) {
     if (key) extra.CURSOR_API_KEY = key;
   }
   const child = { ...process.env, ...env, ...extra };
+  if (seatId === 'claude') delete child.CLAUDE_CONFIG_DIR;
   for (const k of [
     'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDECODE',
     'OPENAI_API_KEY', 'OPENAI_BASE_URL',
