@@ -32,6 +32,7 @@ import asyncio
 import contextvars
 import json
 import os
+import re
 import logging
 import subprocess
 import time
@@ -200,6 +201,33 @@ _READ_ONLY_NEEDS_APPROVAL = (
     "requests.delete", "httpx.post", "httpx.put", "httpx.delete",
     "rm ", "mv ", "cp ", "tee ", "truncate", "chmod", "chown", ">",
 )
+# 20 nov: die lijst werd als losse tekst gezocht, dus "cp " zat in
+# "northsea-mcp --since" en "rm " in "form ": elk leescommando op de NorthSea-
+# dienst werd een goedkeuringsvraag (13 in 8 minuten). En `curl -s -X POST`
+# ontsnapte, omdat alleen `curl -x post` direct achter elkaar telde. Nu: echte
+# commando's (begin van de regel of na ; & | ( ), en curl met POST/data ergens.
+_SCHRIJF_COMMANDO = re.compile(r"(?:^|[\s;&|(])(rm|mv|cp|tee|truncate|chmod|chown)(?=\s|$)")
+_CURL_SCHRIJFT = re.compile(r"\bcurl\b[^|;&]*\s(?:-x\s*(?:post|put|patch|delete)\b|-d\b|--data(?:-raw|-binary)?\b|-f\b|--form\b)")
+_PY_SCHRIJFT = re.compile(r"\b(?:requests|httpx)\.(?:post|put|patch|delete)\b")
+
+
+def schrijft_in_leestaak(schoon: str) -> str | None:
+    """Wat er in een alleen-lezen taak iets zou veranderen, of None."""
+    for onschuldig in _ONSCHULDIGE_OMLEIDING:
+        schoon = schoon.replace(onschuldig, "")
+    m = _SCHRIJF_COMMANDO.search(schoon)
+    if m:
+        return m.group(1)
+    if _CURL_SCHRIJFT.search(schoon):
+        return "curl write"
+    m = _PY_SCHRIJFT.search(schoon)
+    if m:
+        return m.group(0)
+    if ">" in schoon:
+        return ">"
+    return None
+
+
 # Omleidingen die niets schrijven, zodat `2>/dev/null` een leestaak niet stopt.
 _ONSCHULDIGE_OMLEIDING = ("2>&1", "&>/dev/null", "2>/dev/null", ">/dev/null")
 
@@ -270,9 +298,9 @@ def approval_reason(command: str, cwd: str | None, read_only: bool = False) -> s
         schoon = lowered
         for onschuldig in _ONSCHULDIGE_OMLEIDING:
             schoon = schoon.replace(onschuldig, "")
-        for pattern in _READ_ONLY_NEEDS_APPROVAL:
-            if pattern in schoon:
-                return f"changes something in a read-only task ({pattern.strip()})"
+        gevonden = schrijft_in_leestaak(schoon)
+        if gevonden:
+            return f"changes something in a read-only task ({gevonden})"
 
     # Writing outside the workspace. Reading outside stays free -- the agent has
     # to be able to look at its own source in order to work on it.

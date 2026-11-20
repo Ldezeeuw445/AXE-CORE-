@@ -77,6 +77,10 @@ export function TaskCompletionToasts() {
           // apparaat hem net schreef.
           const message = `${m.tekst}: ${rij.title}`;
           void (async () => {
+            // Drie apparaten zagen dezelfde overgang op dezelfde milliseconde en
+            // schreven alle drie (20 nov, 3x "Done: axe.focus_log"). Eerst een
+            // willekeurige pauze, dan pas kijken: de eerste schrijft, de rest ziet hem.
+            await new Promise((r) => setTimeout(r, Math.random() * 6000));
             const sinds = new Date(Date.now() - 10 * 60_000).toISOString();
             const { data: al } = await sb.from('core_notifications').select('id')
               .eq('message', message).gte('created_at', sinds).limit(1);
