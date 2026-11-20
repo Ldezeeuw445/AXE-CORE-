@@ -1136,6 +1136,10 @@ export interface KeysPerApp {
   keys: KeyRow[];
 }
 
+export function testServerProviderKey(key: string): Promise<{ status: string }> {
+  return call('POST', `/keys/provider-test/${encodeURIComponent(key)}`);
+}
+
 export async function keysOverview(): Promise<{ generated_at: string; apps: KeysPerApp[] }> {
   return call('GET', '/keys/overview');
 }

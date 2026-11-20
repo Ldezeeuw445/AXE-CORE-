@@ -54,7 +54,7 @@ import { MindsetQuotesSection } from '@/presentation/components/settings/Mindset
 import { AgentMotorenSection } from '@/presentation/components/settings/AgentMotorenSection';
 import { CodingSeatsSection } from '@/presentation/components/settings/CodingSeatsSection';
 import { UsageCreditsSection } from '@/presentation/components/settings/UsageCreditsSection';
-import { KeysPerAppSection } from '@/presentation/components/settings/KeysPerAppSection';
+import { KeysPerAppSection, ServerProviderSlots } from '@/presentation/components/settings/KeysPerAppSection';
 import { ollamaHeaders, ollamaUrl } from '@/infrastructure/config/ollamaSleutel';
 import {
   readAllProviderUsage,
@@ -866,6 +866,8 @@ function ProviderKeysSection() {
           </div>
         </div>
       )}
+
+      <ServerProviderSlots />
 
       {/* Provider cards grid — gelijke kolommen, geen 1fr-rek. */}
       <KaartRaster>

@@ -3557,6 +3557,34 @@ async def keys_overview():
     return await asyncio.to_thread(_sl.lees, sb())
 
 
+@app.post("/keys/provider-test/{key}", dependencies=[AUTH])
+async def provider_key_test(key: str):
+    groq = {"GROQ_AGENTS_API_KEY", "GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY"}
+    openrouter = {f"OPENROUTER{slot}_API_KEY" for slot in (3, 4, 5)}
+    if key not in groq | openrouter:
+        raise HTTPException(404, "Unknown provider slot")
+    secret = os.environ.get(key, "").strip()
+    if not secret:
+        return {"status": "Not configured"}
+    if key in groq:
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        model = "openai/gpt-oss-120b" if key == "GROQ_AGENTS_API_KEY" else "openai/gpt-oss-20b"
+    else:
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        model = "openrouter/free"
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(url, headers={"Authorization": f"Bearer {secret}"}, json={
+                "model": model, "messages": [{"role": "user", "content": "Reply OK"}],
+                "max_tokens": 128,
+            })
+        if response.is_success and response.json().get("choices"):
+            return {"status": "Works"}
+        return {"status": "Rate limited" if response.status_code == 429 else f"Test failed ({response.status_code})"}
+    except (httpx.HTTPError, ValueError):
+        return {"status": "Test unavailable"}
+
+
 class ManagerBericht(BaseModel):
     agent: str
     role: str = "user"

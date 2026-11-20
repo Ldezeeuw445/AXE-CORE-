@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from 'react';
 import { Kaart, KaartRaster, SectieBlok } from '@/presentation/components/layout/tabMaatstaf';
-import { keysOverview, type KeyRow, type KeysPerApp, type KeyStatus } from '@/infrastructure/gateways/axeCoreApiService';
+import { testServerProviderKey, keysOverview, type KeyRow, type KeysPerApp, type KeyStatus } from '@/infrastructure/gateways/axeCoreApiService';
 import { leesProviderOpslag } from '@/domain/providers';
 import type { ProviderConn } from '@/domain/providerConnections';
 import { metModelTest, type ModelTest } from '@/domain/keysMetModellen';
@@ -119,5 +119,49 @@ export function KeysPerAppSection() {
         {(apps ?? []).map((a) => <AppKaart key={a.app} app={a} />)}
       </KaartRaster>
     </SectieBlok>
+  );
+}
+
+export function ServerProviderSlots() {
+  const slots = [
+    ['Groq 2', 'GROQ_AGENTS_API_KEY'],
+    ['Groq 3', 'GROQ_LIGHT_API_KEY'],
+    ['Groq 4', 'GROQ_RESERVE_API_KEY'],
+    ['OpenRouter 3', 'OPENROUTER3_API_KEY'],
+    ['OpenRouter 4', 'OPENROUTER4_API_KEY'],
+    ['OpenRouter 5', 'OPENROUTER5_API_KEY'],
+  ];
+  const [status, setStatus] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let active = true;
+    void keysOverview().then(({ apps }) => {
+      if (!active) return;
+      const rows = apps.flatMap(app => app.keys);
+      setStatus(previous => ({
+        ...Object.fromEntries(rows.map(row => [row.name, STAND[row.status].tekst])),
+        ...previous,
+      }));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+  async function test(key: string) {
+    setStatus(previous => ({ ...previous, [key]: 'Testing…' }));
+    const result = await testServerProviderKey(key).catch(() => ({ status: 'Test unavailable' }));
+    setStatus(previous => ({ ...previous, [key]: result.status }));
+  }
+  return (
+    <KaartRaster>
+      {slots.map(([label, key]) => (
+        <Kaart key={key} titel={label}>
+          <code className="text-xs break-all">{key}</code>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span aria-live="polite">{status[key] ?? 'Not checked'}</span>
+            <button type="button" disabled={status[key] === 'Testing…'} onClick={() => void test(key)}>
+              Test connection
+            </button>
+          </div>
+        </Kaart>
+      ))}
+    </KaartRaster>
   );
 }
