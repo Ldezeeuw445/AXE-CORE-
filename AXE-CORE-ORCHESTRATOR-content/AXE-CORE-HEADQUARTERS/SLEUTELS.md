@@ -62,6 +62,16 @@ Trading OS leest Polygon en Twelve Data als `POLYGON_API_KEY` /
 `TWELVEDATA_API_KEY`; de `VITE_`-namen voor FRED, FMP en Alpha Vantage
 gebruikt de code niet meer.
 
+### 6. Supabase edge-geheimen — beide projecten
+
+AXE Companion (`pqnngpcg…`, intel-proxy, engine-proxy) en AXE Commodities
+(`kbimnuep…`, NorthSea, Resend). De edge-functie `sleutel-namen`
+(`supabase/functions/sleutel-namen`) geeft alleen de **namen** terug, en alleen
+aan wie de eigen servicesleutel van dat project meestuurt. Companion vraagt de
+AXE-API rechtstreeks; Commodities gaat via de NorthSea MCP
+(`/internal/edge-key-names`), want die heeft die sleutel al. Er is dus geen
+sleutel verplaatst.
+
 ## Hoe je iets terugvindt
 
 ```bash

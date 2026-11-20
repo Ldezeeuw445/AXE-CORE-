@@ -240,8 +240,13 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
 - [~] **Keys per app in AXE, met de manager die meldt** (9 nov, `948420eb`,
       `139f070a`). 20 nov: Settings-sleutels (Exa, ElevenLabs) en de Vercel-env van
       Companion en Trading OS zijn nu zichtbaar (alleen namen, via VERCEL_TOKEN);
-      live: Companion 15 → 6 "unseen", Trading OS 10 → 3. Over: Supabase edge-secrets
-      (geen beheertoken op de VPS) en de 5 DAX-logins (Luka, Strato-terminal).
+      live: Companion 15 → 6 "unseen", Trading OS 10 → 3. Daarna (Luka: "raar dat AXE de
+      terminals van de VPS'en heeft maar de secrets niet ziet") ook de Supabase
+      edge-geheimen: edge-functie `sleutel-namen` in beide projecten, alleen namen.
+      Live: Companion, Trading OS en NorthSea 0 "unseen". Gevonden: twee kapotte
+      namen in Companion-edge (`MARKETSTACK _API_KEY` met spatie, en een geheim
+      waarvan de naam een e-mailadres is) -- Luka moet die in Supabase hernoemen of
+      weghalen. Over: de 5 DAX-logins (Luka) en de 2 Cursor-sleutels op de Mac.
 - [~] **Minder dure abonnementen** (gemeten 20 nov: op de iMac deden de stoelen in 30 dagen 0 minuten echt werk -- alle 992 aanroepen waren loginchecks van 0,02 s; het echte coderen loopt via de Mac mini (23 taken/week). Opzeggen is Luka's keuze; hij gebruikt Claude Code zelf ook.): managers en DAX blijven alles kunnen met
       minder Claude/ChatGPT/Cursor-stoelen (eigen lus + goedkope API's/Ollama
       als basis, stoelen als terugval).

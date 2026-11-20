@@ -153,3 +153,21 @@ def test_vercel_lezen_bewaart_alleen_namen(monkeypatch):
     assert GEHEIM not in repr(uit)
     assert all("decrypt" not in u for u in gevraagd)
     sl._VERCEL_CACHE.update(t=None, namen=None)
+
+
+def test_edge_namen_zichtbaar_en_rare_namen_kapot():
+    edge = {"companion": frozenset({"UW_TOKEN", "ACLED_PASSWORD", "MARKETSTACK _API_KEY", "iemand@example.com"}),
+            "commodities": frozenset({"RESEND_API_KEY"})}
+    over = sl.status([], NU, {}, edge=edge)
+    uw = _key(over, "AXE Companion", "UNUSUAL_WHALES_TOKEN")
+    assert uw["status"] == "present" and "UW_TOKEN" in uw["detail"]
+    assert _key(over, "AXE Companion", "ACLED_PASSWORD")["status"] == "present"
+    assert _key(over, "NorthSea", "RESEND_API_KEY")["status"] == "present"
+    assert "Commodities" in _key(over, "NorthSea", "RESEND_API_KEY")["detail"]
+    assert _key(over, "Trading OS", "INTEL_CRON_SECRET")["status"] == "missing"
+    rare = [k for k in _app(over, "AXE Companion")["keys"] if k["purpose"] == "Odd edge-secret name"]
+    assert {k["name"] for k in rare} == {"MARKETSTACK _API_KEY", "(name hidden)"}
+    assert all(k["status"] == "broken" for k in rare)
+    assert "iemand@example.com" not in json.dumps(over)
+    # zonder edge-namen blijft het eerlijk "unseen"
+    assert _key(sl.status([], NU, {}), "NorthSea", "RESEND_API_KEY")["status"] == "unseen"

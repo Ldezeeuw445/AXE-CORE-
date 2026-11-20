@@ -644,6 +644,27 @@ def create_app(settings: Settings | None = None, *, repo: SupabaseRepository | N
                 log.exception("engine tick desk loop failed")
         return JSONResponse(uit, headers={"Cache-Control": "no-store"})
 
+    @route("/internal/edge-key-names", methods=["GET"])
+    async def edge_key_names(request: Request) -> Response:
+        """Keys per app in AXE (20 nov): de NAMEN van de edge-geheimen van het
+        Commodities-project, via de edge-functie sleutel-namen. Deze server heeft
+        de Commodities-sleutel al; zo hoeft hij nergens anders heen. Nooit waarden."""
+        auth = request.headers.get("authorization", "")
+        rec = store.lookup(auth[7:], ("service",)) if auth.lower().startswith("bearer ") else None
+        if rec is None or "northsea.engine" not in rec.scopes:
+            return JSONResponse({"error": "unauthorized"}, status_code=401, headers={"Cache-Control": "no-store"})
+        try:
+            async with httpx.AsyncClient(timeout=15) as http:
+                r = await http.get(f"{settings.commodities_url}/functions/v1/sleutel-namen",
+                                   headers={"Authorization": f"Bearer {settings.commodities_key}",
+                                            "apikey": settings.commodities_key})
+            namen = [str(n) for n in (r.json().get("names") or [])] if r.status_code == 200 else None
+        except Exception:  # noqa: BLE001
+            namen = None
+        if namen is None:
+            return JSONResponse({"error": "edge function unreachable"}, status_code=502, headers={"Cache-Control": "no-store"})
+        return JSONResponse({"names": namen}, headers={"Cache-Control": "no-store"})
+
     @route("/internal/desk/tidy", methods=["POST"])
     async def desk_tidy(request: Request) -> Response:
         """Opruimen + voorstellen voor de NorthSea Manager (opruimen.py).

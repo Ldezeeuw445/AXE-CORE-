@@ -21,6 +21,11 @@ os.environ), niet uit een .env-bestand. Plekken (SLEUTELS.md):
 - edge       Supabase edge-secrets (intel-proxy, trading-os engine)
 - build      Trading OS op Vercel (project trading-os); VITE_ komt in de bundel
 
+edge: sinds 20 nov vraagt dit de NAMEN van de edge-geheimen op via de
+edge-functie sleutel-namen (supabase/functions/sleutel-namen) in beide
+projecten -- Companion rechtstreeks met de eigen servicesleutel, Commodities
+via de NorthSea MCP (die heeft die sleutel al). Nooit waarden.
+
 companion en build: sinds 20 nov vraagt dit de NAMEN van de env-variabelen op
 bij Vercel (VERCEL_TOKEN op de VPS), nooit de waarden (geen ?decrypt).
 - settings   AXE Core Instellingen -> Keys (user_settings, achter RLS)
@@ -52,12 +57,15 @@ PLEK_LABEL = {
 
 def _k(naam: str, apps: tuple[str, ...], plek: str, doel: str, feeds: tuple[str, ...] = (),
        publiek: bool = False, nodig: str = "required", provider: str | None = None,
-       bewijs: tuple[str, str, int] | None = None, alias: tuple[str, ...] = ()) -> dict[str, Any]:
+       bewijs: tuple[str, str, int] | None = None, alias: tuple[str, ...] = (),
+       project: str = "companion") -> dict[str, Any]:
     """nodig: required | optional | unused. provider: id in Models & Tests (de
     app vult daar de status mee in). bewijs: (tabel, tijdkolom, max dagen).
-    alias: andere namen waaronder de code dezelfde sleutel ook leest."""
+    alias: andere namen waaronder de code dezelfde sleutel ook leest.
+    project: bij plek "edge": welk Supabase-project (companion | commodities)."""
     return {"naam": naam, "apps": apps, "plek": plek, "doel": doel, "feeds": feeds, "publiek": publiek,
-            "nodig": nodig, "provider": provider, "bewijs": bewijs, "alias": alias}
+            "nodig": nodig, "provider": provider, "bewijs": bewijs, "alias": alias,
+            "project": project}
 
 
 C, T, A, N = "AXE Companion", "Trading OS", "AXE Core", "NorthSea"
@@ -110,7 +118,8 @@ CATALOGUS: tuple[dict[str, Any], ...] = (
     # ── NorthSea ────────────────────────────────────────────────────────────
     _k("NORTHSEA_ENGINE_TOKEN", (N,), "vps", "AXE Core → NorthSea engine"),
     _k("NORTHSEA_DISCOVERY_TOKEN", (N,), "vps", "Discovery sweep"),
-    _k("RESEND_API_KEY", (N, T), "edge", "Sending mail from trade@ (only after Luka approves)"),
+    _k("RESEND_API_KEY", (N, T), "edge", "Sending mail from trade@ (only after Luka approves)",
+       project="commodities"),
     # ── AXE Companion (server + intel-proxy) ────────────────────────────────
     _k("METAAPI_TOKEN", (C, T), "companion", "MetaApi / MT5 broker connection (live accounts)",
        bewijs=("broker_trades", "created_at", 7)),
@@ -123,9 +132,11 @@ CATALOGUS: tuple[dict[str, Any], ...] = (
     _k("COINGECKO_API_KEY", (C,), "companion", "Crypto prices", nodig="optional",
        alias=("COINGECKO_DEMO_API_KEY",)),
     _k("PERIGON_API_KEY", (C,), "companion", "News", nodig="optional"),
-    _k("UNUSUAL_WHALES_TOKEN", (C,), "edge", "Old intel-proxy route (401 since Aug; paid)", nodig="unused"),
+    _k("UNUSUAL_WHALES_TOKEN", (C,), "edge", "Old intel-proxy route (401 since Aug; paid)", nodig="unused",
+       alias=("UW_TOKEN", "UW_API_KEY", "UNUSUAL_WHALES_KEY")),
     _k("GREYNOISE_API_KEY", (C,), "edge", "Old cyber feed (only checked 3 fixed IPs)", nodig="unused"),
-    _k("RAPIDAPI_KEY", (C,), "edge", "Old ADS-B route (replaced by free adsb.lol)", nodig="unused"),
+    _k("RAPIDAPI_KEY", (C,), "edge", "Old ADS-B route (replaced by free adsb.lol)", nodig="unused",
+       alias=("X_RAPIDAPI_KEY",)),
     _k("ACLED_PASSWORD", (C,), "edge", "Armed conflict events (ACLED)", nodig="optional"),
     _k("QUIVER_API_KEY", (C,), "edge", "Old congress route (replaced by Alpha Vantage)", nodig="unused"),
     _k("FMP_API_KEY", (C, T), "edge", "Old congress/fundamentals route", nodig="unused"),
@@ -143,6 +154,9 @@ CATALOGUS: tuple[dict[str, Any], ...] = (
 )
 
 VERS_BINNEN = timedelta(hours=26)
+
+EDGE_PROJECT_LABEL = {"companion": "AXE Companion", "commodities": "AXE Commodities"}
+_NAAM_OK = __import__("re").compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 # Plek -> Vercel-project waar die sleutels als env-variabele staan.
 VERCEL_PROJECT = {"companion": "axe-companion-os", "build": "trading-os"}
@@ -200,12 +214,16 @@ def status(sync_rijen: list[dict[str, Any]], nu: datetime, env: Mapping[str, str
            tabel_bewijs: Mapping[str, str | None] | None = None,
            dax: list[dict[str, Any]] | None = None,
            instellingen: Mapping[str, bool] | None = None,
-           vercel: Mapping[str, set[str] | frozenset[str]] | None = None) -> dict[str, Any]:
+           vercel: Mapping[str, set[str] | frozenset[str]] | None = None,
+           edge: Mapping[str, set[str] | frozenset[str]] | None = None) -> dict[str, Any]:
     """Per app de sleutels met een eerlijke status. Nooit een waarde.
 
     instellingen: per provider-id of hij in AXE Core Settings → Keys is
     ingevuld (user_settings.axe_llm_connections). Zonder: "unseen".
     vercel: per Vercel-project de NAMEN van de production-env. Zonder: "unseen".
+    edge: per Supabase-project (companion | commodities) de NAMEN van de
+    edge-geheimen. Zonder: "unseen". Een naam die geen variabelenaam is (spatie,
+    e-mailadres) komt erbij als "broken": de code vindt hem zo nooit.
 
     status: works | present | missing | broken | unseen | optional | unused
     - optional: niet gezet, en dat mag (alleen nodig als je die functie wilt)
@@ -239,6 +257,16 @@ def status(sync_rijen: list[dict[str, Any]], nu: datetime, env: Mapping[str, str
                 st, detail = "present", "Filled in under AXE Core Settings → Keys"
             else:
                 st, detail = "missing", "Not filled in under AXE Core Settings → Keys"
+        elif k["plek"] == "edge" and edge is not None and k.get("project") in edge:
+            label = EDGE_PROJECT_LABEL[k["project"]]
+            namen = edge[k["project"]]
+            raak = next((n for n in (k["naam"], *k.get("alias", ())) if n in namen), None)
+            if raak is None:
+                st, detail = "missing", f"Not set in Supabase edge secrets ({label})"
+            elif raak == k["naam"]:
+                st, detail = "present", f"Set in Supabase edge secrets ({label}); nothing has proven it works yet"
+            else:
+                st, detail = "present", f"Set in Supabase edge secrets ({label}) as {raak}"
         elif vercel is not None and VERCEL_PROJECT.get(k["plek"]) in vercel:
             project = VERCEL_PROJECT[k["plek"]]
             namen = vercel[project]
@@ -265,11 +293,33 @@ def status(sync_rijen: list[dict[str, Any]], nu: datetime, env: Mapping[str, str
         for app in k["apps"]:
             per_app[app].append(rij)
     per_app["AXE Core"].extend(_dax_rijen(dax or []))
+    for rij in _rare_edge_namen(edge or {}):
+        per_app["AXE Companion" if rij["project"] == "companion" else "NorthSea"].append(rij["rij"])
     tellers = {a: {s: sum(1 for r in rows if r["status"] == s)
                    for s in ("works", "present", "missing", "broken", "unseen", "optional", "unused")}
                for a, rows in per_app.items()}
     return {"generated_at": nu.isoformat(), "apps": [
         {"app": a, "manager": MANAGER[a], "counts": tellers[a], "keys": per_app[a]} for a in APPS]}
+
+
+def _rare_edge_namen(edge: Mapping[str, set[str] | frozenset[str]]) -> list[dict[str, Any]]:
+    """Edge-geheimen met een naam die geen variabelenaam is. Een naam met een @
+    is waarschijnlijk een waarde die per ongeluk als naam is geplakt: die naam
+    tonen we dus NIET, alleen wat er mis is."""
+    uit = []
+    for project, namen in edge.items():
+        for naam in sorted(namen):
+            if _NAAM_OK.match(naam):
+                continue
+            label = EDGE_PROJECT_LABEL.get(project, project)
+            if "@" in naam:
+                toon, wat = "(name hidden)", "the name looks like an e-mail address -- probably pasted into the name field; remove it"
+            else:
+                toon, wat = naam, "the name has a space or odd character, so the code never finds it; rename it"
+            uit.append({"project": project, "rij": {
+                "name": toon, "purpose": "Odd edge-secret name", "where": f"Supabase edge secrets ({label})",
+                "status": "broken", "detail": wat, "feeds": [], "need": "required", "provider": None}})
+    return uit
 
 
 def problemen(overzicht: dict[str, Any], app: str) -> list[str]:
@@ -303,7 +353,43 @@ def lees(db: Any, nu: datetime | None = None) -> dict[str, Any]:
     except Exception:  # noqa: BLE001
         dax = []
     return status(rijen, nu, tabel_bewijs=tabel_bewijs, dax=dax, instellingen=_instellingen(db),
-                  vercel=_vercel_namen())
+                  vercel=_vercel_namen(), edge=_edge_namen())
+
+
+_EDGE_CACHE: dict[str, Any] = {"t": None, "namen": None}
+
+
+def _edge_namen(nu: datetime | None = None) -> dict[str, frozenset[str]] | None:
+    """NAMEN (nooit waarden) van de edge-geheimen per Supabase-project, via de
+    edge-functie sleutel-namen. 10 min in geheugen."""
+    nu = nu or datetime.now(timezone.utc)
+    if _EDGE_CACHE["t"] and nu - _EDGE_CACHE["t"] < timedelta(minutes=10):
+        return _EDGE_CACHE["namen"]
+    import json
+    import urllib.request
+
+    def haal(url: str, headers: dict[str, str]) -> frozenset[str] | None:
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=15) as r:  # noqa: S310
+                return frozenset(str(n) for n in (json.load(r).get("names") or []))
+        except Exception:  # noqa: BLE001 -- dat project blijft dan "unseen"
+            return None
+
+    uit: dict[str, frozenset[str]] = {}
+    basis = (os.environ.get("SUPABASE_URL") or "").strip().rstrip("/")
+    sleutel = (os.environ.get("SUPABASE_SERVICE_ROLE") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    if basis and sleutel:
+        n = haal(f"{basis}/functions/v1/sleutel-namen", {"apikey": sleutel, "Authorization": f"Bearer {sleutel}"})
+        if n is not None:
+            uit["companion"] = n
+    token = (os.environ.get("NORTHSEA_ENGINE_TOKEN") or "").strip()
+    if token:
+        mcp = (os.environ.get("NORTHSEA_MCP_INTERNAL_URL") or "http://127.0.0.1:8040").rstrip("/")
+        n = haal(f"{mcp}/internal/edge-key-names", {"Authorization": f"Bearer {token}"})
+        if n is not None:
+            uit["commodities"] = n
+    _EDGE_CACHE.update(t=nu, namen=uit)
+    return uit
 
 
 _VERCEL_CACHE: dict[str, Any] = {"t": None, "namen": None}

@@ -733,3 +733,26 @@ async def test_vervolgmail_niet_binnen_14_dagen_naar_hetzelfde_adres():
     await eng(repo).tick()
     assert repo.t.get("northsea_followups", []) == []
     assert repo.sends == []
+
+
+async def test_edge_key_names_alleen_namen_en_alleen_met_engine_token(client, store, monkeypatch):
+    r = await client.get("/internal/edge-key-names")
+    assert r.status_code == 401
+
+    class Antw:
+        status_code = 200
+        def json(self): return {"names": ["RESEND_API_KEY"]}
+
+    class Http:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url, headers):
+            assert url.endswith("/functions/v1/sleutel-namen")
+            return Antw()
+
+    monkeypatch.setattr(httpx, "AsyncClient", Http)
+    ok = store.issue(kind="service", client_id="service:engine", subject="service:engine", scopes=["northsea.engine"],
+                     resource="https://mcp.northsea.test/mcp", ttl_s=600, label="engine")
+    r = await client.get("/internal/edge-key-names", headers={"Authorization": f"Bearer {ok}"})
+    assert r.status_code == 200 and r.json() == {"names": ["RESEND_API_KEY"]}
