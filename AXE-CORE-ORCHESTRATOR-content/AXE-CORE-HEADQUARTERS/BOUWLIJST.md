@@ -184,7 +184,7 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       per deal (samen met AXE), geen 90 goedkeuringen; deals komen echt
       dichter bij sluiten; de desk is overzichtelijk. Professioneel: er tekenen
       al bedrijven terug.
-- [ ] **Geen overlopende emmer bij NorthSea** (20 nov GEMETEN: NIET opgelost -- 21 -> 37. Oorzaak: 18 vervolgmail-concepten met hetzelfde sjabloon ("Following up on our previous message") voor kopers van 20 dagen terug, in batches van de NorthSea-engine (16:30, 16:45, 22:15); de fix van 19 nov dekte alleen eerste mails. Plus per nieuwe deal twee keer "Yes needed" (action_queue + deal_tasks). Echte oplossing = vervolgmails onder de vaste regel vanzelf laten gaan -> wacht op Luka's ja.) (live 19 nov, `6f5df5c6`): een eerste
+- [ ] **Geen overlopende emmer bij NorthSea** (20 nov GEMETEN: NIET opgelost -- 21 -> 37. Oorzaak: 18 vervolgmail-concepten met hetzelfde sjabloon ("Following up on our previous message") voor kopers van 20 dagen terug, in batches van de NorthSea-engine (16:30, 16:45, 22:15); de fix van 19 nov dekte alleen eerste mails. Per nieuwe deal twee keer "Yes needed" (action_queue + deal_tasks): opgelost 20 nov (`070b66bd`, live NorthSea 1.5.14; 2 dubbele opgeruimd). Echte oplossing = vervolgmails onder de vaste regel vanzelf laten gaan -> wacht op Luka's ja.) (live 19 nov, `6f5df5c6`): een eerste
       mail boven de daglimiet (5/dag) wacht nu op ruimte in plaats van een
       concept + twee keer "Yes needed" bij Luka. Stapel opgeruimd van 48 naar
       ~21 (1 concept, 10 Yes needed waarvan 7 dezelfde Pitsonel-vraag, 3
