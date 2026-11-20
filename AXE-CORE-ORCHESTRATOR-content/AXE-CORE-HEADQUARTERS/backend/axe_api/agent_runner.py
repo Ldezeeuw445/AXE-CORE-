@@ -208,7 +208,7 @@ def _cursor_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str, model
     return cmd
 
 
-FREE_MODELS = {"opencode": "opencode/inkling-2-small-free", "kilo": "kilo/kilo-auto/free"}
+FREE_MODELS = {"opencode": "opencode/deepseek-v4.1-flash-free", "kilo": "kilo/kilo-auto/free"}
 
 
 def _free_cmd(name):
@@ -216,7 +216,7 @@ def _free_cmd(name):
         if name == "agy":
             return [binary, "--sandbox", "--mode", "plan" if mode == "plan" else "accept-edits", "-p", prompt]
         agent = "plan" if mode == "plan" else ("code" if name == "kilo" else "build")
-        return [binary, "run", "--format", "json", "--agent", agent, "-m", FREE_MODELS[name], "--", prompt]
+        return [binary, "run", "--pure", "--format", "json", "--agent", agent, "-m", FREE_MODELS[name], "--", prompt]
     return command
 
 
@@ -617,7 +617,7 @@ def _auth_fout(tekst: str) -> bool:
 # taak: de volgende stoel. Geen koeling, want het account werkt gewoon.
 _MODEL_FOUT = re.compile(
     r"not supported when using codex with a chatgpt account|\bmodel_not_found\b|"
-    r"unsupported model|model is not supported|requires a newer version",
+    r"model not found|unsupported model|model is not supported|requires a newer version",
     re.IGNORECASE,
 )
 
