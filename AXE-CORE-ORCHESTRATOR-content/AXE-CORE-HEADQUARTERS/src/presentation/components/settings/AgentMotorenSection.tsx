@@ -1,3 +1,6 @@
+import { workerKeuzes } from '@/domain/chatModelKeuzes';
+import { readProviderUsage } from '@/infrastructure/persistence/providerUsageService';
+import { usageTekst } from './ProviderCard';
 import { Link } from 'react-router';
 import { bossAgent, projectsOrchAgent, managersOnderProjects } from '@/domain/agents/bossRoute';
 import { useServerAgents } from '@/presentation/components/axe-core/useServerAgents';
@@ -67,6 +70,13 @@ export function AgentMotorenSection() {
      tier-3-sectie geplakt, en dat is precies waarom een nieuwe agent in de
      roster hier niets kreeg: de secties wisten van hem af, de lijsten niet.
      Zie domain/agents/motorScope.ts. */
+  const [, verversUsage] = useState(0);
+  useEffect(() => {
+    const ververs = () => verversUsage(n => n + 1);
+    window.addEventListener('axe:provider-usage', ververs);
+    return () => window.removeEventListener('axe:provider-usage', ververs);
+  }, []);
+  const managerKeuzes = workerKeuzes(verbindingen, PROVIDERS.map(p => p.id));
   const keuzesVoor = useMemo(
     () => (agent: AxeAgent) => keuzesVoorAgent(agent, verbindingen, PROVIDERS.map(p => p.id)) ?? [],
     [verbindingen],
@@ -283,6 +293,9 @@ export function AgentMotorenSection() {
           const live = activity.ok ? activity.agents[manager.id] : undefined;
           const status = live?.status;
           const task = live?.task;
+          const voorkeur = overrides[manager.id];
+          const provider = voorkeur ? verbindingen[voorkeur.provider] : undefined;
+          const usage = voorkeur ? readProviderUsage(voorkeur.provider) : null;
           return (
             <StatusKaart
               key={manager.id}
@@ -293,10 +306,21 @@ export function AgentMotorenSection() {
                 toon: status === 'ERROR' || status === 'BLOCKED' ? 'bad' : status === 'WORKING' ? 'info' : 'muted',
                 tekst: status ? status.toLowerCase().replaceAll('_', ' ') : 'Unknown',
               }}
-              keuze={<Link to={`/managers?open=${encodeURIComponent(manager.id)}`}>Open manager ›</Link>}
+              keuze={
+                <div>
+                  <select value={voorkeur ? `${voorkeur.provider}:${voorkeur.model}` : ''}
+                    onChange={e => kiesOverride(manager.id, e.target.value)} aria-label={`Chat model for ${manager.name}`}>
+                    <option value="">Claude CLI (default)</option>
+                    {managerKeuzes.map(k => <option key={`${k.provider}:${k.model}`} value={`${k.provider}:${k.model}`}>{k.provider} · {k.label}</option>)}
+                  </select>
+                  <Link to={`/managers?open=${encodeURIComponent(manager.id)}`}>Open manager ›</Link>
+                </div>
+              }
               stats={[
-                { label: 'Engine', waarde: task?.engine || '—' },
-                { label: 'Model', waarde: task?.model || '—' },
+                { label: 'Task engine', waarde: task?.engine || '—' },
+                { label: 'Task model', waarde: task?.model || '—' },
+                { label: 'Provider test', waarde: provider?.lastTest === 'ok' ? 'Connected' : provider?.lastTest === 'fail' ? 'Failed' : 'Not tested' },
+                { label: 'Provider quota', waarde: usage ? usageTekst(usage).regel : 'Unavailable' },
               ]}
               melding={live?.current_action || task?.title || undefined}
             />

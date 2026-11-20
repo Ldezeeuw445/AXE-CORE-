@@ -22,7 +22,7 @@ function foutRegel(f: unknown): string {
 }
 
 
-function usageTekst(snapshot?: ProviderUsageSnapshot | null): { kop: string; regel: string; detail: string } {
+export function usageTekst(snapshot?: ProviderUsageSnapshot | null): { kop: string; regel: string; detail: string } {
   if (!snapshot) return {
     kop: 'USAGE',
     regel: 'Nog geen echte meting',

@@ -1,3 +1,5 @@
+import { leesOverrides } from '@/infrastructure/persistence/agentEngineOverrides';
+import { getProviderKeySlot } from '@/infrastructure/config/providerSleutels';
 /**
  * Een bericht aan een manager: antwoord via Luka's Claude-abonnement
  * (alleen-lezen), acties als gewone taken. Zie domain/agents/managerAntwoord.ts.
@@ -65,7 +67,10 @@ export async function laatManagerAntwoorden(
     const erbij = [wereld.tekst, lessen.tekst].filter(Boolean).join('\n\n');
     const berichten = bouwManagerBerichten({ naam: agent.name, rol: agent.role }, laadManagerChat(agentId),
       erbij ? `${vraag}\n\n${erbij}` : vraag);
-    const ruw = await callProvider({ provider: ABONNEMENT_PROVIDER, key: '', model: 'claude' }, berichten);
+    const voorkeur = leesOverrides()[agentId];
+    const standaard = { provider: ABONNEMENT_PROVIDER, key: '', model: 'claude' } as const;
+    const slot = voorkeur ? getProviderKeySlot(voorkeur.provider) : null;
+    const ruw = await callProvider(slot && voorkeur ? { ...slot, model: voorkeur.model } : standaard, berichten);
     const { tekst, acties } = splitsAntwoord(ruw);
     if (!tekst) return false;
     const bron = bronnenRegel({ ...wereld.bronnen, lessen: lessen.aantal });
