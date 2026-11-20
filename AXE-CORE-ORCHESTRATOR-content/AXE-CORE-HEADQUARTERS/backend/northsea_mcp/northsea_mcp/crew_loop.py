@@ -410,12 +410,10 @@ async def _ja_vraag(service: Any, opp: dict[str, Any], eval_: rules.DealEvaluati
         description=notice["tekst"], owner="luka", requires_approval=True,
         task_type="manual_review", priority=90,
     )
-    await _schrijf_chase(
-        service.repo, dedupe_key=f"desk-yes:{opp['id']}",
-        title=notice["titel"], description=notice["tekst"], opportunity_id=opp["id"],
-        owner="luka", requires_approval=True, action_type="approval_required",
-        extra={"what_yes_does": notice["what_yes_does"], "blocker": eval_.blocker_code},
-    )
+    # Niet ook nog een action_queue-rij (desk-yes:<deal>): die kwam in "wacht
+    # op jou" als tweede "Yes needed" voor dezelfde vraag (gemeten 20 nov: elke
+    # nieuwe deal twee keer). De deal-taak is de ene plek; daar bundelt
+    # _bundel_bij_open_vraag ook op.
     return {"notice": notice, "sent": 0, "approved": 0, "owner": "luka"}
 
 

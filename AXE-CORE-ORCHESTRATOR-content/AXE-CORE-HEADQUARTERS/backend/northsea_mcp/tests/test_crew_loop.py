@@ -103,6 +103,9 @@ async def test_goede_deal_zonder_bescherming_is_een_ja_geen_jacht(repo, research
     assert "Buyer:" in notice["tekst"] and "Seller:" in notice["tekst"]
     assert "What yes does:" in notice["tekst"]
     assert repo.sends == []
+    # 20 nov: één ja-vraag per deal -- de deal-taak, niet ook een action_queue-rij
+    # (die gaf in "wacht op jou" elke deal twee keer "Yes needed").
+    assert not [q for q in repo.t["action_queue"] if str(q.get("dedupe_key", "")).startswith("desk-yes:")]
 
 
 async def test_eerste_kwalificatie_loopt_door_de_bestaande_desk_manager_zonder_nep_inbound(repo, research, crew):
