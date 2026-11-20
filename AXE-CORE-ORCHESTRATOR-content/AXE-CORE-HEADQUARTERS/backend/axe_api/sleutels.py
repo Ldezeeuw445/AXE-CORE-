@@ -17,9 +17,12 @@ Uit de CODE van elke app (9 nov gelezen: process.env / Deno.env.get /
 os.environ), niet uit een .env-bestand. Plekken (SLEUTELS.md):
 
 - vps        /opt/axe-core-api/.env; dit proces ziet ze zelf
-- companion  de Companion-server en zijn Supabase edge-functies
+- companion  de Companion-server (Vercel-project axe-companion-os)
 - edge       Supabase edge-secrets (intel-proxy, trading-os engine)
-- build      .env bij het bouwen; VITE_-namen komen in de browserbundel
+- build      Trading OS op Vercel (project trading-os); VITE_ komt in de bundel
+
+companion en build: sinds 20 nov vraagt dit de NAMEN van de env-variabelen op
+bij Vercel (VERCEL_TOKEN op de VPS), nooit de waarden (geen ?decrypt).
 - settings   AXE Core Instellingen -> Keys (user_settings, achter RLS)
 
 Wat dit proces niet kan zien heet "niet te zien vanaf hier", nooit "ok".
@@ -49,11 +52,12 @@ PLEK_LABEL = {
 
 def _k(naam: str, apps: tuple[str, ...], plek: str, doel: str, feeds: tuple[str, ...] = (),
        publiek: bool = False, nodig: str = "required", provider: str | None = None,
-       bewijs: tuple[str, str, int] | None = None) -> dict[str, Any]:
+       bewijs: tuple[str, str, int] | None = None, alias: tuple[str, ...] = ()) -> dict[str, Any]:
     """nodig: required | optional | unused. provider: id in Models & Tests (de
-    app vult daar de status mee in). bewijs: (tabel, tijdkolom, max dagen)."""
+    app vult daar de status mee in). bewijs: (tabel, tijdkolom, max dagen).
+    alias: andere namen waaronder de code dezelfde sleutel ook leest."""
     return {"naam": naam, "apps": apps, "plek": plek, "doel": doel, "feeds": feeds, "publiek": publiek,
-            "nodig": nodig, "provider": provider, "bewijs": bewijs}
+            "nodig": nodig, "provider": provider, "bewijs": bewijs, "alias": alias}
 
 
 C, T, A, N = "AXE Companion", "Trading OS", "AXE Core", "NorthSea"
@@ -116,7 +120,8 @@ CATALOGUS: tuple[dict[str, Any], ...] = (
     _k("ALPACA_API_KEY_ID", (C,), "companion", "Alpaca broker (live)", nodig="optional"),
     _k("ALPACA_PAPER_API_KEY_ID", (C,), "companion", "Alpaca broker (paper)", nodig="optional"),
     _k("EODHD_API_KEY", (C,), "companion", "End-of-day prices", nodig="optional"),
-    _k("COINGECKO_API_KEY", (C,), "companion", "Crypto prices", nodig="optional"),
+    _k("COINGECKO_API_KEY", (C,), "companion", "Crypto prices", nodig="optional",
+       alias=("COINGECKO_DEMO_API_KEY",)),
     _k("PERIGON_API_KEY", (C,), "companion", "News", nodig="optional"),
     _k("UNUSUAL_WHALES_TOKEN", (C,), "edge", "Old intel-proxy route (401 since Aug; paid)", nodig="unused"),
     _k("GREYNOISE_API_KEY", (C,), "edge", "Old cyber feed (only checked 3 fixed IPs)", nodig="unused"),
@@ -126,14 +131,21 @@ CATALOGUS: tuple[dict[str, Any], ...] = (
     _k("FMP_API_KEY", (C, T), "edge", "Old congress/fundamentals route", nodig="unused"),
     # ── Trading OS (browser + engine-proxy) ─────────────────────────────────
     _k("INTEL_CRON_SECRET", (T,), "edge", "engine-proxy cron"),
-    _k("VITE_POLYGON_API_KEY", (T,), "build", "Polygon prices in the browser", publiek=True),
-    _k("VITE_TWELVEDATA_API_KEY", (T,), "build", "Twelve Data in the browser", publiek=True),
-    _k("VITE_FMP_API_KEY", (T,), "build", "FMP in the browser", publiek=True, nodig="optional"),
-    _k("VITE_FRED_API_KEY", (T,), "build", "FRED in the browser", publiek=True),
-    _k("VITE_ALPHAVANTAGE_KEY", (T,), "build", "Alpha Vantage in the browser", publiek=True, nodig="optional"),
+    # 20 nov in de TRADING-OS-code nagekeken: Polygon en Twelve Data worden nog
+    # gelezen (server ook onder de naam zonder VITE_), FRED/FMP/Alpha Vantage niet meer.
+    _k("VITE_POLYGON_API_KEY", (T,), "build", "Polygon prices (candle engine)", publiek=True,
+       alias=("POLYGON_API_KEY",)),
+    _k("VITE_TWELVEDATA_API_KEY", (T,), "build", "Twelve Data live prices", publiek=True,
+       alias=("TWELVEDATA_API_KEY",)),
+    _k("VITE_FMP_API_KEY", (T,), "build", "No longer read by the Trading OS code", publiek=True, nodig="unused"),
+    _k("VITE_FRED_API_KEY", (T,), "build", "No longer read by the Trading OS code", publiek=True, nodig="unused"),
+    _k("VITE_ALPHAVANTAGE_KEY", (T,), "build", "No longer read by the Trading OS code", publiek=True, nodig="unused"),
 )
 
 VERS_BINNEN = timedelta(hours=26)
+
+# Plek -> Vercel-project waar die sleutels als env-variabele staan.
+VERCEL_PROJECT = {"companion": "axe-companion-os", "build": "trading-os"}
 _KAPOT = ("401", "403", "unauthor", "forbidden", "invalid api key", "invalid_token",
           "authentication", "ontbreekt", "not configured", "missing")
 
@@ -187,11 +199,13 @@ def _dax_rijen(dax: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def status(sync_rijen: list[dict[str, Any]], nu: datetime, env: Mapping[str, str] | None = None,
            tabel_bewijs: Mapping[str, str | None] | None = None,
            dax: list[dict[str, Any]] | None = None,
-           instellingen: Mapping[str, bool] | None = None) -> dict[str, Any]:
+           instellingen: Mapping[str, bool] | None = None,
+           vercel: Mapping[str, set[str] | frozenset[str]] | None = None) -> dict[str, Any]:
     """Per app de sleutels met een eerlijke status. Nooit een waarde.
 
     instellingen: per provider-id of hij in AXE Core Settings → Keys is
     ingevuld (user_settings.axe_llm_connections). Zonder: "unseen".
+    vercel: per Vercel-project de NAMEN van de production-env. Zonder: "unseen".
 
     status: works | present | missing | broken | unseen | optional | unused
     - optional: niet gezet, en dat mag (alleen nodig als je die functie wilt)
@@ -225,6 +239,18 @@ def status(sync_rijen: list[dict[str, Any]], nu: datetime, env: Mapping[str, str
                 st, detail = "present", "Filled in under AXE Core Settings → Keys"
             else:
                 st, detail = "missing", "Not filled in under AXE Core Settings → Keys"
+        elif vercel is not None and VERCEL_PROJECT.get(k["plek"]) in vercel:
+            project = VERCEL_PROJECT[k["plek"]]
+            namen = vercel[project]
+            raak = next((n for n in (k["naam"], *k.get("alias", ())) if n in namen), None)
+            if raak is None:
+                st, detail = "missing", f"Not set in Vercel ({project})"
+            elif raak == k["naam"]:
+                st, detail = "present", f"Set in Vercel ({project}); nothing has proven it works yet"
+            else:
+                st, detail = "present", f"Set in Vercel ({project}) as {raak}"
+                if k["publiek"]:
+                    detail += "; the browser build has no VITE_ copy"
         else:
             st, detail = "unseen", f"Lives in {PLEK_LABEL[k['plek']]}; not visible from the VPS"
         if st == "missing" and k["nodig"] == "unused":
@@ -276,7 +302,41 @@ def lees(db: Any, nu: datetime | None = None) -> dict[str, Any]:
         dax = db.table("core_dax_computers").select("id,owner_agent,status,last_error,stats").execute().data or []
     except Exception:  # noqa: BLE001
         dax = []
-    return status(rijen, nu, tabel_bewijs=tabel_bewijs, dax=dax, instellingen=_instellingen(db))
+    return status(rijen, nu, tabel_bewijs=tabel_bewijs, dax=dax, instellingen=_instellingen(db),
+                  vercel=_vercel_namen())
+
+
+_VERCEL_CACHE: dict[str, Any] = {"t": None, "namen": None}
+
+
+def _vercel_namen(nu: datetime | None = None) -> dict[str, frozenset[str]] | None:
+    """Namen (nooit waarden) van de production-env per Vercel-project.
+
+    Zonder ?decrypt: Vercel geeft dan alleen versleutelde waarden terug, en ook
+    die gooien we meteen weg -- alleen e["key"] blijft over. 10 min in geheugen.
+    """
+    nu = nu or datetime.now(timezone.utc)
+    if _VERCEL_CACHE["t"] and nu - _VERCEL_CACHE["t"] < timedelta(minutes=10):
+        return _VERCEL_CACHE["namen"]
+    token = (os.environ.get("VERCEL_TOKEN") or "").strip()
+    if not token:
+        return None
+    import json
+    import urllib.request
+
+    uit: dict[str, frozenset[str]] = {}
+    for project in sorted(set(VERCEL_PROJECT.values())):
+        try:
+            req = urllib.request.Request(f"https://api.vercel.com/v10/projects/{project}/env",
+                                         headers={"Authorization": f"Bearer {token}"})
+            with urllib.request.urlopen(req, timeout=15) as r:  # noqa: S310 -- vaste https-host
+                envs = json.load(r).get("envs") or []
+        except Exception:  # noqa: BLE001 -- dat project blijft dan "unseen"
+            continue
+        uit[project] = frozenset(str(e.get("key")) for e in envs
+                                 if "production" in (e.get("target") or []) and e.get("key"))
+    _VERCEL_CACHE.update(t=nu, namen=uit)
+    return uit
 
 
 def _instellingen(db: Any) -> dict[str, bool] | None:

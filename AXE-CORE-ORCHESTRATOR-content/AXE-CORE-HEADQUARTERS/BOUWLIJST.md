@@ -237,7 +237,10 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
 - [~] **Een uitgelogde stoel geeft het werk door, met melding wie het overnam**
       (9 nov, `93dcdc3b`, `ca9feb3b`).
 - [~] **Keys per app in AXE, met de manager die meldt** (9 nov, `948420eb`,
-      `139f070a`).
+      `139f070a`). 20 nov: Settings-sleutels (Exa, ElevenLabs) en de Vercel-env van
+      Companion en Trading OS zijn nu zichtbaar (alleen namen, via VERCEL_TOKEN);
+      live: Companion 15 → 6 "unseen", Trading OS 10 → 3. Over: Supabase edge-secrets
+      (geen beheertoken op de VPS) en de 5 DAX-logins (Luka, Strato-terminal).
 - [~] **Minder dure abonnementen** (gemeten 20 nov: op de iMac deden de stoelen in 30 dagen 0 minuten echt werk -- alle 992 aanroepen waren loginchecks van 0,02 s; het echte coderen loopt via de Mac mini (23 taken/week). Opzeggen is Luka's keuze; hij gebruikt Claude Code zelf ook.): managers en DAX blijven alles kunnen met
       minder Claude/ChatGPT/Cursor-stoelen (eigen lus + goedkope API's/Ollama
       als basis, stoelen als terugval).

@@ -51,6 +51,17 @@ bij je account, niet bij de map.
 MetaAPI, de cron-sleutel, databasetoegang. Alles wat een browser niet mag zien
 staat daar en nergens anders.
 
+### 5. Vercel — Companion en Trading OS
+
+Projecten `axe-companion-os` en `trading-os`. Keys per app in AXE vraagt
+sinds 20 nov de **namen** van hun production-env op bij Vercel (met
+`VERCEL_TOKEN` op de VPS, zonder `decrypt`), dus daar staat nu een echte
+"present" of "missing" in plaats van "not visible".
+
+Trading OS leest Polygon en Twelve Data als `POLYGON_API_KEY` /
+`TWELVEDATA_API_KEY`; de `VITE_`-namen voor FRED, FMP en Alpha Vantage
+gebruikt de code niet meer.
+
 ## Hoe je iets terugvindt
 
 ```bash

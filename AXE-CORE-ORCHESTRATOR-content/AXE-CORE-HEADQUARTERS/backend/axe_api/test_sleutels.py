@@ -114,3 +114,42 @@ def test_instellingen_lezen_geeft_alleen_ja_nee():
         def table(self, _): return Q([{"value": {"exa": {"key": GEHEIM}, "groq": {"key": ""}, "x": "raar"}}])
     uit = sl._instellingen(DB())
     assert uit == {"exa": True} and GEHEIM not in json.dumps(uit)
+
+
+def test_vercel_namen_maken_companion_en_trading_os_zichtbaar():
+    vercel = {"axe-companion-os": frozenset({"STRIPE_SECRET_KEY", "COINGECKO_DEMO_API_KEY"}),
+              "trading-os": frozenset({"POLYGON_API_KEY"})}
+    over = sl.status([], NU, {}, vercel=vercel)
+    assert _key(over, "AXE Companion", "STRIPE_SECRET_KEY")["status"] == "present"
+    cg = _key(over, "AXE Companion", "COINGECKO_API_KEY")
+    assert cg["status"] == "present" and "COINGECKO_DEMO_API_KEY" in cg["detail"]
+    # verplicht en niet in Vercel: echt "missing", geen "unseen"
+    assert _key(over, "AXE Companion", "SUPABASE_SERVICE_ROLE_KEY")["status"] == "missing"
+    assert _key(over, "AXE Companion", "ALPACA_API_KEY_ID")["status"] == "optional"
+    pg = _key(over, "Trading OS", "VITE_POLYGON_API_KEY")
+    assert pg["status"] == "present" and "no VITE_ copy" in pg["detail"]
+    assert _key(over, "Trading OS", "VITE_FRED_API_KEY")["status"] == "unused"
+    # edge blijft eerlijk onzichtbaar
+    assert _key(over, "Trading OS", "INTEL_CRON_SECRET")["status"] == "unseen"
+
+
+def test_vercel_lezen_bewaart_alleen_namen(monkeypatch):
+    import io
+    import urllib.request
+
+    body = json.dumps({"envs": [{"key": "STRIPE_SECRET_KEY", "value": GEHEIM, "target": ["production"]},
+                                {"key": "ALLEEN_PREVIEW", "value": GEHEIM, "target": ["preview"]}]}).encode()
+
+    class Antw(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+
+    gevraagd = []
+    monkeypatch.setenv("VERCEL_TOKEN", "t")
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout: gevraagd.append(req.full_url) or Antw(body))
+    sl._VERCEL_CACHE.update(t=None, namen=None)
+    uit = sl._vercel_namen(NU)
+    assert uit["axe-companion-os"] == frozenset({"STRIPE_SECRET_KEY"})
+    assert GEHEIM not in repr(uit)
+    assert all("decrypt" not in u for u in gevraagd)
+    sl._VERCEL_CACHE.update(t=None, namen=None)
