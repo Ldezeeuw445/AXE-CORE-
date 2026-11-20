@@ -1040,10 +1040,36 @@ def _provider_fout(provider: str, response: Any) -> RuntimeError:
 _OLLAMA_SLOT = asyncio.Semaphore(1)
 
 
+# Stroomonderbreker (20 nov): de modelbox op Strato draait op CPU en zat vol --
+# elk verzoek hing tot de timeout van 300 s, en de worker probeerde het elke
+# stap opnieuw ("ollama/llama3.1:8b-16k failed" om de 5 min in de log). Faalt
+# hij of duurt hij te lang, dan slaat de lus hem een kwartier over; de andere
+# aanbieders staan er al vóór.
+OLLAMA_PAUZE_S = 15 * 60
+_ollama_vol_tot = 0.0
+
+
+def ollama_overslaan(nu: float | None = None) -> bool:
+    return (time.monotonic() if nu is None else nu) < _ollama_vol_tot
+
+
+def _ollama_pauzeer(nu: float | None = None) -> None:
+    global _ollama_vol_tot
+    _ollama_vol_tot = (time.monotonic() if nu is None else nu) + OLLAMA_PAUZE_S
+
+
 async def _call_ollama_begrensd(contents: list[dict[str, Any]]) -> dict[str, Any]:
-    """_call_ollama, maar nooit twee tegelijk."""
+    """_call_ollama, maar nooit twee tegelijk, en niet als hij net vol zat."""
+    if ollama_overslaan():
+        raise RuntimeError("ollama skipped: the modelbox was full or too slow in the last 15 min")
     async with _OLLAMA_SLOT:
-        return await _call_ollama(contents)
+        if ollama_overslaan():
+            raise RuntimeError("ollama skipped: the modelbox was full or too slow in the last 15 min")
+        try:
+            return await _call_ollama(contents)
+        except Exception:
+            _ollama_pauzeer()
+            raise
 
 
 def _shell(command: str, cwd: str | None = None) -> dict[str, Any]:
@@ -1193,7 +1219,8 @@ async def _call_ollama(contents: list[dict[str, Any]]) -> dict[str, Any]:
         ],
         "options": {"temperature": 0.2},
     }
-    async with httpx.AsyncClient(timeout=300) as client:
+    # 150 s: koud laden kost ~100 s (gemeten op Hetzner); langer is een volle rij.
+    async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=150.0, write=30.0, pool=10.0)) as client:
         response = await client.post(
             f"{OLLAMA_HOST}/api/chat", json=payload,
             headers=_ollama_headers(),
