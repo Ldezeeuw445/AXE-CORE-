@@ -27,7 +27,7 @@ from . import engine_rules as rules
 from .leescache import haal_tabellen
 from .repository import RepositoryError
 from .research import ResearchError
-from .service import RESEARCH_INSTRUCTIONS
+from .service import RESEARCH_INSTRUCTIONS, parse_ts as _ts
 
 log = logging.getLogger("northsea_mcp.engine")
 
@@ -45,7 +45,11 @@ def _lower(v: Any) -> str:
 
 CANONICAL_MAILBOX = "trade@northseacommodity.com"
 VERVOLG_REGEL = "luka_followups_2026_11_18"
-VERVOLG_PER_DAG = 10
+# Luka 20 nov, "Ja, onder de regel": hooguit 5 vervolgmails per dag, en niemand
+# binnen 14 dagen twee keer. Boven de limiet WACHT de vervolgmail tot morgen:
+# hij wordt dan geen concept bij Luka (dat waren er 15 op 19 nov -- de emmer).
+VERVOLG_PER_DAG = 5
+VERVOLG_RUST_DAGEN = 14
 BLOCKING_POLICIES = ("do_not_contact", "review_required")
 
 
@@ -332,11 +336,27 @@ class EngineService:
         else:
             nieuw = []
             fouten.append("follow-ups skipped: deal_automation_policy interval/max missing or invalid (fail closed)")
+        # Wanneer ging er voor het laatst iets naar dit adres (onze eigen mails).
+        laatst_gemaild: dict[str, datetime] = {}
+        for x in drafts:
+            if x.get("sent_at") and x.get("to_email"):
+                t = _ts(x.get("sent_at"))
+                a = _adres(x.get("to_email"))
+                if t and a and (a not in laatst_gemaild or t > laatst_gemaild[a]):
+                    laatst_gemaild[a] = t
         for f in nieuw:
             anker = next(c for c in outbound if c["id"] == f.anchor_communication_id)
             co = companies.get(f.company_id) or {}
             ct = contacts.get(f.contact_id) or {}
             adres = next((a for a in ontvangers(anker) if a not in bounced_adressen), None)
+            if vervolg_zelf and vervolg_vandaag >= VERVOLG_PER_DAG:
+                # Wachten, niet bij Luka leggen: geen followup-rij, dus de volgende
+                # dag plant de engine hem opnieuw onder de regel.
+                plan["followups_skipped"].append({"anchor": f.anchor_communication_id, "reason": "waiting_for_room_tomorrow"})
+                continue
+            if vervolg_zelf and adres and (t := laatst_gemaild.get(adres)) and nu - t < timedelta(days=VERVOLG_RUST_DAGEN):
+                plan["followups_skipped"].append({"anchor": f.anchor_communication_id, "reason": f"mailed_within_{VERVOLG_RUST_DAGEN}_days"})
+                continue
             opp = next((o for o in d["opportunities"] if o["id"] == f.opportunity_id), None) or {}
             laatste_intel = [intel[c["id"]] for c in inbound if c.get("company_id") == f.company_id and c["id"] in intel]
             missing = next((i.get("engine_missing") or i.get("missing_information") for i in reversed(laatste_intel) if i), []) or []

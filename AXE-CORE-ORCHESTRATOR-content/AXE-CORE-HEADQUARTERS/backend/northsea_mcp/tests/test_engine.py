@@ -687,3 +687,49 @@ async def test_vervolgmail_blijft_concept_als_eerste_mails_uit_staan():
     fu = repo.t["northsea_followups"][0]
     d = next(x for x in repo.t["reply_drafts"] if x["id"] == fu["draft_id"])
     assert d["approval_status"] == "pending" and repo.sends == []
+
+
+async def test_vervolgmail_boven_daglimiet_wacht_tot_morgen_en_komt_niet_bij_luka():
+    """20 nov, Luka 'Ja, onder de regel': max 5 per dag. Boven de limiet ontstonden
+    15 concepten bij Luka (19 nov). Nu: geen concept, geen followup-rij -- de engine
+    plant hem morgen opnieuw."""
+    from datetime import datetime, timezone
+    from northsea_mcp import engine
+    repo = FakeRepo()
+    repo.t["deal_automation_policy"][0].update(auto_send_followups=True, auto_send_qualification=True, auto_reply_nonbinding=True)
+    oude_inbound(repo)
+    repo.t["reply_drafts"] = [d for d in repo.t["reply_drafts"] if d["approval_status"] != "pending"]
+    vandaag = datetime.now(timezone.utc).isoformat()
+    for _ in range(engine.VERVOLG_PER_DAG):
+        repo.t["reply_drafts"].append({"id": str(uuid.uuid4()), "generated_by": "northsea-engine",
+                                       "approval_status": "not_required", "created_at": vandaag})
+    outbound(repo, h=-60)
+    await eng(repo).tick()
+    assert repo.t.get("northsea_followups", []) == []
+    assert not [d for d in repo.t["reply_drafts"] if d.get("approval_status") == "pending"]
+    assert engine.VERVOLG_PER_DAG == 5
+
+
+async def test_vervolgmail_niet_binnen_14_dagen_naar_hetzelfde_adres():
+    from datetime import datetime, timedelta, timezone
+    repo = FakeRepo()
+    repo.t["deal_automation_policy"][0].update(auto_send_followups=True, auto_send_qualification=True, auto_reply_nonbinding=True)
+    oude_inbound(repo)
+    repo.t["reply_drafts"] = [d for d in repo.t["reply_drafts"] if d["approval_status"] != "pending"]
+    anker = outbound(repo, h=-60)
+    # Het adres waar de engine de vervolgmail heen zou sturen.
+    adres = None
+    for c in repo.t["communications"]:
+        if c["id"] == anker:
+            from northsea_mcp.engine import _metadata_ontvangers
+            adres = (_metadata_ontvangers(c) or [None])[0]
+    if adres is None:
+        ct = next((c for c in repo.t.get("contacts", []) if c.get("id") == CONTACT_S), {})
+        adres = (ct.get("email") or "").lower()
+    assert adres
+    repo.t["reply_drafts"].append({"id": str(uuid.uuid4()), "to_email": adres, "generated_by": "northsea-mcp",
+                                   "approval_status": "approved",
+                                   "sent_at": (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()})
+    await eng(repo).tick()
+    assert repo.t.get("northsea_followups", []) == []
+    assert repo.sends == []
