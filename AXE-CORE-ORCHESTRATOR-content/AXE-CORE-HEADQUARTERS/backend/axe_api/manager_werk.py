@@ -240,6 +240,23 @@ def metingen(db: Any, agent: str, nu: datetime, http: Callable[[str], str] | Non
             return (f"Taken laatste 24 uur: {', '.join(f'{k} {v}' for k, v in sorted(tel.items()))}"
                     + ("; meest mislukt: " + " | ".join(f"{n}x {m}" for m, n in top) if top else ""))
         meet(taken)
+
+        def commits() -> str | None:
+            # Wat er al gerepareerd is (20 nov: de proef wilde een fout oplossen
+            # die een uur eerder al op orchestrator stond).
+            import httpx, os
+            tok = (os.environ.get("GITHUB_TOKEN") or "").strip()
+            if not tok:
+                return None
+            r = httpx.get("https://api.github.com/repos/Ldezeeuw445/AXE-CORE-/commits",
+                          params={"sha": "orchestrator", "since": (nu - timedelta(hours=24)).isoformat(), "per_page": 12},
+                          headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"}, timeout=8)
+            if r.status_code != 200:
+                return None
+            kop = [str((c.get("commit") or {}).get("message") or "").split("\n")[0][:100] for c in r.json()]
+            return ("Al gedaan op orchestrator (24 u, staat binnen ~30 min op beide Macs): "
+                    + " | ".join(kop)) if kop else None
+        meet(commits)
     app = APP_VAN.get(agent)
     if app:
         def sleutels() -> str:
