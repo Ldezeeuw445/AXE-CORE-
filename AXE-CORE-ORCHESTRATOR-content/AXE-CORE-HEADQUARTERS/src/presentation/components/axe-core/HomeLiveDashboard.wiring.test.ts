@@ -22,7 +22,7 @@ describe('Home live dashboard is aangesloten', () => {
     expect(css).toMatch(/left: var\(--axe-home-rail-inset\)/);
     expect(css).toMatch(/right: var\(--axe-home-rail-inset\)/);
     expect(css).toMatch(/axe-home-live-cluster/);
-    expect(css).toMatch(/grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+    expect(css).toMatch(/grid-template-rows: repeat\(2, minmax\(0, 1fr\)\)/);
     expect(css).toMatch(/--axe-home-rail-gap: clamp\(8px/);
     expect(css).toMatch(/--axe-home-rail-pad-y: clamp\(4px/);
     expect(css).toMatch(/--axe-home-rail-regel-lijnen: 2/);
@@ -42,12 +42,11 @@ describe('Home live dashboard is aangesloten', () => {
     expect(css).toMatch(/\.axe-home-rail--mobiel \{[^}]*top: 8px/);
     expect(css).toMatch(/\.axe-home-rail-regel \{[^}]*max-height: 2\.5em/);
     expect(css).toMatch(/\.axe-home-live-regel \{[^}]*max-height: 1\.25em/);
-    expect(css).toMatch(/\.axe-kaart-lijf \{[^}]*min-height: calc\(var\(--axe-home-live-lijnen\)/);
+    expect(css).toMatch(/\.axe-kaart-lijf \{[^}]*overflow-y: auto/);
     expect(css).toMatch(/axe-home-rail-tegel-naam/);
     expect(css).toMatch(/axe-home-rail-naam/);
     expect(css).toMatch(/\.axe-ok-chip \{/);
     expect(css).toMatch(/\.axe-home-rail-balk:has\(\[data-axe-ok-chip\]\) \.axe-home-rail-regel \{[^}]*-webkit-line-clamp: 1/);
-    expect(css).toMatch(/nth-child\(n \+ 6\)/);
     expect(css).toMatch(/\.axe-home-live \{[^}]*overflow: hidden/);
     expect(css).toMatch(/\.axe-home-live \{[^}]*pointer-events: none/);
     expect(css).toMatch(/axe-home-rail:not\(\.axe-home-rail--mobiel\)/);
@@ -67,12 +66,9 @@ describe('Home live dashboard is aangesloten', () => {
     expect(dash).toContain('codingSeatsHeartbeat');
     expect(dash).toContain('beslisAgentOk');
     expect(dash).toContain('GoedkeuringActie');
-    expect(dash).toMatch(/<GoedkeuringActie\s+rijen=\{okZicht\}\s+chip/);
     expect(dash).toMatch(/rijen=\{stand\.goedkeuringen\}/);
     expect(dash).not.toMatch(/rijen=\{stand\.goedkeuringen\}[\s\S]{0,80}chip/);
     expect(dash).toContain('No running tasks or missions right now');
-    expect(dash).toContain('and ${n} more');
-    expect(dash).toContain('kaartRegels');
     expect(dash).not.toContain('truncate');
     expect(dash).not.toContain('useLayoutEffect');
   });

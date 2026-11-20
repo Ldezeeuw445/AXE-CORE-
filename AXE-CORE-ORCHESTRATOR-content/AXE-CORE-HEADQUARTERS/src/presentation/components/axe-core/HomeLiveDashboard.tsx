@@ -1,13 +1,8 @@
-/**
- * Living 24/7 strip around the core. Two cards left of the composer, two right,
- * each pair side by side under its rail. Wrap, no ellipsis, no inner scroll.
- * Extra rows behind "and N more".
- */
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
 import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
-import { homeLiveStand, kaartRegels, seatsRegels, type LiveRegel, type LiveTaak } from '@/domain/homeLive';
+import { homeLiveStand, seatsRegels, type LiveRegel, type LiveTaak } from '@/domain/homeLive';
 import { taakActieLabel, taakFoutVan, type TaakActie } from '@/domain/taken/taakFout';
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
@@ -16,17 +11,6 @@ import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 import { groepeerAbonnementen, stoelSleutel, type CodingSeat } from '@/domain/codingSeats';
 import { haalWachtOpJou } from '@/application/approvals/wachtOpJou';
 import './homeLive.css';
-
-type LijstSleutel = 'lopend' | 'recent' | 'ok' | 'seats' | null;
-
-function Meer({ n, onOpen }: { n: number; onOpen: () => void }) {
-  if (n <= 0) return null;
-  return (
-    <button type="button" className="axe-home-live-meer" data-axe-home-meer onClick={onOpen}>
-      {`and ${n} more`}
-    </button>
-  );
-}
 
 function Regel({ kleur, children }: { kleur?: string; children: ReactNode }) {
   return (
@@ -70,26 +54,12 @@ function Actie({
   );
 }
 
-/** Altijd de top 1–4 rijen; nooit alleen 'and N more'. */
-function FitLijst<T>({
-  items,
-  render,
-  leeg,
-  onMeer,
-}: {
+function LiveLijst<T>({ items, render, leeg }: {
   items: T[];
   render: (item: T) => ReactNode;
   leeg: ReactNode;
-  onMeer: () => void;
 }) {
-  if (items.length === 0) return <>{leeg}</>;
-  const { zicht, meer } = kaartRegels(items);
-  return (
-    <div className="axe-home-live-fit">
-      {zicht.map(render)}
-      <Meer n={meer} onOpen={onMeer} />
-    </div>
-  );
+  return <>{items.length ? items.map(render) : leeg}</>;
 }
 
 function recentRegel(t: LiveTaak): { tekst: string; actie?: TaakActie } {
@@ -103,7 +73,6 @@ export function HomeLiveDashboard() {
   const server = useServerAgents();
   const jobs = useAxeJobStore((s) => s.jobs);
   const [stoelen, setStoelen] = useState<CodingSeat[]>([]);
-  const [lijst, setLijst] = useState<LijstSleutel>(null);
   /* 17 nov, UI-ronde: "No pending approvals." terwijl er 48 wachtten -- deze
      kaart kende alleen AXE's eigen vragen. Nu ook wat elders wacht (NorthSea),
      met de knop naar "Wacht op jou". Eén keer per minuut ververst. */
@@ -164,16 +133,14 @@ export function HomeLiveDashboard() {
     stoelen,
   });
 
-  const okZicht = stand.goedkeuringen.slice(0, 1);
   const seats = seatsRegels(stand);
 
   const kaartLopend = (
     <div className="axe-home-live-kaart-vak" data-axe-home-kaart="lopend">
       <Kaart className="axe-home-live-kaart" titel="WORKING NOW">
-        <FitLijst
+        <LiveLijst
           items={stand.lopend}
           leeg={<Regel kleur="var(--text-muted)">No running tasks or missions right now.</Regel>}
-          onMeer={() => setLijst('lopend')}
           render={(t) => (
             <Regel key={t.id}>
               <span style={{ color: t.kleur }}>{t.agent}</span>
@@ -190,10 +157,9 @@ export function HomeLiveDashboard() {
   const kaartRecent = (
     <div className="axe-home-live-kaart-vak" data-axe-home-kaart="recent">
       <Kaart className="axe-home-live-kaart" titel="RECENT">
-        <FitLijst
+        <LiveLijst
           items={stand.recent}
           leeg={<Regel kleur="var(--text-muted)">No recent completed or failed tasks in this feed.</Regel>}
-          onMeer={() => setLijst('recent')}
           render={(t) => {
             const r = recentRegel(t);
             return (
@@ -221,11 +187,10 @@ export function HomeLiveDashboard() {
           </button>
         )}
         <GoedkeuringActie
-          rijen={okZicht}
-          chip
+          rijen={stand.goedkeuringen}
+          onVraag={(rij) => { if (rij.agentId) navigate(`/managers?open=${encodeURIComponent(rij.agentId)}`); }}
           onBeslis={(rij, akkoord) => { void beslisAgentOk({ akkoord, rij }).then(verversServerAgents); }}
         />
-        <Meer n={Math.max(0, stand.goedkeuringen.length - okZicht.length)} onOpen={() => setLijst('ok')} />
       </Kaart>
     </div>
   );
@@ -233,10 +198,9 @@ export function HomeLiveDashboard() {
   const kaartSeats = (
     <div className="axe-home-live-kaart-vak" data-axe-home-seats data-axe-home-kaart="seats">
       <Kaart className="axe-home-live-kaart" titel="SEATS · DAX · CRON">
-        <FitLijst
+        <LiveLijst
           items={seats}
           leeg={<Regel kleur="var(--text-muted)">No seat, DAX or schedule heartbeat yet.</Regel>}
-          onMeer={() => setLijst('seats')}
           render={(s: LiveRegel) => (
             <Regel key={s.id} kleur={s.kleur}>
               {s.tekst}
@@ -262,41 +226,7 @@ export function HomeLiveDashboard() {
         {kaartSeats}
       </div>
 
-      {lijst && (
-        <div className="axe-home-live-lijst" data-axe-home-lijst={lijst} role="dialog" aria-label="Full live list">
-          <div className="axe-home-live-lijst-kop">
-            <span>
-              {lijst === 'lopend' ? 'WORKING NOW' : lijst === 'recent' ? 'RECENT' : lijst === 'ok' ? 'NEEDS YOUR OK' : 'SEATS · DAX · CRON'}
-            </span>
-            <button type="button" className="axe-home-live-meer" onClick={() => setLijst(null)}>Close</button>
-          </div>
-          {lijst === 'lopend' && stand.lopend.map((t) => (
-            <Regel key={t.id}><span style={{ color: t.kleur }}>{t.agent}</span> · {t.titel}</Regel>
-          ))}
-          {lijst === 'recent' && stand.recent.map((t) => {
-            const r = recentRegel(t);
-            return (
-              <Regel key={t.id} kleur={t.kleur}>
-                {r.tekst}
-                <Actie actie={r.actie} taskId={t.taskId} />
-              </Regel>
-            );
-          })}
-          {lijst === 'ok' && (
-            <GoedkeuringActie
-              rijen={stand.goedkeuringen}
-              onBeslis={(rij, akkoord) => { void beslisAgentOk({ akkoord, rij }).then(verversServerAgents); }}
-              onVraag={(rij) => { if (rij.agentId) navigate(`/managers?open=${encodeURIComponent(rij.agentId)}`); }}
-            />
-          )}
-          {lijst === 'seats' && seatsRegels(stand).map((s) => (
-            <Regel key={s.id} kleur={s.kleur}>
-              {s.tekst}
-              <Actie actie={s.actie} />
-            </Regel>
-          ))}
-        </div>
-      )}
+
     </div>
   );
 }

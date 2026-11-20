@@ -354,7 +354,7 @@
   cursor: pointer;
 }
 
-/* 2+2 besides each other under the rails, 8px above the composer. */
+/* Two stacked cards per side, 8px above the composer. */
 .axe-home-live {
   position: fixed;
   left: var(--axe-home-rail-inset);
@@ -374,8 +374,8 @@
 
 .axe-home-live-cluster {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: var(--axe-home-stack-gap);
   width: var(--axe-home-live-cluster-breed);
   max-width: var(--axe-home-live-cluster-breed);
@@ -448,24 +448,10 @@
   flex: 1 1 auto;
   height: auto;
   max-height: none;
-  min-height: calc(var(--axe-home-live-lijnen) * 1.25em);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.axe-home-live-fit {
-  height: auto;
-  max-height: none;
   min-height: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.axe-home-live-fit > :nth-child(n + 6) {
-  display: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
 }
 
 .axe-home-live-regel {
