@@ -8421,9 +8421,15 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 @media (max-width: 860px) {
   .axe-managers-room {
-    grid-template-columns: 1fr;
+    /* minmax(0, 1fr), niet 1fr: een gridkolom krimpt anders niet onder zijn
+       breedste inhoud (zoekbalk + Chat/Activity + DAX = ~500px), en op een
+       telefoon van 375px viel alles rechts weg (gemeten 20 nov). */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(180px, 38%) minmax(0, 1fr);
   }
+  .axe-managers-room-lijst,
+  .axe-managers-room > * { min-width: 0; }
+  .axe-managers-room-lijst-kop { flex-wrap: wrap; }
 }
 .axe-managers-room-lijst {
   /* Never inherit shell rail aside rules (fixed + translate off-screen). */
