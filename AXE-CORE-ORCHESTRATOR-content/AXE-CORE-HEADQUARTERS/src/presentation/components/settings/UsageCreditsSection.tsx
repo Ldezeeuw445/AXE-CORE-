@@ -114,9 +114,9 @@ export function UsageCreditsSection() {
         </Kaart>
       </KaartRaster>
 
-      <SectieBlok titel="SEATS" extra={<span className="font-mono text-[10.5px]" style={{ color: 'var(--text-muted)' }}>today / week · 5-hour window</span>}>
+      <SectieBlok titel="SEATS" extra={<span className="font-mono text-[10.5px]" style={{ color: 'var(--text-muted)' }}>recorded sessions · AXE budgets</span>}>
         <KaartRaster ruim>
-          {(data?.seats ?? []).map((stoel) => {
+          {(data?.seats ?? []).filter(stoel => !['xai', 'xai2'].includes(stoel.id)).map((stoel) => {
             const stand = seatStand(stoel);
             const accent = seatAccent(stoel.family);
             const last = stoel.last_failure_at || stoel.last_limit_at;
@@ -124,7 +124,7 @@ export function UsageCreditsSection() {
               <Kaart key={stoel.id} titel={stoel.label} actie={<Stand toon={stand.toon} tekst={stand.tekst} />}>
                 <p className="text-[11px] mb-3" style={{ color: 'var(--text-muted)' }} title={stoelRol(stoel)}>{stoelRol(stoel)}</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <Cijfer label="Today" waarde={`${stoel.sessions_today}/${stoel.sessions_max || '—'}`} />
+                  <Cijfer label="Today / AXE budget" waarde={`${stoel.sessions_today}/${stoel.sessions_max || '—'}`} />
                   <Cijfer label="This week" waarde={String(stoel.sessions_week)} />
                   <Cijfer label="Window" waarde={vensterTekst(stoel.window_free_at, stoel.window_open)} />
                   <Cijfer label="Last limit" waarde={last ? geleden(Date.parse(last)) : '—'} />

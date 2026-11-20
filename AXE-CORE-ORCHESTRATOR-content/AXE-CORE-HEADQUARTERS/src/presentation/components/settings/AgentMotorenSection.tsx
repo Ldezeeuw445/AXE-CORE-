@@ -1,3 +1,4 @@
+import { useServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 /**
  * Instellingen → Motoren per agent.
  *
@@ -43,6 +44,7 @@ const WAARVOOR: Record<HoofdAgent, string> = {
 };
 
 export function AgentMotorenSection() {
+  const activity = useServerAgents();
   const [toewijzing, setToewijzing] = useState<MotorToewijzing>(() => leesToewijzing());
   const [motorAccounts, setMotorAccounts] = useState<Record<string, MotorStatus>>({});
   const [planner, setPlanner] = useState<PlannerStatus | null>(null);
@@ -237,6 +239,9 @@ export function AgentMotorenSection() {
         />
         {HOOFD_AGENTS.map(agent => {
           const motor = toewijzing[agent];
+          const live = activity.ok ? activity.agents[agent] : undefined;
+          const task = live?.task;
+          const actualEngine = [task?.engine, task?.model].filter(Boolean).join(' · ');
           const opties = kiesbaar(toewijzing, agent);
           const g = motor !== 'sleutels' ? abonnementGebruik[motor] : undefined;
           const lat = agentLatency(agent);
@@ -247,7 +252,7 @@ export function AgentMotorenSection() {
               key={agent}
               naam={AGENT_LABEL[agent]}
               accent={ACCENT[agent]}
-              rol={WAARVOOR[agent]}
+              rol={[WAARVOOR[agent], live?.status, actualEngine].filter(Boolean).join(' · ')}
               stand={motorStatus(motor)}
               keuze={
                 <select value={motor} onChange={e => kies(agent, e.target.value as HoofdMotor)} aria-label={`Engine for ${AGENT_LABEL[agent]}`}>
@@ -255,16 +260,16 @@ export function AgentMotorenSection() {
                 </select>
               }
               stats={[
-                { label: 'Runs 24h', waarde: g ? String(g.runs_24h) : '—' },
+                { label: 'Seat runs 24h', waarde: g ? String(g.runs_24h) : '—' },
                 { label: 'Latency', waarde: lat != null ? duur(lat) : '—' },
-                { label: 'Tokens 7d', waarde: tokens ? kort(tokens) : '—' },
-                { label: 'Last run', waarde: g?.last_run_at ? geleden(g.last_run_at * 1000) : '—' },
+                { label: 'Seat tokens 7d', waarde: tokens ? kort(tokens) : '—' },
+                { label: 'Last seat run', waarde: g?.last_run_at ? geleden(g.last_run_at * 1000) : '—' },
               ]}
               balken={[
                 ...(planner?.dagbudget && motor !== 'sleutels' ? [{ label: 'Planner today', waarde: `${vandaag}/${planner.dagbudget}`, pct: (vandaag / planner.dagbudget) * 100 }] : []),
                 ...(g && g.ok_7d + g.failed_7d > 0 ? [{ label: 'Success 7d', waarde: `${g.ok_7d}/${g.ok_7d + g.failed_7d}`, pct: (g.ok_7d / (g.ok_7d + g.failed_7d)) * 100, goed: true }] : []),
               ]}
-              melding={g?.last_limit_message ?? undefined}
+              melding={live?.current_action || task?.title || g?.last_limit_message || undefined}
             />
           );
         })}
