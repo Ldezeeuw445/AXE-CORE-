@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 43 gebouwd maar nog niet bewezen, 61 open (van 177).
+**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 45 gebouwd maar nog niet bewezen, 59 open (van 177).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -9,8 +9,8 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (50%) | 8 | 1 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 27 | 6 |
-| Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 4 | 3 |
-| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 4 | 34 |
+| Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 5 | 2 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 5 | 33 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
@@ -126,7 +126,8 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
   - [~] **AXE mag Ollama op Strato herstarten** (Luka 20 nov): eigen sleutel `axe-ollama-knop` op de VPS (alleen `status` en `restart`), `/ollama-knop/status|restart` in de API. Wacht op Luka: `infra/dax/ollama-knop-recht.sh` één keer als root op Strato draaien. Gemeten 20 nov: Ollama bereikbaar maar elk antwoord >170 s (rij vol door DAX-bots op CPU). Volgende: bots naar Groq als de Ollama-rij vol is.
   - [~] **DAX-bots inloggen vanuit AXE** (20 nov): Strato-terminal heeft eigen knoppen (Ollama, containers, DAX-logins, per bot Claude/Codex inloggen); kreeg eerst de knoppen van de API-VPS. Bewezen als Keys per app de bots op Works zet.
   - [~] **Ruis wordt gesprek** (20 nov: far_field-ruisonderdrukking, taalhint NL/EN voor de transcriptie, drempel 0,6, en `isRuis`: een los bromgeluid of vreemd los woord komt niet in de chat en AXE breekt zijn antwoord erop af. Bewezen als Luka een dag praat zonder rommel in de chat.)
-  - [ ] **Telefoon: het invoerveld neemt op elke tab meer dan de halve hoogte** (20 nov, 375 px); op Taken zie je daardoor maar een paar regels. alles wat ooit in AXE
+  - [~] **Telefoon: het invoerveld neemt op elke tab meer dan de halve hoogte** (20 nov, 375 px); op Taken zie je daardoor maar een paar regels. Gerepareerd: statuspillen en tip-knoppen elk op één schuifregel, orb klein -- de tab krijgt 400 i.p.v. 324 px (preview 375x812, Taken leesbaar). Bewezen op Luka's telefoon na de volgende build. Nog open: op Home lopen de managerlijst, het gesprek en de kaarten door elkaar heen.
+      alles wat ooit in AXE
       gebouwd of bedacht is (computer use, eigen browser, "hey axe show me the
       map of New York", ...), per functie: werkt het echt, en kan Luka het met
       alleen zijn stem gebruiken.

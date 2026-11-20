@@ -9979,3 +9979,30 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 [data-axe-seats-raster].axe-agent-raster--ruim {
   grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
 }
+
+/* Telefoon (Luka 20 nov, gemeten op 375x812): de tab zelf kreeg maar 324 van
+   de 812 px -- de rest ging naar de statuspillen (86), de vier tip-knoppen op
+   twee regels, de orb op een eigen regel (64) en de tabbalk. Op een telefoon:
+   pillen en tips elk op één regel die je opzij schuift, en de orb klein. */
+@media (max-width: 639px) {
+  :root[data-look] .axe-home-pillen,
+  :root[data-look] .axe-snelacties {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  :root[data-look] .axe-home-pillen::-webkit-scrollbar,
+  :root[data-look] .axe-snelacties::-webkit-scrollbar { display: none; }
+  :root[data-look] .axe-home-pillen { padding: 0 8px 4px; gap: 6px; }
+  :root[data-look] .axe-home-pillen > *,
+  :root[data-look] .axe-snelactie { flex: 0 0 auto; }
+  :root[data-look] .axe-presence-idle {
+    height: 34px;
+    display: grid;
+    place-items: center;
+    overflow: visible;
+  }
+  :root[data-look] .axe-presence-idle > * { transform: scale(0.5); }
+}
