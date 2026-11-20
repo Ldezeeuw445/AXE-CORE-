@@ -186,8 +186,12 @@ def _dax_rijen(dax: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def status(sync_rijen: list[dict[str, Any]], nu: datetime, env: Mapping[str, str] | None = None,
            tabel_bewijs: Mapping[str, str | None] | None = None,
-           dax: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+           dax: list[dict[str, Any]] | None = None,
+           instellingen: Mapping[str, bool] | None = None) -> dict[str, Any]:
     """Per app de sleutels met een eerlijke status. Nooit een waarde.
+
+    instellingen: per provider-id of hij in AXE Core Settings → Keys is
+    ingevuld (user_settings.axe_llm_connections). Zonder: "unseen".
 
     status: works | present | missing | broken | unseen | optional | unused
     - optional: niet gezet, en dat mag (alleen nodig als je die functie wilt)
@@ -213,6 +217,14 @@ def status(sync_rijen: list[dict[str, Any]], nu: datetime, env: Mapping[str, str
                 st, detail = "present", "Set on the VPS; nothing has proven it works yet"
             else:
                 st, detail = "missing", "Not set on the VPS"
+        elif k["plek"] == "settings" and instellingen is not None and k.get("provider"):
+            # 20 nov: Exa en ElevenLabs stonden op "not visible", terwijl ze gewoon
+            # in Luka's instellingen staan -- en die kan de VPS lezen (alleen of
+            # ze gevuld zijn, nooit de waarde).
+            if instellingen.get(str(k["provider"])):
+                st, detail = "present", "Filled in under AXE Core Settings → Keys"
+            else:
+                st, detail = "missing", "Not filled in under AXE Core Settings → Keys"
         else:
             st, detail = "unseen", f"Lives in {PLEK_LABEL[k['plek']]}; not visible from the VPS"
         if st == "missing" and k["nodig"] == "unused":
@@ -264,7 +276,25 @@ def lees(db: Any, nu: datetime | None = None) -> dict[str, Any]:
         dax = db.table("core_dax_computers").select("id,owner_agent,status,last_error,stats").execute().data or []
     except Exception:  # noqa: BLE001
         dax = []
-    return status(rijen, nu, tabel_bewijs=tabel_bewijs, dax=dax)
+    return status(rijen, nu, tabel_bewijs=tabel_bewijs, dax=dax, instellingen=_instellingen(db))
+
+
+def _instellingen(db: Any) -> dict[str, bool] | None:
+    """Welke providers in AXE Core Settings → Keys gevuld zijn. Alleen ja/nee."""
+    try:
+        rijen = db.table("user_settings").select("value").eq("key", "axe_llm_connections").limit(5).execute().data or []
+    except Exception:  # noqa: BLE001 -- dan blijft het "unseen"
+        return None
+    gevuld: dict[str, bool] = {}
+    for r in rijen:
+        waarde = r.get("value")
+        if not isinstance(waarde, dict):
+            continue
+        for prov, v in waarde.items():
+            sleutel = v.get("key") if isinstance(v, dict) else None
+            if isinstance(sleutel, str) and len(sleutel.strip()) > 8:
+                gevuld[str(prov)] = True
+    return gevuld
 
 
 def manager_regel(db: Any, app: str, nu: datetime | None = None) -> str:

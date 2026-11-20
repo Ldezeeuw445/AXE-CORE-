@@ -93,3 +93,24 @@ def test_tweede_vps_dax_logins():
     assert rijen["dax-developer-01 login"]["status"] == "missing"
     assert rijen["dax-trading-01 login"]["status"] == "broken"
     assert "STRATO" in rijen["dax-developer-01 login"]["where"]
+
+
+def test_instellingen_sleutels_zijn_zichtbaar_zonder_waarde():
+    over = sl.status([], NU, {}, instellingen={"exa": True})
+    assert _key(over, "AXE Core", "EXA_API_KEY")["status"] == "present"
+    assert _key(over, "AXE Core", "ELEVENLABS_API_KEY")["status"] == "optional"
+    zonder = sl.status([], NU, {})
+    assert _key(zonder, "AXE Core", "EXA_API_KEY")["status"] == "unseen"
+
+
+def test_instellingen_lezen_geeft_alleen_ja_nee():
+    class Q:
+        def __init__(self, data): self.data = data
+        def select(self, *_): return self
+        def eq(self, *_): return self
+        def limit(self, *_): return self
+        def execute(self): return self
+    class DB:
+        def table(self, _): return Q([{"value": {"exa": {"key": GEHEIM}, "groq": {"key": ""}, "x": "raar"}}])
+    uit = sl._instellingen(DB())
+    assert uit == {"exa": True} and GEHEIM not in json.dumps(uit)
