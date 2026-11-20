@@ -68,7 +68,7 @@ const ARGS: Record<string, { properties: Record<string, unknown>; required: stri
   // push approval card. See computerCatalog for the full reasoning.
   computer_read:   { properties: {
                                    tool: str('Read-only tool id, e.g. screen.observe, screen.displays, pointer.position, app.list, window.list, git.status, files.read.'),
-                                   path: str('Path, for files.* / personal.files.list. Optional.'),
+                                   path: str('Path, for files.* / personal.files.list. Reading also takes an absolute path in home, /Applications or /Volumes. Optional.'),
                                    workspace: str('Workspace for repo-scoped tools. Optional.'),
                                    device: str('Target Mac id or label. Optional; preferred Mac is used when unambiguous.'),
                                    query: str('Search text, for files.search. Optional.'),

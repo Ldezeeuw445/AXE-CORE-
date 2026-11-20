@@ -30,12 +30,13 @@
  * Run:  node infra/axe-computer-worker/worker.mjs
  */
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, realpath, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { resolve, sep, join, dirname, relative } from 'node:path';
 import { homedir, hostname, tmpdir } from 'node:os';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { reportCodingSeats } from './codingSeats.mjs';
+import { maakLeesWeigering } from './leesRegels.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -463,6 +464,32 @@ function safePath(root, p) {
   return abs;
 }
 
+/* ── lezen buiten de werkmap ────────────────────────────────────────────────
+ * Luka 20 nov: "is dat wel handig dat hij alleen in zijn eigen map mag kijken?"
+ * -- nee, niet voor een assistent die alles kan. LEZEN mag nu op de hele Mac
+ * (thuismap, Programma's, externe schijven). SCHRIJVEN en VERWIJDEREN blijven
+ * in de werkmap (safePath) en vragen elke keer om een ok.
+ *
+ * Wat nooit gelezen wordt, wat er ook gevraagd wordt (alles wat AXE leest gaat
+ * naar een model): elke verborgen map of bestand (~/.ssh, ~/.claude, ~/.aws,
+ * ~/.axe ... daar staan de sleutels), de sleutelhanger, cookies, browser-
+ * profielen en wachtwoordmanagers, plus de vault en DENY_NAMES (.env, *.key).
+ * Gecontroleerd na realpath, dus een symlink ernaartoe telt ook. */
+const leesWeigering = maakLeesWeigering({ home: homedir(), denyPaths: DENY_PATHS, denyNames: DENY_NAMES });
+
+/** Leespad: binnen de werkmap de gewone regels, daarbuiten leesWeigering. */
+async function leesPad(root, p) {
+  const ruw = resolve(root, String(p ?? '.').replace(/^~/, homedir()));
+  if (ruw === root || ruw.startsWith(root + sep)) return safePath(root, p ?? '.');
+  let echt;
+  try { echt = await realpath(ruw); } catch { echt = ruw; }
+  for (const kandidaat of new Set([ruw, echt])) {
+    const nee = leesWeigering(kandidaat);
+    if (nee) throw new Error(nee);
+  }
+  return echt;
+}
+
 const SEAT_ENV = {
   // Geen CLAUDE_CONFIG_DIR voor de eerste stoel: `claude auth login` zonder map
   // bewaart de login in de sleutelhanger onder "Claude Code-credentials". Zet je
@@ -728,7 +755,7 @@ async function execute(payload) {
     case 'git.log':     return git(root, 'log', '-5', '--oneline');
 
     case 'files.list': {
-      const dir = safePath(root, args.path ?? '.');
+      const dir = await leesPad(root, args.path ?? '.');
       const entries = await readdir(dir, { withFileTypes: true });
       return entries
         .filter(e => !e.name.startsWith('.') && !DENY_NAMES.test(e.name))
@@ -738,7 +765,7 @@ async function execute(payload) {
     }
 
     case 'files.read': {
-      const file = safePath(root, args.path);
+      const file = await leesPad(root, args.path);
       const s = await stat(file);
       if (s.size > 512 * 1024) throw new Error(`file too large (${Math.round(s.size / 1024)}kb)`);
       return (await readFile(file, 'utf8')).slice(0, MAX_OUTPUT);
@@ -762,6 +789,16 @@ async function execute(payload) {
     case 'files.search': {
       const q = String(args.query ?? '').trim();
       if (!q) throw new Error('files.search needs a query');
+      /* Met een pad buiten de werkmap: zoek op bestandsnaam via Spotlight
+         (mdfind), en laat alleen zien wat leesWeigering doorlaat. */
+      if (args.path) {
+        const waar = await leesPad(root, args.path);
+        if (!(waar === root || waar.startsWith(root + sep))) {
+          const uit = await run('mdfind', ['-onlyin', waar, '-name', q], root);
+          const ok = String(uit).split('\n').filter(r => r && !leesWeigering(resolve(r))).slice(0, 100);
+          return ok.join('\n') || '(nothing found)';
+        }
+      }
       // --fixed-strings: the query is data, never a pattern the model composes.
       return run('git', ['grep', '-n', '--fixed-strings', '-I', '--', q], root);
     }

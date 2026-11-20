@@ -26,6 +26,8 @@ export default defineConfig({
     include: [
       'src/**/*.{test,spec}.{ts,tsx}',
       'supabase/functions/**/*.test.ts',
+      // De Mac-worker: wat AXE op een Mac mag lezen (leesRegels).
+      'infra/computer-worker/**/*.test.mjs',
       // Guard-scripts leven buiten src/; zonder deze regel draait hun test
       // niet in `npx vitest run` en kan Pages weer stuk zonder dat de suite het ziet.
       'scripts/check-web-supabase-env.test.ts',

@@ -49,6 +49,12 @@ Tools: ${OBSERVE_TOOLS.join(' · ')}
 \`files.read\` and \`files.list\` take a \`path\`; \`git.*\` take an optional
 \`workspace\` (defaults to the one Luka has selected). \`files.search\` takes a
 \`query\`.
+Reading is not limited to the workspace: \`files.list\` and \`files.read\` also
+take an absolute path anywhere in Luka's home folder, /Applications or /Volumes
+(e.g. \`/Applications\`, \`~/Library/LaunchAgents\`). \`files.search\` with a
+\`path\` outside the workspace finds files by name there (Spotlight). Hidden
+folders, the keychain, browser profiles and password managers are never
+readable. Writing and deleting stay inside the workspace.
 
 Luka has more than one Mac. If the same workspace exists on two machines that
 are both online, you will be told to pick one — add \`"device"\` and ask again.

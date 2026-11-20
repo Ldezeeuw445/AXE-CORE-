@@ -120,6 +120,8 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       met alle drie tegelijk in de kamer getest.
 - [~] **Alle functies op één lijst, met hands-free** (20 nov: `FUNCTIES.md`, ~90 functies per gebied met werkt / stem / typen / klik en een voorbeeldzin. Meteen gerepareerd: getypt "open trading" opent nu de tab (was een taak), en de stem kan tabs, de Home-weergave en de notch openen (`open_tab`). Nog open, zie de gaten onderaan FUNCTIES.md.)
   - [~] **Getypt een afspraak toevoegen** (20 nov: `afspraakUitZin` + tier 1 `calendar_add`; in de preview opgeslagen op vrijdag 19:30. Bewezen zodra Luka het in de echte app doet.)
+  - [~] **AXE leest de hele Mac** (Luka 20 nov): `files.list/read/search` ook buiten de werkmap -- thuismap, /Applications, /Volumes. Nooit: verborgen mappen, sleutelhanger, cookies, browserprofielen, wachtwoordmanagers, vault, .env/*.key (`leesRegels.mjs`, getest). Schrijven/verwijderen blijft in de werkmap met een ok. Bewezen zodra AXE op de Mac mini `/Applications` laat zien.
+  - [~] **Claude-account 1 'not connected' terwijl hij ingelogd was** (20 nov): de controle zette zelf CLAUDE_CONFIG_DIR=~/.claude; gerepareerd `7afae4dc`, op de iMac gemeten true.
   - [ ] **Ruis wordt gesprek**: de live stem zette "umuyoruz.", "Zadnji.", "Mhm." als berichten van Luka in de chat (20 nov gezien) -- achtergrondgeluid als beurt.
   - [ ] **Telefoon: het invoerveld neemt op elke tab meer dan de halve hoogte** (20 nov, 375 px); op Taken zie je daardoor maar een paar regels. alles wat ooit in AXE
       gebouwd of bedacht is (computer use, eigen browser, "hey axe show me the
