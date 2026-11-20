@@ -67,14 +67,14 @@ export function CompactStatusRow({ label, status, tone, icon = 'Key', accent, co
   const Icon = providerIcoon(icon);
   const statusColor = color ?? standKleur(tone, true);
   return (
-    <div className="grid min-w-0 items-center gap-x-2 py-[3px]" style={{ gridTemplateColumns: 'minmax(0, 1fr) max-content', minHeight: 28 }}>
-      <div className="grid min-w-0 items-center gap-x-2" style={{ gridTemplateColumns: '11px minmax(0, 1fr)' }}>
-        <Icon size={11} aria-hidden="true" style={{ color: accent ?? 'var(--accent-cyan)' }} />
-        <span className="text-axe-meta truncate" title={label} style={{ color: 'var(--text-secondary)' }}>{label}</span>
+    <div style={{ display: 'flex', flexWrap: 'nowrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0, minHeight: 28, paddingBlock: 3, boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', flex: '1 1 0%', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        <Icon size={11} aria-hidden="true" style={{ color: accent ?? 'var(--accent-cyan)', flexShrink: 0 }} />
+        <span className="text-axe-meta" title={label} style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       </div>
-      <div className="grid items-center gap-x-1.5 whitespace-nowrap" style={{ gridTemplateColumns: 'max-content 6px', color: statusColor }}>
+      <div style={{ display: 'flex', flex: '0 0 auto', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', color: statusColor }}>
         <span className="text-axe-meta">{status}</span>
-        <span aria-hidden="true" className="w-[6px] h-[6px] rounded-full" style={{ background: statusColor }} />
+        <span aria-hidden="true" style={{ width: 6, height: 6, flexShrink: 0, borderRadius: '50%', background: statusColor }} />
       </div>
     </div>
   );
