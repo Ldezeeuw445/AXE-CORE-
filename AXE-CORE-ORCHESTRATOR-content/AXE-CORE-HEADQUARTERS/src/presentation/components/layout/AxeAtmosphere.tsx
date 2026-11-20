@@ -20,6 +20,7 @@
  * ontwerp is uitgewerkt en beoordeeld. Wijk je hier af, wijk dan daar ook af,
  * anders lopen de twee uit elkaar en weet niemand meer welke de waarheid is.
  */
+import { heeftEchteFocus } from '@/infrastructure/ui/echteFocus';
 import { useEffect, useRef } from 'react';
 
 /**
@@ -181,7 +182,8 @@ function useSterren() {
 
     const lus = (nu: number) => {
       frame = requestAnimationFrame(lus);
-      if (document.hidden || !document.hasFocus()) return;
+      // Echte macOS-focus: document.hasFocus() blijft true in een andere app (20 nov).
+      if (document.hidden || !heeftEchteFocus()) return;
       // Eerste frame, of terug uit de achtergrond: alleen de klok gelijkzetten.
       // Zonder dit is nu-vorige de hele looptijd van de pagina en springt het
       // flonkeren in één keer honderden radialen door.

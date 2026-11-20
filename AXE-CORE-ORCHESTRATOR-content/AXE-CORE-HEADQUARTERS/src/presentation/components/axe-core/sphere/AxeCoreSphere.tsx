@@ -26,6 +26,7 @@
  * tussen twee lagen deeltjes in plaats van erbovenop. Dat is wat diepte geeft:
  * je kijkt ergens ín, niet tegen een schil aan.
  */
+import { heeftEchteFocus } from '@/infrastructure/ui/echteFocus';
 import { useEffect, useRef } from 'react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
@@ -437,7 +438,9 @@ export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number;
     let zichtbaar = true;
     // Ook stil als het venster niet vooraan staat: een app die open staat terwijl
     // je elders werkt, hoort de Mac niets te kosten (gemeten 13 sep: ~35% CPU in rust).
-    const draaien = () => !document.hidden && zichtbaar && document.hasFocus();
+    // heeftEchteFocus i.p.v. document.hasFocus(): die laatste blijft in de
+    // Tauri-webview true in een andere app (20 nov: ~57% CPU in de achtergrond).
+    const draaien = () => !document.hidden && zichtbaar && heeftEchteFocus();
 
     /* ── Dertig beelden per seconde, niet zestig ────────────────────────────
      *

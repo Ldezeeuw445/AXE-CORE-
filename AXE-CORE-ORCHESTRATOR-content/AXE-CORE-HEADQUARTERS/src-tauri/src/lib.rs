@@ -721,7 +721,55 @@ fn toon_hoofdvenster_stil(app: tauri::AppHandle) {
 /// zwart op wit welk venster het was en wanneer. Blijft onder de 256 kB.
 #[cfg(desktop)]
 fn log_focus(label: &str) {
-    log_regel("focus.log", &format!("focus {label}"));
+    log_regel("focus.log", &format!("focus {label} oorzaak={}", focus_oorzaak()));
+}
+
+/// Waarom kreeg AXE de focus? (20 nov, Mac mini: elke ~10 s, in reeksen.)
+///
+/// Het event dat macOS op dat moment verwerkt: een klik of toets van Luka op
+/// AXE (`muis`/`toets`) is goed; `systeem` (Cmd-Tab, Dock) ook; alles anders
+/// betekent dat AXE het zelf deed. `actief_was=nee` = AXE stond daarvoor niet
+/// vooraan. Alleen lezen, geen gedrag.
+#[cfg(target_os = "macos")]
+fn focus_oorzaak() -> String {
+    use cocoa::base::{id, nil};
+    use objc::{class, msg_send, sel, sel_impl};
+    unsafe {
+        let app: id = msg_send![class!(NSApplication), sharedApplication];
+        let ev: id = msg_send![app, currentEvent];
+        let soort = if ev == nil {
+            "geen".to_string()
+        } else {
+            let t: u64 = msg_send![ev, type];
+            match t {
+                1 | 3 | 25 => "muis".to_string(),      // left/right/other mouse down
+                10 | 12 => "toets".to_string(),       // key down / flags changed
+                13 => "systeem".to_string(),          // AppKitDefined (activatie, Cmd-Tab)
+                14 => "systeem-sub".to_string(),      // SystemDefined
+                15 => "app".to_string(),              // ApplicationDefined (eigen code)
+                ander => format!("type{ander}"),
+            }
+        };
+        let ws: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+        let voor: id = msg_send![ws, frontmostApplication];
+        let naam = if voor == nil {
+            "?".to_string()
+        } else {
+            let n: id = msg_send![voor, localizedName];
+            if n == nil {
+                "?".to_string()
+            } else {
+                let c: *const std::os::raw::c_char = msg_send![n, UTF8String];
+                if c.is_null() { "?".to_string() } else { std::ffi::CStr::from_ptr(c).to_string_lossy().replace(' ', "_") }
+            }
+        };
+        format!("{soort} vooraan={naam}")
+    }
+}
+
+#[cfg(all(desktop, not(target_os = "macos")))]
+fn focus_oorzaak() -> String {
+    "onbekend".to_string()
 }
 
 /// Eén regel met tijdstempel in ~/.axe/<naam>, onder de 256 kB.

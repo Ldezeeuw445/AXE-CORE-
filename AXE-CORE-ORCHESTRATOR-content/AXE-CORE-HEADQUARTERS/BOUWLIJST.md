@@ -1,14 +1,14 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 42% klaar** `████████░░░░░░░░░░░░` -- 71 klaar, 27 gebouwd maar nog niet bewezen, 70 open (van 168).
+**Stand: 42% klaar** `████████░░░░░░░░░░░░` -- 71 klaar, 28 gebouwd maar nog niet bewezen, 69 open (van 168).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 8 (44%) | 8 | 2 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 13 | 13 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 1 (4%) | 14 | 12 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 4 | 3 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 2 | 35 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
@@ -146,6 +146,12 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       `109779a8` notch, `d7453322` wekwoord volgt echte vensterfocus).
       19 nov 23:40 Luka: "op de mac mini pakt axe core nog steeds de focus" --
       dus niet opgelost. Eerst meten wélk venster/proces de focus pakt.
+      20 nov, focus.log van de Mac mini gelezen (nieuwe worker-actie): reeksen
+      van "focus axe-float-axe" (notch) en "focus main" elke ~10,3 s, minuten
+      lang (laatst 19 nov 23:33). Op de iMac niet. Oorzaak nog niet zeker; de
+      app logt nu bij elk focusmoment ook het event van macOS (muis/toets/
+      systeem/app) en welke app vooraan stond -- daarmee is de bron te zien
+      zodra de Mac mini de nieuwe build heeft.
       20 nov: alle bekende focus-pakkers in de code zijn al afgevangen (notch
       niet-focusable, herstart na build op de achtergrond + focus terug). De
       app logt elk focusmoment in ~/.axe/focus.log, maar dat stond buiten wat
@@ -153,7 +159,15 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       dat log + de app vooraan vanaf de VPS te lezen. Volgende: lezen, oorzaak.
 - [ ] **Notch helemaal tegen de bovenkant van het scherm.**
 - [ ] **Geen nieuwe witte AXE CORE naast de oude op de Mac mini** na een build.
-- [ ] **Beide Macs traag** (18 nov): oorzaak meten en weghalen.
+- [~] **Beide Macs traag** (18 nov): oorzaak meten en weghalen. 20 nov gemeten
+      op de iMac (8 GB, 8 kernen): AXE's eigen webview ~57% CPU continu (WebKit
+      GPU 31% + WebContent 26%) plus WindowServer 34%, omdat de bol en de
+      sterrenachtergrond pauzeerden op `document.hasFocus()`, en die blijft in
+      WKWebView true als je in een andere app zit. Nu: `echteFocus.ts` (macOS-
+      vensterfocus via Tauri) voor bol en achtergrond; komt met de app-build.
+      Ook: schijf maar 8,8 GB vrij (~/axe-wt-android 17,9 GB, ~/.cache/uv 9,8 GB,
+      fincept 6,6 GB) -- opruimen is Luka's keuze. Bewezen als de CPU in rust
+      laag blijft na de build.
 - [~] **AXE Overlay in de ene notch bovenaan** (9 nov, `580ac272`).
 - [~] **Driehoek-avatars met eigen kleur, ook in de notch** (19 nov,
       `370d0bd0`); de staten (rust / werkt / wacht) nog niet in het echt gezien.
