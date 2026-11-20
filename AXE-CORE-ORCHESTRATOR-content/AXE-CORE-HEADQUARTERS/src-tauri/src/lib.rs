@@ -767,6 +767,43 @@ fn focus_oorzaak() -> String {
     }
 }
 
+/// Het vangnet (20 nov, Luka: "it is getting pretty annoying").
+///
+/// Op de Mac mini kreeg een AXE-venster elke ~10 s de focus terwijl Luka op
+/// zijn andere scherm typte. De precieze bron is nog niet gevonden (focus.log
+/// zegt het na deze build), maar de regel is helder: AXE mag de focus alleen
+/// hebben als Luka erom vroeg. Een klik of toets op AXE (muis/toets) of een
+/// wissel via Cmd-Tab / het Dock (systeem) is Luka; al het andere is AXE zelf,
+/// en dan krijgt de vorige app de focus meteen terug ([NSApp deactivate]).
+/// Uit: `touch ~/.axe/focus-vangnet-uit`.
+#[cfg(target_os = "macos")]
+fn focus_teruggeven_als_niet_van_luka() {
+    use cocoa::base::{id, nil};
+    use objc::{class, msg_send, sel, sel_impl};
+    if let Some(home) = std::env::var_os("HOME") {
+        if PathBuf::from(home).join(".axe").join("focus-vangnet-uit").exists() {
+            return;
+        }
+    }
+    unsafe {
+        let app: id = msg_send![class!(NSApplication), sharedApplication];
+        let ev: id = msg_send![app, currentEvent];
+        let van_luka = if ev == nil {
+            false
+        } else {
+            let t: u64 = msg_send![ev, type];
+            // mouse down (1, 3, 25), mouse up (2, 4, 26), key down/up (10, 11),
+            // flags (12), AppKitDefined = activatie via Cmd-Tab/Dock (13),
+            // scroll (22), gestures (29-32).
+            matches!(t, 1 | 2 | 3 | 4 | 10 | 11 | 12 | 13 | 22 | 25 | 26 | 29 | 30 | 31 | 32)
+        };
+        if !van_luka {
+            let _: () = msg_send![app, deactivate];
+            log_regel("focus.log", "teruggegeven: niet van Luka, vorige app weer vooraan");
+        }
+    }
+}
+
 #[cfg(all(desktop, not(target_os = "macos")))]
 fn focus_oorzaak() -> String {
     "onbekend".to_string()
@@ -855,6 +892,8 @@ pub fn run() {
     let builder = builder.on_window_event(|window, event| {
         if let WindowEvent::Focused(true) = event {
             log_focus(window.label());
+            #[cfg(target_os = "macos")]
+            focus_teruggeven_als_niet_van_luka();
         }
     });
 

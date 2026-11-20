@@ -152,6 +152,10 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       app logt nu bij elk focusmoment ook het event van macOS (muis/toets/
       systeem/app) en welke app vooraan stond -- daarmee is de bron te zien
       zodra de Mac mini de nieuwe build heeft.
+      20 nov, vangnet (Luka: "getting pretty annoying"): krijgt een AXE-venster
+      de focus zonder klik/toets/Cmd-Tab/Dock van Luka, dan geeft AXE hem meteen
+      terug aan de vorige app ([NSApp deactivate]) en schrijft "teruggegeven"
+      in focus.log. Uit: `touch ~/.axe/focus-vangnet-uit`.
       20 nov: alle bekende focus-pakkers in de code zijn al afgevangen (notch
       niet-focusable, herstart na build op de achtergrond + focus terug). De
       app logt elk focusmoment in ~/.axe/focus.log, maar dat stond buiten wat
