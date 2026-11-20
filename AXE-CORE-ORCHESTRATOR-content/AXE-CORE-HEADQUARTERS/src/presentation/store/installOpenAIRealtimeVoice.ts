@@ -243,6 +243,18 @@ export const REALTIME_TOOLS: RealtimeToolDef[] = [
     },
   },
   {
+    name: 'open_tab',
+    description:
+      "Open a tab or page of AXE itself (trading, managers, agenda/calendar, tasks, northsea, settings, memory, code, browser, portal...), switch what Home shows (sphere, neural, terrain, runtime), or open/close the notch. Use it whenever Luka says open / go to / show me <a part of AXE>. Not for websites (show_on_home) and not for apps on the Mac (use_computer).",
+    parameters: {
+      type: 'object',
+      properties: {
+        tab: { type: 'string', description: "The tab or view in Luka's words, e.g. 'trading', 'agenda', 'terrain', 'notch'." },
+      },
+      required: ['tab'],
+    },
+  },
+  {
     name: 'use_computer',
     description:
       "Act on Luka's own Mac — the same computer use the typed chat has. Open or focus an app (app.open with {app:'Safari'}), list running apps (app.list), look at the screen (screen.observe), list personal files (personal.files.list with {path}), read a file in a workspace (files.read with {path, workspace}; it is also shown on Home), click or type (pointer.click, keyboard.type). Anything that changes something shows Luka an approval card first; you never choose the risk level.",
@@ -385,6 +397,7 @@ export async function handleRealtimeTool(name: string, rawArgs: unknown): Promis
       case 'search_memory': return await toolSearchMemory(args);
       case 'show_on_home': return await (await import('./realtimeHomeTools')).toolShowOnHome(args);
       case 'use_computer': return await (await import('./realtimeHomeTools')).toolUseComputer(args);
+      case 'open_tab': return await (await import('./realtimeHomeTools')).toolOpenTab(args);
       case 'get_overview': return await (await import('./realtimePartnerTools')).toolGetOverview();
       case 'use_connected_service': return await (await import('./realtimePartnerTools')).toolConnectedService(args);
       default: {

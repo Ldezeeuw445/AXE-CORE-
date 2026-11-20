@@ -116,3 +116,36 @@ export async function toolUseComputer(args: Args): Promise<string> {
   }
   return JSON.stringify({ ok: !mislukt, result: result.slice(0, 4000) });
 }
+
+/**
+ * open_tab (20 nov, functielijst): de stem kon geen tab openen, geen Home-
+ * weergave kiezen en de notch niet openen -- alleen typen kon dat (en zelfs
+ * dat werd een taak). Dezelfde regels als getypt: homeCommando voor de
+ * weergave en de notch, de navRegistry (detectChatAction) voor tabs.
+ */
+export async function toolOpenTab(args: Args): Promise<string> {
+  const doel = String((args as { tab?: unknown }).tab ?? '').trim();
+  if (!doel) return JSON.stringify({ ok: false, message: 'Which tab? Say e.g. trading, managers, agenda, settings.' });
+  const { homeCommando } = await import('@/domain/overlay/homeCommando');
+  const commando = homeCommando(`open ${doel}`) ?? homeCommando(`zet home op ${doel}`);
+  if (commando?.soort === 'weergave') {
+    useCoreViewStore.getState().setCoreView(commando.weergave);
+    return JSON.stringify({ ok: true, message: `Home shows ${commando.weergave}.` });
+  }
+  if (commando?.soort === 'notch') {
+    const { isTauriRuntime } = await import('@/infrastructure/config/apiUrl');
+    if (!isTauriRuntime()) return JSON.stringify({ ok: false, message: 'The notch only exists in the Mac app.' });
+    const { openZwevend, sluitZwevend } = await import('@/infrastructure/gateways/zwevendeVensters');
+    await (commando.open ? openZwevend('axe') : sluitZwevend('axe'));
+    return JSON.stringify({ ok: true, message: commando.open ? 'Notch is open.' : 'Notch is closed.' });
+  }
+  const { detectChatAction } = await import('@/application/chat/chatActionService');
+  const actie = await detectChatAction(`open ${doel}`);
+  if (actie && actie.kind === 'navigate') {
+    const { useVoiceStore } = await import('@/presentation/store/voiceStore');
+    useVoiceStore.setState({ pendingAction: { kind: 'navigate', path: actie.path, label: actie.label, expliciet: true } });
+    return JSON.stringify({ ok: true, message: `${actie.label} is open.` });
+  }
+  if (actie && actie.kind === 'clarify') return JSON.stringify({ ok: false, message: actie.message });
+  return JSON.stringify({ ok: false, message: `No tab called "${doel}".` });
+}

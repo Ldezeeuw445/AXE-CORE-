@@ -122,12 +122,13 @@ afterEach(() => {
 });
 
 describe('REALTIME_TOOLS', () => {
-  it('declares exactly the nine base tools this voice call has (the registry tools are added per session)', () => {
+  it('declares exactly the ten base tools this voice call has (the registry tools are added per session)', () => {
     expect(REALTIME_TOOLS.map((t) => t.name).sort()).toEqual([
       'answer_pending_approval',
       'cancel_task',
       'get_overview',
       'get_task_status',
+      'open_tab',
       'search_memory',
       'show_on_home',
       'start_background_task',
