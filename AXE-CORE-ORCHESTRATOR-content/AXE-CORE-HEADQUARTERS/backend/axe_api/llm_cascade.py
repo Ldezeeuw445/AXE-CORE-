@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from dataclasses import dataclass, field, replace
+from typing import Any, Optional, Sequence
 
 import httpx
 
@@ -76,6 +76,19 @@ AANBIEDERS: tuple[Aanbieder, ...] = (
               keyloos=True, min_timeout=180.0),
 )
 
+def met_sleutel(basis: str, sleutel_env: str, naam: str, model: Optional[str] = None,
+                extra: Optional[dict[str, Any]] = None) -> Aanbieder:
+    """Dezelfde aanbieder met een andere sleutel (bijvoorbeeld een tweede account).
+
+    `naam` is wat rust en "welk model" laten zien, dus per sleutel uniek: een 429 op de sleutel van de ene
+    manager legt de andere niet stil. Een vast `model` gaat voor de model-omgevingsvariabele."""
+    a = next(x for x in AANBIEDERS if x.naam == basis)
+    uit = replace(a, naam=naam, sleutel_env=sleutel_env, extra={**a.extra, **(extra or {})})
+    if model:
+        uit = replace(uit, model_env=f"_VAST_{naam}", model=model)
+    return uit
+
+
 _rust_tot: dict[str, float] = {}
 _laatste_goed: Optional[str] = None
 
@@ -112,14 +125,18 @@ def vergeet_alles() -> None:
     _laatste_goed = None
 
 
-async def chat(messages: list[dict], max_tokens: int = 1024, timeout: float = 60.0, alleen: Optional[tuple[str, ...]] = None) -> tuple[str, str]:
+async def chat(messages: list[dict], max_tokens: int = 1024, timeout: float = 60.0, alleen: Optional[tuple[str, ...]] = None,
+               keten: Optional[Sequence[Aanbieder]] = None) -> tuple[str, str]:
     """Antwoord + welke aanbieder het gaf. Gooit RuntimeError als er geen enkele werkt.
 
     `alleen` beperkt de keten tot die aanbieders (bijvoorbeeld de gratis: Groq en de eigen modelbox), voor werk dat
-    nooit een betaalde aanroep mag kosten."""
+    nooit een betaalde aanroep mag kosten. `keten` is een eigen volgorde (bijvoorbeeld de sleutels van één manager):
+    die wordt in die volgorde geprobeerd, zonder de gedeelde "laatst geslaagde" te veranderen."""
     global _laatste_goed
     fouten: list[str] = []
-    for a in volgorde():
+    nu = _klok()
+    rij = volgorde(nu) if keten is None else [a for a in keten if a.sleutel() and _rust_tot.get(a.naam, 0.0) <= nu]
+    for a in rij:
         if alleen is not None and a.naam not in alleen:
             continue
         body: dict[str, Any] = {"model": a.gekozen_model(), "messages": messages, "max_tokens": max_tokens, **a.extra}
@@ -140,7 +157,8 @@ async def chat(messages: list[dict], max_tokens: int = 1024, timeout: float = 60
         if not tekst.strip():
             fouten.append(f"{a.naam}: leeg antwoord")
             continue
-        _laatste_goed = a.naam
+        if keten is None:
+            _laatste_goed = a.naam
         return tekst, a.naam
     raise RuntimeError("Geen LLM bereikbaar voor de browser-agent -- " + ("; ".join(fouten) or "geen enkele sleutel ingesteld"))
 

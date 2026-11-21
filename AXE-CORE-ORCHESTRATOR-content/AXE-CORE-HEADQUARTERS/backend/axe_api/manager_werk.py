@@ -38,7 +38,52 @@ ANTWOORD_NA = timedelta(minutes=3)       # zo lang krijgt de app de kans
 NIET_OUDER_DAN = timedelta(hours=24)     # oudere opdrachten niet alsnog oprakelen
 MAX_ANTWOORDEN_PER_RONDE = 2
 MAX_TAKEN_PER_DAG = 8                    # per manager
-GRATIS = ("groq", "openrouter", "ollama")
+
+# ── welke sleutels elke manager gebruikt ───────────────────────────────────
+# Luka, 21 nov: elke manager zijn eigen sleutel, met eigen verbruik, en Grok mag. Volgorde per manager:
+#   1. eigen Grok  XAI_<MANAGER>_API_KEY   (bijv. XAI_NORTHSEAMGR_API_KEY), anders de gedeelde XAI_API_KEY
+#   2. eigen OpenRouter (gratis model), dan een tweede
+#   3. Groq light / reserve (de extra Groq-accounts)
+#   4. de eigen modelbox (Ollama), die altijd antwoordt
+# Nooit GROQ_API_KEY: die is van de chat, en de managers trokken hem leeg.
+OPENROUTER_GRATIS_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+OPENROUTER_GRATIS_RESERVE = ("google/gemma-4-31b-it:free", "nvidia/nemotron-3.5-lightning:free")
+MANAGER_SLEUTELS: dict[str, tuple[tuple[str, str], tuple[str, str]]] = {
+    # manager: ((eerste OpenRouter, tweede), (eerste Groq, tweede))
+    "axemanager": (("OPENROUTER3_API_KEY", "OPENROUTER4_API_KEY"), ("GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY")),
+    "axon": (("OPENROUTER3_API_KEY", "OPENROUTER5_API_KEY"), ("GROQ_RESERVE_API_KEY", "GROQ_LIGHT_API_KEY")),
+    "northseamgr": (("OPENROUTER4_API_KEY", "OPENROUTER5_API_KEY"), ("GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY")),
+    "projectsmgr": (("OPENROUTER4_API_KEY", "OPENROUTER3_API_KEY"), ("GROQ_RESERVE_API_KEY", "GROQ_LIGHT_API_KEY")),
+    "tradingos": (("OPENROUTER5_API_KEY", "OPENROUTER3_API_KEY"), ("GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY")),
+    "companionmgr": (("OPENROUTER5_API_KEY", "OPENROUTER4_API_KEY"), ("GROQ_RESERVE_API_KEY", "GROQ_LIGHT_API_KEY")),
+}
+
+
+def _kort_env(env: str) -> str:
+    return env.removesuffix("_API_KEY")
+
+
+def sleutel_volgorde(agent: str) -> list[tuple[str, str]]:
+    """(aanbieder, omgevingsnaam) in de volgorde waarin deze manager ze probeert. Alleen namen, nooit waarden."""
+    (or1, or2), (gq1, gq2) = MANAGER_SLEUTELS.get(agent, MANAGER_SLEUTELS["axemanager"])
+    return [("xai", f"XAI_{agent.upper()}_API_KEY"), ("xai", "XAI_API_KEY"),
+            ("openrouter", or1), ("openrouter", or2), ("groq", gq1), ("groq", gq2), ("ollama", "OLLAMA_PROXY_KEY")]
+
+
+def manager_keten(agent: str) -> list[Any]:
+    """De llm_cascade-keten van één manager; elke sleutel rust apart."""
+    import llm_cascade as _llm
+    uit = []
+    for basis, env in sleutel_volgorde(agent):
+        naam = f"{basis}/{_kort_env(env)}"
+        if basis == "openrouter":
+            uit.append(_llm.met_sleutel(basis, env, naam, model=OPENROUTER_GRATIS_MODEL,
+                                        extra={"models": [OPENROUTER_GRATIS_MODEL, *OPENROUTER_GRATIS_RESERVE]}))
+        elif basis == "ollama":
+            uit.append(next(a for a in _llm.AANBIEDERS if a.naam == "ollama"))
+        else:
+            uit.append(_llm.met_sleutel(basis, env, naam))
+    return uit
 OPEN = ("pending", "queued", "retrying", "waiting_approval", "planning", "running", "in_progress", "verifying")
 KLAAR = ("completed", "failed", "cancelled", "blocked")
 
@@ -341,7 +386,8 @@ def denk(db: Any, agent: str, opdrachten: list[dict[str, Any]], geschiedenis: li
     berichten.append({"role": "user", "content": "\n\n".join(str(o.get("body") or "") for o in opdrachten)[:4000]})
     if chat is None:
         import llm_cascade as _llm
-        tekst, model = _draai(lambda: _llm.chat(berichten, max_tokens=900, timeout=45.0, alleen=GRATIS))
+        keten = manager_keten(agent)
+        tekst, model = _draai(lambda: _llm.chat(berichten, max_tokens=900, timeout=45.0, keten=keten))
     else:
         tekst, model = chat(berichten)
     antwoord, taken = lees_antwoord(tekst)

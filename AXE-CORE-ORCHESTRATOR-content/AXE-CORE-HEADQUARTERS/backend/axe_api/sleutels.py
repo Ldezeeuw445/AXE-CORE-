@@ -90,7 +90,9 @@ CATALOGUS: tuple[dict[str, Any], ...] = (
     _k("OPENAI_API_KEY", (A, C), "vps", "Agent thinking, 3rd choice; Companion AI", provider="openai"),
     _k("ANTHROPIC_API_KEY", (A,), "vps", "Pay-per-use Claude; you use subscriptions instead",
        nodig="unused", provider="anthropic"),
-    _k("XAI_API_KEY", (A,), "vps", "Grok API; you have Grok Bot itself", nodig="unused", provider="xai"),
+    _k("XAI_API_KEY", (A,), "vps", "Grok API shared by the managers (after a manager's own XAI_<MANAGER>_API_KEY)", nodig="optional", provider="xai"),
+    *(_k(f"XAI_{m.upper()}_API_KEY", (A,), "vps", f"Own Grok key for {m}: its own usage, tried first", nodig="optional", provider="xai")
+      for m in ("axemanager", "northseamgr", "projectsmgr", "companionmgr", "tradingos", "axon")),
     _k("OPENROUTER_API_KEY", (A,), "vps", "OpenRouter 1 (OpenRouter 2 is the one that works)",
        nodig="unused", provider="openrouter"),
     *(_k(f"OPENROUTER{slot}_API_KEY", (A,), "vps", f"OpenRouter {slot}: free agent fallback",

@@ -174,3 +174,66 @@ def test_lees_overleg_alleen_bestaande_collega():
     assert mw.lees_overleg('{"overleg": [{"met": "onbekend", "vraag": "x"}]}', "axon") == []
     assert mw.lees_overleg('{"overleg": [{"met": "AXON", "vraag": "x"}]}', "tradingos") == [("axon", "x")]
     assert mw.lees_overleg("geen json", "axon") == []
+
+
+# ── eigen sleutels per manager (21 nov) ────────────────────────────────────
+
+def test_elke_manager_heeft_eigen_sleutels_en_nooit_de_chat_groq():
+    import manager_werk as mw
+    for agent in mw.NAAM:
+        v = mw.sleutel_volgorde(agent)
+        namen = [env for _, env in v]
+        assert namen[0] == f"XAI_{agent.upper()}_API_KEY"   # eigen Grok eerst
+        assert "GROQ_API_KEY" not in namen                    # de chat-sleutel nooit
+        assert v[-1][0] == "ollama"                            # modelbox als laatste
+    # de drie OpenRouter-accounts zijn eerlijk verdeeld: elk de eerste keus van twee managers
+    eerste = [mw.MANAGER_SLEUTELS[a][0][0] for a in mw.NAAM]
+    assert sorted(eerste.count(k) for k in set(eerste)) == [2, 2, 2]
+
+
+def test_keten_slaat_ontbrekende_sleutels_over_en_rust_per_sleutel(monkeypatch):
+    import asyncio
+    import llm_cascade as llm
+    import manager_werk as mw
+    for env in ("XAI_API_KEY", "XAI_NORTHSEAMGR_API_KEY", "OPENROUTER4_API_KEY", "OPENROUTER5_API_KEY",
+                "GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY", "GROQ_API_KEY"):
+        monkeypatch.delenv(env, raising=False)
+    monkeypatch.setenv("OPENROUTER4_API_KEY", "x")
+    monkeypatch.setenv("OPENROUTER5_API_KEY", "y")
+    monkeypatch.setenv("GROQ_API_KEY", "chat")
+    llm.vergeet_alles()
+    gezien = []
+
+    class Antw:
+        def __init__(self, code, body):
+            self.status_code, self._b, self.text = code, body, str(body)
+
+        def json(self):
+            return self._b
+
+    class Client:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, headers, json):
+            gezien.append((url, headers["Authorization"], json["model"]))
+            if headers["Authorization"] == "Bearer x":
+                return Antw(429, {"error": {"message": "rate limit"}})
+            return Antw(200, {"choices": [{"message": {"content": "ok"}}]})
+
+    monkeypatch.setattr(llm.httpx, "AsyncClient", Client)
+    tekst, model = asyncio.run(llm.chat([{"role": "user", "content": "hi"}], keten=mw.manager_keten("northseamgr")))
+    assert (tekst, model) == ("ok", "openrouter/OPENROUTER5")
+    assert [g[1] for g in gezien] == ["Bearer x", "Bearer y"]          # geen Grok-sleutel -> overgeslagen
+    assert all(g[2] == mw.OPENROUTER_GRATIS_MODEL for g in gezien)       # alleen het gratis model
+    assert "Bearer chat" not in [g[1] for g in gezien]
+    # OPENROUTER4 rust nu, maar alleen die sleutel: een manager met OPENROUTER5 eerst merkt niets
+    assert llm._rust_tot.get("openrouter/OPENROUTER4", 0) > 0
+    assert "openrouter" not in llm._rust_tot
+    llm.vergeet_alles()
