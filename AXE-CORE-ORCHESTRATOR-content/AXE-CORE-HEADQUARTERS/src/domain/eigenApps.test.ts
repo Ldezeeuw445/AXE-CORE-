@@ -25,6 +25,11 @@ describe('vindEigenApp', () => {
   it('elke app heeft een pagina of een url, nooit geen van beide', () => {
     for (const app of EIGEN_APPS) expect(Boolean(app.pagina) !== Boolean(app.url)).toBe(true);
   });
+
+  it('Companion opent de app, niet de www-homepagina', () => {
+    expect(eigenApp('companion')?.url).toBe('https://axecompanion.com/chat');
+    expect(eigenApp('companion')?.url).not.toContain('www.');
+  });
 });
 
 describe('plekUit', () => {
