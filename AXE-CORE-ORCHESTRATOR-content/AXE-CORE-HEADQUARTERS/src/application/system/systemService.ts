@@ -36,7 +36,6 @@ export interface ServiceState {
 const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
 const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
-const TERMINAL_HEALTH_URL = import.meta.env.VITE_TERMINAL_HEALTH_URL ?? 'https://api.axecompanion.com/terminal-health';
 // Same-origin server-side proxy in dev/Vercel; a direct api.axecompanion.com
 // call (with the bearer key attached client-side) inside a packaged Tauri
 // app instead — see axeCoreApiService.ts for the full rationale.
@@ -342,21 +341,10 @@ const SERVICES: Array<{
   },
   {
     key: 'terminal',
-    check: async () => {
-      const t = Date.now();
-      try {
-        const res = await fetch(TERMINAL_HEALTH_URL, { signal: AbortSignal.timeout(5000) });
-        const data = res.ok ? await res.json().catch(() => ({})) : null;
-        return {
-          ok: res.ok,
-          latency: Date.now() - t,
-          meta: data ? { endpoint: TERMINAL_HEALTH_URL, mode: 'remote_terminal' } : { endpoint: TERMINAL_HEALTH_URL },
-          version: res.ok ? 'wss-proxy' : null,
-        };
-      } catch {
-        return { ok: false, latency: Date.now() - t, version: null, meta: { endpoint: TERMINAL_HEALTH_URL } };
-      }
-    },
+    // De terminal-server luistert alleen op 127.0.0.1:4022 en nginx geeft van buiten
+    // alleen de websocket door; /terminal-health bestond nooit (404) en het lampje
+    // stond daardoor altijd op offline. axe-core-api meet hem nu naast de deur.
+    check: async () => vpsAgentStatus('terminal'),
   },
   {
     key: 'langgraph',

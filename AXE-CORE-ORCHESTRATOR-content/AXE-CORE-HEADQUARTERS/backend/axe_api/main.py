@@ -3209,6 +3209,16 @@ async def _check_vps_services() -> dict:
         ollama_health(),
     )
     results = {**dict(zip(names, checked)), **runtimes, "ollama": ollama}
+    # AXE Terminal (terminal-server.cjs, systemd axe-terminal). Hij luistert alleen
+    # op 127.0.0.1:4022; nginx geeft van buiten alleen de websocket (/terminal) door,
+    # dus de app vroeg een /terminal-health op dat niet bestaat en zag altijd
+    # "offline" terwijl de terminal gewoon werkte (21 nov). Van hieruit wel te meten.
+    try:
+        async with httpx.AsyncClient(timeout=4) as client:
+            results["terminal"] = await http_health(
+                client, os.environ.get("AXE_TERMINAL_HEALTH_URL", "http://127.0.0.1:4022/health"))
+    except Exception as e:  # noqa: BLE001
+        results["terminal"] = {"configured": True, "reachable": False, "error": str(e)[:150]}
     # Hermes is not a separate daemon — it is the Ollama model hermes3:8b.
     # HERMES_URL historically pointed at .../v1/chat/completions, so the
     # generic "/health" derivation 404'd and the Models & Tests card stayed

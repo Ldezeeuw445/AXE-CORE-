@@ -200,7 +200,7 @@ export default function Home() {
        * in de letters, nooit in een vlak). */}
           {!isMobile && (
             <div
-              className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-mono-data z-20 pointer-events-none"
+              className="absolute top-[74px] left-1/2 -translate-x-1/2 text-[9px] font-mono-data z-20 pointer-events-none"
               title="De commit en het tijdstip waarop deze app gebouwd is"
               style={{ color: bouwOud ? 'var(--m-budget)' : 'rgba(255,255,255,0.34)' }}
             >
