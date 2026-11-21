@@ -40,11 +40,11 @@ MAX_ANTWOORDEN_PER_RONDE = 2
 MAX_TAKEN_PER_DAG = 8                    # per manager
 
 # ── welke sleutels elke manager gebruikt ───────────────────────────────────
-# Luka, 21 nov: elke manager zijn eigen sleutel, met eigen verbruik, en Grok mag. Volgorde per manager:
-#   1. eigen Grok  XAI_<MANAGER>_API_KEY   (bijv. XAI_NORTHSEAMGR_API_KEY), anders de gedeelde XAI_API_KEY
-#   2. eigen OpenRouter (gratis model), dan een tweede
-#   3. Groq light / reserve (de extra Groq-accounts)
-#   4. de eigen modelbox (Ollama), die altijd antwoordt
+# Luka, 21 nov: elke manager zijn eigen sleutel, met eigen verbruik (geen Grok: die gebruikt hij niet).
+# Volgorde per manager:
+#   1. eigen OpenRouter (gratis model), dan een tweede
+#   2. Groq light / reserve (de extra Groq-accounts)
+#   3. de eigen modelbox (Ollama), die altijd antwoordt
 # Nooit GROQ_API_KEY: die is van de chat, en de managers trokken hem leeg.
 OPENROUTER_GRATIS_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
 OPENROUTER_GRATIS_RESERVE = ("google/gemma-4-31b-it:free", "nvidia/nemotron-3.5-lightning:free")
@@ -66,8 +66,7 @@ def _kort_env(env: str) -> str:
 def sleutel_volgorde(agent: str) -> list[tuple[str, str]]:
     """(aanbieder, omgevingsnaam) in de volgorde waarin deze manager ze probeert. Alleen namen, nooit waarden."""
     (or1, or2), (gq1, gq2) = MANAGER_SLEUTELS.get(agent, MANAGER_SLEUTELS["axemanager"])
-    return [("xai", f"XAI_{agent.upper()}_API_KEY"), ("xai", "XAI_API_KEY"),
-            ("openrouter", or1), ("openrouter", or2), ("groq", gq1), ("groq", gq2), ("ollama", "OLLAMA_PROXY_KEY")]
+    return [("openrouter", or1), ("openrouter", or2), ("groq", gq1), ("groq", gq2), ("ollama", "OLLAMA_PROXY_KEY")]
 
 
 def manager_keten(agent: str) -> list[Any]:
