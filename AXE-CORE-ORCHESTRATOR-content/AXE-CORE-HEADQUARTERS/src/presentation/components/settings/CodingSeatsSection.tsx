@@ -23,6 +23,7 @@ import {
   toonStoelEmail,
   verspildeStoelen,
   watMoetLukaDoen,
+  moetAccountVerifieren,
   type AbonnementGroep,
   type CodingSeat,
 } from '@/domain/codingSeats';
@@ -166,6 +167,7 @@ export function CodingSeatsSection({ compact = false }: { compact?: boolean } = 
       lastRunFout: v?.status === 'ok' || v?.status === 'idle' ? (g?.last_limit_message ?? null) : (v?.reden ?? g?.last_limit_message ?? null),
     });
     const actie = watMoetLukaDoen(getoond);
+    const verifieer = moetAccountVerifieren(getoond);
     const rood = stoelHeeftActie(getoond) && !stoelNietGebruikt(getoond) && kaart.stand.tekst !== 'Online' && kaart.stand.tekst !== 'Running' && kaart.stand.tekst !== 'Not used';
     const reset = vensterReset(v?.sessie?.reset || v?.week?.reset) || resetTekst(getoond);
     const label = MOTOR_LABEL[stoel.id as keyof typeof MOTOR_LABEL] || ({ agy: 'Google Antigravity', kilo: 'Kilo Auto Free', opencode: 'OpenCode Free' } as Record<string, string>)[stoel.id] || stoel.label;
@@ -175,21 +177,22 @@ export function CodingSeatsSection({ compact = false }: { compact?: boolean } = 
     const geschiedenis = kaartMelding(kaart.geschiedenis ?? g?.last_limit_message);
     if (compact) {
       const { tekst, toon } = kaart.stand;
-      return <CompactStatusRow key={groep.key} icon="Terminal" accent={ACCENT[groep.provider]} label={motorNaam(label, { account: groep.email, ingelogd: stoel.logged_in })}
-        status={tekst === 'Online' ? 'Connected' : tekst} tone={toon === 'ok' ? 'ok' : toon === 'bad' ? 'fail' : 'idle'} />;
+      return <CompactStatusRow key={groep.key} icon="Terminal" accent={ACCENT[groep.provider]} label={motorNaam(label, { account: groep.email, ingelogd: stoel.logged_in, moetVerifieren: verifieer })}
+        status={verifieer ? 'Verify account' : tekst === 'Online' ? 'Connected' : tekst} tone={toon === 'ok' ? 'ok' : toon === 'bad' ? 'fail' : 'idle'} />;
     }
     return (
       <StatusKaart
         key={groep.key}
         klein={groep.nietGebruikt}
         naam={motorNaam(label, {
-          account: groep.email,
+          account: verifieer ? (getoond.email ?? groep.email) : groep.email,
           ingelogd: stoel.logged_in,
           nietGebruikt: groep.nietGebruikt,
+          moetVerifieren: verifieer,
         })}
         accent={ACCENT[groep.provider] || 'var(--text-secondary)'}
         rol={`${gratis ? 'Free CLI · ' : ''}${v?.plan ? `${v.plan} plan · ` : ''}${machines}${door.length ? ` · ${door.join(', ')}` : ''}`}
-        stand={stoelen == null ? { toon: 'muted', tekst: 'Checking' } : (groep.nietGebruikt ? { toon: 'muted', tekst: 'Not used' } : kaart.stand)}
+        stand={stoelen == null ? { toon: 'muted', tekst: 'Checking' } : (groep.nietGebruikt ? { toon: 'muted', tekst: 'Not used' } : verifieer ? { toon: 'warn', tekst: 'Verify account' } : kaart.stand)}
         keuze={(rood || actie) && !groep.nietGebruikt ? (
           <code
             title={actie || stoel.login_command}

@@ -464,6 +464,15 @@ export function verspildeStoelen(stoelen: CodingSeat[]): { email: string; machin
   return uit;
 }
 
+/**
+ * Antigravity is ingelogd, maar Google wil het account eerst verifiëren (Luka 22 nov:
+ * het lampje zei "not logged in" terwijl de Google-login gelukt was). De worker zet
+ * dat in login_command, zie AGY_VERIFIEER in infra/computer-worker/codingSeats.mjs.
+ */
+export function moetAccountVerifieren(stoel: Pick<CodingSeat, 'login_command' | 'logged_in'> & Partial<Pick<CodingSeat, 'id' | 'seat_id'>>): boolean {
+  return stoel.logged_in !== true && /signed in, but google wants this account verified/i.test(stoel.login_command || '');
+}
+
 /** Wat Luka moet doen als de stoel niet bruikbaar is. Null = niets, hij draait. */
 export function watMoetLukaDoen(stoel: Pick<CodingSeat, 'provider' | 'id' | 'logged_in' | 'login_command' | 'machine' | 'rate_limited' | 'rate_limit_until' | 'config_exists' | 'seat_id' | 'actie' | 'email'>): string | null {
   if (stoel.actie) return stoel.actie;

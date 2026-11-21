@@ -9,9 +9,14 @@ export interface MotorStatus {
   account?: string | null;
   ingelogd?: boolean | null;
   nietGebruikt?: boolean;
+  /** Ingelogd, maar de aanbieder wil het account eerst laten verifiëren (Antigravity). */
+  moetVerifieren?: boolean;
 }
 
 export function motorNaam(vasteNaam: string, status?: MotorStatus | null): string {
+  if (status?.moetVerifieren) {
+    return status.account ? `${vasteNaam} · ${status.account} (verify account)` : `${vasteNaam} (verify account)`;
+  }
   if (status?.ingelogd === false) {
     return status.nietGebruikt ? `${vasteNaam} (not used)` : `${vasteNaam} (not logged in)`;
   }

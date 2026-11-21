@@ -17,6 +17,19 @@ const execFileP = promisify(execFile);
 const FREE_MODELS = { opencode: 'opencode/beam-free', kilo: 'kilo/kilo-auto/free', agy: null };
 const freeChecks = new Map();
 
+export const AGY_VERIFIEER = 'agy  -- signed in, but Google wants this account verified: run agy and open the link it shows';
+
+/** Met welk Google-account Antigravity laatst inlogde, uit zijn eigen log (geen tokens). */
+export function agyEmailUitLog(tekst) {
+  const alle = [...String(tekst || '').matchAll(/authenticated successfully as (\S+@\S+)/g)];
+  return alle.length ? alle.at(-1)[1] : null;
+}
+
+function agyEmail(home) {
+  try { return agyEmailUitLog(readFileSync(join(home, '.gemini/antigravity-cli/cli.log'), 'utf8')); }
+  catch { return null; }
+}
+
 async function probeFree(seat, env, home) {
   const cached = freeChecks.get(seat.id);
   if (cached && Date.now() - cached.at < 30 * 60_000) return cached.login;
@@ -24,6 +37,7 @@ async function probeFree(seat, env, home) {
   const childEnv = withCliPath({ ...env, PATH: join(home, '.local/bin') + ':' + (env.PATH || '') });
   for (const key of ['GOOGLE_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GENAI_USE_VERTEXAI']) delete childEnv[key];
   let loggedIn = null;
+  let moetVerifieren = false;
   try {
     const model = FREE_MODELS[seat.id];
     const prompt = 'Reply with OK only. Do not use any tools.';
@@ -33,11 +47,18 @@ async function probeFree(seat, env, home) {
     const { stdout } = await execFileP(seat.id, args, { cwd: dir, env: childEnv, timeout: 55_000 });
     loggedIn = model ? /"type":"text"/.test(stdout) : stdout.trim() === 'OK';
   } catch (err) {
-    if (/eligibility check failed|not logged in|verify your account/i.test(err.stderr || '')) loggedIn = false;
+    const fout = err.stderr || '';
+    if (/eligibility check failed|verify your account/i.test(fout)) {
+      // Luka 22 nov: Google-login gelukt, maar Google wil dat account eerst
+      // verifiëren. Dat is geen "not logged in": hij moet iets anders doen.
+      loggedIn = false;
+      moetVerifieren = true;
+    } else if (/not logged in/i.test(fout)) loggedIn = false;
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
-  const login = { loggedIn, email: null };
+  const email = seat.id === 'agy' ? agyEmail(home) : null;
+  const login = { loggedIn, email, moetVerifieren };
   freeChecks.set(seat.id, { at: Date.now(), login });
   return login;
 }
@@ -303,7 +324,7 @@ export async function collectSeats({ env = process.env, home = homedir() } = {})
       email: login.email || null,
       org_id: login.orgId || null,
       logged_in: configured ? login.loggedIn : false,
-      login_command: seat.login,
+      login_command: login.moetVerifieren ? AGY_VERIFIEER : seat.login,
       current_task: known.task || null,
       rate_limited: rateLimited,
       rate_limit_until: rateLimited ? new Date(untilMs).toISOString() : null,

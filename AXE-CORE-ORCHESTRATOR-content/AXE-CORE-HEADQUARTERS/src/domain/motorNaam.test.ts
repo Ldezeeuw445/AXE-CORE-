@@ -17,4 +17,10 @@ describe('motorNaam', () => {
     expect(motorNaam('Cursor')).toBe('Cursor');
     expect(motorNaam('Cursor', { account: null, ingelogd: null })).toBe('Cursor');
   });
+
+  it('zegt "verify account" als de login lukte maar de aanbieder verificatie wil', () => {
+    expect(motorNaam('Google Antigravity', { ingelogd: false, moetVerifieren: true, account: 'x@gmail.com' }))
+      .toBe('Google Antigravity · x@gmail.com (verify account)');
+    expect(motorNaam('Google Antigravity', { ingelogd: false, moetVerifieren: true })).toBe('Google Antigravity (verify account)');
+  });
 });
