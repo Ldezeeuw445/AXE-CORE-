@@ -35,6 +35,19 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { buildTerminalWsUrl } from '@/infrastructure/config/terminalWsUrl';
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+
+/** Een link uit de terminal openen in de echte browser, ook in de Mac-app. */
+async function openTerminalLink(uri: string): Promise<void> {
+  if (isTauriRuntime()) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_link', { url: uri });
+      return;
+    } catch { /* geen https of geen app: val terug */ }
+  }
+  window.open(uri, '_blank', 'noopener');
+}
 
 /* ─── Public API ────────────────────────────────────────────────────────── */
 export interface XtermHandle {
@@ -234,7 +247,12 @@ export const XtermTerminal = forwardRef<XtermHandle, Props>(function XtermTermin
     });
 
     const fitAddon      = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
+    /* 21 nov, Luka: "hij opent bij niks die website". Zonder handler doet de
+       addon window.open, en dat doet in de Tauri-app niets: de inloglink van
+       Claude/Codex/Cursor bleef dood. In de app gaat hij nu via open_link
+       (/usr/bin/open → je standaardbrowser); in een gewone browser blijft het
+       een nieuw tabblad. */
+    const webLinksAddon = new WebLinksAddon((_e, uri) => { void openTerminalLink(uri); });
     term.loadAddon(fitAddon);
     term.loadAddon(webLinksAddon);
     term.open(containerRef.current);
