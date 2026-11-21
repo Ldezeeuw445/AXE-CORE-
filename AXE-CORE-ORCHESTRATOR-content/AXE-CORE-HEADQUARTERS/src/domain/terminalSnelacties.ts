@@ -53,82 +53,171 @@ export interface Snelactie {
 /** Waar de repo op een Mac staat. Eén plek, want hij komt in vier commando's terug. */
 const REPO_MAC = '~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS';
 
-/** Inloggen op de abonnementen. Op elke machine hetzelfde, en op elke machine
- *  apart nodig -- een sessie verhuist niet mee. */
 /**
- * Extra abonnementen (Luka 20 nov: "een sneltoets voor allemaal, ook Claude
- * login 2 en 3"). Elk gaat naar zijn eigen map, en de inlogpagina opent in een
- * privévenster -- in je gewone browser keurde hij meteen account 1 goed.
- * Alleen op een Mac: daar staat het script en is er een browser.
+ * Welk abonnement op welke machine (Luka, 21 nov: "de juiste sneltoets onder de
+ * juiste terminal, zodat het niet fout kan gaan").
+ *
+ * Eén account hoort op één machine: hetzelfde account op twee machines geeft geen
+ * extra limiet, ze trekken samen aan dezelfde. De verdeling:
+ *
+ *   VPS API   Claude 1 en 4, ChatGPT/Codex 1 en 3, Cursor 1, OpenCode, Kilo -- altijd aan
+ *   Mac mini  Claude 2, Cursor 2, Google Antigravity -- wat een Mac met scherm nodig heeft
+ *   iMac      Claude 3, ChatGPT/Codex 2 -- voor wat Luka zelf doet
+ *
+ * De vier "Mac · ..."-vakken zijn de Mac waarop AXE CORE draait. Op de iMac is dat
+ * dus de iMac. Daarom controleert elke Mac-knop zelf op welke machine hij staat:
+ * op de verkeerde doet hij niets en zegt hij waar hij hoort.
  */
-const EXTRA_LOGINS = (repo: string): Snelactie[] => [
-  { label: 'OpenCode Free', cmd: `cd ${repo} && opencode --pure -m opencode/beam-free`, uitleg: 'Start Beam Free in deze checkout', groep: 'agents' },
-  { label: 'Kilo Auto Free', cmd: `cd ${repo} && kilo -m kilo/kilo-auto/free`, uitleg: 'Start Kilo met de gratis modelkeuze', groep: 'agents' },
-  { label: 'Google Antigravity', cmd: `cd ${repo} && agy`, uitleg: 'Start de Google-agent en meld je aan met je persoonlijke account', groep: 'agents' },
-  { label: 'Gratis agents installeren', cmd: 'npm i -g opencode-ai @kilocode/cli && curl -fsSL https://antigravity.google/cli/install.sh | bash', uitleg: 'Installeer de drie extra agents op deze Mac', groep: 'agents' },
-  ...(['tweede', 'derde', 'vierde'] as const).map((n, i) => ({
-    label: `Claude login ${i + 2}`,
-    cmd: `${repo}/scripts/prive-login.sh claude ~/.claude-${n}`,
-    uitleg: `Claude-account ${i + 2} -- privévenster, kies daar het andere account`,
-    groep: 'agents' as const,
-  })),
-  ...(['tweede', 'derde'] as const).map((n, i) => ({
-    label: `Codex login ${i + 2}`,
-    cmd: `${repo}/scripts/prive-login.sh codex ~/.codex-${n}`,
-    uitleg: `ChatGPT-account ${i + 2} -- privévenster, typ daar de code die hier staat`,
-    groep: 'agents' as const,
-  })),
+const OP_IMAC = 'hostname | grep -qi imac';
+
+/** Alleen op de Mac mini; op de iMac zegt hij waar hij heen moet. */
+export const alleenMacMini = (cmd: string) =>
+  `if ${OP_IMAC}; then echo "Dit is de iMac. Deze knop hoort op de Mac mini: open AXE CORE daar, vak Mac · agents."; else ${cmd}; fi`;
+
+/** Alleen op de iMac. */
+export const alleenImac = (cmd: string) =>
+  `if ${OP_IMAC}; then ${cmd}; else echo "Dit is $(hostname), niet de iMac. Deze knop hoort in het vak iMac."; fi`;
+
+const WELKE_AGENTS: Snelactie = {
+  label: 'Welke agents',
+  cmd: 'for b in claude codex cursor-agent opencode kilo agy; do printf "%-13s %s\\n" "$b" "$(command -v $b || echo ONTBREEKT)"; done',
+  uitleg: 'Welke code-CLI\'s op deze machine staan',
+  groep: 'agents',
+  leestAlleen: true,
+};
+
+const SLEUTELS = (cd: string): Snelactie => ({
+  label: 'Sleutels?',
+  // De valkuil die in agent_runner.py bovenaan staat: een CLI die een sleutel
+  // in zijn omgeving vindt authenticeert daarmee in plaats van met je
+  // abonnement -- en dan betaalt de gemeterde API terwijl er in de logs niets
+  // verandert. Dit laat zien of dat risico er is.
+  cmd: `${cd} && for k in ANTHROPIC_API_KEY OPENAI_API_KEY OPENAI_BASE_URL ANTHROPIC_AUTH_TOKEN; do printf "%-22s %s\\n" "$k" "$([ -n "\${!k}" ] && echo GEZET || echo leeg)"; done`,
+  uitleg: 'Staat er een API-sleutel in de omgeving? Die wint van je abonnement',
+  groep: 'agents',
+  leestAlleen: true,
+});
+
+/** Mac mini: Claude 2, Cursor 2, Antigravity. */
+const MAC_MINI_LOGINS = (repo: string): Snelactie[] => [
+  WELKE_AGENTS,
+  {
+    label: 'Claude login 2',
+    cmd: alleenMacMini(`${repo}/scripts/prive-login.sh claude ~/.claude-tweede`),
+    uitleg: 'Claude-account 2, op de Mac mini -- privévenster, kies daar account 2',
+    groep: 'agents',
+  },
   {
     label: 'Cursor 2',
-    cmd: `bash ${repo}/scripts/zet_cursor2_sleutel.sh`,
-    uitleg: 'Tweede Cursor-account: zet de sleutel van dat account',
+    cmd: alleenMacMini(`bash ${repo}/scripts/zet_cursor2_sleutel.sh`),
+    uitleg: 'Cursor-account 2, op de Mac mini: zet de sleutel van dat account',
     groep: 'agents',
   },
+  {
+    label: 'Antigravity installeren',
+    cmd: alleenMacMini('curl -fsSL https://antigravity.google/cli/install.sh | bash'),
+    uitleg: 'Google Antigravity op de Mac mini zetten',
+    groep: 'agents',
+  },
+  {
+    label: 'Google Antigravity',
+    cmd: alleenMacMini(`cd ${repo} && agy`),
+    uitleg: 'Start Antigravity op de Mac mini; meld je aan met je Google-account',
+    groep: 'agents',
+  },
+  SLEUTELS(`cd ${repo}`),
 ];
 
-const AGENT_ACTIES = (cd: string): Snelactie[] => [
+/** iMac: Claude 3, ChatGPT/Codex 2. */
+const IMAC_LOGINS = (repo: string): Snelactie[] => [
+  WELKE_AGENTS,
   {
-    label: 'Welke agents',
-    cmd: 'for b in claude codex cursor-agent opencode kilo agy; do printf "%-8s %s\\n" "$b" "$(command -v $b || echo ONTBREEKT)"; done',
-    uitleg: 'Welke code-CLI\'s op deze machine staan',
-    groep: 'agents',
-    leestAlleen: true,
-  },
-  {
-    label: 'Claude login',
-    cmd: 'claude auth login',
-    uitleg: 'Inloggen met je Claude Pro-abonnement — geen API-sleutel',
+    label: 'Claude login 3',
+    cmd: alleenImac(`${repo}/scripts/prive-login.sh claude ~/.claude-derde`),
+    uitleg: 'Claude-account 3, op de iMac -- privévenster, kies daar account 3',
     groep: 'agents',
   },
   {
-    label: 'Codex login',
-    cmd: 'codex login',
-    uitleg: 'Inloggen met je ChatGPT Plus-abonnement',
+    label: 'Codex login 2',
+    cmd: alleenImac(`${repo}/scripts/prive-login.sh codex ~/.codex-tweede`),
+    uitleg: 'ChatGPT-account 2, op de iMac -- privévenster, typ daar de code die hier staat',
     groep: 'agents',
   },
-  {
-    label: 'Cursor login',
-    cmd: 'cursor-agent login',
-    uitleg: 'Inloggen met je Cursor-abonnement',
-    groep: 'agents',
-  },
+  SLEUTELS(`cd ${repo}`),
+];
+
+/**
+ * VPS API: de meeste accounts, want die machine staat altijd aan. Er is geen
+ * browser: Claude en Cursor geven een link, Codex een link plus code
+ * (--device-auth). Een tweede account krijgt een eigen map (CLAUDE_CONFIG_DIR,
+ * CODEX_HOME), net als op de Mac.
+ */
+const VPS_LOGINS = (repo: string): Snelactie[] => [
+  WELKE_AGENTS,
   {
     label: 'Agents installeren',
-    cmd: 'npm i -g @anthropic-ai/claude-code @openai/codex && curl https://cursor.com/install -fsS | bash',
-    uitleg: 'Alle drie de code-CLI\'s installeren',
+    cmd: 'npm i -g @anthropic-ai/claude-code @openai/codex opencode-ai @kilocode/cli && curl https://cursor.com/install -fsS | bash',
+    uitleg: 'Claude Code, Codex, OpenCode, Kilo en Cursor op de VPS zetten',
     groep: 'agents',
   },
   {
-    label: 'Sleutels?',
-    // De valkuil die in agent_runner.py bovenaan staat: een CLI die een sleutel
-    // in zijn omgeving vindt authenticeert daarmee in plaats van met je
-    // abonnement -- en dan betaalt de gemeterde API terwijl er in de logs niets
-    // verandert. Dit laat zien of dat risico er is.
-    cmd: `${cd} && for k in ANTHROPIC_API_KEY OPENAI_API_KEY OPENAI_BASE_URL ANTHROPIC_AUTH_TOKEN; do printf "%-22s %s\\n" "$k" "$([ -n "\${!k}" ] && echo GEZET || echo leeg)"; done`,
-    uitleg: 'Staat er een API-sleutel in de omgeving? Die wint van je abonnement',
+    label: 'Agents-sessie',
+    // tmux: de agents draaien door als je dit venster of de app sluit. -A: bestaat
+    // hij al, dan stap je erin in plaats van een tweede te maken.
+    cmd: 'tmux new -A -s agents',
+    uitleg: 'Open de vaste agents-sessie (tmux). Ctrl+b c = nieuw venster, Ctrl+b d = eruit, hij blijft draaien',
     groep: 'agents',
-    leestAlleen: true,
+    blijftDraaien: true,
   },
+  {
+    label: 'Claude login 1',
+    cmd: 'claude auth login',
+    uitleg: 'Claude-account 1 -- open de link op je Mac, kies account 1, plak de code hier',
+    groep: 'agents',
+  },
+  {
+    label: 'Claude login 4',
+    cmd: 'CLAUDE_CONFIG_DIR=~/.claude-vierde claude auth login',
+    uitleg: 'Claude-account 4 -- open de link in een privévenster, kies account 4, plak de code hier',
+    groep: 'agents',
+  },
+  {
+    label: 'Codex login 1',
+    cmd: 'codex login --device-auth',
+    uitleg: 'ChatGPT-account 1 -- open de link en typ de code die hier staat',
+    groep: 'agents',
+  },
+  {
+    label: 'Codex login 3',
+    cmd: 'mkdir -p ~/.codex-derde && CODEX_HOME=~/.codex-derde codex login --device-auth',
+    uitleg: 'ChatGPT-account 3 -- open de link in een privévenster en typ de code die hier staat',
+    groep: 'agents',
+  },
+  {
+    label: 'Cursor login 1',
+    cmd: 'cursor-agent login',
+    uitleg: 'Cursor-account 1 -- open de link en meld je aan',
+    groep: 'agents',
+  },
+  {
+    label: 'OpenCode login',
+    cmd: 'opencode auth login',
+    uitleg: 'OpenCode koppelen; kies daar het account of de aanbieder',
+    groep: 'agents',
+  },
+  {
+    label: 'OpenCode Free',
+    cmd: `cd ${repo} && opencode --pure -m opencode/beam-free`,
+    uitleg: 'Start OpenCode met het gratis model',
+    groep: 'agents',
+  },
+  {
+    label: 'Kilo Auto Free',
+    cmd: `cd ${repo} && kilo -m kilo/kilo-auto/free`,
+    uitleg: 'Start Kilo met de gratis modelkeuze',
+    groep: 'agents',
+  },
+  SLEUTELS(`cd ${repo}`),
 ];
 
 const GIT_ACTIES = (pad: string): Snelactie[] => [
@@ -401,7 +490,7 @@ const VPS: Snelactie[] = [
     groep: 'machine',
     leestAlleen: true,
   },
-  ...AGENT_ACTIES(`cd ${REPO_VPS}`),
+  ...VPS_LOGINS(REPO_VPS),
   ...GIT_ACTIES(REPO_VPS),
 ];
 
@@ -486,7 +575,8 @@ const ONBEKEND: Snelactie[] = [
     groep: 'machine',
     leestAlleen: true,
   },
-  ...AGENT_ACTIES('cd ~'),
+  WELKE_AGENTS,
+  SLEUTELS('cd ~'),
   ...GIT_ACTIES('.'),
 ];
 
@@ -498,15 +588,13 @@ const ONBEKEND: Snelactie[] = [
  * lijst van een andere machine.
  */
 export function snelactiesVoor(hostId: string): Snelactie[] {
-  const metAgentsEnGit = (eigen: Snelactie[], cd: string, pad: string) =>
-    [...eigen, ...AGENT_ACTIES(cd), ...EXTRA_LOGINS(pad), ...GIT_ACTIES(pad)];
-
-  if (hostId === 'deze-mac') return metAgentsEnGit(MAC_REPO, `cd ${REPO_MAC}`, REPO_MAC);
-  if (hostId === 'mac-api') return metAgentsEnGit(MAC_API, `cd ${REPO_MAC}`, REPO_MAC);
-  if (hostId === 'mac-agents') return metAgentsEnGit(MAC_AGENTS, `cd ${REPO_MAC}`, REPO_MAC);
-  if (hostId === 'mac-git') return metAgentsEnGit(MAC_GIT, `cd ${REPO_MAC}`, REPO_MAC);
-  // De iMac is een Mac zonder eigen rol: de bouwcommando's zijn daar hetzelfde.
-  if (hostId === 'imac') return metAgentsEnGit(MAC_REPO, `cd ${REPO_MAC}`, REPO_MAC);
+  // Logins staan alleen in het vak van hun machine: in het bouw-, API- of git-vak
+  // zou een login-knop het account op een plek zetten waar het niet hoort.
+  if (hostId === 'deze-mac') return [...MAC_REPO, ...GIT_ACTIES(REPO_MAC)];
+  if (hostId === 'mac-api') return [...MAC_API, ...GIT_ACTIES(REPO_MAC)];
+  if (hostId === 'mac-agents') return [...MAC_AGENTS, ...MAC_MINI_LOGINS(REPO_MAC), ...GIT_ACTIES(REPO_MAC)];
+  if (hostId === 'mac-git') return [...MAC_GIT, ...GIT_ACTIES(REPO_MAC)];
+  if (hostId === 'imac') return [...MAC_REPO, ...IMAC_LOGINS(REPO_MAC), ...GIT_ACTIES(REPO_MAC)];
   if (hostId === 'vps-hetzner') return STRATO;
   if (hostId.startsWith('vps')) return VPS;
   return ONBEKEND;

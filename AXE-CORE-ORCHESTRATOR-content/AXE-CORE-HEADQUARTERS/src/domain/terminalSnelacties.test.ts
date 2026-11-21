@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { blijvendDraaiend, snelactiesVoor } from './terminalSnelacties';
+import { alleenImac, alleenMacMini, blijvendDraaiend, snelactiesVoor } from './terminalSnelacties';
 
 /**
  * Welke vensters open moeten blijven staan.
@@ -23,10 +23,11 @@ describe('wat blijft draaien', () => {
     expect(labels).toEqual(['Logs volgen', 'Zelf starten']);
   });
 
-  it('markeert op een VPS niets, want daar draait alles onder systemd', () => {
+  it('markeert op een VPS alleen de agents-sessie, want de diensten draaien onder systemd', () => {
     // `systemctl restart` komt terug; de dienst draait daarna zonder dit
-    // venster. Zou hier iets staan, dan klopt de aanname niet meer.
-    expect(blijvendDraaiend('vps-strato')).toEqual([]);
+    // venster. Alleen tmux houdt het venster vast (en de agents erin lopen door
+    // als je het sluit).
+    expect(blijvendDraaiend('vps-strato').map(a => a.label)).toEqual(['Agents-sessie']);
   });
 
   it('geeft nooit een blijvende dienst door als leesactie', () => {
@@ -70,5 +71,47 @@ describe('agent-acties draaien in de checkout', () => {
     for (const a of proeven) {
       expect(a.cmd, a.label).toMatch(/^cd \S+ && /);
     }
+  });
+});
+
+
+/**
+ * Luka, 21 nov: "de juiste sneltoets onder de juiste terminal, zodat het niet
+ * fout kan gaan". Eén account op één machine.
+ */
+describe('elk account onder zijn eigen machine', () => {
+  const logins = (id: string) => snelactiesVoor(id).filter(a => /login \d|OpenCode login|Cursor 2|Antigravity|OpenCode|Kilo/.test(a.label)).map(a => a.label);
+
+  it('zet elk login-label in precies één vak', () => {
+    const ids = ['deze-mac', 'mac-api', 'mac-agents', 'mac-git', 'imac', 'vps-strato', 'vps-hetzner', 'onbekend'];
+    const waar = new Map<string, string[]>();
+    for (const id of ids) for (const l of logins(id)) waar.set(l, [...(waar.get(l) ?? []), id]);
+    for (const [label, vakken] of waar) expect(vakken, label).toHaveLength(1);
+  });
+
+  it('verdeelt de accounts zoals afgesproken', () => {
+    expect(logins('vps-strato')).toEqual(['Claude login 1', 'Claude login 4', 'Codex login 1', 'Codex login 3', 'Cursor login 1', 'OpenCode login', 'OpenCode Free', 'Kilo Auto Free']);
+    expect(logins('mac-agents')).toEqual(['Claude login 2', 'Cursor 2', 'Antigravity installeren', 'Google Antigravity']);
+    expect(logins('imac')).toEqual(['Claude login 3', 'Codex login 2']);
+    for (const id of ['deze-mac', 'mac-api', 'mac-git']) expect(logins(id), id).toEqual([]);
+  });
+
+  it('laat een Mac-knop op de verkeerde Mac niets doen', () => {
+    // De "Mac · ..."-vakken zijn de Mac waarop de app draait; op de iMac is dat de iMac.
+    for (const a of snelactiesVoor('mac-agents').filter(a => /login \d|Cursor 2|Antigravity/.test(a.label))) {
+      expect(a.cmd, a.label).toMatch(/^if hostname \| grep -qi imac; then echo "Dit is de iMac/);
+    }
+    for (const a of snelactiesVoor('imac').filter(a => /login \d/.test(a.label))) {
+      expect(a.cmd, a.label).toMatch(/^if hostname \| grep -qi imac; then (?!echo)/);
+    }
+    expect(alleenMacMini('x')).toContain('else x; fi');
+    expect(alleenImac('x')).toContain('then x; else');
+  });
+
+  it('logt op de VPS zonder browser in, en elk tweede account in een eigen map', () => {
+    const vps = snelactiesVoor('vps-strato');
+    for (const a of vps.filter(a => a.label.startsWith('Codex login'))) expect(a.cmd).toContain('--device-auth');
+    expect(vps.find(a => a.label === 'Claude login 4')!.cmd).toContain('CLAUDE_CONFIG_DIR=~/.claude-vierde');
+    expect(vps.find(a => a.label === 'Codex login 3')!.cmd).toContain('CODEX_HOME=~/.codex-derde');
   });
 });
