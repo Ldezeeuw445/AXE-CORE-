@@ -186,3 +186,29 @@ def test_managervraag_over_betaling_of_login_blijft_bij_luka():
     # Een gewone managervraag zonder betaling/login blijft in-plan.
     gewoon = {"kind": "manager_ask", "title": "Dubbele voorstellen opruimen", "detail": "3 dubbel."}
     assert beslis_goedkeuring(gewoon).actie == ACTIE_AUTO
+
+
+def test_managers_mogen_containers_en_bestanden_bekijken():
+    """21 nov: acht ok-vragen voor puur kijken legden de managers stil."""
+    for c in ("docker ps -a --filter name=dax-northsea-01",
+              "docker logs dax-northsea-01 --tail 20",
+              "docker inspect -f '{{.Mounts}}' dax-northsea-01",
+              "docker ps -a --filter name=companionmgr --format '{{.ID}} {{.Names}}'",
+              "find /opt -type f -name '*dax-northsea-01*' 2>/dev/null | head -20",
+              "docker logs axe-api --tail 200 2>&1 | grep -i error | tail -5",
+              "systemctl status axe-core-api | head -20"):
+        assert is_inspectie(c), c
+        assert shell_auto_reden(c), c
+    for c in ("docker inspect dax-northsea-01",                      # dumpt Env met sleutels
+              "docker inspect -f '{{.Config.Env}}' dax-northsea-01",
+              "docker restart dax-northsea-01",
+              "docker exec dax-northsea-01 rm -rf /tmp",
+              "find /opt -name '*.log' -delete",
+              "find /opt -exec rm {} ;",
+              "docker ps | sh",
+              "docker ps | xargs docker rm",
+              "find /opt -name x | tee /tmp/uit",
+              "docker logs x > /tmp/log",
+              "docker ps; docker rm x",
+              "docker ps $(rm -rf /)"):
+        assert not is_inspectie(c), c

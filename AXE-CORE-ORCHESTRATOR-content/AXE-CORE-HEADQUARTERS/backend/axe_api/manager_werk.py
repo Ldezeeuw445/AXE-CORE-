@@ -93,7 +93,13 @@ zeg hem dan precies welke en waar.
 
 Antwoord ALLEEN met JSON, zonder uitleg eromheen:
 {{"antwoord": "<wat je Luka terugzegt: kort, gewone taal, Nederlands>",
-  "taken": ["<concrete opdracht die je nu zelf uitvoert met je tools>", ...]}}
+  "taken": ["<concrete opdracht die je nu zelf uitvoert met je tools>", ...],
+  "overleg": [{{"met": "<manager-id>", "vraag": "<wat je een collega wilt vragen>"}}]}}
+
+Je collega's (id -- terrein): axemanager -- AXE CORE zelf, de app en de VPS (de baas);
+projectsmgr -- projecten en de DAX-bots; companionmgr -- AXE Companion en axecompanion.com;
+axon -- AXON Memory, het geheugen; tradingos -- Trading OS en de marktfeeds;
+northseamgr -- NorthSea Desk, deals en mail.
 
 - "taken" leeg als er niets te doen is (een vraag, een bedankje).
 - Elke taak is één zelfstandige opdracht met genoeg context om zonder het gesprek uit
@@ -101,6 +107,8 @@ Antwoord ALLEEN met JSON, zonder uitleg eromheen:
 - Kun je iets niet zelf (een login, een betaling, een keuze van Luka), zeg dan in
   "antwoord" precies wat Luka moet doen, en maak er geen taak van.
 - Zeg in "antwoord" wat je gaat doen ("Ik ga nu ..."), niet "ik zal het doorgeven".
+- "overleg" alleen als een collega iets weet of moet doen dat in ZIJN terrein ligt
+  (hooguit 1, meestal leeg). Hij antwoordt binnen een paar minuten in jouw gesprek.
 
 METINGEN VAN NU (zojuist gemeten -- dit is de waarheid; oude verslagen hieronder
 kunnen fout zijn, en spreken ze een meting tegen, dan geldt de meting):
@@ -137,6 +145,19 @@ def lees_antwoord(tekst: str) -> tuple[str, list[str]]:
     antwoord = str(d.get("antwoord") or "").strip()[:3000]
     taken = [str(t).strip()[:1500] for t in (d.get("taken") or []) if str(t).strip()][:3]
     return antwoord, taken
+
+
+def lees_overleg(tekst: str, van: str) -> list[tuple[str, str]]:
+    """Model-uitvoer → [(collega, vraag)], hooguit één, nooit aan zichzelf."""
+    d = _json_uit(tekst) or {}
+    uit: list[tuple[str, str]] = []
+    for o in d.get("overleg") or []:
+        if not isinstance(o, dict):
+            continue
+        met, vraag = str(o.get("met") or "").strip().lower(), str(o.get("vraag") or "").strip()
+        if met in MANAGERS and met != van and vraag:
+            uit.append((met, vraag[:1200]))
+    return uit[:1]
 
 
 def _draai(coro_maker: Callable[[], Any]) -> Any:
@@ -299,14 +320,17 @@ def metingen(db: Any, agent: str, nu: datetime, http: Callable[[str], str] | Non
         def sleutels() -> str:
             import sleutels as _sl
             p = _sl.problemen(_sl.lees(db, nu), app)
-            return "Sleutels: " + ("; ".join(p[:4]) if p else "geen kapotte of ontbrekende verplichte sleutels")
+            if not p:
+                return "Sleutels: geen kapotte of ontbrekende verplichte sleutels"
+            return ("Sleutels: " + "; ".join(p[:4]) + ". Sleutels zetten of hernoemen kan alleen Luka: "
+                    "noem hem welke en waar, maak er geen taak van.")
         meet(sleutels)
     return regels or ["(geen metingen voor dit terrein)"]
 
 
 def denk(db: Any, agent: str, opdrachten: list[dict[str, Any]], geschiedenis: list[dict[str, Any]],
-         chat: Callable[..., Any] | None = None) -> tuple[str, list[str], str]:
-    """Het model vragen. Geeft (antwoord, taken, welk model)."""
+         chat: Callable[..., Any] | None = None) -> tuple[str, list[str], str, list[tuple[str, str]]]:
+    """Het model vragen. Geeft (antwoord, taken, welk model, overleg)."""
     berichten: list[dict[str, str]] = [
         {"role": "system", "content": SYSTEEM.format(
             naam=NAAM.get(agent, agent), context=_context(db, agent),
@@ -321,7 +345,7 @@ def denk(db: Any, agent: str, opdrachten: list[dict[str, Any]], geschiedenis: li
     else:
         tekst, model = chat(berichten)
     antwoord, taken = lees_antwoord(tekst)
-    return antwoord, taken, model
+    return antwoord, taken, model, lees_overleg(tekst, agent)
 
 
 # ── opslaan ────────────────────────────────────────────────────────────────
@@ -435,7 +459,7 @@ def run(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[s
             key=lambda b: str(b.get("created_at")))
         geschiedenis = [b for b in geschiedenis if b not in wacht]
         try:
-            antwoord, taken, model = denk(db, agent, wacht, geschiedenis, chat=chat)
+            antwoord, taken, model, overleg = denk(db, agent, wacht, geschiedenis, chat=chat)
         except Exception as e:  # noqa: BLE001
             uit["fouten"].append(f"{agent}: {e}"[:200])
             continue
@@ -447,12 +471,21 @@ def run(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[s
             antwoord = "Ik ga ermee aan de slag." if gestart else "Gezien."
         if gestart:
             antwoord += "\n\nGestart:\n" + "\n".join(f"- {t[:160]}" for t in gestart)
+        for met, vraag in overleg:
+            if stel_vraag(db, agent, met, vraag, nu):
+                antwoord += f"\n\nIk vraag het {NAAM[met].split(' (')[0]}: {vraag[:200]}"
         _zeg(db, agent, antwoord)
         uit["beantwoord"].append({"agent": agent, "model": model, "taken": len(gestart)})
         uit["taken"] += len(gestart)
     uit["gemeld"] = meld_klaar(db, nu)
-    # Eén eigen ronde per run (max ~60 s), de managers om de beurt: elke 2 min één.
     if not uit["beantwoord"]:
+        try:
+            if (o := beantwoord_overleg(db, nu, chat=chat)):
+                uit["overleg"] = o
+        except Exception as e:  # noqa: BLE001
+            uit["fouten"].append(f"overleg: {e}"[:200])
+    # Eén eigen ronde per run (max ~60 s), de managers om de beurt: elke 2 min één.
+    if not uit["beantwoord"] and not uit.get("overleg"):
         agent = MANAGERS[(nu.hour * 30 + nu.minute // 2) % len(MANAGERS)]
         try:
             if (gestart := eigen_ronde(db, agent, nu, chat=chat)):
@@ -499,7 +532,9 @@ def eigen_ronde(db: Any, agent: str, nu: datetime, chat: Callable[..., Any] | No
         return None
     if _heeft_open_taak(db, agent) or _taken_vandaag(db, agent, nu) >= MAX_TAKEN_PER_DAG:
         return None
-    antwoord, taken, _model = denk(db, agent, [{"body": RONDE_VRAAG}], [], chat=chat)
+    antwoord, taken, _model, overleg = denk(db, agent, [{"body": RONDE_VRAAG}], [], chat=chat)
+    for met, vraag in overleg:
+        stel_vraag(db, agent, met, vraag, nu)
     if not taken:
         # Ook een rustige ronde telt, anders vraagt hij het elke 2 minuten opnieuw.
         _markeer_ronde(db, agent, nu)
@@ -526,6 +561,70 @@ def _markeer_ronde(db: Any, agent: str, nu: datetime) -> None:
 _RUSTIG: dict[str, datetime] = {}
 
 
+# ── 5. onderling overleggen ────────────────────────────────────────────────
+#
+# Een manager vraagt een collega iets (kind 'ask', van manager aan manager).
+# De collega antwoordt in een volgende run (kind 'report', in_reply_to = de
+# vraag) en dat antwoord komt ook in het gesprek van de vrager met Luka, zodat
+# Luka het leest en de vrager het bij zijn volgende denkstap weet. Een antwoord
+# op overleg vraagt zelf nooit verder door: geen kettingen.
+
+MAX_OVERLEG_PER_DAG = 4  # per vrager
+
+
+def stel_vraag(db: Any, van: str, met: str, vraag: str, nu: datetime) -> bool:
+    try:
+        al = (db.table("core_manager_messages").select("id").eq("from_agent", van).eq("kind", "ask")
+              .gte("created_at", (nu - timedelta(hours=24)).isoformat()).limit(20).execute().data) or []
+        if len(al) >= MAX_OVERLEG_PER_DAG:
+            return False
+        db.table("core_manager_messages").insert({
+            "from_agent": van, "to_agent": met, "kind": "ask", "body": vraag[:1200],
+            "created_at": nu.isoformat()}).execute()
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.warning("overleg %s -> %s mislukte: %s", van, met, e)
+        return False
+
+
+def open_overleg(berichten: list[dict[str, Any]], nu: datetime) -> list[dict[str, Any]]:
+    """Vragen tussen managers zonder antwoord (puur), oudste eerst."""
+    beantwoord = {b.get("in_reply_to") for b in berichten if b.get("kind") == "report" and b.get("in_reply_to")}
+    return sorted(
+        (b for b in berichten
+         if b.get("kind") == "ask" and b.get("from_agent") in MANAGERS and b.get("to_agent") in MANAGERS
+         and b.get("id") not in beantwoord
+         and (t := _tijd(b.get("created_at"))) and nu - t <= NIET_OUDER_DAN),
+        key=lambda b: str(b.get("created_at")))
+
+
+def beantwoord_overleg(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[str, Any] | None:
+    """Eén open vraag per run beantwoorden."""
+    rijen = (db.table("core_manager_messages").select("id,from_agent,to_agent,kind,body,in_reply_to,created_at")
+             .in_("kind", ["ask", "report"]).gte("created_at", (nu - NIET_OUDER_DAN).isoformat())
+             .order("created_at", desc=True).limit(300).execute().data) or []
+    wacht = open_overleg(rijen, nu)
+    if not wacht:
+        return None
+    v = wacht[0]
+    van, met = v["from_agent"], v["to_agent"]
+    vraag = (f"Je collega {NAAM.get(van, van)} vraagt je: {v.get('body')}\n\n"
+             "Antwoord kort en feitelijk vanuit je metingen en context. Moet er in jouw terrein iets "
+             "gebeuren dat je zelf kunt, zet het dan in taken. Geen overleg terug.")
+    antwoord, taken, model, _ = denk(db, met, [{"body": vraag}], [], chat=chat)
+    ruimte = max(0, MAX_TAKEN_PER_DAG - _taken_vandaag(db, met, nu))
+    gestart = [t for t in taken[:min(ruimte, 1)] if maak_taak(db, met, t, nu, v.get("id"))]
+    antwoord = antwoord or "Daar weet ik niets van."
+    if gestart:
+        antwoord += f"\n\nIk pak dit zelf op: {gestart[0][:160]}"
+    db.table("core_manager_messages").insert({
+        "from_agent": met, "to_agent": van, "kind": "report", "body": antwoord[:3000],
+        "in_reply_to": v.get("id"), "created_at": nu.isoformat()}).execute()
+    _zeg(db, van, f"Ik vroeg {NAAM.get(met, met).split(' (')[0]}: {str(v.get('body'))[:300]}\n\n"
+                  f"{NAAM.get(met, met).split(' (')[0]}: {antwoord[:1500]}")
+    return {"van": van, "met": met, "model": model, "taken": len(gestart)}
+
+
 def dienst() -> dict[str, Any]:
     return {
         "agent": "managerwerk", "name": "Managers aan het werk",
@@ -536,4 +635,5 @@ def dienst() -> dict[str, Any]:
     }
 
 
-__all__ = ["run", "dienst", "onbeantwoord", "lees_antwoord", "meld_tekst", "meld_klaar"]
+__all__ = ["run", "dienst", "onbeantwoord", "lees_antwoord", "lees_overleg", "meld_tekst", "meld_klaar",
+           "stel_vraag", "open_overleg", "beantwoord_overleg"]

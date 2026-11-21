@@ -167,11 +167,46 @@ def is_dax_git_werktak(command: str) -> bool:
     return all(_DAX_GIT_STAP.match(x) for x in stappen)
 
 
-def is_inspectie(command: str) -> bool:
-    cmd = " ".join((command or "").split())
+# 21 nov: de managers liepen sinds 20 nov 22:04 vast op puur kijken --
+# `docker ps`, `docker logs`, `find /opt ... 2>/dev/null` -- en Luka kreeg er
+# acht ok-vragen voor. Kijken naar containers en bestanden verandert niets.
+# `docker inspect` alleen met een --format zonder Env/Config: anders gaan de
+# sleutels van een container naar een gratis extern model.
+_ARG = r"(?: (?:'[^'`$;&|<>]*'|\"[^\"`$;&|<>]*\"|[\w@.:+=/,*~-]+))"
+DOCKER_LEES_RE = re.compile(
+    r"^docker (?:ps|images|compose ps|stats --no-stream|logs|top|port|version|info)" + _ARG + r"*$"
+    r"|^docker inspect (?:-f|--format)[ =]'(?:(?!env|config|secret|password|token)[^'`$])*'" + _ARG + r"+$",
+    re.I,
+)
+# find zonder iets dat schrijft of uitvoert.
+FIND_RE = re.compile(r"^find" + _ARG + r"+$")
+FIND_DOET_IETS = re.compile(r"\s-(?:delete|exec|execdir|ok|okdir|fprint\w*|fls)\b", re.I)
+# Een staart van filters die alleen lezen: `| grep x | head -20`.
+FILTER_RE = re.compile(r"^(?:grep(?: -[A-Za-z]+)*|egrep|head|tail|wc|sort|uniq|cut)" + _ARG + r"*$")
+_OMLEIDING_RE = re.compile(r"\s*(?:2>&1|2>/dev/null|>/dev/null|&>/dev/null)")
+
+
+def _losse_inspectie(cmd: str) -> bool:
     if LEES_RE.match(cmd) and not re.search(r"\bsed\b.*\s-i\b|>", cmd):
         return True
-    return bool(INSPECTIE_RE.match(cmd))
+    if INSPECTIE_RE.match(cmd):
+        return True
+    kaal = _OMLEIDING_RE.sub("", cmd).strip()
+    if DOCKER_LEES_RE.match(kaal):
+        return True
+    return bool(FIND_RE.match(kaal) and not FIND_DOET_IETS.search(kaal))
+
+
+def is_inspectie(command: str) -> bool:
+    cmd = " ".join((command or "").split())
+    if _losse_inspectie(cmd):
+        return True
+    # Eén pijplijn: een leescommando, dan alleen leesfilters. Quotes met een |
+    # erin vallen al af doordat _ARG geen | in een quote toelaat.
+    delen = [d.strip() for d in cmd.split("|")]
+    if len(delen) < 2 or any(not d for d in delen):
+        return False
+    return _losse_inspectie(delen[0]) and all(FILTER_RE.match(_OMLEIDING_RE.sub("", d).strip()) for d in delen[1:])
 
 
 def schrijft_eigen_artifacts(command: str) -> bool:

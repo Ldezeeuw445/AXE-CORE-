@@ -141,3 +141,36 @@ def test_rustige_ronde_maakt_niets_en_meldt_niets(monkeypatch):
     assert mw.eigen_ronde(db, "axon", NU, chat=chat) is None
     assert db.data["core_tasks"] == [] and db.data["core_manager_messages"] == []
     assert mw.eigen_ronde(db, "axon", NU + timedelta(minutes=10), chat=lambda b: 1 / 0) is None  # niet opnieuw gevraagd
+
+
+def test_overleg_vraag_antwoord_in_gesprek_van_de_vrager(monkeypatch):
+    monkeypatch.setattr(mw, "_context", lambda db, a: "context")
+    monkeypatch.setattr(mw, "metingen", lambda db, a, nu, http=None: ["-"])
+    db = DB({"core_manager_messages": [
+        {"from_agent": "luka", "to_agent": "tradingos", "kind": "directive", "body": "Waarom staan de feeds stil?",
+         "created_at": t(5)},
+    ], "core_tasks": []})
+    eerst = lambda b: ('{"antwoord": "Ik kijk.", "taken": [], "overleg": [{"met": "companionmgr", '
+                       '"vraag": "Draait intel-proxy nog?"}, {"met": "tradingos", "vraag": "zelf"}]}', "groq")
+    mw.run(db, NU, chat=eerst)
+    ask = [m for m in db.data["core_manager_messages"] if m["kind"] == "ask"]
+    assert len(ask) == 1 and ask[0]["from_agent"] == "tradingos" and ask[0]["to_agent"] == "companionmgr"
+    assert any("Ik vraag het AXE Companion Manager" in m["body"] for m in db.data["core_manager_messages"]
+               if m["from_agent"] == "tradingos")
+    # volgende run: de collega antwoordt, één keer
+    tweede = lambda b: ('{"antwoord": "intel-proxy geeft 502 sinds gisteren.", "taken": [], '
+                        '"overleg": [{"met": "axon", "vraag": "keten"}]}', "groq")
+    uit = mw.run(db, NU, chat=tweede)
+    assert uit["overleg"]["van"] == "tradingos" and uit["overleg"]["met"] == "companionmgr"
+    rapport = [m for m in db.data["core_manager_messages"] if m.get("in_reply_to") == ask[0]["id"]]
+    assert len(rapport) == 1 and "502" in rapport[0]["body"]
+    assert any(m["from_agent"] == "tradingos" and m["to_agent"] == "luka" and "502" in m["body"]
+               for m in db.data["core_manager_messages"])
+    assert len([m for m in db.data["core_manager_messages"] if m["kind"] == "ask"]) == 1  # geen ketting
+    assert mw.open_overleg(db.data["core_manager_messages"], NU) == []
+
+
+def test_lees_overleg_alleen_bestaande_collega():
+    assert mw.lees_overleg('{"overleg": [{"met": "onbekend", "vraag": "x"}]}', "axon") == []
+    assert mw.lees_overleg('{"overleg": [{"met": "AXON", "vraag": "x"}]}', "tradingos") == [("axon", "x")]
+    assert mw.lees_overleg("geen json", "axon") == []
