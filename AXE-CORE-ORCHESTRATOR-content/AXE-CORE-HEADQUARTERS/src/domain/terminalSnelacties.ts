@@ -60,9 +60,13 @@ const REPO_MAC = '~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTER
  * Eén account hoort op één machine: hetzelfde account op twee machines geeft geen
  * extra limiet, ze trekken samen aan dezelfde. De verdeling:
  *
- *   VPS API   Claude 1 en 4, ChatGPT/Codex 1 en 3, Cursor 1, OpenCode, Kilo -- altijd aan
- *   Mac mini  Claude 2, Cursor 2, Google Antigravity -- wat een Mac met scherm nodig heeft
- *   iMac      Claude 3, ChatGPT/Codex 2 -- voor wat Luka zelf doet
+ *   VPS API   Claude 1 (205@gmail), Codex 1 (support@), Cursor 1 (4@gmail), OpenCode, Kilo -- altijd aan
+ *   Mac mini  Claude 2 (4@gmail), Cursor 2 (hotmail), Google Antigravity -- wat een Mac met scherm nodig heeft
+ *   iMac      Claude 3 (support@), Codex 2 (hotmail) -- voor wat Luka zelf doet
+ *
+ * Luka heeft 3 Claude-, 2 ChatGPT- en 2 Cursor-accounts (21 nov). Een vierde Claude
+ * of derde Codex bestaat niet; die knoppen zijn weg. De mailhint in elke uitleg is
+ * het account waarmee die knop echt ingelogd is.
  *
  * De vier "Mac · ..."-vakken zijn de Mac waarop AXE CORE draait. Op de iMac is dat
  * dus de iMac. Daarom controleert elke Mac-knop zelf op welke machine hij staat:
@@ -104,13 +108,13 @@ const MAC_MINI_LOGINS = (repo: string): Snelactie[] => [
   {
     label: 'Claude login 2',
     cmd: alleenMacMini(`${repo}/scripts/prive-login.sh claude ~/.claude-tweede`),
-    uitleg: 'Claude-account 2, op de Mac mini -- privévenster, kies daar account 2',
+    uitleg: 'Claude-account 2 (lukadezeeuw4@gmail), op de Mac mini -- privévenster, kies dat account',
     groep: 'agents',
   },
   {
     label: 'Cursor 2',
     cmd: alleenMacMini(`bash ${repo}/scripts/zet_cursor2_sleutel.sh`),
-    uitleg: 'Cursor-account 2, op de Mac mini: zet de sleutel van dat account',
+    uitleg: 'Cursor-account 2 (hotmail), op de Mac mini: zet de sleutel van dat account',
     groep: 'agents',
   },
   {
@@ -134,13 +138,13 @@ const IMAC_LOGINS = (repo: string): Snelactie[] => [
   {
     label: 'Claude login 3',
     cmd: alleenImac(`${repo}/scripts/prive-login.sh claude ~/.claude-derde`),
-    uitleg: 'Claude-account 3, op de iMac -- privévenster, kies daar account 3',
+    uitleg: 'Claude-account 3 (support@axeheadquarters), op de iMac -- privévenster, kies dat account',
     groep: 'agents',
   },
   {
     label: 'Codex login 2',
-    cmd: alleenImac(`${repo}/scripts/prive-login.sh codex ~/.codex-tweede`),
-    uitleg: 'ChatGPT-account 2, op de iMac -- privévenster, typ daar de code die hier staat',
+    cmd: alleenImac(`${repo}/scripts/prive-login.sh codex ~/.codex`),
+    uitleg: 'ChatGPT-account 2 (hotmail), op de iMac -- privévenster, typ daar de code die hier staat',
     groep: 'agents',
   },
   SLEUTELS(`cd ${repo}`),
@@ -172,31 +176,19 @@ const VPS_LOGINS = (repo: string): Snelactie[] => [
   {
     label: 'Claude login 1',
     cmd: 'claude auth login',
-    uitleg: 'Claude-account 1 -- open de link op je Mac, kies account 1, plak de code hier',
-    groep: 'agents',
-  },
-  {
-    label: 'Claude login 4',
-    cmd: 'CLAUDE_CONFIG_DIR=~/.claude-vierde claude auth login',
-    uitleg: 'Claude-account 4 -- open de link in een privévenster, kies account 4, plak de code hier',
+    uitleg: 'Claude-account 1 (lukadezeeuw205@gmail) -- open de link op je Mac, kies dat account, plak de code hier',
     groep: 'agents',
   },
   {
     label: 'Codex login 1',
     cmd: 'codex login --device-auth',
-    uitleg: 'ChatGPT-account 1 -- open de link en typ de code die hier staat',
-    groep: 'agents',
-  },
-  {
-    label: 'Codex login 3',
-    cmd: 'mkdir -p ~/.codex-derde && CODEX_HOME=~/.codex-derde codex login --device-auth',
-    uitleg: 'ChatGPT-account 3 -- open de link in een privévenster en typ de code die hier staat',
+    uitleg: 'ChatGPT-account 1 (support@axeheadquarters) -- open de link en typ de code die hier staat',
     groep: 'agents',
   },
   {
     label: 'Cursor login 1',
     cmd: 'cursor-agent login',
-    uitleg: 'Cursor-account 1 -- open de link en meld je aan',
+    uitleg: 'Cursor-account 1 (lukadezeeuw4@gmail) -- open de link en meld je aan',
     groep: 'agents',
   },
   {

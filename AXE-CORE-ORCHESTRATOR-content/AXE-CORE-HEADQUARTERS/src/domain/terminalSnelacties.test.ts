@@ -90,7 +90,7 @@ describe('elk account onder zijn eigen machine', () => {
   });
 
   it('verdeelt de accounts zoals afgesproken', () => {
-    expect(logins('vps-strato')).toEqual(['Claude login 1', 'Claude login 4', 'Codex login 1', 'Codex login 3', 'Cursor login 1', 'OpenCode login', 'OpenCode Free', 'Kilo Auto Free']);
+    expect(logins('vps-strato')).toEqual(['Claude login 1', 'Codex login 1', 'Cursor login 1', 'OpenCode login', 'OpenCode Free', 'Kilo Auto Free']);
     expect(logins('mac-agents')).toEqual(['Claude login 2', 'Cursor 2', 'Antigravity installeren', 'Google Antigravity']);
     expect(logins('imac')).toEqual(['Claude login 3', 'Codex login 2']);
     for (const id of ['deze-mac', 'mac-api', 'mac-git']) expect(logins(id), id).toEqual([]);
@@ -108,10 +108,19 @@ describe('elk account onder zijn eigen machine', () => {
     expect(alleenImac('x')).toContain('then x; else');
   });
 
-  it('logt op de VPS zonder browser in, en elk tweede account in een eigen map', () => {
+  it('logt op de VPS zonder browser in, alleen met accounts die bestaan', () => {
     const vps = snelactiesVoor('vps-strato');
     for (const a of vps.filter(a => a.label.startsWith('Codex login'))) expect(a.cmd).toContain('--device-auth');
-    expect(vps.find(a => a.label === 'Claude login 4')!.cmd).toContain('CLAUDE_CONFIG_DIR=~/.claude-vierde');
-    expect(vps.find(a => a.label === 'Codex login 3')!.cmd).toContain('CODEX_HOME=~/.codex-derde');
+    // Luka heeft 3 Claude- en 2 ChatGPT-accounts: geen vierde Claude, geen derde Codex.
+    expect(vps.map(a => a.label)).not.toContain('Claude login 4');
+    expect(vps.map(a => a.label)).not.toContain('Codex login 3');
+  });
+
+  it('zet bij elke inlogknop welk account erbij hoort', () => {
+    for (const id of ['vps-strato', 'mac-agents', 'imac']) {
+      for (const a of snelactiesVoor(id).filter(a => /login \d|Cursor 2/.test(a.label))) {
+        expect(a.uitleg, a.label).toMatch(/\((lukadezeeuw\d+@gmail|support@axeheadquarters|hotmail)\)/);
+      }
+    }
   });
 });
