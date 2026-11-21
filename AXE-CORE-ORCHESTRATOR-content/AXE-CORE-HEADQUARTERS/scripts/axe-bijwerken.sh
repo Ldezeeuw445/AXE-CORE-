@@ -264,7 +264,9 @@ oude_axe_weg
 # zo goed een tweede checkout van deze repo. De poort is wat er werkelijk in de
 # weg zit, en via de werkmap van dat proces weten we of het van ons is.
 for poort in 4022 8001; do
-  for pid in $(lsof -ti :"$poort" 2>/dev/null); do
+  # -sTCP:LISTEN: alleen de server zelf. Zonder dit telde ook het app-venster mee dat
+  # als CLIENT met 4022 praat (WebKit.Networking), met een valse "bezet"-melding (21 nov).
+  for pid in $(lsof -ti :"$poort" -sTCP:LISTEN 2>/dev/null); do
     # De werkmap van het proces. Zit die niet in deze checkout, dan is het
     # iemand anders zijn server en blijft hij staan -- ook als hij toevallig
     # onze poort bezet. Dan zegt de app straks zelf dat de poort bezet is.
