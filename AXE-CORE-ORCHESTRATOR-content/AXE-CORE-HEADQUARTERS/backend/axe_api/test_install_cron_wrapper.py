@@ -19,6 +19,10 @@ OLD_TICK = (
 UNRELATED = "5 4 * * * /usr/local/bin/iets-anders"
 
 
+def _wrapper_regel(wrapper_pad) -> str:
+    return f"* * * * * {wrapper_pad} >/dev/null 2>&1"
+
+
 def _schrijf_uitvoerbaar(pad: Path, inhoud: str) -> None:
     pad.write_text(inhoud)
     pad.chmod(pad.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -79,7 +83,7 @@ def test_helper_zet_wrapperregel_en_blijft_idempotent(tmp_path):
     eerste = _run(env)
     assert eerste.returncode == 0, eerste.stderr
     regels = cron_file.read_text().splitlines()
-    assert regels == [f"* * * * * {wrapper_pad}"]
+    assert regels == [_wrapper_regel(wrapper_pad)]
     assert SECRET not in cron_file.read_text()
     assert "X-Cron-Secret" not in cron_file.read_text()
     assert SECRET not in eerste.stdout and SECRET not in eerste.stderr
@@ -95,8 +99,9 @@ def test_helper_vervangt_oude_curlregel_en_houdt_andere_regels(tmp_path):
     assert r.returncode == 0, r.stderr
     regels = cron_file.read_text().splitlines()
     assert UNRELATED in regels
-    assert f"* * * * * {wrapper_pad}" in regels
-    assert regels.count(f"* * * * * {wrapper_pad}") == 1
+    assert _wrapper_regel(wrapper_pad) in regels
+    assert regels.count(_wrapper_regel(wrapper_pad)) == 1
+    assert f"* * * * * {wrapper_pad}" not in regels
     assert not any("/cron/tick" in l for l in regels)
     assert SECRET not in cron_file.read_text()
     assert "X-Cron-Secret" not in cron_file.read_text()
@@ -155,3 +160,25 @@ def test_deploy_sh_roept_de_helper_aan_en_zet_geen_geheim_in_crontab():
     # niet uit .env lezen om de crontab te vullen.
     assert "grep -E '^CRON_SECRET='" not in tekst
     assert "grep -E '^CRON_KEY='" not in tekst
+    # Stap 4 kopieert de huidige unit-naam, met terugval naar de oude.
+    assert "[ -f axe-core-api.service ]" in tekst
+    assert "[ -f axe_api.service ]" in tekst
+    assert 'cp "$UNIT_SRC" /etc/systemd/system/axe-core-api.service' in tekst
+    assert "cp axe_api.service /etc/systemd/system/axe-core-api.service" not in tekst
+    assert "Missing systemd unit file" in tekst
+
+
+def test_helper_vervangt_oude_wrapperregel_zonder_redirect_zonder_duplicaat(tmp_path):
+    env, wrapper_pad, _, cron_file = _omgeving(tmp_path)
+    oud = f"* * * * * {wrapper_pad}"
+    cron_file.write_text(f"{UNRELATED}\n{oud}\n{oud}\n")
+    r = _run(env)
+    assert r.returncode == 0, r.stderr
+    regels = cron_file.read_text().splitlines()
+    assert regels == [UNRELATED, _wrapper_regel(wrapper_pad)]
+    assert oud not in regels
+    assert regels.count(_wrapper_regel(wrapper_pad)) == 1
+    # Nog een keer draaien blijft één stille regel.
+    r2 = _run(env)
+    assert r2.returncode == 0, r2.stderr
+    assert cron_file.read_text().splitlines() == regels
