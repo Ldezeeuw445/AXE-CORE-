@@ -172,9 +172,9 @@ def is_dax_git_werktak(command: str) -> bool:
 # acht ok-vragen voor. Kijken naar containers en bestanden verandert niets.
 # `docker inspect` alleen met een --format zonder Env/Config: anders gaan de
 # sleutels van een container naar een gratis extern model.
-_ARG = r"(?: (?:'[^'`$;&|<>]*'|\"[^\"`$;&|<>]*\"|[\w@.:+=/,*~-]+))"
+_ARG = r"(?: (?:'[^'`$;&|<>]*'|\"[^\"`$;&|<>]*\"|[\w@.:+=/,*~-]+(?:'[^'`$;&|<>]*'|\"[^\"`$;&|<>]*\")?))"
 DOCKER_LEES_RE = re.compile(
-    r"^docker (?:ps|images|compose ps|stats --no-stream|logs|top|port|version|info)" + _ARG + r"*$"
+    r"^docker (?:ps|images|compose ps|stats --no-stream|logs|top|port|version|info|system (?:info|df)|(?:network|volume|image|container) ls)" + _ARG + r"*$"
     r"|^docker inspect (?:-f|--format)[ =]'(?:(?!env|config|secret|password|token)[^'`$])*'" + _ARG + r"+$",
     re.I,
 )

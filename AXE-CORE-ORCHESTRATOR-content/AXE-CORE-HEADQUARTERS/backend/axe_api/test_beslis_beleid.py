@@ -196,7 +196,9 @@ def test_managers_mogen_containers_en_bestanden_bekijken():
               "docker ps -a --filter name=companionmgr --format '{{.ID}} {{.Names}}'",
               "find /opt -type f -name '*dax-northsea-01*' 2>/dev/null | head -20",
               "docker logs axe-api --tail 200 2>&1 | grep -i error | tail -5",
-              "systemctl status axe-core-api | head -20"):
+              "systemctl status axe-core-api | head -20",
+              "docker images --filter=reference='*dax-northsea-01*' --format '{{.Repository}}:{{.Tag}}'",
+              "docker network ls", "docker system info"):
         assert is_inspectie(c), c
         assert shell_auto_reden(c), c
     for c in ("docker inspect dax-northsea-01",                      # dumpt Env met sleutels
@@ -210,5 +212,7 @@ def test_managers_mogen_containers_en_bestanden_bekijken():
               "find /opt -name x | tee /tmp/uit",
               "docker logs x > /tmp/log",
               "docker ps; docker rm x",
-              "docker ps $(rm -rf /)"):
+              "docker ps $(rm -rf /)",
+              "systemctl show-environment | grep KEY",                 # omgeving = sleutels
+              "docker images --filter=reference='x'$(id)"):
         assert not is_inspectie(c), c
