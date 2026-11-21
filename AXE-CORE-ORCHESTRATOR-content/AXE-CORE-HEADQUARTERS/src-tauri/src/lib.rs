@@ -893,8 +893,22 @@ fn focus_teruggeven_als_niet_van_luka() {
     //  2. "flags changed" is ook Shift loslaten tijdens gewoon typen. Cmd-Tab
     //     activeert binnen ~0,1 s na het loslaten; 0,3 s laat typen er bijna
     //     nooit meer onder vallen.
+    //
+    // 21 nov, Luka: "hij plakt ineens die code niet meer in de terminal waar
+    // ik wil inloggen". focus.log iMac: 'klik 1.2s, muis op AXE true' werd
+    // teruggegeven -- dat wás zijn klik, AXE werd alleen iets later actief dan
+    // een seconde. AXE bleef zichtbaar vooraan, maar ⌘V ging naar Chrome met
+    // de inlogpagina. Twee gaten dicht:
+    //  3. Wisselen tussen AXE's eigen vensters (notch → hoofdvenster) is geen
+    //     activatie van buiten: een AXE-venster verloor net de focus. Dan niets
+    //     doen.
+    //  4. Een klik óp AXE telt tot 3 s. De muis-op-AXE-eis blijft, dus een klik
+    //     in een andere app op het tweede scherm telt nog steeds niet.
+    if ms_sinds(&AXE_VENSTER_BLUR_MS) < 500 {
+        return;
+    }
     let (op_axe, op_rand) = unsafe { muis_op_axe_of_rand() };
-    let van_luka = (klik < 1.0 && (op_axe || op_rand)) || cmd_tab < 0.3;
+    let van_luka = (klik < 3.0 && (op_axe || op_rand)) || cmd_tab < 0.3;
     if !van_luka {
         unsafe {
             let app: id = msg_send![class!(NSApplication), sharedApplication];
@@ -904,6 +918,23 @@ fn focus_teruggeven_als_niet_van_luka() {
             "teruggegeven: niet van Luka (klik {klik:.1}s, cmd {cmd_tab:.1}s geleden, muis op AXE {op_axe}, op dock/menubalk {op_rand})"
         ));
     }
+}
+
+/// Wanneer een AXE-venster voor het laatst de focus verloor (ms sinds 1970).
+#[cfg(desktop)]
+static AXE_VENSTER_BLUR_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[cfg(desktop)]
+fn nu_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+#[cfg(desktop)]
+fn ms_sinds(t: &std::sync::atomic::AtomicU64) -> u64 {
+    nu_ms().saturating_sub(t.load(std::sync::atomic::Ordering::Relaxed))
 }
 
 /// Staat de muis nu op een venster van AXE, of op het Dock / de menubalk?
@@ -1037,10 +1068,16 @@ pub fn run() {
 
     #[cfg(desktop)]
     let builder = builder.on_window_event(|window, event| {
-        if let WindowEvent::Focused(true) = event {
-            log_focus(window.label());
-            #[cfg(target_os = "macos")]
-            focus_teruggeven_als_niet_van_luka();
+        match event {
+            WindowEvent::Focused(true) => {
+                log_focus(window.label());
+                #[cfg(target_os = "macos")]
+                focus_teruggeven_als_niet_van_luka();
+            }
+            WindowEvent::Focused(false) => {
+                AXE_VENSTER_BLUR_MS.store(nu_ms(), std::sync::atomic::Ordering::Relaxed);
+            }
+            _ => {}
         }
     });
 
