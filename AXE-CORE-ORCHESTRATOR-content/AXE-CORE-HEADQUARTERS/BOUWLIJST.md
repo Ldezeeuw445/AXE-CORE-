@@ -1,16 +1,16 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 45 gebouwd maar nog niet bewezen, 59 open (van 177).
+**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 49 gebouwd maar nog niet bewezen, 57 open (van 179).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (50%) | 8 | 1 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 27 | 6 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 29 | 5 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 5 | 2 |
-| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (14%) | 5 | 33 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (13%) | 7 | 32 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
@@ -468,8 +468,15 @@ Niet namaken -- AXE heeft al Taken, Home en de managers. Wat erbij moet:
       initiatief elke 2 uur per manager: één ding dat NU faalt. Elke denkstap begint
       met METINGEN (feeds, site, MCP, falende taken met 'laatst', commits, sleutels);
       eigen oude verslagen gaan niet meer mee (die hielden 'Companion draait niet'
-      in leven). Open: onderling overleggen; bewezen zodra een eigen-ronde-taak echt
-      iets repareert.
+      in leven). 21 nov: (5) onderling overleggen -- een manager vraagt een collega
+      iets ("overleg" in zijn antwoord, kind 'ask'), de collega antwoordt de run
+      erna en dat antwoord staat in jouw gesprek met de vrager; max 4/dag, geen
+      kettingen. En: de eigen taken lagen sinds 20 nov 22:04 stil op puur kijken
+      (`docker ps`, `docker logs`, `find ... 2>/dev/null`) -- 8 ok-vragen voor
+      Luka. Kijken mag nu zelf (`beslis_beleid.is_inspectie`); `docker inspect`
+      alleen met een --format zonder Env (anders gaan sleutels naar een gratis
+      model), `systemctl show-environment` blijft vragen. Bewezen zodra een
+      eigen-ronde-taak echt iets repareert en een overleg in een gesprek staat.
 - [ ] Deal-specifieke mails door een model; abonnementen samenvoegen;
       stem-punten; device manager.
 
