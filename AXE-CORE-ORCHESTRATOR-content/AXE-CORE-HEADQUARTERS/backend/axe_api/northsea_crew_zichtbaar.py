@@ -147,8 +147,10 @@ def schrijf_zichtbaar(db: Any, job: str, data: dict[str, Any] | None) -> dict[st
             continue
         try:
             if b.get("akkoord_nodig"):
-                from beslis_beleid import bestaande_deal_vraag
+                from beslis_beleid import bestaande_deal_vraag, recent_beslist_deal
                 if bestaande_deal_vraag(db, deal_code=b.get("deal_code"), deal_id=b.get("deal_id")):
+                    continue
+                if recent_beslist_deal(db, deal_code=b.get("deal_code"), deal_id=b.get("deal_id")):
                     continue
             rij = core_task_rij(b)
             rij.setdefault("id", str(uuid4()))

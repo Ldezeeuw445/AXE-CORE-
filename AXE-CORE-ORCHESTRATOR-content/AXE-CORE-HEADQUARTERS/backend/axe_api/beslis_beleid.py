@@ -197,8 +197,45 @@ def _losse_inspectie(cmd: str) -> bool:
     return bool(FIND_RE.match(kaal) and not FIND_DOET_IETS.search(kaal))
 
 
+# 22 nov (Luka: "ik moet nog heel veel approven"): gemeten in 72 uur goedkeuringen --
+# bijna alles was kijken dat hier nog niet stond. Nog steeds niet: alles wat start,
+# stopt, herstart, opruimt (prune), schrijft of POST; en `docker inspect` zonder
+# --format (daar staan de sleutels van een container in).
+EXTRA_LEES_RE = re.compile(
+    r"^crontab -l(?: -u [\w.-]+)?$"
+    r"|^df(?: -\w+)*(?: /[\w./-]*)*$"
+    r"|^docker(?:-compose| compose)(?: -f [\w./-]+)* (?:ps|logs(?: --tail[ =]\d+| -n \d+| --no-color| [\w.-]+)*|config(?: --services)?|version|images|top)$"
+    r"|^docker-compose (?:-v|--version|version)$"
+    r"|^docker (?:network|volume) inspect [\w.-]+(?: [\w.-]+)*$"
+    r"|^supabase (?:functions|projects|secrets) list(?: --project-ref[ =][\w-]+)?$"
+    r"|^echo(?: \"[^\"`$]*\"| '[^'`$]*'| [\w.:/=-]+)*$"
+    r"|^(?:true|:)$",
+    re.I,
+)
+# Luka's eigen DAX-server. Een kijk-commando daar is net zo onschuldig als hier.
+EIGEN_SSH_RE = re.compile(
+    r"^ssh(?: -o \S+| -T| -q)*(?: --)? (strato-dax) (?:'([^'`$;&|<>]*)'|\"([^\"`$;&|<>]*)\"|([^'\"`$;&|<>]+))$"
+)
+
+
 def is_inspectie(command: str) -> bool:
     cmd = " ".join((command or "").split())
+    # `a; b && c || echo x`: elk deel moet zelf kijken zijn.
+    if re.search(r";|&&|\|\|", cmd) and not re.search(r"[`]|\$\(", cmd):
+        delen = [d.strip() for d in re.split(r";|&&|\|\|", cmd)]
+        if all(d and (_enkel_kijken(d)) for d in delen):
+            return True
+    return _enkel_kijken(cmd)
+
+
+def _enkel_kijken(cmd: str) -> bool:
+    m = EIGEN_SSH_RE.match(cmd)
+    if m:
+        binnen = (m.group(2) or m.group(3) or m.group(4) or "").strip()
+        return bool(binnen) and _enkel_kijken(binnen)
+    kaal = _OMLEIDING_RE.sub("", cmd).strip()
+    if EXTRA_LEES_RE.match(kaal):
+        return True
     if _losse_inspectie(cmd):
         return True
     # Eén pijplijn: een leescommando, dan alleen leesfilters. Quotes met een |
@@ -206,7 +243,9 @@ def is_inspectie(command: str) -> bool:
     delen = [d.strip() for d in cmd.split("|")]
     if len(delen) < 2 or any(not d for d in delen):
         return False
-    return _losse_inspectie(delen[0]) and all(FILTER_RE.match(_OMLEIDING_RE.sub("", d).strip()) for d in delen[1:])
+    eerste = _OMLEIDING_RE.sub("", delen[0]).strip()
+    return (_losse_inspectie(delen[0]) or bool(EXTRA_LEES_RE.match(eerste))) and all(
+        FILTER_RE.match(_OMLEIDING_RE.sub("", d).strip()) for d in delen[1:])
 
 
 def schrijft_eigen_artifacts(command: str) -> bool:
@@ -383,6 +422,37 @@ def _unstick_taak(db: Any, taak_id: str, *, queued: bool) -> None:
             db.table("core_tasks").update(velden).eq("id", taak_id).execute()
     except Exception:
         pass
+
+
+BESLIST_RUST_DAGEN = 7
+
+
+def recent_beslist_deal(db: Any, deal_code: str | None = None, deal_id: str | None = None,
+                        dagen: int = BESLIST_RUST_DAGEN) -> dict[str, Any] | None:
+    """Besliste Luka de afgelopen `dagen` al over deze deal? Dan niet opnieuw vragen.
+
+    22 nov gemeten: "Yes needed: 75fcab46 — Copper Cathode" werd 2x per dag opnieuw
+    gevraagd (6x goedgekeurd in 3 dagen). Het ok in AXE verandert niets aan de deal
+    in de desk, dus de cron vroeg het elke run weer zodra de vorige niet meer open stond."""
+    if not deal_code and not deal_id:
+        return None
+    from datetime import datetime, timedelta, timezone
+    sinds = (datetime.now(timezone.utc) - timedelta(days=dagen)).isoformat()
+    try:
+        rijen = (
+            db.table("core_approvals").select("*")
+            .in_("status", ["approved", "rejected"]).eq("kind", "northsea_notice")
+            .gte("decided_at", sinds).order("decided_at", desc=True).limit(200).execute().data
+        ) or []
+    except Exception:
+        return None
+    for r in rijen:
+        meta = r.get("metadata") or {}
+        if deal_id and str(meta.get("deal_id") or "") == str(deal_id):
+            return r
+        if deal_code and str(meta.get("deal_code") or "").upper() == str(deal_code).upper():
+            return r
+    return None
 
 
 def bestaande_deal_vraag(db: Any, deal_code: str | None = None, deal_id: str | None = None) -> dict[str, Any] | None:
