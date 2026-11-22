@@ -143,9 +143,36 @@ def zet(agent: str, wat: str, waarde: Any) -> None:
     TELLERS.setdefault(agent, {})[wat] = waarde
 
 
+REM_TYPE = "manager.rem"
+REM_AGENT = "managerwerk"   # niet onder de manager zelf: dan werd dit zijn "laatste activiteit"
+
+
+def rem_rij(agent: str, wat: str, detail: str = "") -> dict[str, Any]:
+    """Een rem of fout van de lus als event -- de API draait met 2 workers, dus tellen in het
+    geheugen van één proces klopt niet; de database telt voor allebei."""
+    return {"agent": REM_AGENT, "event_type": REM_TYPE, "source": "managerwerk",
+            "message": f"{agent}|{wat}|{' '.join(str(detail).split())}"[:300]}
+
+
+def tel_rems(events: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    uit: dict[str, dict[str, Any]] = {}
+    for e in sorted(events, key=lambda e: str(e.get("created_at") or "")):
+        delen = str(e.get("message") or "").split("|", 2)
+        if len(delen) < 2:
+            continue
+        agent, wat = delen[0], delen[1]
+        t = uit.setdefault(agent, {})
+        t[wat] = int(t.get(wat) or 0) + 1
+        if wat == "model_fout":
+            t["laatste_fout"] = f"{str(e.get('created_at'))[:16]} {delen[2] if len(delen) > 2 else ''}"[:200]
+    return uit
+
+
 def gezondheid(managers: tuple[str, ...], taken: list[dict[str, Any]], nu: datetime,
-               laatste_run: datetime | None, ronde_loopt_sinds: datetime | None) -> dict[str, Any]:
-    """Per manager wat er gebeurt + alarmen. `taken` = core_tasks van de managers, laatste 24 u."""
+               laatste_run: datetime | None, ronde_loopt_sinds: datetime | None,
+               rems: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Per manager wat er gebeurt + alarmen. `taken` = core_tasks van de managers, laatste 24 u;
+    `rems` = tel_rems(events van de laatste 24 u); zonder rems de tellers van dit proces."""
     per: dict[str, Any] = {}
     alarmen: list[str] = []
     for m in managers:
@@ -153,7 +180,7 @@ def gezondheid(managers: tuple[str, ...], taken: list[dict[str, Any]], nu: datet
         klaar = sum(1 for t in eigen if t.get("status") in KLAAR)
         mis = sum(1 for t in eigen if t.get("status") in MISLUKT)
         afgerond = klaar + mis
-        tel_ = TELLERS.get(m, {})
+        tel_ = (rems if rems is not None else TELLERS).get(m, {})
         per[m] = {
             "taken_24u": len(eigen),
             "open": sum(1 for t in eigen if t.get("status") in OPEN),
@@ -165,7 +192,6 @@ def gezondheid(managers: tuple[str, ...], taken: list[dict[str, Any]], nu: datet
             "ongeldige_json": int(tel_.get("ongeldige_json", 0)),
             "json_hersteld": int(tel_.get("json_hersteld", 0)),
             "model_fouten": int(tel_.get("model_fout", 0)),
-            "laatste_antwoord": tel_.get("laatste_antwoord"),
             "laatste_fout": tel_.get("laatste_fout"),
         }
         if tel_.get("geblokkeerd"):
@@ -201,5 +227,5 @@ def ervaring_les(taak: dict[str, Any], status: str, v: dict[str, str]) -> str | 
             + (f"\nToepassen op: {app}" if app else ""))
 
 
-__all__ = ["vingerafdruk", "idem_sleutel", "beslis", "poging", "lees_model_json", "geldig", "HERSTEL_VRAAG",
+__all__ = ["rem_rij", "tel_rems", "REM_TYPE", "REM_AGENT", "vingerafdruk", "idem_sleutel", "beslis", "poging", "lees_model_json", "geldig", "HERSTEL_VRAAG",
            "tel", "zet", "gezondheid", "ervaring_les", "ERVARING", "TELLERS"]

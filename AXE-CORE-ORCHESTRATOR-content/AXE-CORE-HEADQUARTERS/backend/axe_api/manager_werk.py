@@ -393,8 +393,7 @@ def denk(db: Any, agent: str, opdrachten: list[dict[str, Any]], geschiedenis: li
     try:
         tekst, model = vraag(berichten)
     except Exception as e:  # noqa: BLE001
-        _mb.tel(agent, "model_fout")
-        _mb.zet(agent, "laatste_fout", f"{datetime.now(timezone.utc).isoformat()[:16]} model: {e}"[:200])
+        _rem(db, agent, "model_fout", str(e)[:160])
         raise
     if _json_uit(tekst) is None and (tekst or "").strip():
         # Eén herstelpoging; daarna nooit een half-geldig antwoord als actie.
@@ -404,12 +403,11 @@ def denk(db: Any, agent: str, opdrachten: list[dict[str, Any]], geschiedenis: li
         except Exception:  # noqa: BLE001
             hersteld, model2 = "", model
         if _json_uit(hersteld) is not None:
-            _mb.tel(agent, "json_hersteld")
+            _rem(db, agent, "json_hersteld")
             tekst, model = hersteld, model2
         else:
-            _mb.tel(agent, "ongeldige_json")
+            _rem(db, agent, "ongeldige_json", " ".join((tekst or "").split())[:120])
             log.warning("invalid_model_output %s: %s", agent, " ".join((tekst or "").split())[:300])
-    _mb.zet(agent, "laatste_antwoord", datetime.now(timezone.utc).isoformat()[:16])
     antwoord, taken = lees_antwoord(tekst)
     return antwoord, taken, model, lees_overleg(tekst, agent)
 
@@ -423,6 +421,16 @@ def _taken_vandaag(db: Any, agent: str, nu: datetime) -> int:
         return len(rijen)
     except Exception:  # noqa: BLE001
         return MAX_TAKEN_PER_DAG  # niet kunnen tellen = voorzichtig: geen nieuwe
+
+
+def _rem(db: Any, agent: str, wat: str, detail: str = "") -> None:
+    """Tel een rem of fout, in dit proces én in de database (voor GET /managers/gezondheid)."""
+    import manager_betrouwbaar as _mb
+    _mb.tel(agent, wat)
+    try:
+        db.table("core_agent_events").insert(_mb.rem_rij(agent, wat, detail)).execute()
+    except Exception:  # noqa: BLE001 -- tellen breekt de lus nooit
+        pass
 
 
 def _recente_taken(db: Any, agent: str, nu: datetime) -> list[dict[str, Any]]:
@@ -462,7 +470,7 @@ def maak_taak(db: Any, agent: str, opdracht: str, nu: datetime, bron_id: Any = N
         bestaand = []   # niet kunnen kijken: de daglimiet blijft de rem
     besluit, _al = _mb.beslis(bestaand, idem, vinger, nu)
     if besluit != "maak":
-        _mb.tel(agent, besluit)
+        _rem(db, agent, besluit, vinger)
         log.info("geen nieuwe taak voor %s: %s (%s)", agent, besluit, vinger)
         if besluit == "geblokkeerd":
             _escaleer(db, agent, opdracht, vinger)
@@ -570,13 +578,28 @@ def run(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[s
 def gezondheid(db: Any, nu: datetime) -> dict[str, Any]:
     """GET /managers/gezondheid: per manager wat er gebeurt, plus alarmen."""
     import manager_betrouwbaar as _mb
+    sinds = (nu - timedelta(hours=24)).isoformat()
     try:
         taken = (db.table("core_tasks").select("requested_by,status,metadata,created_at")
-                 .in_("requested_by", list(MANAGERS)).gte("created_at", (nu - timedelta(hours=24)).isoformat())
-                 .limit(500).execute().data) or []
+                 .in_("requested_by", list(MANAGERS)).gte("created_at", sinds).limit(500).execute().data) or []
     except Exception:  # noqa: BLE001
         taken = []
-    return _mb.gezondheid(MANAGERS, taken, nu, _STAND["laatste_run"], _STAND["loopt_sinds"])
+    try:
+        events = (db.table("core_agent_events").select("message,created_at").eq("agent", _mb.REM_AGENT)
+                  .eq("event_type", _mb.REM_TYPE).gte("created_at", sinds).limit(1000).execute().data) or []
+        rems: dict[str, dict[str, Any]] | None = _mb.tel_rems(events)
+    except Exception:  # noqa: BLE001
+        rems = None
+    # Laatste ronde uit de cron-rij zelf: de ronde kan in de andere worker gedraaid hebben.
+    laatste, loopt = _STAND["laatste_run"], _STAND["loopt_sinds"]
+    try:
+        rij = (db.table("core_schedules").select("last_run_at,lease_until,last_status")
+               .eq("job_key", dienst()["job_key"]).limit(1).execute().data or [None])[0]
+        if rij:
+            laatste = max([t for t in (laatste, _tijd(rij.get("last_run_at"))) if t], default=None)
+    except Exception:  # noqa: BLE001
+        pass
+    return _mb.gezondheid(MANAGERS, taken, nu, laatste, loopt, rems)
 
 
 def _run(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[str, Any]:

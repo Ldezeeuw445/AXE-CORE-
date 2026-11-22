@@ -159,3 +159,17 @@ def test_mislukte_managertaak_wordt_een_les_die_terugkomt():
 
 def test_gewone_taak_geeft_geen_ervaring():
     assert not tv.ervaring(DB(), {"title": "x", "metadata": {}}, "failed", {"faalde": "y"})
+
+
+def test_tellers_staan_in_de_database_voor_beide_workers():
+    db = DB()
+    mw.maak_taak(db, "axon", "Repareer de axon sync", NU, "x")
+    mw.maak_taak(db, "axon", "Repareer de axon sync", NU, "x")   # dubbel
+    db.rijen["core_schedules"] = [{"job_key": "axe_core:staande-managerwerk",
+                                   "last_run_at": (NU - timedelta(minutes=1)).isoformat()}]
+    mw._STAND["laatste_run"] = None
+    g = mw.gezondheid(db, NU)
+    assert g["managers"]["axon"]["dubbel_tegengehouden"] == 1
+    assert g["ok"], g["alarmen"]
+    ev = db.rijen["core_agent_events"][0]
+    assert ev["agent"] == "managerwerk" and ev["message"].startswith("axon|dubbel|")
