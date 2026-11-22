@@ -435,7 +435,7 @@ def _rem(db: Any, agent: str, wat: str, detail: str = "") -> None:
 
 def _recente_taken(db: Any, agent: str, nu: datetime) -> list[dict[str, Any]]:
     import manager_betrouwbaar as _mb
-    return (db.table("core_tasks").select("id,title,status,metadata,result,created_at,completed_at")
+    return (db.table("core_tasks").select("id,title,goal,capability,status,metadata,result,created_at,completed_at")
             .eq("requested_by", agent).gte("created_at", (nu - _mb.TERUGKIJKEN).isoformat())
             .order("created_at", desc=True).limit(200).execute().data) or []
 
@@ -451,10 +451,11 @@ def _escaleer(db: Any, agent: str, opdracht: str, vinger: str) -> None:
             return
         rij = _gl.stap_taak(titel, "luka", agent,
                             f"Dit probleem mislukte al twee keer ({vinger}). Ik probeer het niet opnieuw "
-                            "tot jij kijkt of zegt wat anders moet.")
+                            "tot jij kijkt of zegt wat anders moet. Zet deze stap op Done als ik het weer mag proberen.")
+        rij["metadata"] = {**(rij.get("metadata") or {}), "vinger": vinger}
         db.table("core_tasks").insert(rij).execute()
         _zeg(db, agent, f"Dit lukte me twee keer niet: {opdracht[:200]}\n\nIk stop ermee en heb het bij jou "
-                        "gezet (Taken > Your turn). Zeg wat anders moet, dan pak ik het weer op.")
+                        "gezet (Taken > Your turn). Zet die stap op Done als ik het opnieuw mag proberen.")
     except Exception as e:  # noqa: BLE001
         log.warning("escaleren %s mislukte: %s", agent, e)
 

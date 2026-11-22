@@ -73,6 +73,15 @@ def beslis(bestaand: list[dict[str, Any]], idem: str, vinger: str, nu: datetime)
         if meta(t).get("idem") == idem:
             return "dubbel", t
     zelfde = [t for t in bestaand if meta(t).get("vinger") == vinger]
+    # Luka gaf het probleem weer vrij: hij zette de stap "... loopt vast" op Done. Mislukkingen
+    # van daarvoor tellen niet meer (anders bleef het voor altijd geblokkeerd).
+    vrij = [tijd(t) for t in bestaand
+            if str(t.get("capability")) == "stap" and str(t.get("status")) in KLAAR
+            and (meta(t).get("vinger") == vinger or vinger in str(t.get("goal") or ""))]
+    vrij_sinds = max([v for v in vrij if v], default=None)
+    if vrij_sinds:
+        zelfde = [t for t in zelfde if (tt := tijd(t)) is None or tt > vrij_sinds
+                  or str(t.get("status")) in OPEN]
     for t in zelfde:
         if str(t.get("status")) in OPEN:
             return "loopt", t

@@ -175,3 +175,15 @@ def test_tellers_staan_in_de_database_voor_beide_workers():
     assert g["ok"], g["alarmen"]
     ev = [r for r in db.rijen["core_manager_messages"] if r.get("to_agent") == "rem"][0]
     assert ev["from_agent"] == "managerwerk" and ev["body"].startswith("axon|dubbel|")
+
+
+def test_luka_geeft_een_geblokkeerd_probleem_vrij_met_done():
+    from datetime import timedelta
+    mis = [{"status": "failed", "created_at": (NU - timedelta(hours=h)).isoformat(),
+            "metadata": {"vinger": "v", "idem": f"i{h}"}} for h in (5, 4)]
+    assert mb.beslis(mis, "x", "v", NU)[0] == "geblokkeerd"
+    stap = {"capability": "stap", "status": "completed", "goal": "Dit probleem mislukte al twee keer (v).",
+            "completed_at": (NU - timedelta(hours=1)).isoformat(), "metadata": {}}
+    assert mb.beslis(mis + [stap], "x", "v", NU)[0] == "maak"
+    open_stap = {**stap, "status": "pending"}
+    assert mb.beslis(mis + [open_stap], "x", "v", NU)[0] == "geblokkeerd"
