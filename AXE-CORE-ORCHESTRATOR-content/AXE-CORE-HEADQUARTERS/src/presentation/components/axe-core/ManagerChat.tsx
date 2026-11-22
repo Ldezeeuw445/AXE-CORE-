@@ -9,7 +9,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { managerStaat } from '@/domain/agents/managerStaat';
 import { motion } from 'framer-motion';
-import { ArrowUp, ChevronDown, ChevronUp, Mic, Paperclip, Sparkles, Plug, X } from 'lucide-react';
+import { ArrowUp, ChevronDown, ChevronUp, Copy, Mic, MoreHorizontal, Paperclip, Reply, Sparkles, Plug, X } from 'lucide-react';
+import { SNELLE_REACTIES, citaat, leesAntwoord, metAntwoord, scheidingTekst, scheidingVoor, wisselReactie, type AntwoordOp, type Reacties } from '@/domain/agents/managerChatGrok';
 import { AXE_SKILLS } from '@/domain/tierRouter/axeSkills';
 import { APPS } from '@/domain/apps';
 import { agentById, type AxeAgentId } from '@/domain/agents/roster';
@@ -260,6 +261,28 @@ export function ManagerChat({
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [stripOpen, setStripOpen] = useState(false);
   const [picker, setPicker] = useState<null | 'skills' | 'connectors'>(null);
+  // Grokbot (22 nov): reacties, puntjes-menu en antwoorden op één bubbel.
+  const [reacties, setReacties] = useState<Reacties>(() => {
+    try { return JSON.parse(localStorage.getItem(`axe.mgr.reacties.${agent.id}`) || '{}') as Reacties; } catch { return {}; }
+  });
+  const reageer = (id: string, emoji: string) => setReacties((r) => {
+    const uit = wisselReactie(r, id, emoji);
+    try { localStorage.setItem(`axe.mgr.reacties.${agent.id}`, JSON.stringify(uit)); } catch { /* geen opslag */ }
+    return uit;
+  });
+  const [menuVoor, setMenuVoor] = useState<string | null>(null);
+  const [menuBoven, setMenuBoven] = useState(false);
+  const [antwoordOp, setAntwoordOp] = useState<AntwoordOp | null>(null);
+  useEffect(() => {
+    if (!menuVoor) return;
+    const dicht = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement | null)?.closest('.axe-mgr-acties')) setMenuVoor(null);
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuVoor(null); };
+    document.addEventListener('mousedown', dicht);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', dicht); document.removeEventListener('keydown', esc); };
+  }, [menuVoor]);
   const startListening = useVoiceStore((s) => s.startListening);
   const stopListening = useVoiceStore((s) => s.stopListening);
   const voiceStatus = useVoiceStore((s) => s.voiceStatus);
@@ -383,17 +406,19 @@ export function ManagerChat({
   const heeftStrip = !!(server && (missie || server.dax_computer || server.events.length > 0 || (server.routines?.length ?? 0) > 0));
 
   const stuur = (gesproken?: string) => {
-    const basis = (gesproken ?? opvolging).trim();
+    const eigen = (gesproken ?? opvolging).trim();
+    const basis = eigen ? metAntwoord(eigen, antwoordOp) : eigen;
     const bijlage = formatAttachmentsForPrompt(attachments);
     const t = (basis + bijlage).trim();
     if (!t || !onOpvolging) return;
-    if (wacht && onGoedkeuring && (followupIsAkkoord(basis) || followupIsAfwijzing(basis))) {
-      onGoedkeuring(followupIsAkkoord(basis), followupIsAltijd(basis));
+    if (wacht && onGoedkeuring && (followupIsAkkoord(eigen) || followupIsAfwijzing(eigen))) {
+      onGoedkeuring(followupIsAkkoord(eigen), followupIsAltijd(eigen));
       setOpvolging('');
       setAttachments([]);
       return;
     }
     setLokaal((prev) => [...prev, nieuwMsg('user', basis || '(attachment)')]);
+    setAntwoordOp(null);
     setWachtOpAntwoord(true);
     onOpvolging(t);
     setOpvolging('');
@@ -609,7 +634,7 @@ export function ManagerChat({
         <div
           ref={draadRef}
           className="flex-1 min-h-0 flex flex-col gap-2.5 text-[12.5px] leading-relaxed overflow-y-auto pr-1"
-          style={{ minHeight: 180 }}
+          style={{ minHeight: 180, ['--mgr-kleur' as string]: agent.accent || '#22D3EE' }}
           data-axe-agent-draad
         >
           {berichten.length === 0 && !typing && (
@@ -625,45 +650,67 @@ export function ManagerChat({
               );
             }
             const user = m.role === 'user';
+            const i = berichten.indexOf(m);
+            const vorige = i > 0 ? berichten[i - 1]?.at : undefined;
+            const { citaat: geciteerd, rest } = user ? leesAntwoord(m.text) : { citaat: null, rest: m.text };
+            const reactie = reacties[m.id];
+            const menuOpen = menuVoor === m.id;
             return (
-              <div
-                key={m.id}
-                className={`flex items-end gap-2 ${user ? 'justify-end' : 'justify-start'}`}
-                data-axe-chat-role={m.role}
-              >
-                {!user && (
-                  <span className="flex-none mb-0.5">
-                    <ManagerAvatar agent={agent} size={22} />
-                  </span>
-                )}
+              <div key={m.id} className="axe-mgr-rij-wrap">
+                {scheidingVoor(m.at, vorige) && m.at ? (
+                  <p className="axe-mgr-tijdlijn">{scheidingTekst(m.at)}</p>
+                ) : null}
                 <div
-                  className="max-w-[82%] px-3 py-2 rounded-2xl"
-                  style={{
-                    background: m.error
-                      ? 'rgba(239,68,68,.10)'
-                      : user
-                        ? 'rgba(34,211,238,.14)'
-                        : 'rgba(255,255,255,.04)',
-                    border: m.error
-                      ? '1px solid rgba(239,68,68,.28)'
-                      : user
-                        ? '1px solid rgba(34,211,238,.28)'
-                        : '1px solid rgba(255,255,255,.06)',
-                    color: m.error ? 'var(--err, #f87171)' : 'var(--text-primary)',
-                    borderBottomRightRadius: user ? 6 : undefined,
-                    borderBottomLeftRadius: user ? undefined : 6,
-                  }}
+                  className={`axe-mgr-rij${user ? ' axe-mgr-rij--luka' : ''}`}
+                  data-axe-chat-role={m.role}
                 >
-                  {user || m.error ? (
-                    <CollapsibleBubbleText text={m.text} asMarkdown={false} />
-                  ) : (
-                    <CollapsibleBubbleText text={m.text} asMarkdown />
-                  )}
-                  {m.at ? (
-                    <span className="axe-manager-chat-tijd">
-                      {user ? 'Luka' : agent.name} · {amsterdamKlok(m.at)}
-                    </span>
-                  ) : null}
+                  <div
+                    className={`axe-mgr-bubbel${user ? ' axe-mgr-bubbel--luka' : ''}${m.error ? ' axe-mgr-bubbel--fout' : ''}`}
+                    title={m.at ? `${user ? 'Luka' : agent.name} · ${amsterdamKlok(m.at)}` : undefined}
+                  >
+                    {geciteerd ? <p className="axe-mgr-citaat">{geciteerd}</p> : null}
+                    {user || m.error ? (
+                      <CollapsibleBubbleText text={rest} asMarkdown={false} />
+                    ) : (
+                      <CollapsibleBubbleText text={rest} asMarkdown />
+                    )}
+                    {reactie ? (
+                      <button type="button" className="axe-mgr-reactie" onClick={() => reageer(m.id, reactie)}
+                        aria-label={`Reactie ${reactie}, klik om weg te halen`}>{reactie}</button>
+                    ) : null}
+                  </div>
+                  <div className={`axe-mgr-acties${menuOpen ? ' is-open' : ''}`}>
+                    <button type="button" className="axe-mgr-puntjes" aria-label="Meer"
+                      aria-expanded={menuOpen} onClick={(e) => {
+                        // Onderaan het gesprek klapt het menu naar boven open, anders valt het weg.
+                        const knop = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        const vak = draadRef.current?.getBoundingClientRect();
+                        setMenuBoven(!!vak && vak.bottom - knop.bottom < 220);
+                        setMenuVoor(menuOpen ? null : m.id);
+                      }}>
+                      <MoreHorizontal size={15} aria-hidden />
+                    </button>
+                    {menuOpen && (
+                      <div className={`axe-mgr-menu${menuBoven ? ' axe-mgr-menu--boven' : ''}`} role="menu">
+                        <div className="axe-mgr-menu-emoji">
+                          {SNELLE_REACTIES.map((e) => (
+                            <button key={e} type="button" role="menuitem" aria-label={`Reageer ${e}`}
+                              className={reactie === e ? 'is-gekozen' : undefined}
+                              onClick={() => { reageer(m.id, e); setMenuVoor(null); }}>{e}</button>
+                          ))}
+                        </div>
+                        <button type="button" role="menuitem" className="axe-mgr-menu-item" onClick={() => {
+                          setAntwoordOp({ id: m.id, wie: user ? 'Luka' : agent.name, tekst: rest });
+                          setMenuVoor(null);
+                          requestAnimationFrame(() => composerRef.current?.focus());
+                        }}><Reply size={14} aria-hidden /> Beantwoorden</button>
+                        <button type="button" role="menuitem" className="axe-mgr-menu-item" onClick={() => {
+                          void navigator.clipboard?.writeText(rest).catch(() => undefined);
+                          setMenuVoor(null);
+                        }}><Copy size={14} aria-hidden /> Kopiëren</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -743,6 +790,17 @@ export function ManagerChat({
                   </ul>
                 )
               )}
+            </div>
+          )}
+          {antwoordOp && (
+            <div className="axe-mgr-antwoordbalk" role="status">
+              <Reply size={13} aria-hidden />
+              <span className="axe-mgr-antwoordbalk-tekst">
+                <b>{antwoordOp.wie}</b> {citaat(antwoordOp.tekst)}
+              </span>
+              <button type="button" aria-label="Niet meer beantwoorden" onClick={() => setAntwoordOp(null)}>
+                <X size={13} aria-hidden />
+              </button>
             </div>
           )}
           <div className="axe-manager-composer flex items-end gap-1.5">
