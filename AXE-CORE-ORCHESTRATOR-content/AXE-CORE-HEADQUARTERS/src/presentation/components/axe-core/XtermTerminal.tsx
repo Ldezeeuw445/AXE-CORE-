@@ -36,6 +36,7 @@ import '@xterm/xterm/css/xterm.css';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { buildTerminalWsUrl } from '@/infrastructure/config/terminalWsUrl';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+import { verbindingMisluktHint } from '@/domain/terminalHosts';
 
 /** Een link uit de terminal openen in de echte browser, ook in de Mac-app. */
 async function openTerminalLink(uri: string): Promise<void> {
@@ -154,7 +155,7 @@ export const XtermTerminal = forwardRef<XtermHandle, Props>(function XtermTermin
         termRef.current?.write(
           `\r\n\x1b[31m[Connection failed]\x1b[0m \x1b[90m(code ${e.code || 1006})\x1b[0m\r\n` +
           `\x1b[90mTried: ${endpoint}\r\n` +
-          `Check on the VPS: systemctl status axe-terminal · ss -tlnp | grep 4022 · nginx has the /terminal block.\x1b[0m\r\n`,
+          `${verbindingMisluktHint(endpoint, { tauri: isTauriRuntime(), paginaHost: typeof location === 'undefined' ? '' : location.hostname })}\x1b[0m\r\n`,
         );
       }
     };
