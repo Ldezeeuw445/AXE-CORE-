@@ -13,6 +13,8 @@
 import { terugkomstContext } from '@/application/axe/terugkomst';
 import { haalSessieNotities, noteerAfgerondeSessies, sessieGeheugenContext } from '@/application/axe/sessieGeheugen';
 import { callWithFallback } from '@/infrastructure/gateways/llmGateway';
+import { rijActie, rijAntwoord } from '@/domain/chat/rijOpdracht';
+import { rijActieApi, rijStand } from '@/infrastructure/gateways/axeCoreApiService';
 import { useVoiceStore, type ConversationMessage, type RoutingEvent, writeConversationMemory } from '@/presentation/store/voiceStore';
 import { extractMemoryFromMessage, buildRagContext } from '@/infrastructure/persistence/ragMemoryService';
 import {
@@ -523,6 +525,29 @@ export function installStableChat(): void {
         }));
         const ok = await stableConfirmPendingEdit(text);
         if (ok) return;
+      }
+
+      // "Doe de rij": deterministisch, geen model nodig (backend/axe_api/rij.py).
+      const rij = rijActie(text);
+      if (rij) {
+        useVoiceStore.setState(s => ({
+          conversation: [...s.conversation, { role: 'user' as const, text, timestamp: Date.now() }],
+          voiceStatus: 'processing',
+          error: null,
+        }));
+        let antwoord: string;
+        try {
+          antwoord = rijAntwoord(rij, rij === 'stand' ? await rijStand() : await rijActieApi(rij));
+        } catch (e) {
+          antwoord = `Ik kon de rij niet bereiken: ${e instanceof Error ? e.message : String(e)}`.slice(0, 240);
+        }
+        useVoiceStore.setState(s => ({
+          conversation: [...s.conversation, { role: 'axe' as const, text: antwoord, timestamp: Date.now() }],
+          response: antwoord,
+          voiceStatus: 'speaking',
+        }));
+        speakAxe(antwoord, () => useVoiceStore.setState({ voiceStatus: 'idle' }));
+        return;
       }
 
       if (wantsAgenticWork(text)) {

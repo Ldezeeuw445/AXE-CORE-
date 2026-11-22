@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 55 gebouwd maar nog niet bewezen, 52 open (van 180).
+**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 56 gebouwd maar nog niet bewezen, 51 open (van 180).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -10,7 +10,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (50%) | 8 | 1 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 29 | 5 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 5 | 2 |
-| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (13%) | 13 | 27 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (13%) | 14 | 26 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
@@ -453,8 +453,9 @@ Niet namaken -- AXE heeft al Taken, Home en de managers. Wat erbij moet:
       (of een manager/Claude), "Samen" -- met per stap waarom, welke bestanden,
       en wat de AI moet doen als het zijn beurt is.
   *(22 nov: gebouwd -- Taken-tab bovenaan drie kolommen Your turn · AI's turn · Together uit /stappen, met waarom per stap en een Done-knop op stappen; `--wie samen` zet hem in Together. Bestanden per stap nog niet. API-test groen, in de preview gezien; komt met deploy + app-build.)*
-- [ ] **"Doe de rij"**: zeg tegen AXE "doe de rij" en hij werkt de open
+- [~] **"Doe de rij"**: zeg tegen AXE "doe de rij" en hij werkt de open
       stappen af waar hij eigenaar van is, één voor één, met een logregel per stap.
+  *(22 nov: gebouwd -- "doe de rij" / "stop de rij" / "hoe staat de rij?" in de chat (zonder model), `axe rij [begin|stop|stand]`, POST/GET /stappen/rij. De open AI-stappen krijgen een nummer; alleen de eerste gaat naar de worker, de managerdienst (elke 2 min) start de volgende als er niets uit de rij draait; een logregel per stap. Nooit erin: trading, NorthSea-akkoorden, geld, wissen, of wat bij Luka ligt. `backend/axe_api/rij.py`, tests groen. Nog niet echt gestart -- dat start echt werk, dus Luka's woord.)*
 - [~] **Log + ritme**: elke afgeronde stap één regel in het log (wie, wat), en
       een strookje "ritme" met hoeveel er per dag af is, laatste 30 dagen.
   *(22 nov: gebouwd -- afgeronde taken schreven al een logregel (taak_verslag), `axe stap-af` nu ook; GET /log/ritme telt per dag, de notch-Vandaag-kaart toont 30 balkjes + "N done today · M this week". Test groen, in de preview gezien.)*

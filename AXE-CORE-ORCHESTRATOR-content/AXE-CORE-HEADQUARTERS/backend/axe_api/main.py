@@ -3788,6 +3788,29 @@ async def stap_nieuw(body: StapNieuw):
     return {"ok": True, "stap": {"id": taak["id"], "titel": taak["title"], "wie": taak.get("assignee")}}
 
 
+class RijActie(BaseModel):
+    actie: str = "begin"  # begin | stop
+    actor: str = "luka"
+
+
+@app.get("/stappen/rij", dependencies=[AUTH])
+async def rij_stand():
+    """Hoe staat 'doe de rij'? (rij.py)"""
+    import rij as _rij
+    return await asyncio.to_thread(_rij.stand, sb())
+
+
+@app.post("/stappen/rij", dependencies=[AUTH])
+async def rij_actie(body: RijActie):
+    """'Doe de rij': de open AI-stappen één voor één laten afwerken, of de rij stoppen."""
+    import rij as _rij
+    if body.actie == "stop":
+        return await asyncio.to_thread(_rij.stop, sb(), body.actor)
+    if body.actie != "begin":
+        raise HTTPException(422, "actie is begin of stop")
+    return await asyncio.to_thread(_rij.begin, sb(), body.actor)
+
+
 @app.post("/stappen/{stap_id}/af", dependencies=[AUTH])
 async def stap_af(stap_id: str, body: StapAf):
     """`axe stap-af`: een stap dicht met de uitkomst, plus één regel in het log."""

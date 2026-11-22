@@ -55,6 +55,7 @@ COMMANDS = [
     ("stappen", "axe stappen", "Open steps, split into Luka's turn and an AI's turn"),
     ("stap-nieuw", "axe stap-nieuw \"<titel>\" [--wie luka|axe|<manager>] [--waarom <w>]", "Add a step to the shared list (default: Luka's turn)"),
     ("stap-af", "axe stap-af <id> \"<uitkomst>\"", "Close a step with its outcome; writes one log line"),
+    ("rij", "axe rij [begin|stop|stand]", "Work the AI's open steps one by one (never trading, money or deletes)"),
     ("lessen", "axe lessen [\"<regel>\" --waarom <w> --toepassen <t>]", "Luka's corrections as lessons: read them, or save a new one"),
 ]
 
@@ -124,7 +125,7 @@ def _resolve(words: list[str]) -> tuple[str, list[str]]:
         return path, words[2:]
     if words[0] in ("help", "--help", "-h"):
         return "help", words[1:]
-    if words[0] in ("notify", "report", "status", "help", "observe", "log", "stappen", "lessen", "stap-nieuw", "stap-af"):
+    if words[0] in ("notify", "report", "status", "help", "observe", "log", "stappen", "lessen", "stap-nieuw", "stap-af", "rij"):
         return words[0], words[1:]
     raise UsageError(f"unknown or incomplete command '{' '.join(words)}'. See axe help")
 

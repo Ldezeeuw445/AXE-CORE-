@@ -523,6 +523,13 @@ def run(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[s
         uit["beantwoord"].append({"agent": agent, "model": model, "taken": len(gestart)})
         uit["taken"] += len(gestart)
     uit["gemeld"] = meld_klaar(db, nu)
+    # 'Doe de rij' (rij.py): staat er iets in de rij en draait er niets, start de volgende.
+    try:
+        import rij as _rij
+        if (r := _rij.tik(db, nu)).get("stand") == "gestart":
+            uit["rij"] = r
+    except Exception as e:  # noqa: BLE001
+        uit["fouten"].append(f"rij: {e}"[:200])
     if not uit["beantwoord"]:
         try:
             if (o := beantwoord_overleg(db, nu, chat=chat)):

@@ -416,6 +416,14 @@ def _run(path: str, parsed: dict[str, Any], client: Client, cfg: dict[str, Any])
         if not p:
             raise UsageError('stap-af needs an id: axe stap-af <id> "<uitkomst>"')
         return envelope(path, "ok", client.post(f"/stappen/{p[0]}/af", {"uitkomst": " ".join(p[1:]).strip(), "actor": actor}))
+    if path == "rij":
+        # 22 nov: 'doe de rij' -- de open AI-stappen één voor één (backend/axe_api/rij.py).
+        actie = (p[0] if p else "begin").lower()
+        if actie in ("stand", "status"):
+            return envelope(path, "ok", client.get("/stappen/rij"))
+        if actie not in ("begin", "stop"):
+            raise UsageError("rij: axe rij [begin|stop|stand]")
+        return envelope(path, "ok", client.post("/stappen/rij", {"actie": actie, "actor": actor}))
     if path == "notify":
         msg = _flag(parsed, "message") or " ".join(p)
         if not msg:

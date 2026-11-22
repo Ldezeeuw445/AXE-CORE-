@@ -718,6 +718,15 @@ export async function stapAf(id: string, uitkomst: string, actor = 'luka'): Prom
   await call('POST', `/stappen/${encodeURIComponent(id)}/af`, { uitkomst, actor });
 }
 
+/** 'Doe de rij' (backend/axe_api/rij.py): de open AI-stappen één voor één. */
+export async function rijActieApi(actie: 'begin' | 'stop', actor = 'luka'): Promise<import('@/domain/chat/rijOpdracht').RijUitslag> {
+  return call('POST', '/stappen/rij', { actie, actor });
+}
+
+export async function rijStand(): Promise<import('@/domain/chat/rijOpdracht').RijUitslag> {
+  return call('GET', '/stappen/rij');
+}
+
 /** De echte routekaart van de draaiende API (FastAPI's eigen /openapi.json). */
 export async function apiOpenApi(): Promise<unknown> {
   return call('GET', '/openapi.json');
