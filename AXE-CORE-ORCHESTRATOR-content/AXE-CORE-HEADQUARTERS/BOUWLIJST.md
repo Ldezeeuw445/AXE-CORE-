@@ -1,21 +1,22 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 74 klaar, 58 gebouwd maar nog niet bewezen, 49 open (van 181).
+**Stand: 38% klaar** `████████░░░░░░░░░░░░` -- 74 klaar, 62 gebouwd maar nog niet bewezen, 57 open (van 193).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
+| Luka 22 nov -- deze week af: OS3, managers = Grokbot = DAX, NorthSea maakt deals | 0 (0%) | 2 | 6 |
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (47%) | 10 | 0 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 29 | 5 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 5 | 2 |
-| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (13%) | 14 | 26 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (13%) | 15 | 26 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
 | 4 — Computer use, browser, code-editor | 1 (33%) | 0 | 2 |
-| 5 — Luka kan het zelf | 3 (75%) | 0 | 1 |
+| 5 — Luka kan het zelf | 3 (43%) | 1 | 3 |
 | 6 — AXE als baas (Jarvis-route, niet letterlijk Jarvis) | 23 (92%) | 0 | 2 |
 | 7 — axe-commandolaag (CLI + hek, geen tweede agent) | 4 (57%) | 0 | 3 |
 <!-- stand:end -->
@@ -27,6 +28,17 @@ Lees eerst `AGENTS.md` in de hoofdmap. Werk je hieraan met Cursor of Cowork:
 zet je naam bij het punt dat je oppakt, zodat we niet twee keer hetzelfde doen.
 
 ---
+
+## Luka 22 nov -- deze week af: OS3, managers = Grokbot = DAX, NorthSea maakt deals
+
+- [~] **Zijbalk: geen Not tested / Unknown meer**: VPS-sleutels test de zijbalk zelf (half uur cache, 402 = No credits); stoelen: worker vond `~/.local/bin` niet onder launchd, opencode wachtte op stdin, Cursor liep in time-out en `isAuthenticated` werd niet gelezen -- alles gerepareerd, lokaal nagebootst. Live na App bijwerken.
+- [~] **Home: per kant één kaart met twee tabs** (Working now / Recent; Needs your OK / Seats·DAX·Cron), tellers, groter op de Mac mini, binnen de maat op de iMac; stoelen met hun echte naam. In de preview gemeten.
+- [ ] **Managers-tab = Grokbot**: zelfde look en werking -- reacties (emoji), reply, puntjes bij hover op een bubbel, Luka's bubbel in de kleur van de manager, zichtbaar als een andere manager of AXE iets stuurde ("Bericht van X"), geen vierkant om de AXE-avatar, knoppen recht uitgelijnd, statusregel ("Task running ...") helemaal leesbaar, DAX-knop netjes.
+- [ ] **DAX-bots = managers**: geen aparte agents meer; elke DAX-bot staat in de Managers-tab, always on, en kan hetzelfde als een manager (praten, laten zien, regelen) -- geen verschil tussen Claude, Grokbot en DAX-bots.
+- [ ] **Taken: weten of ik iets moet**: nu 38 gepland, 30 mislukt, steeds 1-10 "need attention" ook na retry. Per taak: van wie, wat er gebeurt, of Luka iets moet; oude mislukte die al opgelost zijn uit beeld.
+- [ ] **Home-metrics**: alles wat belangrijk is in één blik (naast agents en kaarten), goede metrics, niets dubbel, nutteloze dingen weg; daarna elke pagina een perfecte layout.
+- [ ] **NorthSea Manager maakt echt deals**: 24/7 naar een deal toe werken (zie ook "NorthSea-dealbesluit echt laten landen").
+- [ ] **Doorwerken**: de hele lijst constant afwerken tot AXE CORE deze week af is.
 
 ## Eerst — één doorlopend systeem (audit 19 nov 2026)
 
