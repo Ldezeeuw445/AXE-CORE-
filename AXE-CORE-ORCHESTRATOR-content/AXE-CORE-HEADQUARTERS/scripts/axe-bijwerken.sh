@@ -295,6 +295,14 @@ done
 # Beide achtergrondworkers worden opnieuw geregistreerd vanuit DEZE canonical
 # orchestrator-checkout. Dat maakt hun bronpad onderdeel van dezelfde update als
 # de .app en voorkomt dat launchd stil naar een oude worktree blijft wijzen.
+# Coding-CLI's bij: een oude Codex weigerde 22 nov elk model van Luka's ChatGPT-account
+# ("requires a newer version of Codex"). Luka gaf het ok ("Ja doe maar"). Faalt het
+# (geen netwerk, geen codex), dan gaat de update gewoon verder.
+if command -v codex >/dev/null 2>&1 || [ -x "$HOME/.local/bin/codex" ]; then
+  zeg "Codex CLI bijwerken"
+  ( PATH="$HOME/.local/bin:$PATH" codex update </dev/null 2>&1 | tail -2 ) || true
+fi
+
 zeg "Canonical computer-worker registreren"
 bash scripts/install-computer-worker-launchd.sh
 

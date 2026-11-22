@@ -583,12 +583,26 @@ export function vindBin(naam, envSleutel, omgeving = env, bestaat = existsSync) 
   return `/opt/homebrew/bin/${naam}`;
 }
 
+let catalogusCache = null;
+/** Zichtbare modellen uit `codex debug models` (wat dit account echt mag), nieuwste eerst. */
+async function codexCatalogus(bin, child) {
+  if (catalogusCache) return catalogusCache;
+  try {
+    const { out } = await runStatus(bin, ['debug', 'models'], REPO, child, 60_000);
+    const d = JSON.parse(out.slice(out.indexOf('{')));
+    const lijst = Array.isArray(d) ? d : (d.models || []);
+    catalogusCache = lijst.filter(m => (m.visibility || 'list') === 'list').map(m => m.slug || m.id).filter(Boolean);
+  } catch { catalogusCache = []; }
+  return catalogusCache;
+}
+
 async function runCodexWithFallback(prompt, root, seat, requestedModel) {
   const bin = vindBin('codex', 'AXE_CODEX_BIN');
   const raw = String(requestedModel || env.AXE_CODEX_MODEL || '').trim();
   // gpt-5-codex geeft model_not_found op een ChatGPT-login; astra/gpt-6 400.
   // Leeg = de CLI kiest zelf. Andere AXE_CODEX_MODEL-waarden blijven een pin.
-  const model = /astra|gpt-6\b|gpt-5-codex/i.test(raw) ? '' : raw;
+  // 22 nov: alleen bekende dode pins weg; 'gpt-6-luna' is juist een werkend model.
+  const model = /astra|gpt-5-codex/i.test(raw) ? '' : raw;
   // 22 nov: codex 0.142 kent '--approve-for-me' niet meer ("unexpected argument") en
   // weigerde ELKE run. `codex exec` vraagt niets: de sandbox (workspace-write) is de grens.
   const base = ['exec', prompt, '-C', '.', '-s', 'workspace-write'];
@@ -602,6 +616,16 @@ async function runCodexWithFallback(prompt, root, seat, requestedModel) {
   if (result.code !== 0 && isCodexModelNotFound(result.out) && model) {
     tried.push('retry without -m');
     result = await runStatus(bin, base, root, child, AGENT_TIMEOUT_MS);
+  }
+
+  // 22 nov: het model in Luka's Codex-config (gpt-5.4 / gpt-6-astra) mag niet met zijn
+  // ChatGPT-account. Codex' eigen catalogus zegt welke wel: probeer die (zichtbare) modellen.
+  if (result.code !== 0 && (isCodexModelNotFound(result.out) || /newer version of Codex/i.test(result.out))) {
+    for (const m of (await codexCatalogus(bin, child)).filter(x => x !== model).slice(0, 2)) {
+      tried.push(`-m ${m} (catalogus)`);
+      result = await runStatus(bin, [...base, '-m', m], root, child, AGENT_TIMEOUT_MS);
+      if (result.code === 0 && !isCodexModelNotFound(result.out)) break;
+    }
   }
 
   if (result.code === 0 && !isCodexModelNotFound(result.out)) {
