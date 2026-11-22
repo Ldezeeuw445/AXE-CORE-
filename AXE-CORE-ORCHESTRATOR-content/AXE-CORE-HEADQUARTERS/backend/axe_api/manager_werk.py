@@ -485,6 +485,11 @@ def maak_taak(db: Any, agent: str, opdracht: str, nu: datetime, bron_id: Any = N
                  "exactly what he must do. End with: what you found, what you changed, and whether it is done."),
         "status": "queued", "priority": "high", "source_app": "axe_core",
         "requested_by": agent, "capability": "agentic", "assignee": agent,
+        # Gemeten 22 nov: zonder dit zette de database 'read' (kolomdefault) en kon
+        # GEEN managertaak ooit iets veranderen -- ook Claude Code op de Mac werd
+        # geweigerd. Schrijven blijft achter Luka's ok (approval_key/approval_reason);
+        # NorthSea zet de lus zelf altijd op alleen-lezen.
+        "execution_mode": "execute",
         "metadata": {"agent": agent, "manager": True, "uit_gesprek": True, "bericht_id": bron_id, "app": "axe_core",
                      "app_naam": APP_VAN.get(agent, ""), "idem": idem, "vinger": vinger,
                      "poging": _mb.poging(bestaand, vinger)},

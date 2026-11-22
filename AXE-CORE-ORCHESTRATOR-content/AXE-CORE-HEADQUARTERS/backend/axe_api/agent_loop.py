@@ -41,6 +41,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
 import device_actions
+import klaar_regels
 from agent_workspace import (
     AGENT_BRIEFS,
     crew_voor,
@@ -1651,6 +1652,7 @@ async def _lus(
     # De laatste oplevering van een coding-agent in deze taak (device_actions.oplevering):
     # die bepaalt mee of 'klaar' mag, en gaat mee in het resultaat (taakverslag, review).
     laatste_oplevering: dict[str, Any] | None = None
+    coding_gevraagd = False
 
     for step in range(1, MAX_STEPS + 1):
         if time.monotonic() - started > WALL_CLOCK_SECONDS:
@@ -1712,9 +1714,29 @@ async def _lus(
                 verify_command = str(args.get("verify_command") or "").strip()
                 expect = str(args.get("expect_in_output") or "").strip()
 
-                weigering = device_actions.oplevering_weigering(laatste_oplevering)
+                # Regel 1 (klaar_regels): zegt hij zelf dat het niet lukte, dan is het
+                # geblokkeerd, geen klaar -- ook als zijn "bewijs" slaagt.
+                if klaar_regels.geeft_falen_toe(summary):
+                    transcript.append({"step": step, "tool": "finish", "blocked": "agent_reports_failure"})
+                    await on_event("axe.progress", f"Step {step}: the agent says it did not work -- "
+                                   "recording it as blocked, not done.", {})
+                    return {
+                        **motor_velden(),
+                        "summary": klaar_regels.als_blokkade(summary),
+                        "steps_used": step,
+                        **({"oplevering": laatste_oplevering} if laatste_oplevering else {}),
+                        "verification": {"passed": True, "checks": [
+                            {"name": "agent_reports_failure", "passed": True}]},
+                        "transcript": transcript,
+                    }
+                weigering = None
+                if klaar_regels.leeg_bewijs(verify_command, expect):
+                    weigering = klaar_regels.WEIGER_LEEG.format(cmd=verify_command[:120])
+                elif klaar_regels.coding_zonder_oplevering(coding_gevraagd, laatste_oplevering):
+                    weigering = klaar_regels.WEIGER_CODING
+                weigering = weigering or device_actions.oplevering_weigering(laatste_oplevering)
                 if weigering:
-                    transcript.append({"step": step, "tool": "finish", "refused": "oplevering_niet_compleet"})
+                    transcript.append({"step": step, "tool": "finish", "refused": "klaar_geweigerd"})
                     await on_event("verification.failed", "Completion refused: the coding agent's delivery is "
                                    "incomplete.", {"ontbreekt": (laatste_oplevering or {}).get("ontbreekt")})
                     responses.append({"functionResponse": {"name": "finish", "response": {
@@ -1881,6 +1903,8 @@ async def _lus(
                     "step": step, "tool": "run_on_device", "device": device,
                     "device_tool": tool, "ok": result.get("ok"),
                 })
+                if tool in device_actions.AGENT_RUNS:
+                    coding_gevraagd = True
                 if tool in device_actions.AGENT_RUNS and isinstance(result.get("oplevering"), dict):
                     laatste_oplevering = {**result["oplevering"], "device": device, "tool": tool}
                     transcript[-1]["compleet"] = bool(laatste_oplevering.get("compleet"))

@@ -51,7 +51,7 @@ def test_de_lus_weigert_een_tool_buiten_de_werkplek(monkeypatch):
         if len(beurten) == 1:
             return {"parts": [{"functionCall": {"name": "write_file", "args": {"path": "/tmp/x", "content": "hoi"}}}]}
         return {"parts": [{"functionCall": {"name": "finish", "args": {
-            "summary": "klaar", "verify_command": "echo ok", "expect_in_output": "ok"}}}]}
+            "summary": "klaar", "verify_command": "python3 -c \"print('ok')\"", "expect_in_output": "ok"}}}]}
 
     monkeypatch.setattr(agent_loop, "_call_model", model)
     monkeypatch.setattr(agent_loop, "_write", lambda *a, **k: geschreven.append(a) or {"bytes_written": 3})

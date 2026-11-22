@@ -54,9 +54,9 @@ def test_lus_weigert_klaar_tot_de_oplevering_compleet_is(monkeypatch):
         "device": device, "tool": tool, "ok": True, "oplevering": da.oplevering(next(leveringen))})
     stappen = iter([
         {"name": "run_on_device", "args": {"device": "mini", "tool": "claude_code.run", "args": {"prompt": "fix"}}},
-        {"name": "finish", "args": {"summary": "klaar", "verify_command": "echo ok", "expect_in_output": "ok"}},
+        {"name": "finish", "args": {"summary": "klaar", "verify_command": "git -C repo log -1 --oneline", "expect_in_output": "ok"}},
         {"name": "run_on_device", "args": {"device": "mini", "tool": "claude_code.run", "args": {"prompt": "kleiner"}}},
-        {"name": "finish", "args": {"summary": "klaar", "verify_command": "echo ok", "expect_in_output": "ok"}},
+        {"name": "finish", "args": {"summary": "klaar", "verify_command": "git -C repo log -1 --oneline", "expect_in_output": "ok"}},
     ])
     gezien: list = []
 

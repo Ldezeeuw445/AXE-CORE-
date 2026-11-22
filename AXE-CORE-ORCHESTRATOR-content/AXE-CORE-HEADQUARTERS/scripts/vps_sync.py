@@ -158,6 +158,7 @@ MANIFEST = {
     "/opt/axe-core-api/gedeeld_log.py": ("backend/axe_api/gedeeld_log.py", "axe-core-api"),
     "/opt/axe-core-api/rij.py": ("backend/axe_api/rij.py", "axe-core-api"),
     "/opt/axe-core-api/manager_betrouwbaar.py": ("backend/axe_api/manager_betrouwbaar.py", "axe-core-api"),
+    "/opt/axe-core-api/klaar_regels.py": ("backend/axe_api/klaar_regels.py", "axe-task-worker"),
     "/opt/axe-core-api/manager_context.py": ("backend/axe_api/manager_context.py", "axe-core-api"),
     "/opt/axe-core-api/taak_voortgang.py": ("backend/axe_api/taak_voortgang.py", "axe-task-worker"),
     "/opt/axe-core-api/taak_verslag.py": ("backend/axe_api/taak_verslag.py", "axe-task-worker"),
@@ -246,7 +247,7 @@ OPTIONAL_WHEN_MISSING = {
 # Wie wie nodig heeft. Ship je de één zonder de ander, dan start de worker niet.
 WORKER_IMPORTS = {
     "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py", "northsea_desk_handler.py", "dax_bouw.py", "bouw_publiceer.py"),
-    "agent_loop.py": ("device_actions.py", "agent_workspace.py", "beslis_beleid.py", "provider_router.py"),
+    "agent_loop.py": ("klaar_regels.py", "device_actions.py", "agent_workspace.py", "beslis_beleid.py", "provider_router.py"),
     "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "grok_managers.py", "taak_fout.py", "gezondheid.py", "memory_schrijfhek.py", "geheimen.py", "device_notify.py", "modelbox.py", "northsea_mailwachter.py", "sleutels.py", "stoelen_actueel.py", "stem_vloer.py", "manager_draad.py", "northsea_opruimen.py", "rij.py"),
     "memory_schrijfhek.py": ("geheimen.py",),
     "provider_router.py": ("stoelen_actueel.py",),
