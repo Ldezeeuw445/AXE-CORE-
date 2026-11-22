@@ -405,6 +405,17 @@ def _run(path: str, parsed: dict[str, Any], client: Client, cfg: dict[str, Any])
         return envelope(path, "ok", client.get("/lessen"))
     if path == "stappen":
         return envelope(path, "ok", client.get("/stappen"))
+    if path == "stap-nieuw":
+        # 22 nov: elke AI-sessie zet zelf een stap in dezelfde lijst als AXE.
+        titel = " ".join(p).strip()
+        if not titel:
+            raise UsageError('stap-nieuw needs a title: axe stap-nieuw "<titel>" [--wie <wie>]')
+        return envelope(path, "ok", client.post("/stappen", {"titel": titel, "wie": _flag(parsed, "wie") or "luka",
+                                                             "waarom": _flag(parsed, "waarom") or "", "actor": actor}))
+    if path == "stap-af":
+        if not p:
+            raise UsageError('stap-af needs an id: axe stap-af <id> "<uitkomst>"')
+        return envelope(path, "ok", client.post(f"/stappen/{p[0]}/af", {"uitkomst": " ".join(p[1:]).strip(), "actor": actor}))
     if path == "notify":
         msg = _flag(parsed, "message") or " ".join(p)
         if not msg:

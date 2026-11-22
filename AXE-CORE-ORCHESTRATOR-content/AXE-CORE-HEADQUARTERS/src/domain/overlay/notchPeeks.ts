@@ -155,3 +155,20 @@ export function eerstvolgende<T extends { naam: string; at: string }>(items: T[]
   const t = nu.getTime();
   return [...items].filter((i) => new Date(i.at).getTime() > t).sort((a, b) => a.at.localeCompare(b.at))[0] ?? null;
 }
+
+/**
+ * Zacht geluid (22 nov, BOUWLIJST): bij een vraag en bij "klaar", één toon per
+ * keer. Een vraag wint van klaar: als beide tegelijk binnenkomen moet je weten
+ * dat er iets op je wacht. Alleen op de Mac waar Luka net iets deed (stil <
+ * GELUID_STIL_S), zodat iMac en Mac mini niet tegelijk piepen.
+ */
+export type NotchGeluid = 'vraag' | 'klaar';
+export const GELUID_STIL_S = 120;
+
+export function geluidVoor(peeks: Peek[], stilSeconden: number | null, aan: boolean): NotchGeluid | null {
+  if (!aan || peeks.length === 0) return null;
+  if (stilSeconden !== null && stilSeconden > GELUID_STIL_S) return null;
+  if (peeks.some((p) => p.soort === 'claude-wacht' || p.soort === 'goedkeuring')) return 'vraag';
+  if (peeks.some((p) => p.soort === 'claude-klaar' || p.soort === 'taak-klaar')) return 'klaar';
+  return null;
+}

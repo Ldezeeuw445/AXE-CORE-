@@ -699,10 +699,23 @@ export async function listPendingApprovals(limit = 50): Promise<DurableTaskAppro
 }
 
 /** Wat er open staat en wiens beurt het is (GET /stappen, gedeeld_log.py). */
-export interface GedeeldeStap { id?: string | null; titel?: string | null; wie?: string | null; status?: string | null; sinds?: string | null }
-export async function gedeeldeStappen(): Promise<{ jouw_beurt: GedeeldeStap[]; ai_beurt: GedeeldeStap[] }> {
-  const r = await call<{ jouw_beurt?: GedeeldeStap[]; ai_beurt?: GedeeldeStap[] }>('GET', '/stappen');
-  return { jouw_beurt: r.jouw_beurt ?? [], ai_beurt: r.ai_beurt ?? [] };
+export interface GedeeldeStap { id?: string | null; titel?: string | null; wie?: string | null; status?: string | null; sinds?: string | null; waarom?: string | null; is_stap?: boolean }
+export async function gedeeldeStappen(): Promise<{ jouw_beurt: GedeeldeStap[]; ai_beurt: GedeeldeStap[]; samen: GedeeldeStap[] }> {
+  const r = await call<{ jouw_beurt?: GedeeldeStap[]; ai_beurt?: GedeeldeStap[]; samen?: GedeeldeStap[] }>('GET', '/stappen');
+  return { jouw_beurt: r.jouw_beurt ?? [], ai_beurt: r.ai_beurt ?? [], samen: r.samen ?? [] };
+}
+
+export type RitmeDag = { dag: string; aantal: number };
+
+/** Ritme (22 nov): logregels per dag van alle AI's, laatste 30 dagen, oudste eerst. */
+export async function logRitme(): Promise<{ dagen: RitmeDag[]; totaal: number }> {
+  const r = await call<{ dagen?: RitmeDag[]; totaal?: number }>('GET', '/log/ritme');
+  return { dagen: r.dagen ?? [], totaal: r.totaal ?? 0 };
+}
+
+/** `axe stap-af` vanuit de app: een stap dicht met de uitkomst. */
+export async function stapAf(id: string, uitkomst: string, actor = 'luka'): Promise<void> {
+  await call('POST', `/stappen/${encodeURIComponent(id)}/af`, { uitkomst, actor });
 }
 
 /** De echte routekaart van de draaiende API (FastAPI's eigen /openapi.json). */

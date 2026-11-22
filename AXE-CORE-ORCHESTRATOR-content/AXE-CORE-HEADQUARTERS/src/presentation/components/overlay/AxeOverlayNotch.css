@@ -1110,3 +1110,12 @@ button.axe-ov__pil { cursor: pointer; }
 .axe-ov__widgets .axe-ov__focus .axe-ov__focus-tijd { margin-top: auto; }
 .axe-ov__widgets .axe-ov__focus .axe-ov__focus-start, .axe-ov__widgets .axe-ov__focus .axe-ov__w-knoppen { margin-bottom: auto; }
 @media (prefers-reduced-motion: reduce) { .axe-ov__held-gezicht::before { animation: none !important; } }
+
+/* Ritme (22 nov): 30 dagen balkjes, vandaag in cyaan. */
+.axe-ov__ritme { display: flex; flex-direction: column; gap: 4px; }
+.axe-ov__ritme-balken { display: flex; align-items: flex-end; gap: 2px; height: 22px; }
+.axe-ov__ritme-balken i { flex: 1; min-width: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.22); }
+.axe-ov__ritme-balken i.is-vandaag { background: var(--axe-notch-accent); }
+.axe-ov__ritme > span { font-size: 10.5px; color: rgba(255, 255, 255, 0.45); }
+/* Met het ritme erbij: één regel in de Vandaag-kaart (Claude staat al als pil). */
+.axe-ov__widgets > .axe-ov__dag .axe-ov__home-regels li:nth-child(n+2) { display: none; }

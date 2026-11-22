@@ -19,6 +19,7 @@ import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
 import PhoneTasks from '@/presentation/pages/phone/PhoneTasks';
 import { TasksDesk } from '@/presentation/components/tasks/TasksDesk';
 import { TakenSecties } from '@/presentation/components/tasks/TakenSecties';
+import { WiensBeurt } from '@/presentation/components/tasks/WiensBeurt';
 import { STATUS_NL } from '@/domain/takenOverzicht';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
@@ -427,6 +428,9 @@ export default function Tasks() {
           </button>
         </div>
       </div>
+
+      {/* 22 nov: wiens beurt -- de gedeelde stappen van elke AI (axe stap-nieuw / stap-af). */}
+      <WiensBeurt />
 
       <TakenSecties taken={tasks} loading={loading} />
 

@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 49 gebouwd maar nog niet bewezen, 57 open (van 179).
+**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 54 gebouwd maar nog niet bewezen, 53 open (van 180).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -10,7 +10,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (50%) | 8 | 1 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 29 | 5 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 5 | 2 |
-| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (13%) | 7 | 32 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (13%) | 12 | 28 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
@@ -376,6 +376,7 @@ de slimme dingen en wat AXE nog mist:
       nette versie van onze notch-focusfix van 18 nov.
 - [ ] Zacht geluid bij een vraag en bij "klaar" (uit te zetten); bij meerdere
       sessies volgt de notch de sessie die op jou wacht, nooit springen.
+  *(22 nov: het geluid is gebouwd -- twee zachte WebAudio-tonen (vraag omhoog, klaar omlaag), alleen op de Mac waar Luka zit (stil < 2 min), uit te zetten in de notch-instellingen. Open: bij meerdere Claude-sessies de wachtende volgen.)*
 - [ ] Nooit zonder te vragen ~/.claude/settings.json aanpassen; eerst laten
       zien wat erbij komt, met een gedateerde kopie.
 
@@ -444,20 +445,24 @@ nuttiger maakt op de Macs, in volgorde van waarde:
 ### Slimme dingen uit Spazio voor AXE (Luka, 18 nov)
 
 Niet namaken -- AXE heeft al Taken, Home en de managers. Wat erbij moet:
-- [ ] **Eén ding vandaag**: bovenaan Home één kaart met DE prioriteit van
+- [~] **Eén ding vandaag**: bovenaan Home één kaart met DE prioriteit van
       vandaag (de eerste open stap van Luka, of die hij vastpint), niet een lijst.
-- [ ] **Wiens beurt**: Taken in drie kolommen -- "Jouw beurt", "AXE's beurt"
+  *(22 nov: gebouwd in de notch-Home -- de kaart "Eén ding vandaag" bovenaan, eigen keuze vastpinnen, op beide Macs gelijk via user_settings. In de preview gezien; komt met de app-build.)*
+- [~] **Wiens beurt**: Taken in drie kolommen -- "Jouw beurt", "AXE's beurt"
       (of een manager/Claude), "Samen" -- met per stap waarom, welke bestanden,
       en wat de AI moet doen als het zijn beurt is.
+  *(22 nov: gebouwd -- Taken-tab bovenaan drie kolommen Your turn · AI's turn · Together uit /stappen, met waarom per stap en een Done-knop op stappen; `--wie samen` zet hem in Together. Bestanden per stap nog niet. API-test groen, in de preview gezien; komt met deploy + app-build.)*
 - [ ] **"Doe de rij"**: zeg tegen AXE "doe de rij" en hij werkt de open
       stappen af waar hij eigenaar van is, één voor één, met een logregel per stap.
-- [ ] **Log + ritme**: elke afgeronde stap één regel in het log (wie, wat), en
+- [~] **Log + ritme**: elke afgeronde stap één regel in het log (wie, wat), en
       een strookje "ritme" met hoeveel er per dag af is, laatste 30 dagen.
-- [ ] **`axe`-commando voor elke AI-sessie**: `axe log "wat ik deed"`,
+  *(22 nov: gebouwd -- afgeronde taken schreven al een logregel (taak_verslag), `axe stap-af` nu ook; GET /log/ritme telt per dag, de notch-Vandaag-kaart toont 30 balkjes + "N done today · M this week". Test groen, in de preview gezien.)*
+- [~] **`axe`-commando voor elke AI-sessie**: `axe log "wat ik deed"`,
       `axe stap-af <id> "uitkomst"`, `axe stap-nieuw ...` -- zodat Claude Code,
       Codex en Cursor (en later via AXON elke AI) in hetzelfde log en dezelfde
       stappen schrijven als AXE en de managers. Plus de regel in CLAUDE.md /
       AGENTS.md: lees eerst de stappen, log aan het eind.
+  *(22 nov: gebouwd -- `axe stap-nieuw "titel" --wie luka|axe|<manager>|samen --waarom ..` en `axe stap-af <id> "uitkomst"`; een stap is een core_task met capability 'stap' en status pending, dus de worker pakt hem niet op; stap-af sluit alleen stappen, nooit een taak die een worker draait. De regel staat in AGENTS.md. Tests groen; live na de deploy.)*
 - [ ] **Bureau**: mappen met links (sites, tools, methodes) met één regel
       waarom ze ertoe doen.
 

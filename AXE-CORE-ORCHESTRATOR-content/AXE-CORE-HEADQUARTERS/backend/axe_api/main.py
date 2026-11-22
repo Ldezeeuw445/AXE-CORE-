@@ -3655,6 +3655,20 @@ async def gedeeld_log_lezen(limit: int = 20):
     return {"regels": await asyncio.to_thread(_lees_log, limit)}
 
 
+@app.get("/log/ritme", dependencies=[AUTH])
+async def gedeeld_log_ritme(dagen: int = 30):
+    """Ritme: logregels per dag, laatste `dagen` dagen (oudste eerst)."""
+    import gedeeld_log as _gl
+    from datetime import date as _date, timedelta as _td
+    dagen = max(7, min(dagen, 90))
+    vanaf = (_date.today() - _td(days=dagen - 1)).isoformat()
+    rijen = await asyncio.to_thread(lambda: (sb().table("core_manager_messages").select("created_at")
+                                             .eq("to_agent", _gl.LOG).gte("created_at", vanaf)
+                                             .limit(5000).execute().data) or [])
+    reeks = _gl.ritme([r.get("created_at") for r in rijen], _date.today().isoformat(), dagen)
+    return {"dagen": reeks, "totaal": sum(d["aantal"] for d in reeks)}
+
+
 @app.post("/log", dependencies=[AUTH])
 async def gedeeld_log_schrijven(body: LogRegel):
     import gedeeld_log as _gl
@@ -3743,10 +3757,63 @@ async def les_schrijven(body: LesInvoer):
 async def gedeelde_stappen():
     """Wat er open staat, en wiens beurt het is (Luka of een AI)."""
     import gedeeld_log as _gl
-    taken = await asyncio.to_thread(lambda: (sb().table("core_tasks").select("id,title,status,assignee,created_at")
+    taken = await asyncio.to_thread(lambda: (sb().table("core_tasks").select("id,title,goal,status,assignee,capability,created_at")
                                               .in_("status", list(_gl.OPEN)).order("created_at", desc=True)
                                               .limit(200).execute().data) or [])
     return _gl.verdeel_stappen(taken)
+
+
+class StapNieuw(BaseModel):
+    titel: str
+    wie: str = "luka"
+    waarom: str = ""
+    actor: str = "onbekend"
+
+
+class StapAf(BaseModel):
+    uitkomst: str = ""
+    actor: str = "onbekend"
+
+
+@app.post("/stappen", dependencies=[AUTH], status_code=201)
+async def stap_nieuw(body: StapNieuw):
+    """`axe stap-nieuw`: één stap in de gedeelde lijst, door welke AI ook (gedeeld_log.py)."""
+    import gedeeld_log as _gl
+    try:
+        payload = _gl.stap_taak(body.titel, body.wie, body.actor, body.waarom)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    taak, _ = await asyncio.to_thread(task_repo().create, payload)
+    await asyncio.to_thread(_gl.schrijf, sb(), body.actor, f"Nieuwe stap voor {payload['assignee']}: {payload['title']}")
+    return {"ok": True, "stap": {"id": taak["id"], "titel": taak["title"], "wie": taak.get("assignee")}}
+
+
+@app.post("/stappen/{stap_id}/af", dependencies=[AUTH])
+async def stap_af(stap_id: str, body: StapAf):
+    """`axe stap-af`: een stap dicht met de uitkomst, plus één regel in het log."""
+    import gedeeld_log as _gl
+    from datetime import datetime as _dt, timezone as _tz
+    import uuid as _uuid
+    try:
+        _uuid.UUID(stap_id)
+    except ValueError:
+        raise HTTPException(422, "geen geldige stap-id")
+    rijen = await asyncio.to_thread(lambda: sb().table("core_tasks").select("id,title,status,capability,revision")
+                                    .eq("id", stap_id).limit(1).execute().data or [])
+    if not rijen:
+        raise HTTPException(404, "stap niet gevonden")
+    taak = rijen[0]
+    reden = _gl.waarom_niet_af(taak)
+    if reden:
+        raise HTTPException(409, reden)
+    velden = _gl.af_velden(body.uitkomst, body.actor, _dt.now(_tz.utc).isoformat())
+    velden["revision"] = int(taak.get("revision") or 0) + 1
+    klaar = await asyncio.to_thread(lambda: sb().table("core_tasks").update(velden).eq("id", stap_id)
+                                    .eq("revision", taak.get("revision") or 0).execute().data or [])
+    if not klaar:
+        raise HTTPException(409, "de stap veranderde net; probeer opnieuw")
+    await asyncio.to_thread(_gl.schrijf, sb(), body.actor, f"{taak.get('title')}: {velden['result']['summary']}")
+    return {"ok": True, "stap": {"id": stap_id, "titel": taak.get("title"), "status": "completed"}}
 
 
 class NorthSeaOpruimen(BaseModel):

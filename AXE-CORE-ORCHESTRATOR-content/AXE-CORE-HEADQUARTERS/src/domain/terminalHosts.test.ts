@@ -140,16 +140,17 @@ describe('de shortlist hoort bij de machine', () => {
     expect(alles).not.toContain('/opt/axe-core-api');
   });
 
-  it('elke machine krijgt de agents en git, want die zijn niet machinegebonden', () => {
-    // Luka's vraag: "cursor subscription erop claude codex, ssh in git alles
-    // gewoon ff makkelijk onder elke terminal".
+  it('elke machine krijgt git en status; logins alleen onder hun eigen machine', () => {
+    // Eerst stond elke login onder elke terminal ("alles gewoon ff makkelijk
+    // onder elke terminal"). Sinds 21 nov (d5b57612, Luka: "de juiste snel toets
+    // onder de juiste terminal zodat het niet fout kan gaan") staat een login
+    // alleen in het vak van de machine waar dat account hoort.
     for (const id of ['deze-mac', 'vps-strato', 'iets-onbekends']) {
       const labels = snelactiesVoor(id).map(x => x.label);
-      expect(labels).toContain('Claude login');
-      expect(labels).toContain('Codex login');
-      expect(labels).toContain('Cursor login');
       expect(labels).toContain('Status');
     }
+    expect(snelactiesVoor('vps-strato').map(x => x.label)).toContain('Claude login 1');
+    expect(snelactiesVoor('deze-mac').map(x => x.label).some(l => /login/i.test(l))).toBe(false);
   });
 
   it('alles wat vanzelf draait, verandert niets', () => {

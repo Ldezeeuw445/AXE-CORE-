@@ -38,14 +38,21 @@ def als_regel(r: dict[str, Any]) -> dict[str, Any]:
 
 def verdeel_stappen(taken: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """Wiens beurt: Luka (wacht op zijn ja) of een AI (pakt hem zelf op)."""
-    jouw, ai = [], []
+    jouw, ai, samen = [], [], []
     for t in taken:
         if t.get("status") not in OPEN:
             continue
+        waarom = t.get("goal") if t.get("goal") and t.get("goal") != t.get("title") else ""
         stap = {"id": t.get("id"), "titel": t.get("title"), "wie": t.get("assignee") or "axe",
-                "status": t.get("status"), "sinds": t.get("created_at")}
-        (jouw if t.get("status") == "waiting_approval" or t.get("assignee") == "luka" else ai).append(stap)
-    return {"jouw_beurt": jouw, "ai_beurt": ai}
+                "status": t.get("status"), "sinds": t.get("created_at"),
+                "waarom": waarom or "", "is_stap": t.get("capability") == STAP}
+        if t.get("assignee") == "samen":
+            samen.append(stap)
+        elif t.get("status") == "waiting_approval" or t.get("assignee") == "luka":
+            jouw.append(stap)
+        else:
+            ai.append(stap)
+    return {"jouw_beurt": jouw, "ai_beurt": ai, "samen": samen}
 
 
 def context_tekst(regels: list[dict[str, Any]], max_regels: int = 10) -> str:
@@ -71,6 +78,71 @@ def taak_regel(taak: dict[str, Any], resultaat: dict[str, Any]) -> tuple[str, st
     wat = str(resultaat.get("summary") or "").strip()
     titel = str(taak.get("title") or "taak").strip()
     return wie, (f"{titel}: {wat}" if wat else f"{titel}: afgerond")[:MAX_TEKST]
+
+
+# ── Stappen schrijven (22 nov): elke AI-sessie, niet alleen AXE ──────────
+#
+# `axe stap-nieuw` en `axe stap-af` (BOUWLIJST: "`axe`-commando voor elke
+# AI-sessie"). Een stap is een core_task met capability "stap" en status
+# "pending": hij staat in de lijst (OPEN), maar de worker pakt hem niet op --
+# claim_next_core_task kijkt alleen naar queued/retrying/planning/verifying.
+# Een stap is een afspraak over wie wat doet, geen opdracht om te draaien.
+STAP = "stap"
+WIE_LUKA = ("luka", "jij", "you", "me")
+WIE_SAMEN = ("samen", "together", "both")
+
+
+def stap_taak(titel: str, wie: str = "", actor: str = "", waarom: str = "") -> dict[str, Any]:
+    titel = " ".join(str(titel or "").split())[:200]
+    if not titel:
+        raise ValueError("een stap heeft een titel nodig")
+    wie = " ".join(str(wie or "").split()).lower()[:60] or "luka"
+    if wie in WIE_LUKA:
+        wie = "luka"
+    elif wie in WIE_SAMEN:
+        wie = "samen"
+    waarom = " ".join(str(waarom or "").split())[:600]
+    actor = " ".join(str(actor or "").split())[:60] or "onbekend"
+    return {
+        "title": titel, "goal": waarom or titel, "status": "pending", "capability": STAP,
+        "assignee": wie, "requested_by": actor, "source_app": "axe_core", "priority": "medium",
+        "metadata": {"stap": True, "waarom": waarom, "door": actor},
+    }
+
+
+def waarom_niet_af(taak: dict[str, Any]) -> str | None:
+    """None = deze stap mag met `axe stap-af` dicht. Anders de reden in één zin."""
+    status = str(taak.get("status") or "")
+    if status in ("completed", "done"):
+        return "deze stap is al af"
+    if status in ("failed", "cancelled", "rejected"):
+        return f"deze stap is {status}; zet een nieuwe stap als het alsnog moet"
+    if taak.get("capability") == STAP or status == "pending":
+        return None
+    return ("dit is een taak die een worker draait (status %s); die sluit zichzelf als hij klaar is" % status)
+
+
+def af_velden(uitkomst: str, actor: str, nu: str) -> dict[str, Any]:
+    uitkomst = " ".join(str(uitkomst or "").split())[:MAX_TEKST]
+    return {"status": "completed", "completed_at": nu, "error": None,
+            "result": {"summary": uitkomst or "afgerond", "door": " ".join(str(actor or "").split())[:60]}}
+
+
+# ── Ritme (22 nov): hoeveel er per dag af is, laatste 30 dagen ───────────
+RITME_DAGEN = 30
+
+
+def ritme(tijden: list[str], vandaag: str, dagen: int = RITME_DAGEN) -> list[dict[str, Any]]:
+    """Per dag (oudste eerst) het aantal logregels. `tijden` = created_at (ISO), `vandaag` = 'YYYY-MM-DD'."""
+    from datetime import date, timedelta
+    eind = date.fromisoformat(vandaag[:10])
+    reeks = [(eind - timedelta(days=i)).isoformat() for i in range(dagen - 1, -1, -1)]
+    tel = dict.fromkeys(reeks, 0)
+    for t in tijden:
+        d = str(t or "")[:10]
+        if d in tel:
+            tel[d] += 1
+    return [{"dag": d, "aantal": tel[d]} for d in reeks]
 
 
 # ── Lessen: een correctie als geheugen (Luka, 18 nov) ──────────────────────

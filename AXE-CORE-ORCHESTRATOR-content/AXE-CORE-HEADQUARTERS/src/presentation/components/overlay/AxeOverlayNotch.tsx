@@ -30,8 +30,10 @@ import { syncManagerDraad, MANAGER_DRAAD_EVT } from '@/infrastructure/persistenc
 import { isVoorMij, landTekst } from '@/domain/portal/portal';
 import { claimWorp, getekendeLink, openWorpen } from '@/infrastructure/gateways/portalService';
 import { ditToestel } from '@/infrastructure/gateways/axeDeviceService';
-import { eerstvolgende, homeStand, nieuwePeeks, PEEK_MS, zetInRij, type NotchMoment, type Peek } from '@/domain/overlay/notchPeeks';
-import { calendarJobs, gedeeldeStappen, type GedeeldeStap } from '@/infrastructure/gateways/axeCoreApiService';
+import { eerstvolgende, geluidVoor, homeStand, nieuwePeeks, PEEK_MS, zetInRij, type NotchMoment, type Peek } from '@/domain/overlay/notchPeeks';
+import { geluidAan, speelToon, zetGeluid } from './notchToon';
+import { calendarJobs, gedeeldeStappen, logRitme, type GedeeldeStap } from '@/infrastructure/gateways/axeCoreApiService';
+import { ritmeStrook, type RitmeDag } from '@/domain/overlay/ritme';
 import { EEN_DING_SLEUTEL, datumSleutel, kiesEenDing, type EigenDing } from '@/domain/overlay/eenDing';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
@@ -600,10 +602,25 @@ export function AxeOverlayNotch({
     moment.claude?.toestemming, moment.taken]);
   const vorigMoment = useRef<NotchMoment | null>(null);
   const [peekRij, setPeekRij] = useState<Peek[]>([]);
+  const [geluid, setGeluid] = useState(geluidAan);
   useEffect(() => {
     const erbij = nieuwePeeks(vorigMoment.current, moment);
     vorigMoment.current = moment;
     if (erbij.length && !open) setPeekRij((r) => zetInRij(r, erbij));
+    /* 22 nov: zacht geluid bij een vraag en bij klaar -- alleen op de Mac
+       waar Luka zit (stil < 2 min), zodat de twee Macs niet tegelijk piepen. */
+    if (erbij.length && geluidAan()) {
+      const speel = (stil: number | null) => {
+        const g = geluidVoor(erbij, stil, true);
+        if (g) speelToon(g);
+      };
+      if (isTauriRuntime()) {
+        void import('@tauri-apps/api/core')
+          .then(({ invoke }) => invoke<number | null>('systeem_idle_s'))
+          .then((s) => speel(typeof s === 'number' ? s : null))
+          .catch(() => speel(null));
+      } else speel(null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [momentSleutel]);
   /* Portal (18 nov): wat de iPhone hierheen gooit, landt hier. Elke 10 s
@@ -670,6 +687,7 @@ export function AxeOverlayNotch({
      iMac en Mac mini hetzelfde ding tonen; anders de oudste stap van Luka. */
   const [eigenDing, setEigenDing] = useState<EigenDing | null>(null);
   const [jouwBeurt, setJouwBeurt] = useState<GedeeldeStap[]>([]);
+  const [ritme, setRitme] = useState<RitmeDag[]>([]);
   const [dingKiezen, setDingKiezen] = useState(false);
   const [dingTekst, setDingTekst] = useState('');
   const bewaarDing = async (d: EigenDing | null) => {
@@ -699,6 +717,10 @@ export function AxeOverlayNotch({
         const st = await gedeeldeStappen();
         if (!weg) setJouwBeurt(st.jouw_beurt);
       } catch { /* geen verbinding: dan alleen eigen keuze / goedkeuringen */ }
+      try {
+        const r = await logRitme();
+        if (!weg) setRitme(r.dagen);
+      } catch { /* oude API zonder /log/ritme: strookje valt weg */ }
       try {
         // De andere Mac kan het ding net gezet hebben: niet uit de lokale cache.
         const sleutel = EEN_DING_SLEUTEL(new Date());
@@ -1211,6 +1233,19 @@ export function AxeOverlayNotch({
                   </li>
                 ))}
               </ul>
+              {ritme.length > 0 && (() => {
+                const strook = ritmeStrook(ritme);
+                return (
+                  <div className="axe-ov__ritme" title="Steps done per day by every AI, last 30 days">
+                    <div className="axe-ov__ritme-balken" aria-hidden="true">
+                      {strook.balken.map((b) => (
+                        <i key={b.dag} className={b.vandaag ? 'is-vandaag' : ''} style={{ height: `${Math.round(b.hoogte * 100)}%` }} title={`${b.dag}: ${b.aantal}`} />
+                      ))}
+                    </div>
+                    <span>{strook.zin}</span>
+                  </div>
+                );
+              })()}
               <button
                 type="button"
                 className="axe-ov__home-open"
@@ -1415,6 +1450,19 @@ export function AxeOverlayNotch({
                   }}
                 />
                 Launch overlay at login
+              </label>
+              <label className="axe-ov__check">
+                <input
+                  type="checkbox"
+                  checked={geluid}
+                  onChange={(e) => {
+                    const aan = e.target.checked;
+                    zetGeluid(aan);
+                    setGeluid(aan);
+                    if (aan) speelToon('klaar');
+                  }}
+                />
+                Soft sound when something asks for you or finishes
               </label>
               <p className="axe-ov__hint">API key via ~/.axe/axe-api.key — nooit in de UI getoond.</p>
               <button type="button" className="axe-ov__link" onClick={() => void focusMainShell()}>Open AXE CORE shell</button>
