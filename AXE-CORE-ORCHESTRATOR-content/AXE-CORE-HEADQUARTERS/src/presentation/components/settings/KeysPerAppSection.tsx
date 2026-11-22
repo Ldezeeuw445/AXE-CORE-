@@ -156,7 +156,7 @@ function bewaarSlotCache(key: string, status: string): void {
 }
 
 /** Een 402 is geen kapotte sleutel maar geen tegoed: dat moet er zo staan. */
-export function slotTekst(result: string | undefined): string {
+function slotTekst(result: string | undefined): string {
   if (result === 'Works') return 'Connected';
   if (result === 'Rate limited') return 'Rate limited';
   if (result?.includes('402')) return 'No credits';
