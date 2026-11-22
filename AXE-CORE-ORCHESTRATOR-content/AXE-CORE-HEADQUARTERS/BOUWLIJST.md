@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 54 gebouwd maar nog niet bewezen, 53 open (van 180).
+**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 55 gebouwd maar nog niet bewezen, 52 open (van 180).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -10,7 +10,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (50%) | 8 | 1 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 29 | 5 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 5 | 2 |
-| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (13%) | 12 | 28 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (13%) | 13 | 27 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
@@ -316,9 +316,10 @@ en me uit zichzelf helpt met alles en dingen echt makkelijker maakt."
 ## Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov)
 
 Wat AXE ook moet kunnen, naar het voorbeeld van Spazio OS Pro:
-- [ ] **Geheugen tussen sessies**: na elk gesprek een korte notitie (wat
+- [~] **Geheugen tussen sessies**: na elk gesprek een korte notitie (wat
       gevraagd, wat veranderd, waar gestopt); het volgende begint met de
       laatste zes. "Ga verder waar we waren" werkt dan gewoon.
+  *(22 nov: gebouwd -- na 45 min stilte is een sessie af; AXE schrijft er op de achtergrond drie regels over (Gevraagd / Veranderd / Gestopt bij) met hetzelfde model als de chat, anders een simpele notitie. Opslag global_memory `sessie:<start>`, dus gedeeld tussen de Macs en de telefoon; beide chatroutes zetten de laatste zes als "Waar we waren" in de systeemprompt. `domain/chat/sessieNotities.ts` + `application/axe/sessieGeheugen.ts`, 15 tests groen. Nog niet in de echte app gezien.)*
 - [ ] **Chats-pagina**: elk gesprek met AXE en de managers doorzoekbaar,
       samenvatten in drie regels, vragen aan alle gesprekken tegelijk (met bron).
 - [ ] **Vaste agents**: ochtendbrief elke dag, roadmap-check maandag,

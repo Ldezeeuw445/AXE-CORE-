@@ -11,6 +11,8 @@
  * 6. Living Display owned by installSpherePresent (no double project).
  */
 import { terugkomstContext } from '@/application/axe/terugkomst';
+import { haalSessieNotities, noteerAfgerondeSessies, sessieGeheugenContext } from '@/application/axe/sessieGeheugen';
+import { callWithFallback } from '@/infrastructure/gateways/llmGateway';
 import { useVoiceStore, type ConversationMessage, type RoutingEvent, writeConversationMemory } from '@/presentation/store/voiceStore';
 import { extractMemoryFromMessage, buildRagContext } from '@/infrastructure/persistence/ragMemoryService';
 import {
@@ -328,6 +330,11 @@ async function stableSimpleSend(text: string): Promise<boolean> {
   }));
   if (cascade.length === 0) return false;
 
+  // Geheugen tussen sessies: noteer een afgeronde vorige sessie op de
+  // achtergrond, pas na het antwoord (zelfde provider, niet tegelijk).
+  const draadNu = [...st.conversation];
+  setTimeout(() => { void noteerAfgerondeSessies(draadNu, (m) => callWithFallback(cascade, m)); }, 20_000);
+
   const history = st.conversation
     .slice(-10)
     .map(m => ({
@@ -348,6 +355,7 @@ async function stableSimpleSend(text: string): Promise<boolean> {
     (skillsBlock ? `\n\n${skillsBlock}` : '') +
     (memoryBlock ? `\n\n${memoryBlock}` : '') +
     terugkomstContext() +
+    sessieGeheugenContext() +
     replyLanguageInstruction() +
     `\n\n${CONVERSATION_FIRST_RULE}` +
     (isSocialChatTurn(text)
@@ -489,6 +497,7 @@ async function stableSimpleSend(text: string): Promise<boolean> {
 export function installStableChat(): void {
   if (installed) return;
   installed = true;
+  void haalSessieNotities();
 
   const original = useVoiceStore.getState().sendMessage;
   // Het hervatten van lopende taken staat in installTierRouter
