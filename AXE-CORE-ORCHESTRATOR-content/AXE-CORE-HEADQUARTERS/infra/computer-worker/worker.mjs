@@ -72,6 +72,9 @@ const CAPABILITY = 'computer_use';
 const POLL_MS = Number(env.AXE_COMPUTER_POLL_MS ?? 1500);
 const LEASE_MS = 90_000;
 const STEP_TIMEOUT_MS = Number(env.AXE_COMPUTER_TIMEOUT_MS ?? 5 * 60_000);
+// 22 nov: een echte Codex-run (één test toevoegen + draaien) duurde langer dan 5 min en
+// werd afgekapt. Coding-agents krijgen 15 min; de VPS wacht 16 (device_actions).
+const AGENT_TIMEOUT_MS = Number(env.AXE_AGENT_TIMEOUT_MS ?? 15 * 60_000);
 /**
  * The machine, and this process on it. DEVICE_ID is stable across restarts —
  * it is what the app addresses a task to. WORKER_ID identifies the process,
@@ -534,16 +537,16 @@ function isCodexModelNotFound(text) {
   return /model_not_found|not supported when using Codex|model is not supported|unsupported model/i.test(text || '');
 }
 
-function runStatus(cmd, args, cwd, extraEnv) {
+function runStatus(cmd, args, cwd, extraEnv, timeoutMs = STEP_TIMEOUT_MS) {
   return new Promise((res, rej) => {
-    execFile(cmd, args, { cwd, env: extraEnv || process.env, timeout: STEP_TIMEOUT_MS, maxBuffer: 8 << 20 },
+    execFile(cmd, args, { cwd, env: extraEnv || process.env, timeout: timeoutMs, maxBuffer: 8 << 20 },
       (err, stdout, stderr) => {
         const out = `${stdout ?? ''}${stderr ?? ''}`.slice(0, MAX_OUTPUT);
         // A non-zero exit is a RESULT, not a transport failure: "31 tests
         // failed" is exactly what was asked for. Only a missing binary or a
         // timeout is an actual error.
         if (err && (err.code === 'ENOENT' || err.killed)) {
-          return rej(new Error(err.killed ? `timed out after ${STEP_TIMEOUT_MS / 1000}s` : `not found: ${cmd}`));
+          return rej(new Error(err.killed ? `timed out after ${timeoutMs / 1000}s` : `not found: ${cmd}`));
         }
         const code = err ? (typeof err.code === 'number' ? err.code : 1) : 0;
         res({ out: out.trim() || '(no output)', code });
@@ -551,8 +554,8 @@ function runStatus(cmd, args, cwd, extraEnv) {
   });
 }
 
-function run(cmd, args, cwd, extraEnv) {
-  return runStatus(cmd, args, cwd, extraEnv).then(r => r.out);
+function run(cmd, args, cwd, extraEnv, timeoutMs = STEP_TIMEOUT_MS) {
+  return runStatus(cmd, args, cwd, extraEnv, timeoutMs).then(r => r.out);
 }
 
 
@@ -590,11 +593,11 @@ async function runCodexWithFallback(prompt, root, seat, requestedModel) {
 
   const first = model ? [...base, '-m', model] : base;
   tried.push(model ? `-m ${model}` : 'account default (no -m)');
-  let result = await runStatus(bin, first, root, child);
+  let result = await runStatus(bin, first, root, child, AGENT_TIMEOUT_MS);
 
   if (result.code !== 0 && isCodexModelNotFound(result.out) && model) {
     tried.push('retry without -m');
-    result = await runStatus(bin, base, root, child);
+    result = await runStatus(bin, base, root, child, AGENT_TIMEOUT_MS);
   }
 
   if (result.code === 0 && !isCodexModelNotFound(result.out)) {
@@ -606,7 +609,7 @@ async function runCodexWithFallback(prompt, root, seat, requestedModel) {
     tried.push(`claude CLI fallback (${claude})`);
     try {
       const claudeArgv = ['-p', prompt, '--output-format', 'json', '--permission-mode', 'acceptEdits'];
-      const claudeResult = await runStatus(claude, claudeArgv, root, seatChildEnv('claude'));
+      const claudeResult = await runStatus(claude, claudeArgv, root, seatChildEnv('claude'), AGENT_TIMEOUT_MS);
       if (claudeResult.code === 0 && !isCodexModelNotFound(claudeResult.out)) {
         return `[Codex model unsupported; ran Claude CLI instead. Tried: ${tried.join(' → ')}]\n${claudeResult.out}`;
       }
@@ -887,7 +890,7 @@ async function execute(payload) {
       const argv = ['-p', prompt, '--output-format', 'json', '--permission-mode', 'acceptEdits'];
       const model = String(args.model ?? '').trim();
       if (model) argv.push('--model', model);
-      return metOplevering(root, branch, basis, await run(bin, argv, root, seatChildEnv(seat)));
+      return metOplevering(root, branch, basis, await run(bin, argv, root, seatChildEnv(seat), AGENT_TIMEOUT_MS));
     }
 
     case 'codex.run': {
@@ -905,7 +908,7 @@ async function execute(payload) {
       const argv = ['-p', prompt, '--output-format', 'json', '--force'];
       const model = String(args.model ?? '').trim();
       if (model) argv.push('--model', model);
-      return metOplevering(root, branch, basis, await run(bin, argv, root, seatChildEnv(String(args.seat ?? 'cursor'))));
+      return metOplevering(root, branch, basis, await run(bin, argv, root, seatChildEnv(String(args.seat ?? 'cursor')), AGENT_TIMEOUT_MS));
     }
 
     default:

@@ -24,6 +24,9 @@ CAPABILITY = "computer_use"
 HEARTBEAT_STALE_S = 90
 POLL_S = 1.5
 TIMEOUT_S = 6 * 60
+# Coding-agents (claude_code/codex/cursor.run) krijgen op de Mac 15 min (worker.mjs AGENT_TIMEOUT_MS);
+# hier een minuut langer wachten, anders geeft de VPS op terwijl de Mac nog werkt (22 nov gemeten).
+AGENT_TIMEOUT_S = 16 * 60
 
 TOOL_TIERS: dict[str, str] = {
     "system.info": "observe",
@@ -410,7 +413,8 @@ def run_on_device(
         },
     }).execute().data[0]
 
-    deadline = time.monotonic() + TIMEOUT_S
+    wacht_s = AGENT_TIMEOUT_S if tool in AGENT_RUNS else TIMEOUT_S
+    deadline = time.monotonic() + wacht_s
     while time.monotonic() < deadline:
         sleep(POLL_S)
         # Stopt Luka de taak waar deze actie bij hoort, dan heeft doorwachten
@@ -438,4 +442,4 @@ def run_on_device(
             return {"device": device, "tool": tool, "ok": False,
                     "error": (r.get("error") or {}).get("message") or r["status"]}
     return {"device": device, "tool": tool, "ok": False,
-            "error": f"no answer from {device} within {TIMEOUT_S}s"}
+            "error": f"no answer from {device} within {wacht_s}s"}
