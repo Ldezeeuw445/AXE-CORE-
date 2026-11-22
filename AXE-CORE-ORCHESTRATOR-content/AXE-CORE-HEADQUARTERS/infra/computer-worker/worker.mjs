@@ -539,7 +539,10 @@ function isCodexModelNotFound(text) {
 
 function runStatus(cmd, args, cwd, extraEnv, timeoutMs = STEP_TIMEOUT_MS) {
   return new Promise((res, rej) => {
-    execFile(cmd, args, { cwd, env: extraEnv || process.env, timeout: timeoutMs, maxBuffer: 8 << 20 },
+    // 22 nov gemeten: met stdin open wacht `codex exec` op invoer tot de time-out (elke
+    // Codex-run liep zo 5, later 15 min vast); met stdin dicht was dezelfde run in 12 s
+    // klaar. Claude wachtte er ook 3 s op. Niemand geeft hier invoer: meteen dicht.
+    const kind = execFile(cmd, args, { cwd, env: extraEnv || process.env, timeout: timeoutMs, maxBuffer: 8 << 20 },
       (err, stdout, stderr) => {
         const out = `${stdout ?? ''}${stderr ?? ''}`.slice(0, MAX_OUTPUT);
         // A non-zero exit is a RESULT, not a transport failure: "31 tests
@@ -551,6 +554,7 @@ function runStatus(cmd, args, cwd, extraEnv, timeoutMs = STEP_TIMEOUT_MS) {
         const code = err ? (typeof err.code === 'number' ? err.code : 1) : 0;
         res({ out: out.trim() || '(no output)', code });
       });
+    kind.stdin?.end();
   });
 }
 
