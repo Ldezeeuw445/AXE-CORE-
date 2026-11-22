@@ -6,7 +6,7 @@
  */
 import { berichtTijd, balkTijd } from '@/domain/overlay/notchWidgets';
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
-import { Bot, CheckCircle2, ChevronUp, Home, LayoutGrid, MessageSquare, Mic, Plus, Settings, Users, Paperclip, X } from 'lucide-react';
+import { ArrowRight, Bot, CalendarDays, CheckCircle2, ChevronUp, History, Home, LayoutGrid, MessageSquare, Mic, Plus, Settings, SquareTerminal, Users, Paperclip, X } from 'lucide-react';
 import { claudeLive, klok, leesStand, type ClaudeLive } from '@/domain/overlay/claudeLive';
 import { vpsAuthHeaders, isTauriRuntime, VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 import {
@@ -905,8 +905,17 @@ export function AxeOverlayNotch({
       <div className="axe-ov__stars" aria-hidden="true" />
       {dragging && (
         <div className="axe-ov__dropzone" aria-hidden="true">
-          <AxeGezicht kleur={AXE_CYAAN} stemming="werkt" size={36} label="AXE" levend />
-          <span>Drop here: ask AXE about it, or convert it to another format</span>
+          <div className="axe-ov__drop-vak">
+            <AxeGezicht kleur={AXE_CYAAN} stemming="werkt" size={40} label="AXE" levend />
+            <span>Drop here: ask AXE about it, or convert it to another format</span>
+            <span className="axe-ov__drop-soorten"><i>PDF</i><i>Images</i><i>Docs</i><i>Links</i><i>…</i></span>
+          </div>
+          {/* Ronde 5, naar Luka's foto: de managers als rail ernaast. */}
+          <div className="axe-ov__drop-rail">
+            {AXE_AGENTS.filter((a) => a.id !== 'axe').slice(0, 5).map((a) => (
+              <AxeGezicht key={a.id} kleur={a.accent} stemming="rust" size={24} label={a.kort || a.name} />
+            ))}
+          </div>
         </div>
       )}
       {/* Géén data-tauri-drag-region. Die stond hier en maakte de hele balk
@@ -1071,22 +1080,35 @@ export function AxeOverlayNotch({
                   <button type="button" className="axe-ov__fout-opnieuw" aria-label="Try again" title="Try again" onClick={() => window.location.reload()}>↻</button>
                 </div>
               ) : (
+                activity.length === 0 && !claude ? (
+                /* Ronde 5 (foto 2): niets te doen → AXE in het midden, sterrenstof
+                   eromheen. Rust ziet er anders uit dan werk. */
+                <div className="axe-ov__vlak axe-ov__rust">
+                  <div className="axe-ov__stof axe-ov__stof--l" aria-hidden="true" />
+                  <div className="axe-ov__stof axe-ov__stof--r" aria-hidden="true" />
+                  <div className="axe-ov__gloed axe-ov__gloed--midden" data-toestand={leven.toestand} aria-hidden="true" />
+                  <button type="button" className="axe-ov__held-gezicht" onClick={() => setTab(leven.toestand === 'wacht' ? 'approvals' : 'chat')} title={leven.uitleg}>
+                    <AxeGezicht kleur={AXE_CYAAN} stemming={AXE_STEMMING[leven.toestand] ?? 'rust'} size={72} label="AXE" levend />
+                  </button>
+                  <span className="axe-ov__rust-tekst">{eenDing.tekst ? `Next · ${eenDing.tekst}` : 'Managers are quiet. Ask AXE anything.'}</span>
+                </div>
+                ) : (
                 <div className="axe-ov__eiland">
                   <div className="axe-ov__vlak axe-ov__held">
                     <div className="axe-ov__gloed" data-toestand={leven.toestand} aria-hidden="true" />
                     <button type="button" className="axe-ov__held-gezicht" onClick={() => setTab(leven.toestand === 'wacht' ? 'approvals' : 'chat')} title={leven.uitleg}>
-                      <AxeGezicht kleur={AXE_CYAAN} stemming={AXE_STEMMING[leven.toestand] ?? 'rust'} size={64} label="AXE" levend />
+                      <AxeGezicht kleur={AXE_CYAAN} stemming={AXE_STEMMING[leven.toestand] ?? 'rust'} size={84} label="AXE" levend />
                     </button>
                     <ul className="axe-ov__stappen" aria-label="What AXE is doing">
-                      {activity[1] && <li className="is-vorig">{activity[1].replace(/\s·\s[^·]*$/, '')}</li>}
-                      <li className="is-nu">{activity[0] ? activity[0].replace(/\s·\s[^·]*$/, '') : leven.uitleg}</li>
-                      {eenDing.tekst && <li className="is-volgend">Next · {eenDing.tekst}</li>}
+                      {activity[1] && <li className="is-vorig"><History size={14} strokeWidth={1.7} /><span>{activity[1].replace(/\s·\s[^·]*$/, '')}</span></li>}
+                      <li className="is-nu"><SquareTerminal size={17} strokeWidth={1.7} /><span>{activity[0] ? activity[0].replace(/\s·\s[^·]*$/, '') : leven.uitleg}</span></li>
+                      {eenDing.tekst && <li className="is-volgend"><ArrowRight size={14} strokeWidth={1.7} /><span>{eenDing.tekst}</span></li>}
                     </ul>
                   </div>
                   <div className="axe-ov__vlak axe-ov__pillen">
                     {claude && (
                       <button type="button" className="axe-ov__pil" style={{ ['--chip' as string]: CLAUDE_KORAAL }} onClick={() => setTab('claude')} title={`Claude · ${claude.nu}`}>
-                        <AxeGezicht kleur={CLAUDE_KORAAL} stemming={CLAUDE_STEMMING[claude.toestand]} size={24} label="Claude" />
+                        <AxeGezicht kleur={CLAUDE_KORAAL} stemming={CLAUDE_STEMMING[claude.toestand]} size={28} label="Claude" />
                         <span>{claude.nu}</span>
                       </button>
                     )}
@@ -1094,7 +1116,7 @@ export function AxeOverlayNotch({
                       const g = gezichtVoor(activityWie[i]);
                       return (
                         <div key={i} className="axe-ov__pil" style={{ ['--chip' as string]: g.kleur }} title={`${g.naam} · ${line}`}>
-                          <AxeGezicht kleur={g.kleur} stemming={/waiting/i.test(line) ? 'wacht' : 'werkt'} size={24} label={g.naam} />
+                          <AxeGezicht kleur={g.kleur} stemming={/waiting/i.test(line) ? 'wacht' : 'werkt'} size={28} label={g.naam} />
                           <span>{line.replace(/\s·\s[^·]*$/, '')}</span>
                         </div>
                       );
@@ -1104,13 +1126,15 @@ export function AxeOverlayNotch({
                     )}
                   </div>
                 </div>
+                )
               )}
               {/* 20 nov, naar Luka's foto: één rij gelijke kaarten (Vandaag ·
                   Taken · Focus · Weer) in plaats van een lange pagina. */}
               <NotchWidgets open={open && tab === 'home'} pagina="werk" vandaag={(
               <div className="axe-ov__vlak axe-ov__w axe-ov__dag">
-              <div className="axe-ov__home-kop">
-                <span className="axe-ov__w-label">{home.groet} · Today</span>
+              <div className="axe-ov__w-kop">
+                <span className="axe-ov__w-label"><CalendarDays size={13} strokeWidth={1.8} />{home.groet}</span>
+                <span className="axe-ov__w-meta">today</span>
               </div>
               <div className={`axe-ov__eending axe-ov__eending--${eenDing.bron}${eenDing.klaar ? ' is-klaar' : ''}`}>
                 <span className="axe-ov__eending-label">Eén ding vandaag</span>

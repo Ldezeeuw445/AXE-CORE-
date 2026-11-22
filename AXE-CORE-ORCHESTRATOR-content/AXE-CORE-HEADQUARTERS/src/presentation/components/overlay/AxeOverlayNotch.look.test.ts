@@ -44,7 +44,10 @@ describe('AxeOverlayNotch vaste HQ-schil', () => {
     expect(css).toContain('--axe-notch-btn: #111111');
     expect(css).toContain('--axe-notch-accent: #22D3EE');
     expect(css).toMatch(/\.axe-ov__ico:hover\s*\{[^}]*var\(--axe-notch-accent\)/s);
-    expect(css).toMatch(/\.axe-ov__ico\[aria-pressed="true"\],\s*\.axe-ov__ico--hot\s*\{[^}]*background:\s*var\(--axe-notch-accent\)/s);
+    // Ronde 5 (22 nov): actieve tab is een zachte grijze pil (Luka's foto's);
+    // de luisterende microfoon blijft vol cyaan.
+    expect(css).toMatch(/\.axe-ov__ico--hot\s*\{[^}]*background:\s*var\(--axe-notch-accent\)/s);
+    expect(css).toMatch(/\.axe-ov__ico\[aria-pressed="true"\]\s*\{[^}]*background:\s*rgba\(255, 255, 255/s);
   });
 
   it('clip-path maskeert de afgeronde onderhoeken (geen OS-rechthoek-streepjes)', () => {

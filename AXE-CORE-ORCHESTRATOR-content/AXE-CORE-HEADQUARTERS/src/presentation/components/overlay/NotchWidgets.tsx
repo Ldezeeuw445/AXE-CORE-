@@ -6,6 +6,7 @@
  * Muziek en Mac-knoppen bestaan alleen in de echte app (Tauri), niet in de browser.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { CloudSun, ListChecks, Timer } from 'lucide-react';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { AFSPRAKEN_EVENT, laadAfspraken } from '@/infrastructure/persistence/afsprakenService';
@@ -158,7 +159,10 @@ export function NotchWidgets({ open, pagina = 'werk', vandaag }: { open: boolean
   const weerKaart = (
     <>
       <div className="axe-ov__vlak axe-ov__w axe-ov__weer">
-        <span className="axe-ov__w-label">{plek.naam}</span>
+        <div className="axe-ov__w-kop">
+          <span className="axe-ov__w-label"><CloudSun size={13} strokeWidth={1.8} />{plek.naam}</span>
+          <span className="axe-ov__w-meta">now</span>
+        </div>
         {plekKiezen ? (
           <form onSubmit={(e) => { e.preventDefault(); void kiesPlek(plekTekst); }}>
             <input autoFocus value={plekTekst} onChange={(e) => setPlekTekst(e.target.value)} onBlur={() => setPlekKiezen(false)} placeholder="City" maxLength={60} />
@@ -242,9 +246,12 @@ export function NotchWidgets({ open, pagina = 'werk', vandaag }: { open: boolean
 
       {vandaag}
       <div className="axe-ov__vlak axe-ov__w axe-ov__blok">
+        <div className="axe-ov__w-kop">
         <div className="axe-ov__blok-tabs" role="tablist">
-          <button type="button" role="tab" aria-selected={blad === 'taken'} onClick={() => setBlad('taken')}>Tasks{openTaken ? ` · ${openTaken}` : ''}</button>
+          <button type="button" role="tab" aria-selected={blad === 'taken'} onClick={() => setBlad('taken')}><ListChecks size={13} strokeWidth={1.8} />Tasks</button>
           <button type="button" role="tab" aria-selected={blad === 'notitie'} onClick={() => setBlad('notitie')}>Note</button>
+        </div>
+          <span className="axe-ov__w-meta">{blad === 'taken' ? (openTaken ? `${openTaken} to do` : 'all done') : 'both Macs'}</span>
         </div>
         {blad === 'taken' ? (
           <>
@@ -267,7 +274,10 @@ export function NotchWidgets({ open, pagina = 'werk', vandaag }: { open: boolean
         )}
       </div>
       <div className={`axe-ov__vlak axe-ov__w axe-ov__focus${fs?.klaar ? ' is-klaar' : ''}`}>
-        <span className="axe-ov__w-label">Focus</span>
+        <div className="axe-ov__w-kop">
+          <span className="axe-ov__w-label"><Timer size={13} strokeWidth={1.8} />Focus</span>
+          <span className="axe-ov__w-meta">{fs ? (fs.klaar ? 'done' : fs.loopt ? 'running' : 'paused') : 'ready'}</span>
+        </div>
         {fs ? (
           <>
             <b className="axe-ov__focus-tijd">{fs.klaar ? 'Done ✓' : fs.tekst}</b>

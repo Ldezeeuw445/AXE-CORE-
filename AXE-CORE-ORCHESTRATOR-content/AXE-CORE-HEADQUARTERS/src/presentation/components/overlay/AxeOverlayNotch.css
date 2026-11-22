@@ -105,27 +105,33 @@ html[data-axe-notch] {
 .axe-ov__top > .axe-ov__icons:first-child { justify-self: start; }
 .axe-ov__top > .axe-ov__icons:last-child { justify-self: end; }
 .axe-ov__icons { display: flex; gap: 8px; align-items: center; color: var(--axe-notch-ink); }
+/* Ronde 5 (22 nov, naar Luka's foto's): ronde knoppen zonder rand. Rust is
+   bijna onzichtbaar; de actieve tab is een zachte grijze pil, zoals op de
+   foto's. Cyaan blijft het accent: hover-icoon en de microfoon die luistert. */
 .axe-ov__ico {
-  background: var(--axe-notch-btn);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--axe-notch-ink);
-  width: calc(32px * var(--axe-notch-scale));
-  height: calc(32px * var(--axe-notch-scale));
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.62);
+  width: calc(30px * var(--axe-notch-scale));
+  height: calc(30px * var(--axe-notch-scale));
   padding: 0;
   cursor: pointer;
   display: grid; place-items: center;
-  border-radius: 8px;
+  border-radius: 999px;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 .axe-ov__ico:hover {
   color: var(--axe-notch-accent);
-  background: rgba(34, 211, 238, 0.16);
-  border-color: rgba(34, 211, 238, 0.45);
+  background: rgba(255, 255, 255, 0.07);
 }
-.axe-ov__ico[aria-pressed="true"],
+.axe-ov__ico[aria-pressed="true"] {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.13);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
 .axe-ov__ico--hot {
   color: #04252B;
   background: var(--axe-notch-accent);
-  border-color: var(--axe-notch-accent);
 }
 .axe-ov__blob {
   /* 19 nov: drager van het AXE-driehoekje (AxeGezicht), geen eigen vorm meer. */
@@ -985,3 +991,122 @@ button.axe-ov__pil { cursor: pointer; }
 .axe-ov__focus-start button.is-start { width: auto; padding: 0 16px; background: rgba(255,255,255,.92); color: #0b0b0b; border-color: transparent; font-size: 12.5px; font-weight: 600; }
 .axe-ov__widgets .axe-ov__weer-nu b { font-size: 34px; font-weight: 300; }
 .axe-ov__widgets .axe-ov__weer-nu span { font-size: 22px; }
+
+
+/* ── Ronde 5 (22 nov): dichter bij Luka's foto's ─────────────────────────────
+ * Kaarten zonder rand, met een zachte glans van boven; AXE groot met een halo
+ * om hem heen; stappen met een icoon; volle pillen; een rusttoestand met
+ * sterrenstof; kaartkoppen als "icoon Titel ........ stand". */
+.axe-ov__vlak {
+  border: 0;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.032));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+.axe-ov__held { min-height: 128px; gap: 22px; padding: 16px 20px; }
+.axe-ov__held .axe-ov__gloed {
+  left: -10px; width: 230px; height: 230px;
+}
+.axe-ov__held-gezicht { filter: drop-shadow(0 0 22px rgba(34, 211, 238, 0.35)); }
+.axe-ov__stappen { gap: 8px; }
+.axe-ov__stappen li { display: flex; align-items: center; gap: 9px; font-size: 13px; color: rgba(255, 255, 255, 0.36); }
+.axe-ov__stappen li > svg { flex: none; opacity: 0.8; }
+.axe-ov__stappen li > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-ov__stappen li.is-nu { font-size: 16px; font-weight: 500; color: rgba(255, 255, 255, 0.94); }
+.axe-ov__pillen { gap: 10px; padding: 16px; }
+.axe-ov__pil {
+  min-height: 40px; padding: 6px 14px 6px 6px; gap: 10px;
+  background: color-mix(in srgb, var(--chip) 14%, rgba(0, 0, 0, 0.35));
+  border: 1px solid color-mix(in srgb, var(--chip) 45%, transparent);
+  color: color-mix(in srgb, var(--chip) 72%, white);
+  font-size: 13px;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.axe-ov__pil:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--chip) 22%, rgba(0, 0, 0, 0.35)); }
+
+/* Rust (foto 2): AXE in het midden, stofbanden links en rechts die zacht
+   bewegen. Alleen CSS-stippen, geen canvas: de notch draait de hele dag. */
+.axe-ov__rust {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  min-height: 140px;
+  background: radial-gradient(ellipse at 50% 55%, rgba(34, 211, 238, 0.07), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.025));
+}
+.axe-ov__gloed--midden { left: 50%; top: 45%; transform: translate(-50%, -50%); width: 260px; height: 260px; }
+.axe-ov__rust .axe-ov__held-gezicht { position: relative; z-index: 1; }
+.axe-ov__rust-tekst { position: relative; z-index: 1; font-size: 12.5px; color: rgba(255, 255, 255, 0.5); }
+.axe-ov__stof {
+  position: absolute; top: 0; bottom: 0; width: 34%;
+  pointer-events: none; opacity: 0.55;
+  /* Drie rasters met onderling ondeelbare maten: samen lijkt het willekeurig stof. */
+  background-image:
+    radial-gradient(circle at 30% 40%, rgba(255, 255, 255, 0.9) 0.7px, transparent 1.2px),
+    radial-gradient(circle at 70% 20%, rgba(255, 255, 255, 0.55) 0.6px, transparent 1.1px),
+    radial-gradient(circle at 50% 80%, rgba(255, 255, 255, 0.4) 0.5px, transparent 1px);
+  background-size: 13px 17px, 7px 11px, 19px 5px;
+  background-position: 0 0, 3px 4px, 5px 2px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 22%, transparent 38%, transparent 55%, #000 72%, transparent 92%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 22%, transparent 38%, transparent 55%, #000 72%, transparent 92%);
+  opacity: 0.7;
+  animation: axe-stof 9s linear infinite;
+}
+.axe-ov__stof--l { left: 4%; }
+.axe-ov__stof--r { right: 4%; animation-direction: reverse; }
+@keyframes axe-stof { from { background-position: 0 0, 3px 4px, 5px 2px; } to { background-position: 0 170px, 3px 114px, 5px 97px; } }
+
+/* Kaartkoppen zoals de foto's: icoon + titel links, stand rechts. */
+.axe-ov__w-kop { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; }
+.axe-ov__vlak .axe-ov__w-label {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none;
+  color: rgba(255, 255, 255, 0.88);
+}
+.axe-ov__vlak .axe-ov__w-label > svg { opacity: 0.7; }
+.axe-ov__w-meta { font-size: 11.5px; color: rgba(255, 255, 255, 0.42); white-space: nowrap; }
+.axe-ov__widgets .axe-ov__focus .axe-ov__w-kop { align-self: stretch; }
+.axe-ov__widgets .axe-ov__focus-tijd { font-size: 44px; font-weight: 300; }
+.axe-ov__blok-tabs { gap: 2px; }
+.axe-ov__blok-tabs button {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 0; background: transparent; padding: 3px 8px; border-radius: 999px;
+  font: 600 13px inherit; color: rgba(255, 255, 255, 0.42);
+}
+.axe-ov__blok-tabs button[aria-selected="true"] { color: rgba(255, 255, 255, 0.9); background: rgba(255, 255, 255, 0.08); border: 0; }
+.axe-ov__blok input, .axe-ov__blok textarea, .axe-ov__weer input { border: 0; background: rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 8px 12px; }
+
+/* Eén ding vandaag: zachte kaart in de kaart, geen cyaan kader. */
+.axe-ov__widgets .axe-ov__eending { border: 0; background: rgba(255, 255, 255, 0.05); border-radius: 14px; }
+
+/* Slepen (foto 4): gestippeld vak met een groene gloed van onder, rechts de managers. */
+.axe-ov__dropzone {
+  border: 0; background: rgba(8, 8, 8, 0.96); gap: 10px; padding: 8px;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  align-items: stretch;
+}
+.axe-ov__drop-vak {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  border-radius: 16px; border: 1.5px dashed rgba(255, 255, 255, 0.28);
+  background: radial-gradient(ellipse at 50% 140%, rgba(74, 222, 128, 0.35), rgba(34, 211, 238, 0.08) 55%, transparent 80%);
+}
+.axe-ov__drop-soorten { display: flex; gap: 6px; }
+.axe-ov__drop-soorten i {
+  font-style: normal; font-size: 10.5px; padding: 2px 8px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.6);
+}
+.axe-ov__drop-rail {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 8px; border-radius: 16px; background: rgba(255, 255, 255, 0.05);
+}
+@media (prefers-reduced-motion: reduce) { .axe-ov__stof { animation: none !important; } }
+/* Halo direct achter het gezicht (foto 1): de gloed in de toestandskleur. */
+.axe-ov__held-gezicht, .axe-ov__rust .axe-ov__held-gezicht { isolation: isolate; }
+.axe-ov__held-gezicht::before {
+  content: ''; position: absolute; inset: -30px; border-radius: 50%; z-index: -1;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.5) 30%, rgba(59, 130, 246, 0.24) 52%, transparent 72%);
+  filter: blur(6px);
+  animation: axe-gloed 3.2s ease-in-out infinite;
+}
+.axe-ov__widgets .axe-ov__focus { justify-content: flex-start; gap: 10px; }
+.axe-ov__widgets .axe-ov__focus .axe-ov__focus-tijd { margin-top: auto; }
+.axe-ov__widgets .axe-ov__focus .axe-ov__focus-start, .axe-ov__widgets .axe-ov__focus .axe-ov__w-knoppen { margin-bottom: auto; }
+@media (prefers-reduced-motion: reduce) { .axe-ov__held-gezicht::before { animation: none !important; } }
