@@ -196,30 +196,17 @@ test.describe('Home live layout blijft uit de composer', () => {
       expect(spreiding(gatenLinks), `left gaps even at ${maat.naam}`).toBeLessThanOrEqual(2);
       expect(spreiding(gatenRechts), `right gaps even at ${maat.naam}`).toBeLessThanOrEqual(2);
 
-      const lopendBox = await box(page, '[data-axe-home-kaart="lopend"]');
-      const recentBox = await box(page, '[data-axe-home-kaart="recent"]');
-      const okBox = await box(page, '[data-axe-home-kaart="ok"]');
-      const seatsBox = await box(page, '[data-axe-home-kaart="seats"]');
-      expect(lopendBox.y - (lastLinks.y + lastLinks.height), `left rail above live at ${maat.naam}`).toBeGreaterThanOrEqual(8);
-      expect(okBox.y - (lastRechts.y + lastRechts.height), `right rail above live at ${maat.naam}`).toBeGreaterThanOrEqual(8);
-      expect(Math.abs(lopendBox.y - recentBox.y), `left pair one row at ${maat.naam}`).toBeLessThan(4);
-      expect(Math.abs(okBox.y - seatsBox.y), `right pair one row at ${maat.naam}`).toBeLessThan(4);
-      expect(Math.abs(lopendBox.y - okBox.y), `both pairs same row at ${maat.naam}`).toBeLessThan(4);
-      expect(recentBox.x, `RECENT right of WORKING NOW at ${maat.naam}`).toBeGreaterThan(lopendBox.x + lopendBox.width - 1);
-      expect(seatsBox.x, `SEATS right of OK at ${maat.naam}`).toBeGreaterThan(okBox.x + okBox.width - 1);
-      expect(Math.abs(lopendBox.x - links.x), `left pair under left rail at ${maat.naam}`).toBeLessThan(12);
-      expect(Math.abs((seatsBox.x + seatsBox.width) - (rechts.x + rechts.width)), `right pair under right rail at ${maat.naam}`).toBeLessThan(16);
-      expect(lopendBox.width, `left cards not a full-band at ${maat.naam}`).toBeLessThanOrEqual(links.width / 2 + 12);
-      expect(okBox.width, `right cards not a full-band at ${maat.naam}`).toBeLessThanOrEqual(rechts.width / 2 + 12);
-      expect(okBox.x, `gap between pairs at ${maat.naam}`).toBeGreaterThan(recentBox.x + recentBox.width + 16);
-      expect(lopendBox.height, `live cards taller at ${maat.naam}`).toBeGreaterThanOrEqual(maat.width <= 1100 ? 100 : 160);
-      for (const kaart of [lopendBox, recentBox, okBox, seatsBox]) {
-        const verhouding = kaart.width / kaart.height;
-        expect(verhouding, `live aspect ${verhouding.toFixed(2)} at ${maat.naam}`).toBeGreaterThanOrEqual(0.8);
-        expect(verhouding, `live aspect ${verhouding.toFixed(2)} at ${maat.naam}`).toBeLessThanOrEqual(1.4);
-      }
+      // 22 nov: één kaart per kant met twee tabs (Luka) i.p.v. 2+2 kaarten.
+      const linksKaart = await box(page, '[data-axe-home-kaart="links"]');
+      const rechtsKaart = await box(page, '[data-axe-home-kaart="rechts"]');
+      expect(linksKaart.y - (lastLinks.y + lastLinks.height), `left rail above live at ${maat.naam}`).toBeGreaterThanOrEqual(8);
+      expect(rechtsKaart.y - (lastRechts.y + lastRechts.height), `right rail above live at ${maat.naam}`).toBeGreaterThanOrEqual(8);
+      expect(Math.abs(linksKaart.y - rechtsKaart.y), `both cards same row at ${maat.naam}`).toBeLessThan(4);
+      expect(Math.abs(linksKaart.x - links.x), `left card under left rail at ${maat.naam}`).toBeLessThan(12);
+      expect(Math.abs((rechtsKaart.x + rechtsKaart.width) - (rechts.x + rechts.width)), `right card under right rail at ${maat.naam}`).toBeLessThan(16);
+      expect(linksKaart.height, `live cards tall at ${maat.naam}`).toBeGreaterThanOrEqual(maat.width <= 1100 ? 100 : 160);
 
-      const lopend = await page.locator('[data-axe-home-kaart="lopend"]').innerText();
+      const lopend = await page.locator('[data-axe-home-kaart="links"]').innerText();
       expect(lopend).toMatch(/WORKING NOW/i);
       expect(lopend).toMatch(/Developer/);
       expect(lopend).toMatch(/Trading OS/);

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { kiesTab, type HomeTab } from '@/domain/homeLiveTabs';
 import { useNavigate } from 'react-router';
-import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
 import { GoedkeuringActie } from '@/presentation/components/axe-core/GoedkeuringActie';
 import { homeLiveStand, seatsRegels, type LiveRegel, type LiveTaak } from '@/domain/homeLive';
 import { taakActieLabel, taakFoutVan, type TaakActie } from '@/domain/taken/taakFout';
@@ -60,6 +60,45 @@ function LiveLijst<T>({ items, render, leeg }: {
   leeg: ReactNode;
 }) {
   return <>{items.length ? items.map(render) : leeg}</>;
+}
+
+/**
+ * Eén kaart per kant met twee tabs (22 nov, Luka: "die 2 onderste blokken worden
+ * gewoon 1 card per kant met bovenaan 2 tabs, zodat ze allebei een groter vak
+ * hebben"). De keuze blijft per Mac bewaard; zonder keuze wint wat er speelt.
+ */
+function TabKaart({ kant, tabs, standaard }: {
+  kant: 'links' | 'rechts';
+  tabs: Array<{ id: HomeTab; titel: string; aantal?: number; lijf: ReactNode; aandacht?: boolean }>;
+  standaard: HomeTab;
+}) {
+  const sleutel = `axe.home.tab.${kant}`;
+  const [gekozen, setGekozen] = useState<HomeTab | null>(() => {
+    try { return (localStorage.getItem(sleutel) as HomeTab) || null; } catch { return null; }
+  });
+  const actief = kiesTab(tabs.map((t) => t.id), gekozen, standaard);
+  const kies = (id: HomeTab) => {
+    setGekozen(id);
+    try { localStorage.setItem(sleutel, id); } catch { /* geen opslag */ }
+  };
+  const huidig = tabs.find((t) => t.id === actief) ?? tabs[0];
+  return (
+    <div className="axe-home-live-kaart-vak axe-home-tabkaart" data-axe-home-kaart={kant}>
+      <div className="axe-kaart axe-home-live-kaart">
+        <div className="axe-home-tabs" role="tablist" aria-label={kant === 'links' ? 'Activity' : 'Attention'}>
+          {tabs.map((t) => (
+            <button key={t.id} type="button" role="tab" aria-selected={t.id === actief}
+              className={`axe-home-tab${t.id === actief ? ' is-actief' : ''}${t.aandacht ? ' is-aandacht' : ''}`}
+              onClick={() => kies(t.id)}>
+              {t.titel}
+              {t.aantal ? <span className="axe-home-tab-tal">{t.aantal}</span> : null}
+            </button>
+          ))}
+        </div>
+        <div className="axe-kaart-lijf axe-home-tab-lijf" role="tabpanel">{huidig.lijf}</div>
+      </div>
+    </div>
+  );
 }
 
 function recentRegel(t: LiveTaak): { tekst: string; actie?: TaakActie } {
@@ -135,9 +174,8 @@ export function HomeLiveDashboard() {
 
   const seats = seatsRegels(stand);
 
-  const kaartLopend = (
-    <div className="axe-home-live-kaart-vak" data-axe-home-kaart="lopend">
-      <Kaart className="axe-home-live-kaart" titel="WORKING NOW">
+  const lijfLopend = (
+    <>
         <LiveLijst
           items={stand.lopend}
           leeg={<Regel kleur="var(--text-muted)">No running tasks or missions right now.</Regel>}
@@ -150,13 +188,11 @@ export function HomeLiveDashboard() {
             </Regel>
           )}
         />
-      </Kaart>
-    </div>
+    </>
   );
 
-  const kaartRecent = (
-    <div className="axe-home-live-kaart-vak" data-axe-home-kaart="recent">
-      <Kaart className="axe-home-live-kaart" titel="RECENT">
+  const lijfRecent = (
+    <>
         <LiveLijst
           items={stand.recent}
           leeg={<Regel kleur="var(--text-muted)">No recent completed or failed tasks in this feed.</Regel>}
@@ -170,13 +206,11 @@ export function HomeLiveDashboard() {
             );
           }}
         />
-      </Kaart>
-    </div>
+    </>
   );
 
-  const kaartOk = (
-    <div className="axe-home-live-kaart-vak" data-axe-home-ok data-axe-home-kaart="ok">
-      <Kaart className="axe-home-live-kaart" titel="NEEDS YOUR OK">
+  const lijfOk = (
+    <div data-axe-home-ok>
         {stand.goedkeuringen.length === 0 && !elders && (
           <Regel kleur="var(--text-muted)">Niets wacht op jou.</Regel>
         )}
@@ -191,13 +225,11 @@ export function HomeLiveDashboard() {
           onVraag={(rij) => { if (rij.agentId) navigate(`/managers?open=${encodeURIComponent(rij.agentId)}`); }}
           onBeslis={(rij, akkoord) => { void beslisAgentOk({ akkoord, rij }).then(verversServerAgents); }}
         />
-      </Kaart>
     </div>
   );
 
-  const kaartSeats = (
-    <div className="axe-home-live-kaart-vak" data-axe-home-seats data-axe-home-kaart="seats">
-      <Kaart className="axe-home-live-kaart" titel="SEATS · DAX · CRON">
+  const lijfSeats = (
+    <div data-axe-home-seats>
         <LiveLijst
           items={seats}
           leeg={<Regel kleur="var(--text-muted)">No seat, DAX or schedule heartbeat yet.</Regel>}
@@ -208,22 +240,27 @@ export function HomeLiveDashboard() {
             </Regel>
           )}
         />
-      </Kaart>
     </div>
   );
 
-
+  const okTal = stand.goedkeuringen.length + elders;
+  const seatsSlecht = seats.filter((r) => r.kleur === 'var(--err)').length;
 
   return (
     <div className="axe-home-live" data-axe-home-live>
       <div className="axe-home-live-cluster" data-axe-home-live-cluster="links">
-        {kaartLopend}
-        {kaartRecent}
+        <TabKaart kant="links" standaard="lopend" tabs={[
+          { id: 'lopend', titel: 'Working now', aantal: stand.lopend.length, lijf: lijfLopend },
+          { id: 'recent', titel: 'Recent', aantal: stand.recent.length, lijf: lijfRecent,
+            aandacht: stand.recent.some((t) => t.stand === 'failed') },
+        ]} />
       </div>
       <div className="axe-home-live-midden" aria-hidden="true" />
       <div className="axe-home-live-cluster" data-axe-home-live-cluster="rechts">
-        {kaartOk}
-        {kaartSeats}
+        <TabKaart kant="rechts" standaard={okTal ? 'ok' : 'seats'} tabs={[
+          { id: 'ok', titel: 'Needs your OK', aantal: okTal, lijf: lijfOk, aandacht: okTal > 0 },
+          { id: 'seats', titel: 'Seats · DAX · Cron', aantal: seatsSlecht, lijf: lijfSeats, aandacht: seatsSlecht > 0 },
+        ]} />
       </div>
 
 

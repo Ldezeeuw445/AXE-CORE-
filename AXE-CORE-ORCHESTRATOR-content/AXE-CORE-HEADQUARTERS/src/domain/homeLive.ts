@@ -10,6 +10,9 @@ import { mensTekst, nextTekst } from '@/domain/tijd';
 import { rijenVanLijst, rijenVoorAgent, type GoedkeuringsRij } from '@/domain/agents/pendingApproval';
 import { stoelHeartbeatStand, type CodingSeat } from '@/domain/codingSeats';
 import type { AxeJob } from '@/domain/tierRouter/axeJobRegels';
+import { MOTOR_LABEL } from '@/domain/agentMotoren';
+
+const STOEL_NAAM: Record<string, string> = { ...MOTOR_LABEL, agy: 'Google Antigravity', kilo: 'Kilo Auto Free', opencode: 'OpenCode Free' };
 
 const BEZIG: ReadonlySet<string> = new Set(['WORKING', 'VERIFYING', 'WAITING_TOOL']);
 
@@ -42,6 +45,8 @@ export type LiveDax = {
 
 export type LiveStoel = {
   id: string;
+  /** "Claude-abonnement 2" i.p.v. "claude2" (22 nov: Luka zag "claude2" twee keer). */
+  naam?: string;
   stand: string;
   toon: 'ok' | 'bad' | 'info' | 'muted';
   taak: string;
@@ -198,6 +203,7 @@ export function homeLiveStand(in_: {
     const stand = stoelHeartbeatStand(s, nu);
     return {
       id: s.id,
+      naam: STOEL_NAAM[s.id] || (s as { label?: string }).label || s.id,
       stand: stand.tekst,
       toon: stand.toon,
       taak: s.current_task || (stand.tekst === 'Not used' ? 'not used' : 'idle'),
@@ -218,11 +224,15 @@ export function homeLiveStand(in_: {
 
 export function seatsRegels(stand: HomeLiveStand): LiveRegel[] {
   const uit: LiveRegel[] = [];
+  const gezien = new Set<string>();
   for (const s of stand.stoelen) {
     const slecht = s.toon === 'bad' || s.stand === 'Logged out' || s.stand === 'Offline';
+    const tekst = `${s.naam || s.id} · ${s.stand}${s.taak && s.taak !== 'idle' && s.taak !== 'not used' ? ` · ${s.taak}` : ''}`;
+    if (gezien.has(tekst)) continue;
+    gezien.add(tekst);
     uit.push({
       id: `seat-${s.id}`,
-      tekst: `${s.id} · ${s.stand}${s.taak && s.taak !== 'idle' && s.taak !== 'not used' ? ` · ${s.taak}` : ''}`,
+      tekst,
       kleur: s.toon === 'ok' || s.toon === 'info' ? 'var(--ok)' : slecht ? 'var(--err)' : 'var(--text-muted)',
       actie: s.stand === 'Logged out' || s.stand === 'Offline' ? 'reconnect' : s.stand === 'Rate limited' ? 'retry' : undefined,
     });

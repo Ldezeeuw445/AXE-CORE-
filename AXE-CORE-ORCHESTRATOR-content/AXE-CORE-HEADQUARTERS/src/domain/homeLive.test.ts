@@ -101,7 +101,7 @@ describe('homeLiveStand', () => {
       }],
     });
     const regels = seatsRegels(stand);
-    expect(regels.some((r) => r.tekst.includes('claude4'))).toBe(true);
+    expect(regels.some((r) => r.tekst.includes('Claude-abonnement 4'))).toBe(true);
     expect(regels.some((r) => r.tekst.includes('Energy snapshot'))).toBe(true);
   });
 });
