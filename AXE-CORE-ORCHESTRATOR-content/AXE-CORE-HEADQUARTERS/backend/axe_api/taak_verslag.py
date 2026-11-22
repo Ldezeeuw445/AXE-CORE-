@@ -137,7 +137,41 @@ def schrijf(db: Any, taak: dict[str, Any], status: str, result: dict[str, Any] |
         return False
     episode(db, taak, status, result, tekst)
     ervaring(db, taak, status, verslag(taak, status, result, error))
+    review_stap(db, taak, status, result)
     return True
+
+
+def review_tekst(taak: dict[str, Any], op: dict[str, Any]) -> tuple[str, str]:
+    """Titel + waarom van de reviewstap voor Luka."""
+    titel = f"Review {op.get('branch')}: {_kort(str(taak.get('title') or '').split(': ', 1)[-1], 90)}"
+    waarom = " | ".join(x for x in (
+        f"Wat: {_kort(op.get('samenvatting'), 200)}" if op.get("samenvatting") else "",
+        f"Tests: {_kort(op.get('tests'), 160)}" if op.get("tests") else "",
+        f"Risico's: {_kort(op.get('risicos'), 160)}" if op.get("risicos") else "",
+        f"Op: {op.get('device')}" if op.get("device") else "",
+        "Goed = push de branch en open een PR; mergen in orchestrator doe jij.") if x)
+    return titel[:200], waarom[:600]
+
+
+def review_stap(db: Any, taak: dict[str, Any], status: str, result: dict[str, Any] | None) -> bool:
+    """Coding-werk klaar en compleet: één stap voor Luka om goed te keuren (Taken > Your turn).
+
+    De manager zegt 'klaar' alleen met een complete oplevering (agent_loop); Luka beslist
+    over de branch. Zelfde branch = één stap."""
+    op = (result or {}).get("oplevering") if isinstance((result or {}).get("oplevering"), dict) else None
+    if status != "completed" or not op or not op.get("compleet") or not op.get("branch"):
+        return False
+    try:
+        import gedeeld_log as gl
+        titel, waarom = review_tekst(taak, op)
+        al = (db.table("core_tasks").select("id").eq("capability", gl.STAP).eq("title", titel)
+              .limit(1).execute().data) or []
+        if al:
+            return False
+        db.table("core_tasks").insert(gl.stap_taak(titel, "luka", wie(taak), waarom)).execute()
+        return True
+    except Exception:  # noqa: BLE001 -- een review-stap breekt nooit een taak
+        return False
 
 
 def ervaring(db: Any, taak: dict[str, Any], status: str, v: dict[str, str]) -> bool:

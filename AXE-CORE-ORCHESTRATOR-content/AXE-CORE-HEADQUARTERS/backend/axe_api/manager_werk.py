@@ -521,6 +521,15 @@ def meld_tekst(t: dict[str, Any]) -> str:
     titel = str(t.get("title") or "taak").split(": ", 1)[-1]
     wat = _samenvatting(t)
     if t.get("status") == "completed":
+        op = (t.get("result") or {}).get("oplevering") if isinstance(t.get("result"), dict) else None
+        if isinstance(op, dict) and op.get("branch"):
+            regels = [f"Klaar: {titel}."]
+            for kop, veld in (("Wat", "samenvatting"), ("Tests", "tests"), ("Risico's", "risicos")):
+                if op.get(veld):
+                    regels.append(f"{kop}: {' '.join(str(op[veld]).split())[:400]}")
+            regels.append(f"Branch: {op['branch']}" + (f" op {op['device']}" if op.get("device") else "")
+                          + " -- staat bij jou onder Taken > Your turn om goed te keuren.")
+            return "\n\n".join(regels)
         return f"Klaar: {titel}." + (f"\n\n{wat}" if wat else "")
     return (f"Dit lukte niet: {titel} ({t.get('status')})." + (f"\n\n{wat}" if wat else "")
             + "\n\nIk kijk of ik het anders kan oplossen; lukt dat niet, dan zeg ik je wat er nodig is.")

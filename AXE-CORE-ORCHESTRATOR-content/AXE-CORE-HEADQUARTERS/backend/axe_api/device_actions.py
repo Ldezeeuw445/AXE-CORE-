@@ -215,6 +215,24 @@ def oplevering(output: Any) -> dict[str, Any]:
     return uit
 
 
+def oplevering_weigering(op: dict[str, Any] | None) -> str | None:
+    """Mag de taak 'klaar' zeggen na deze oplevering? None = ja; anders waarom niet.
+
+    Audit 22 nov: tot nu toe kwam de oplevering alleen als tool-antwoord terug en
+    kon de lus 'klaar' zeggen terwijl er geen tests, geen branch of open wijzigingen
+    waren. Geen coding-run in deze taak (op is None) = deze regel geldt niet."""
+    if not isinstance(op, dict) or op.get("compleet"):
+        return None
+    mist: list[str] = [f"kopje {k}" for k in op.get("ontbreekt") or []]
+    if not op.get("branch"):
+        mist.append("een branch")
+    if op.get("niet_gecommit"):
+        mist.append("alles gecommit (er staat nog werk open)")
+    return ("De oplevering van de coding-agent is niet compleet: " + ", ".join(mist or ["onbekend"])
+            + ". Stuur hem terug met een kleinere, duidelijkere opdracht, of zeg eerlijk wat er mist. "
+              "Je bent NIET klaar.")
+
+
 def approval_key(device: str, tool: str, args: dict[str, Any]) -> str | None:
     """What Luka has to say yes to before this runs, or None if it may run.
 

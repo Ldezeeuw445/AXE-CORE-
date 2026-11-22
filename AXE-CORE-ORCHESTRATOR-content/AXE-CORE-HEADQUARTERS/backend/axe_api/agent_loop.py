@@ -1648,6 +1648,9 @@ async def _lus(
     ]
     started = time.monotonic()
     transcript: list[dict[str, Any]] = []
+    # De laatste oplevering van een coding-agent in deze taak (device_actions.oplevering):
+    # die bepaalt mee of 'klaar' mag, en gaat mee in het resultaat (taakverslag, review).
+    laatste_oplevering: dict[str, Any] | None = None
 
     for step in range(1, MAX_STEPS + 1):
         if time.monotonic() - started > WALL_CLOCK_SECONDS:
@@ -1709,6 +1712,15 @@ async def _lus(
                 verify_command = str(args.get("verify_command") or "").strip()
                 expect = str(args.get("expect_in_output") or "").strip()
 
+                weigering = device_actions.oplevering_weigering(laatste_oplevering)
+                if weigering:
+                    transcript.append({"step": step, "tool": "finish", "refused": "oplevering_niet_compleet"})
+                    await on_event("verification.failed", "Completion refused: the coding agent's delivery is "
+                                   "incomplete.", {"ontbreekt": (laatste_oplevering or {}).get("ontbreekt")})
+                    responses.append({"functionResponse": {"name": "finish", "response": {
+                        "accepted": False, "reason": weigering}}})
+                    continue
+
                 await on_event(
                     "axe.progress",
                     f"Step {step}: agent claims completion, verifying with `{verify_command[:120]}`.",
@@ -1733,6 +1745,7 @@ async def _lus(
                         **motor_velden(),
                         "summary": summary,
                         "steps_used": step,
+                        **({"oplevering": laatste_oplevering} if laatste_oplevering else {}),
                         "verification": {
                             "passed": True,
                             "checks": [{
@@ -1868,6 +1881,16 @@ async def _lus(
                     "step": step, "tool": "run_on_device", "device": device,
                     "device_tool": tool, "ok": result.get("ok"),
                 })
+                if tool in device_actions.AGENT_RUNS and isinstance(result.get("oplevering"), dict):
+                    laatste_oplevering = {**result["oplevering"], "device": device, "tool": tool}
+                    transcript[-1]["compleet"] = bool(laatste_oplevering.get("compleet"))
+                    await on_event(
+                        "axe.progress",
+                        f"Step {step}: {tool} delivered"
+                        + (f" on branch {laatste_oplevering.get('branch')}" if laatste_oplevering.get("branch") else "")
+                        + (" -- complete" if laatste_oplevering.get("compleet") else " -- NOT complete"),
+                        {"compleet": laatste_oplevering.get("compleet")},
+                    )
             else:
                 result = {"error": f"unknown tool {name!r}"}
                 transcript.append({"step": step, "tool": name, "error": "unknown"})
