@@ -86,6 +86,8 @@ def test_net_opgelost_koelt_af():
     bestaand = [{"status": "completed", "completed_at": (NU - timedelta(hours=2)).isoformat(),
                  "metadata": {"vinger": "v", "idem": "x"}}]
     assert mb.beslis(bestaand, "y", "v", NU)[0] == "afkoelen"
+    vals = [{**bestaand[0], "result": {"summary": "Ik kan de test niet toevoegen."}}]
+    assert mb.beslis(vals, "y", "v", NU)[0] == "maak"
     bestaand[0]["completed_at"] = (NU - timedelta(hours=30)).isoformat()
     assert mb.beslis(bestaand, "y", "v", NU)[0] == "maak"
 
@@ -171,5 +173,5 @@ def test_tellers_staan_in_de_database_voor_beide_workers():
     g = mw.gezondheid(db, NU)
     assert g["managers"]["axon"]["dubbel_tegengehouden"] == 1
     assert g["ok"], g["alarmen"]
-    ev = db.rijen["core_agent_events"][0]
-    assert ev["agent"] == "managerwerk" and ev["message"].startswith("axon|dubbel|")
+    ev = [r for r in db.rijen["core_manager_messages"] if r.get("to_agent") == "rem"][0]
+    assert ev["from_agent"] == "managerwerk" and ev["body"].startswith("axon|dubbel|")

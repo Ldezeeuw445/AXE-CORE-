@@ -149,7 +149,7 @@ def lees_context_met_bronnen(db: Any, agent: str | None,
                    .in_("status", list(MISLUKT)).gte("created_at", sinds).order("created_at", desc=True)
                    .limit(6).execute().data)
     eigen = lees(lambda: db.table("core_manager_messages").select("body,created_at,to_agent")
-                 .in_("from_agent", list(namen)).not_.in_("to_agent", ["log", "lessen"])
+                 .in_("from_agent", list(namen)).not_.in_("to_agent", ["log", "lessen", "ervaring", "rem"])
                  .order("created_at", desc=True).limit(5).execute().data)
     wacht = lees(lambda: db.table("core_approvals").select("title,created_at").eq("status", "pending")
                  .order("created_at", desc=True).limit(3).execute().data)

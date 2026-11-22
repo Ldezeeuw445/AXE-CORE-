@@ -80,9 +80,18 @@ def beslis(bestaand: list[dict[str, Any]], idem: str, vinger: str, nu: datetime)
     if len(mislukt) >= MAX_POGINGEN:
         return "geblokkeerd", mislukt[0]
     for t in zelfde:
-        if str(t.get("status")) in KLAAR and (tt := tijd(t)) and nu - tt < AFKOELEN:
+        if str(t.get("status")) in KLAAR and (tt := tijd(t)) and nu - tt < AFKOELEN and not _vals_klaar(t):
             return "afkoelen", t
     return "maak", None
+
+
+def _vals_klaar(t: dict[str, Any]) -> bool:
+    """'completed' terwijl de eigen samenvatting zegt dat het niet lukte (van vóór klaar_regels)."""
+    r = t.get("result")
+    if not isinstance(r, dict):
+        return False
+    import klaar_regels
+    return klaar_regels.geeft_falen_toe(str(r.get("summary") or ""))
 
 
 def poging(bestaand: list[dict[str, Any]], vinger: str) -> int:
@@ -143,21 +152,24 @@ def zet(agent: str, wat: str, waarde: Any) -> None:
     TELLERS.setdefault(agent, {})[wat] = waarde
 
 
-REM_TYPE = "manager.rem"
-REM_AGENT = "managerwerk"   # niet onder de manager zelf: dan werd dit zijn "laatste activiteit"
+REM = "rem"                 # core_manager_messages.to_agent
+REM_AGENT = "managerwerk"   # from_agent: niet de manager zelf, anders telt het als zijn eigen bericht
 
 
 def rem_rij(agent: str, wat: str, detail: str = "") -> dict[str, Any]:
-    """Een rem of fout van de lus als event -- de API draait met 2 workers, dus tellen in het
-    geheugen van één proces klopt niet; de database telt voor allebei."""
-    return {"agent": REM_AGENT, "event_type": REM_TYPE, "source": "managerwerk",
-            "message": f"{agent}|{wat}|{' '.join(str(detail).split())}"[:300]}
+    """Een rem of fout van de lus als rij -- de API draait met 2 workers, dus tellen in het
+    geheugen van één proces klopt niet; de database telt voor allebei.
+
+    Niet in core_agent_events: dat is een VIEW (union van taak- en missie-events),
+    inserts daarin falen altijd (gemeten 22 nov)."""
+    return {"from_agent": REM_AGENT, "to_agent": REM, "kind": "report",
+            "body": f"{agent}|{wat}|{' '.join(str(detail).split())}"[:300]}
 
 
 def tel_rems(events: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     uit: dict[str, dict[str, Any]] = {}
     for e in sorted(events, key=lambda e: str(e.get("created_at") or "")):
-        delen = str(e.get("message") or "").split("|", 2)
+        delen = str(e.get("body") or e.get("message") or "").split("|", 2)
         if len(delen) < 2:
             continue
         agent, wat = delen[0], delen[1]
@@ -227,5 +239,5 @@ def ervaring_les(taak: dict[str, Any], status: str, v: dict[str, str]) -> str | 
             + (f"\nToepassen op: {app}" if app else ""))
 
 
-__all__ = ["rem_rij", "tel_rems", "REM_TYPE", "REM_AGENT", "vingerafdruk", "idem_sleutel", "beslis", "poging", "lees_model_json", "geldig", "HERSTEL_VRAAG",
+__all__ = ["rem_rij", "tel_rems", "REM", "REM_AGENT", "vingerafdruk", "idem_sleutel", "beslis", "poging", "lees_model_json", "geldig", "HERSTEL_VRAAG",
            "tel", "zet", "gezondheid", "ervaring_les", "ERVARING", "TELLERS"]

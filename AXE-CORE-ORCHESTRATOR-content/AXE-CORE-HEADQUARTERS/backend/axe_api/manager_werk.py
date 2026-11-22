@@ -428,14 +428,14 @@ def _rem(db: Any, agent: str, wat: str, detail: str = "") -> None:
     import manager_betrouwbaar as _mb
     _mb.tel(agent, wat)
     try:
-        db.table("core_agent_events").insert(_mb.rem_rij(agent, wat, detail)).execute()
+        db.table("core_manager_messages").insert(_mb.rem_rij(agent, wat, detail)).execute()
     except Exception:  # noqa: BLE001 -- tellen breekt de lus nooit
         pass
 
 
 def _recente_taken(db: Any, agent: str, nu: datetime) -> list[dict[str, Any]]:
     import manager_betrouwbaar as _mb
-    return (db.table("core_tasks").select("id,title,status,metadata,created_at,completed_at")
+    return (db.table("core_tasks").select("id,title,status,metadata,result,created_at,completed_at")
             .eq("requested_by", agent).gte("created_at", (nu - _mb.TERUGKIJKEN).isoformat())
             .order("created_at", desc=True).limit(200).execute().data) or []
 
@@ -599,8 +599,8 @@ def gezondheid(db: Any, nu: datetime) -> dict[str, Any]:
     except Exception:  # noqa: BLE001
         taken = []
     try:
-        events = (db.table("core_agent_events").select("message,created_at").eq("agent", _mb.REM_AGENT)
-                  .eq("event_type", _mb.REM_TYPE).gte("created_at", sinds).limit(1000).execute().data) or []
+        events = (db.table("core_manager_messages").select("body,created_at").eq("from_agent", _mb.REM_AGENT)
+                  .eq("to_agent", _mb.REM).gte("created_at", sinds).limit(1000).execute().data) or []
         rems: dict[str, dict[str, Any]] | None = _mb.tel_rems(events)
     except Exception:  # noqa: BLE001
         rems = None
