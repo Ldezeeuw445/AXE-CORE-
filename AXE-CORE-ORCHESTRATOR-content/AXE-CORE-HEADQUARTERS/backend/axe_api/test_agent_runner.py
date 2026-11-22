@@ -379,6 +379,22 @@ def test_cursor_account_uit_json_en_api_sleutel(monkeypatch):
     assert "cursor2" in ar.ENGINES
 
 
+def test_cursor2_met_geweigerde_sleutel_is_niet_ingelogd(monkeypatch):
+    """Een sleutel die er staat is geen login: zegt Cursor dat hij ongeldig is,
+    dan is de stoel uitgelogd en slaat de verdeler hem over."""
+    import agent_runner as ar
+    ar.vergeet_accounts()
+
+    def nep(cmd, motor, timeout=15.0, naam=""):
+        return ("\u26a0 Warning: The provided API key is invalid.\n"
+                "The API key was loaded from the CURSOR_API_KEY environment variable.\n"
+                '{"loggedIn":false}')
+    monkeypatch.setattr(ar, "_draai_status", nep)
+    monkeypatch.setenv("CURSOR2_API_KEY", "geweigerd")
+    assert ar._account_van("cursor2", ar.ENGINES["cursor2"], "/usr/bin/cursor-agent")["ingelogd"] is False
+    ar.vergeet_accounts()
+
+
 class TestBouwrunMagControleren:
     """16 okt: twee 'geslaagde' bouwruns van de planner schreven code maar draaiden
     niets -- elk npm/tsc-commando bleef op een toestemmingsvraag hangen. Een bouwrun
@@ -564,6 +580,36 @@ class TestStoelKeuze:
         assert r["status"] == "ok"
         assert r["seats_tried"][0] == "claude2" and r["engine"] != "claude2"
         assert a._ACCOUNT_CACHE["claude2"][1]["ingelogd"] is False
+
+    # Wat cursor-agent echt schreef (21-22 nov, elke "Build next step" op Cursor 2):
+    # een sleutel in CURSOR2_API_KEY die Cursor weigert. Luka heeft nooit een
+    # Cursor-sleutel gemaakt; hij gebruikt alleen de CLI-login.
+    _CURSOR_SLEUTEL_GEWEIGERD = (
+        "\x1b[33m\u26a0 Warning: The provided API key is invalid.\x1b[0m\n"
+        "The API key was loaded from the CURSOR_API_KEY environment variable.\n"
+        "Please check you have the right key, create a new one, or authenticate without it."
+    )
+
+    def test_geweigerde_cursor_sleutel_is_een_loginfout(self):
+        assert a._auth_fout("Cursor 2 eindigde met 1. stderr: " + self._CURSOR_SLEUTEL_GEWEIGERD)
+
+    def test_geweigerde_cursor_sleutel_valt_door_naar_volgende_stoel(self, monkeypatch):
+        """De taak faalde op Cursor 2 in plaats van door te schuiven, en de stoel
+        bleef 'ingelogd' (een sleutel telde als login), dus de verdeler koos hem
+        steeds opnieuw."""
+        monkeypatch.setenv("CURSOR2_API_KEY", "geweigerd")
+
+        def antwoord(cmd, env):
+            if cmd and "cursor" in cmd[0] and env.get("CURSOR_API_KEY"):
+                return subprocess.CompletedProcess(cmd, 1, "", self._CURSOR_SLEUTEL_GEWEIGERD)
+            return subprocess.CompletedProcess(cmd, 0, '{"result":"ok"}', "")
+        self._nep_cli(monkeypatch, antwoord)
+        a._ACCOUNT_CACHE["cursor2"] = (time.monotonic(), {"ingelogd": True, "account": None})
+        a._SEAT_LIMIT.pop("cursor2", None)
+        r = a.run_agent("proef", "x", permission_mode="plan", engine="cursor2")
+        assert r["status"] == "ok"
+        assert r["seats_tried"][0] == "cursor2" and r["engine"] != "cursor2"
+        assert a._ACCOUNT_CACHE["cursor2"][1]["ingelogd"] is False
 
     def test_limiet_tijdens_run_probeert_volgende(self, monkeypatch):
         def antwoord(cmd, env):
