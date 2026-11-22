@@ -80,6 +80,7 @@ def bouw_context(
     wacht: list[dict[str, Any]],
     nu: datetime | None = None,
     verslagen: list[dict[str, Any]] | None = None,
+    lessen: list[dict[str, Any]] | None = None,
 ) -> str:
     """De context als korte tekst. Lege onderdelen vallen weg."""
     nu = nu or datetime.now(timezone.utc)
@@ -95,6 +96,12 @@ def bouw_context(
     if mislukt:
         delen.append("Al geprobeerd en mislukt (niet blind herhalen):\n" + "\n".join(
             f"- {_kort(t.get('title'), 70)}: {_fout(t.get('error'))}" for t in mislukt[:4]))
+    if lessen:
+        # Audit 22 nov: niet dezelfde fout twee keer. Luka's lessen eerst (wet),
+        # dan de ervaring uit je eigen taken (taak_verslag.ervaring).
+        delen.append("Lessen (Luka's regels gaan voor; volg ze):\n" + "\n".join(
+            f"- {'Luka' if l.get('to_agent') == 'lessen' else 'ervaring'}: "
+            f"{_kort(' '.join(str(l.get('body') or '').replace('#', '').split()), 200)}" for l in lessen[:6]))
     if verslagen:
         # Punt 4 (19 nov): wat zijn vorige taken opleverden, zodat hij niet
         # opnieuw begint of blind herhaalt (taak_verslag.py).
@@ -109,11 +116,12 @@ def bouw_context(
     return tekst[:2500]
 
 
-def bronnen(taken: list, mislukt: list, eigen: list, wacht: list, verslagen: list) -> dict[str, int]:
+def bronnen(taken: list, mislukt: list, eigen: list, wacht: list, verslagen: list,
+            lessen: list | None = None) -> dict[str, int]:
     """Welke herinneringen dit antwoord stuurden (zichtbaar in de chat)."""
     return {k: len(v) for k, v in (("open_taken", taken[:6]), ("mislukt", mislukt[:4]),
                                      ("eigen_berichten", eigen[:5]), ("wacht_op_luka", wacht[:3]),
-                                     ("taakverslagen", verslagen[:4])) if v}
+                                     ("taakverslagen", verslagen[:4]), ("lessen", (lessen or [])[:6])) if v}
 
 
 def lees_context(db: Any, agent: str | None, nu: datetime | None = None) -> str:
@@ -148,5 +156,11 @@ def lees_context_met_bronnen(db: Any, agent: str | None,
     verslagen = lees(lambda: db.table("core_manager_messages").select("body,created_at")
                      .eq("to_agent", "log").in_("from_agent", list(namen)).like("body", "Taakverslag%")
                      .order("created_at", desc=True).limit(4).execute().data)
-    return (bouw_context(kern, taken, mislukt, eigen, wacht, nu, verslagen),
-            bronnen(taken, mislukt, eigen, wacht, verslagen))
+    luka = lees(lambda: db.table("core_manager_messages").select("body,created_at,to_agent")
+                .eq("to_agent", "lessen").order("created_at", desc=True).limit(3).execute().data)
+    ervaring = lees(lambda: db.table("core_manager_messages").select("body,created_at,to_agent")
+                    .eq("to_agent", "ervaring").in_("from_agent", list(namen))
+                    .order("created_at", desc=True).limit(3).execute().data)
+    lessen = (luka or [])[:3] + (ervaring or [])[:3]
+    return (bouw_context(kern, taken, mislukt, eigen, wacht, nu, verslagen, lessen),
+            bronnen(taken, mislukt, eigen, wacht, verslagen, lessen))

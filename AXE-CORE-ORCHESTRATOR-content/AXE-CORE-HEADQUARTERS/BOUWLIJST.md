@@ -1,13 +1,13 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 74 klaar, 56 gebouwd maar nog niet bewezen, 50 open (van 180).
+**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 74 klaar, 58 gebouwd maar nog niet bewezen, 49 open (van 181).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
 | Deel | Klaar | Gebouwd | Open |
 |---|---|---|---|
-| Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (50%) | 8 | 1 |
+| Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (47%) | 10 | 0 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 29 | 5 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 5 | 2 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (13%) | 14 | 26 |
@@ -62,10 +62,14 @@ leerlus. Volgorde = belang. Geen nieuwe app/agent/model tot dit staat.
       X" == register; per tool input/output/rechten/fouten/wie mag hem.
 - [x] **7. Leerlus voor alle agents** (BEWEZEN 20 nov 01:03: VPS-taken sluiten episodes onder hun eigen agent -- browser poor, code-editor poor -- en cron schrijft geen geslaagde runs meer. live 19 nov 20:01; bewezen: sinds de herstart schrijft cron geen geslaagde runs meer als episode (0 in de eerste minuten, was ~70 per uur). Nog niet gezien: de eerste episode van een echte VPS-taak onder zijn eigen agent. Gemeten vooraf: in 30 dagen nul episodes versterkt, bijna geen episode met herinneringen eraan, géén episode voor managers/developer/browser, en cron schreef ~50.000 lege episodes per maand. Nu: elke VPS-taak sluit een episode onder zijn eigen agent (good = klaar én bewezen, poor = mislukt of niet compleet) via `taak_verslag.schrijf`, dus ook als de database de taak op mislukt zette; cron schrijft alleen nog mislukte runs; `agenticEngine` + `agenticEditBridge` (dode code) weg; een test houdt chat (langGraph) en browser-agent in dezelfde beurten-lus en de lus-namen gelijk tussen app en VPS): `agenticEngine` aansluiten of weg,
       `langGraphOrchestrator` in dezelfde lus als `browserAgentLoop`.
-  - [ ] **Versterken voor de managers**: de VPS-lus haalt nog geen herinneringen op
+  - [~] **Versterken voor de managers**: de VPS-lus haalt nog geen herinneringen op
         die je kunt versterken (0 lessen in het gedeelde log; manager-context is
         taken/verslagen), dus hun episodes hebben nog geen memory-refs. Eerst
         bepalen welke herinneringen een manager echt gebruikt.
+    *(22 nov: gebouwd -- elke afgeronde managertaak wordt een les in `ervaring` (Werkte/Mislukt + waarom + toepassen op), dubbel = één keer; de managercontext leest Luka's 3 nieuwste lessen en 3 eigen ervaringen terug, en de bron telt mee als "lessen". Memory-refs op de episodes nog niet.)*
+  - [~] **Manager-lus betrouwbaar** (audit 22 nov): nooit dubbel, nooit eindeloos herhalen,
+        nooit half-geldige modeluitvoer als actie, één ronde tegelijk, zichtbaar.
+    *(22 nov: gebouwd -- `manager_betrouwbaar.py`: idem-sleutel per opdracht + vingerafdruk per probleem; zelfde probleem open = geen nieuwe taak, 2x mislukt = geblokkeerd en één stap voor Luka (Your turn), net opgelost = 24 u afkoelen. Strikte JSON met één herstelpoging, anders geen taak. Eén ronde tegelijk. GET /managers/gezondheid met per manager taken, succes, dubbel tegengehouden, ongeldige uitvoer, alarmen. 11 scenario-tests + 1013 backend-tests groen. Nog niet: verificatie vóór "klaar" met meting voor/na, en een lock over processen heen (nu de lease op de cron-rij).)*
 - [~] **8. De ervaring** (gebouwd 19 nov, komt met de volgende app-build; nog niet gezien: één statusregel bovenin elk managervenster -- Waiting on you / Listening / Task running / Thinking / Ready, volgorde = belang (`managerStaat.ts`); spraak via de microfoon in een managervenster gaat naar díe manager, niet meer naar het AXE-hoofdgesprek; een taak uit een managergesprek meldt "klaar" alleen nog in dat gesprek (was: twee keer in de draad + hardop in het hoofdgesprek); tussenstappen die de server al gelezen zette geven geen badge meer; "Done: X" komt er één keer in, niet per open apparaat): per manager één venster; altijd zichtbaar "luistert /
       bezig / taak draait / wacht op jou"; spraak, tekst en taakstatus in één
       stroom; geen popups voor gewone voortgang; meldingen kort, geen spam.

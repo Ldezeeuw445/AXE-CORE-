@@ -3733,6 +3733,15 @@ async def _agent_register_sync():
     asyncio.get_running_loop().run_in_executor(None, _doe)
 
 
+@app.get("/managers/gezondheid", dependencies=[AUTH])
+async def managers_gezondheid():
+    """Audit 22 nov: per manager wat er gebeurt (taken, succes, dubbel tegengehouden, ongeldige
+    modeluitvoer, geblokkeerde problemen) plus alarmen. Zie manager_betrouwbaar.py."""
+    import manager_werk as _mw
+    from datetime import datetime as _dt, timezone as _tz
+    return await asyncio.to_thread(_mw.gezondheid, sb(), _dt.now(_tz.utc))
+
+
 @app.get("/managers/{agent}/context", dependencies=[AUTH])
 async def manager_context_lezen(agent: str):
     """Eén managercontext (audit 19 nov): wat deze manager nu moet weten."""

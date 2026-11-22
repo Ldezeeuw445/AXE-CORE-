@@ -171,14 +171,12 @@ Wat je verder weet (open taken, eerdere verslagen -- kan verouderd zijn):
 
 
 def _json_uit(tekst: str) -> dict[str, Any] | None:
-    m = re.search(r"\{.*\}", tekst or "", re.S)
-    if not m:
-        return None
-    try:
-        d = json.loads(m.group(0))
-    except ValueError:
-        return None
-    return d if isinstance(d, dict) else None
+    """Strikt (manager_betrouwbaar): één geldig object volgens het schema, of None.
+
+    Tot 22 nov een brede regex `{.*}`: bij uitleg met accolades of twee objecten
+    werd het ongeldige JSON, of erger, het verkeerde object."""
+    import manager_betrouwbaar as _mb
+    return _mb.lees_model_json(tekst)
 
 
 def lees_antwoord(tekst: str) -> tuple[str, list[str]]:
@@ -383,12 +381,35 @@ def denk(db: Any, agent: str, opdrachten: list[dict[str, Any]], geschiedenis: li
         rol = "user" if b.get("from_agent") == LUKA else "assistant"
         berichten.append({"role": rol, "content": str(b.get("body") or "")[:1500]})
     berichten.append({"role": "user", "content": "\n\n".join(str(o.get("body") or "") for o in opdrachten)[:4000]})
-    if chat is None:
-        import llm_cascade as _llm
-        keten = manager_keten(agent)
-        tekst, model = _draai(lambda: _llm.chat(berichten, max_tokens=900, timeout=45.0, keten=keten))
-    else:
-        tekst, model = chat(berichten)
+    import manager_betrouwbaar as _mb
+
+    def vraag(msgs: list[dict[str, str]]) -> tuple[str, str]:
+        if chat is None:
+            import llm_cascade as _llm
+            keten = manager_keten(agent)
+            return _draai(lambda: _llm.chat(msgs, max_tokens=900, timeout=45.0, keten=keten))
+        return chat(msgs)
+
+    try:
+        tekst, model = vraag(berichten)
+    except Exception as e:  # noqa: BLE001
+        _mb.tel(agent, "model_fout")
+        _mb.zet(agent, "laatste_fout", f"{datetime.now(timezone.utc).isoformat()[:16]} model: {e}"[:200])
+        raise
+    if _json_uit(tekst) is None and (tekst or "").strip():
+        # Eén herstelpoging; daarna nooit een half-geldig antwoord als actie.
+        try:
+            hersteld, model2 = vraag(berichten + [{"role": "assistant", "content": tekst[:3000]},
+                                                  {"role": "user", "content": _mb.HERSTEL_VRAAG}])
+        except Exception:  # noqa: BLE001
+            hersteld, model2 = "", model
+        if _json_uit(hersteld) is not None:
+            _mb.tel(agent, "json_hersteld")
+            tekst, model = hersteld, model2
+        else:
+            _mb.tel(agent, "ongeldige_json")
+            log.warning("invalid_model_output %s: %s", agent, " ".join((tekst or "").split())[:300])
+    _mb.zet(agent, "laatste_antwoord", datetime.now(timezone.utc).isoformat()[:16])
     antwoord, taken = lees_antwoord(tekst)
     return antwoord, taken, model, lees_overleg(tekst, agent)
 
@@ -404,7 +425,48 @@ def _taken_vandaag(db: Any, agent: str, nu: datetime) -> int:
         return MAX_TAKEN_PER_DAG  # niet kunnen tellen = voorzichtig: geen nieuwe
 
 
+def _recente_taken(db: Any, agent: str, nu: datetime) -> list[dict[str, Any]]:
+    import manager_betrouwbaar as _mb
+    return (db.table("core_tasks").select("id,title,status,metadata,created_at,completed_at")
+            .eq("requested_by", agent).gte("created_at", (nu - _mb.TERUGKIJKEN).isoformat())
+            .order("created_at", desc=True).limit(200).execute().data) or []
+
+
+def _escaleer(db: Any, agent: str, opdracht: str, vinger: str) -> None:
+    """Twee keer mislukt: niet nog eens proberen, maar een stap voor Luka (Your turn). Eén keer."""
+    import gedeeld_log as _gl
+    titel = f"{NAAM.get(agent, agent).split(' (')[0]} loopt vast: {opdracht[:110]}"
+    try:
+        al = (db.table("core_tasks").select("id").eq("capability", _gl.STAP).eq("title", titel[:200])
+              .limit(1).execute().data) or []
+        if al:
+            return
+        rij = _gl.stap_taak(titel, "luka", agent,
+                            f"Dit probleem mislukte al twee keer ({vinger}). Ik probeer het niet opnieuw "
+                            "tot jij kijkt of zegt wat anders moet.")
+        db.table("core_tasks").insert(rij).execute()
+        _zeg(db, agent, f"Dit lukte me twee keer niet: {opdracht[:200]}\n\nIk stop ermee en heb het bij jou "
+                        "gezet (Taken > Your turn). Zeg wat anders moet, dan pak ik het weer op.")
+    except Exception as e:  # noqa: BLE001
+        log.warning("escaleren %s mislukte: %s", agent, e)
+
+
 def maak_taak(db: Any, agent: str, opdracht: str, nu: datetime, bron_id: Any = None) -> dict[str, Any] | None:
+    """Een managertaak -- maar nooit dubbel, nooit een derde poging, niet net na een oplossing."""
+    import manager_betrouwbaar as _mb
+    idem = _mb.idem_sleutel(agent, bron_id, opdracht)
+    vinger = _mb.vingerafdruk(agent, opdracht)
+    try:
+        bestaand = _recente_taken(db, agent, nu)
+    except Exception:  # noqa: BLE001
+        bestaand = []   # niet kunnen kijken: de daglimiet blijft de rem
+    besluit, _al = _mb.beslis(bestaand, idem, vinger, nu)
+    if besluit != "maak":
+        _mb.tel(agent, besluit)
+        log.info("geen nieuwe taak voor %s: %s (%s)", agent, besluit, vinger)
+        if besluit == "geblokkeerd":
+            _escaleer(db, agent, opdracht, vinger)
+        return None
     rij = {
         "title": f"{NAAM.get(agent, agent).split(' (')[0]}: {opdracht[:90]}",
         "goal": (f"You are {agent}, one of the AXE managers, working for Luka like Grok Bot does: you do the work "
@@ -415,7 +477,9 @@ def maak_taak(db: Any, agent: str, opdracht: str, nu: datetime, bron_id: Any = N
                  "exactly what he must do. End with: what you found, what you changed, and whether it is done."),
         "status": "queued", "priority": "high", "source_app": "axe_core",
         "requested_by": agent, "capability": "agentic", "assignee": agent,
-        "metadata": {"agent": agent, "manager": True, "uit_gesprek": True, "bericht_id": bron_id, "app": "axe_core"},
+        "metadata": {"agent": agent, "manager": True, "uit_gesprek": True, "bericht_id": bron_id, "app": "axe_core",
+                     "app_naam": APP_VAN.get(agent, ""), "idem": idem, "vinger": vinger,
+                     "poging": _mb.poging(bestaand, vinger)},
         "created_at": nu.isoformat(),
     }
     try:
@@ -484,7 +548,38 @@ def _draad(db: Any, nu: datetime) -> list[dict[str, Any]]:
             .order("created_at", desc=True).limit(400).execute().data) or []
 
 
+_RONDE = threading.Lock()
+_STAND: dict[str, datetime | None] = {"laatste_run": None, "loopt_sinds": None}
+
+
 def run(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[str, Any]:
+    """Eén ronde, nooit twee tegelijk (een trage modelketen kan langer duren dan de 2-min-cron).
+
+    Over processen heen houdt de lease op de cron-rij dubbel vuren tegen; hier in het proces dit slot."""
+    if not _RONDE.acquire(blocking=False):
+        return {"beantwoord": [], "taken": 0, "gemeld": 0, "fouten": [], "overgeslagen": "vorige ronde loopt nog"}
+    _STAND["loopt_sinds"] = datetime.now(timezone.utc)
+    try:
+        return _run(db, nu, chat)
+    finally:
+        _STAND["loopt_sinds"] = None
+        _STAND["laatste_run"] = datetime.now(timezone.utc)
+        _RONDE.release()
+
+
+def gezondheid(db: Any, nu: datetime) -> dict[str, Any]:
+    """GET /managers/gezondheid: per manager wat er gebeurt, plus alarmen."""
+    import manager_betrouwbaar as _mb
+    try:
+        taken = (db.table("core_tasks").select("requested_by,status,metadata,created_at")
+                 .in_("requested_by", list(MANAGERS)).gte("created_at", (nu - timedelta(hours=24)).isoformat())
+                 .limit(500).execute().data) or []
+    except Exception:  # noqa: BLE001
+        taken = []
+    return _mb.gezondheid(MANAGERS, taken, nu, _STAND["laatste_run"], _STAND["loopt_sinds"])
+
+
+def _run(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[str, Any]:
     uit: dict[str, Any] = {"beantwoord": [], "taken": 0, "gemeld": 0, "fouten": []}
     try:
         berichten = _draad(db, nu)
@@ -687,5 +782,5 @@ def dienst() -> dict[str, Any]:
     }
 
 
-__all__ = ["run", "dienst", "onbeantwoord", "lees_antwoord", "lees_overleg", "meld_tekst", "meld_klaar",
+__all__ = ["run", "gezondheid", "dienst", "onbeantwoord", "lees_antwoord", "lees_overleg", "meld_tekst", "meld_klaar",
            "stel_vraag", "open_overleg", "beantwoord_overleg"]

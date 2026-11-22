@@ -136,4 +136,31 @@ def schrijf(db: Any, taak: dict[str, Any], status: str, result: dict[str, Any] |
     except Exception:  # noqa: BLE001
         return False
     episode(db, taak, status, result, tekst)
+    ervaring(db, taak, status, verslag(taak, status, result, error))
     return True
+
+
+def ervaring(db: Any, taak: dict[str, Any], status: str, v: dict[str, str]) -> bool:
+    """Een managertaak levert een les op die hij bij zijn volgende taak terugleest (manager_context).
+
+    Apart van Luka's eigen lessen (to_agent 'lessen'): die zijn wet voor elke AI;
+    dit is ervaring van één manager. Zelfde les twee keer = één keer."""
+    meta = taak.get("metadata") if isinstance(taak.get("metadata"), dict) else {}
+    if not meta.get("manager"):
+        return False
+    try:
+        import manager_betrouwbaar as mb
+        les = mb.ervaring_les(taak, status, v)
+        if not les:
+            return False
+        agent = str(meta.get("agent") or taak.get("requested_by") or "axe")[:60]
+        kop = les.splitlines()[0]
+        al = (db.table("core_manager_messages").select("body").eq("to_agent", mb.ERVARING)
+              .eq("from_agent", agent).order("created_at", desc=True).limit(30).execute().data) or []
+        if any(str(r.get("body") or "").splitlines()[:1] == [kop] for r in al):
+            return False
+        db.table("core_manager_messages").insert({"from_agent": agent, "to_agent": mb.ERVARING,
+                                                  "kind": "report", "body": les[:1200]}).execute()
+        return True
+    except Exception:  # noqa: BLE001 -- een les breekt nooit een taak
+        return False
