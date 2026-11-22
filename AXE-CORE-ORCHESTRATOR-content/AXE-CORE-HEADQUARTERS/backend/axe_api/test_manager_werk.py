@@ -187,7 +187,7 @@ def test_elke_manager_heeft_eigen_sleutels_en_nooit_de_chat_groq():
         assert "GROQ_API_KEY" not in namen                    # de chat-sleutel nooit
         assert v[-1][0] == "ollama"                            # modelbox als laatste
     # de drie OpenRouter-accounts zijn eerlijk verdeeld: elk de eerste keus van twee managers
-    eerste = [mw.MANAGER_SLEUTELS[a][0][0] for a in mw.NAAM]
+    eerste = [mw.MANAGER_SLEUTELS[a][0][0] for a in mw.MANAGERS]
     assert sorted(eerste.count(k) for k in set(eerste)) == [2, 2, 2]
 
 
@@ -237,3 +237,16 @@ def test_keten_slaat_ontbrekende_sleutels_over_en_rust_per_sleutel(monkeypatch):
     assert llm._rust_tot.get("openrouter/OPENROUTER4", 0) > 0
     assert "openrouter" not in llm._rust_tot
     llm.vergeet_alles()
+
+
+def test_dax_bot_krijgt_ook_antwoord(monkeypatch):
+    """22 nov: DAX-bots zijn managers -- een bericht aan de Developer DAX-bot wordt beantwoord."""
+    monkeypatch.setattr(mw, "_context", lambda db, a: "context")
+    monkeypatch.setattr(mw, "_http_status", lambda url, timeout=8.0: "HTTP 200")
+    db = DB({"core_manager_messages": [
+        {"from_agent": "luka", "to_agent": "developer", "kind": "directive", "body": "Hoe staat de build?", "created_at": t(5)},
+    ], "core_tasks": []})
+    chat = lambda berichten: ('{"antwoord": "De build is groen.", "taken": []}', "groq")
+    uit = mw.run(db, NU, chat=chat)
+    assert uit["beantwoord"] == [{"agent": "developer", "model": "groq", "taken": 0}]
+    assert any(m["from_agent"] == "developer" and "groen" in m["body"] for m in db.data["core_manager_messages"])

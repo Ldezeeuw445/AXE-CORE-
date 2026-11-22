@@ -16,6 +16,7 @@ import { agentById, type AxeAgent, type AxeAgentId } from '@/domain/agents/roste
 import { type GrokManagerId } from '@/domain/agents/grokManagers';
 import {
   BOSS_ID,
+  DAX_BOT_IDS,
   MANAGER_APP_GROEPEN,
   PROJECTS_ORCH_ID,
   bossAgent,
@@ -176,7 +177,7 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
   const projects = useMemo(() => projectsOrchAgent(), []);
   const onderProjects = useMemo(() => managersOnderProjects(), []);
   const alleIds = useMemo(
-    () => [BOSS_ID, PROJECTS_ORCH_ID, ...onderProjects.map((a) => a.id)] as AxeAgentId[],
+    () => [BOSS_ID, PROJECTS_ORCH_ID, ...onderProjects.map((a) => a.id), ...DAX_BOT_IDS] as AxeAgentId[],
     [onderProjects],
   );
   const [searchParams, setSearchParams] = useSearchParams();
@@ -504,8 +505,12 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
           <button
             type="button"
             className="axe-managers-room-daxlink"
-            onClick={() => navigate('/dax')}
-            title="DAX bots overview"
+            onClick={() => {
+              const groep = document.querySelector('[data-axe-dax-groep]');
+              if (groep) groep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              else navigate('/dax');
+            }}
+            title="DAX bots -- staan nu gewoon in deze lijst"
           >
             DAX
           </button>
@@ -562,6 +567,19 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
                   </li>
                 );
               })}
+
+              {(() => {
+                const bots = DAX_BOT_IDS.map((id) => agentById(id)).filter(matchZoek);
+                if (!bots.length) return null;
+                return (
+                  <li className="axe-managers-room-groep" aria-label="DAX bots" data-axe-dax-groep="">
+                    <p className="axe-managers-room-sectie-label">DAX bots · always on</p>
+                    <ul className="axe-managers-room-groep-ul" role="list">
+                      {bots.map((a) => renderRij(a))}
+                    </ul>
+                  </li>
+                );
+              })()}
             </ul>
         </>
       </div>

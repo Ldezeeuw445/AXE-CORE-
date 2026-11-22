@@ -33,6 +33,10 @@ from typing import Any, Callable
 log = logging.getLogger("axe_manager_werk")
 
 MANAGERS: tuple[str, ...] = ("axemanager", "projectsmgr", "companionmgr", "axon", "tradingos", "northseamgr")
+# 22 nov (Luka): DAX-bots zijn managers. Ze krijgen hetzelfde gesprek (ook met de app
+# dicht); hun eigen werk blijft hun DAX-routine, dus geen extra initiatief-ronde.
+DAX_BOTS: tuple[str, ...] = ("northsea", "trading", "developer", "thinktank", "browser")
+IN_GESPREK: tuple[str, ...] = MANAGERS + DAX_BOTS
 LUKA = "luka"
 ANTWOORD_NA = timedelta(minutes=3)       # zo lang krijgt de app de kans
 NIET_OUDER_DAN = timedelta(hours=24)     # oudere opdrachten niet alsnog oprakelen
@@ -56,6 +60,12 @@ MANAGER_SLEUTELS: dict[str, tuple[tuple[str, str], tuple[str, str]]] = {
     "projectsmgr": (("OPENROUTER4_API_KEY", "OPENROUTER3_API_KEY"), ("GROQ_RESERVE_API_KEY", "GROQ_LIGHT_API_KEY")),
     "tradingos": (("OPENROUTER5_API_KEY", "OPENROUTER3_API_KEY"), ("GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY")),
     "companionmgr": (("OPENROUTER5_API_KEY", "OPENROUTER4_API_KEY"), ("GROQ_RESERVE_API_KEY", "GROQ_LIGHT_API_KEY")),
+    # DAX-bots (22 nov): dezelfde drie OpenRouter-accounts, verspreid, nooit de chat-Groq.
+    "northsea": (("OPENROUTER4_API_KEY", "OPENROUTER3_API_KEY"), ("GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY")),
+    "trading": (("OPENROUTER5_API_KEY", "OPENROUTER4_API_KEY"), ("GROQ_RESERVE_API_KEY", "GROQ_LIGHT_API_KEY")),
+    "developer": (("OPENROUTER3_API_KEY", "OPENROUTER5_API_KEY"), ("GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY")),
+    "thinktank": (("OPENROUTER4_API_KEY", "OPENROUTER5_API_KEY"), ("GROQ_RESERVE_API_KEY", "GROQ_LIGHT_API_KEY")),
+    "browser": (("OPENROUTER5_API_KEY", "OPENROUTER3_API_KEY"), ("GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY")),
 }
 
 
@@ -90,6 +100,8 @@ NAAM = {
     "axemanager": "AXE CORE Manager (de baas)", "projectsmgr": "Projects Manager",
     "companionmgr": "AXE Companion Manager", "axon": "AXON Memory Manager",
     "tradingos": "Trading OS Manager", "northseamgr": "NorthSea Desk Manager",
+    "northsea": "NorthSea DAX-bot", "trading": "Trading DAX-bot", "developer": "Developer DAX-bot",
+    "thinktank": "ThinkTank DAX-bot", "browser": "Browser DAX-bot",
 }
 
 
@@ -250,7 +262,8 @@ def _context(db: Any, agent: str) -> str:
 
 
 APP_VAN = {"companionmgr": "AXE Companion", "tradingos": "Trading OS", "northseamgr": "NorthSea",
-           "projectsmgr": "AXE Core", "axemanager": "AXE Core", "axon": "AXON Memory"}
+           "projectsmgr": "AXE Core", "axemanager": "AXE Core", "axon": "AXON Memory",
+           "northsea": "NorthSea", "trading": "Trading OS", "developer": "AXE Core", "thinktank": "AXE Core", "browser": "AXE Core"}
 
 
 def _http_status(url: str, timeout: float = 8.0) -> str:
@@ -544,7 +557,7 @@ def meld_tekst(t: dict[str, Any]) -> str:
 def meld_klaar(db: Any, nu: datetime) -> int:
     try:
         rijen = (db.table("core_tasks").select("id,title,status,result,error,metadata,requested_by,completed_at")
-                 .in_("requested_by", list(MANAGERS)).in_("status", list(KLAAR))
+                 .in_("requested_by", list(IN_GESPREK)).in_("status", list(KLAAR))
                  .gte("completed_at", (nu - NIET_OUDER_DAN).isoformat()).limit(50).execute().data) or []
     except Exception:  # noqa: BLE001
         return 0
@@ -624,7 +637,7 @@ def _run(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[
     except Exception as e:  # noqa: BLE001
         return {**uit, "fouten": [f"draad: {e}"[:200]]}
     rondes = 0
-    for agent in MANAGERS:
+    for agent in IN_GESPREK:
         if rondes >= MAX_ANTWOORDEN_PER_RONDE:
             break
         wacht = onbeantwoord(berichten, agent, nu)

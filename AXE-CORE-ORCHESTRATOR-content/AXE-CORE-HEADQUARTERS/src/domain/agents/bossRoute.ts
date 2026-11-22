@@ -48,6 +48,13 @@ export const MANAGER_APP_GROEPEN: readonly {
   { label: 'NorthSea Commodity Partners', ids: ['northseamgr'] },
 ] as const;
 
+/**
+ * DAX-bots zijn managers (Luka, 22 nov: "de manager en de DAX-bots horen niet aparte
+ * agents te wezen ... dan kunnen de DAX-bots er gewoon bij in de manager-tab").
+ * Zelfde chat, zelfde draad, always on -- ze heten alleen DAX-bot.
+ */
+export const DAX_BOT_IDS = ['northsea', 'trading', 'developer', 'thinktank', 'browser'] as const satisfies readonly AxeAgentId[];
+
 export function isBoss(id: string | null | undefined): boolean {
   return id === BOSS_ID;
 }
