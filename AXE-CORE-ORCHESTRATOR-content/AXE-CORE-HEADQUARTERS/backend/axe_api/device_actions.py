@@ -174,6 +174,25 @@ def werkbon(opdracht: str) -> str:
     )
 
 
+def motor_fout(output: Any) -> str | None:
+    """De echte reden als de coding-agent zelf faalde (claude -p: is_error + result).
+
+    Gemeten 22 nov: Claude Code op de Mac mini gaf "You've hit your weekly limit ·
+    resets 10pm" -- de manager maakte daar "429, kan het bestand niet lezen" van."""
+    t = str(output or "").split("\n## Oplevering (Mac)")[0]
+    try:
+        d = json.loads(t)
+    except ValueError:
+        return None
+    if isinstance(d, dict) and d.get("is_error"):
+        return " ".join(str(d.get("result") or d.get("subtype") or "onbekende fout").split())[:240]
+    return None
+
+
+def _leeg(v: str) -> str:
+    return "" if v.strip() in ("", "(no output)") else v.strip()
+
+
 def _tekst_van(output: Any) -> str:
     """De leesbare tekst uit wat de Mac teruggeeft (claude -p geeft JSON)."""
     t = str(output or "")
@@ -203,13 +222,16 @@ def oplevering(output: Any) -> dict[str, Any]:
             k, v = regel.split(":", 1)
             uit[k.strip()] = v.strip()
     na_commits = mac.split("\ncommits:", 1)[1] if "\ncommits:" in mac else ""
-    uit["commits"] = na_commits.split("\ndiff:", 1)[0].split("\nniet gecommit:", 1)[0].strip()
-    open_ = mac.split("\nniet gecommit:", 1)[1].split("\ndiff:", 1)[0].strip() if "\nniet gecommit:" in mac else ""
+    uit["commits"] = _leeg(na_commits.split("\ndiff:", 1)[0].split("\nniet gecommit:", 1)[0])
+    open_ = _leeg(mac.split("\nniet gecommit:", 1)[1].split("\ndiff:", 1)[0]) if "\nniet gecommit:" in mac else ""
     if open_:
         uit["niet_gecommit"] = open_  # "af is af" vraagt alles gecommit
-    uit["diff"] = mac.split("\ndiff:", 1)[1].strip() if "\ndiff:" in mac else ""
+    uit["diff"] = _leeg(mac.split("\ndiff:", 1)[1]) if "\ndiff:" in mac else ""
+    if (fout := motor_fout(ruw)):
+        uit["motor_fout"] = fout
     ontbreekt = [k for k in KOPJES if not uit[k.lower().replace("'", "")]]
-    uit["compleet"] = not ontbreekt and bool(uit.get("branch")) and not uit.get("niet_gecommit")
+    uit["compleet"] = (not ontbreekt and bool(uit.get("branch")) and not uit.get("niet_gecommit")
+                       and not uit.get("motor_fout"))
     if ontbreekt:
         uit["ontbreekt"] = ontbreekt
     return uit
@@ -223,6 +245,11 @@ def oplevering_weigering(op: dict[str, Any] | None) -> str | None:
     waren. Geen coding-run in deze taak (op is None) = deze regel geldt niet."""
     if not isinstance(op, dict) or op.get("compleet"):
         return None
+    if op.get("motor_fout"):
+        andere = sorted(AGENT_RUNS - {str(op.get("tool") or "")})
+        return (f"De coding-agent ({op.get('tool') or 'claude_code.run'}) werkte niet: \"{op['motor_fout']}\". "
+                f"Dat is geen fout in de opdracht. Probeer dezelfde opdracht met {' of '.join(andere)} op dezelfde Mac; "
+                "lukt dat ook niet, zeg Luka dan precies deze reden. Je bent NIET klaar.")
     mist: list[str] = [f"kopje {k}" for k in op.get("ontbreekt") or []]
     if not op.get("branch"):
         mist.append("een branch")

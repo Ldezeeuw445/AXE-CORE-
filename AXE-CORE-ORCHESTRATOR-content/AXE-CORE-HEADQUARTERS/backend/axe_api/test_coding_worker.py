@@ -73,3 +73,14 @@ def test_lus_weigert_klaar_tot_de_oplevering_compleet_is(monkeypatch):
     assert uit["oplevering"]["compleet"] and uit["oplevering"]["branch"] == "axe/2026-11-22-ab12"
     geweigerd = [p for c in gezien for p in c.get("parts", []) if p.get("functionResponse", {}).get("name") == "finish"]
     assert geweigerd and "NIET klaar" in geweigerd[0]["functionResponse"]["response"]["reason"]
+
+
+def test_weeklimiet_komt_als_echte_reden_door_en_stuurt_naar_een_andere_motor():
+    uit = ('{"is_error":true,"subtype":"success","result":"You\'ve hit your weekly limit · resets 10pm (Europe/Amsterdam)"}'
+           "\n\n## Oplevering (Mac)\nbranch: axe/20261122-fx3zsw\ncommits:\n(no output)\nniet gecommit:\n(no output)\n"
+           "diff:\n(no output)")
+    op = {**da.oplevering(uit), "tool": "claude_code.run"}
+    assert op["motor_fout"].startswith("You've hit your weekly limit")
+    assert "niet_gecommit" not in op and op["commits"] == "" and not op["compleet"]
+    reden = da.oplevering_weigering(op)
+    assert "weekly limit" in reden and "codex.run" in reden
