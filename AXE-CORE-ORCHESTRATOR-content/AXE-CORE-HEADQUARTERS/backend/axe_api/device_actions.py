@@ -190,10 +190,25 @@ def motor_fout(output: Any) -> str | None:
         eerste = next((r.strip() for r in t.splitlines() if r.strip()), "")
         if eerste.lower().startswith("error:") and "usage:" in t.lower():
             return " ".join(eerste.split())[:240]
+        # codex exec: "ERROR: {...invalid_request_error..., "message": "..."}" (22 nov: model
+        # te nieuw voor de CLI, of niet beschikbaar met een ChatGPT-account).
+        m = re.search(r'^ERROR: \{.*?"message":\s*"([^"]+)"', t, re.M)
+        if m:
+            return " ".join(m.group(1).split())[:240]
         return None
     if isinstance(d, dict) and d.get("is_error"):
         return " ".join(str(d.get("result") or d.get("subtype") or "onbekende fout").split())[:240]
     return None
+
+
+def _geen_voorbeeld(v: str) -> str:
+    t = (v or "").strip()
+    voorbeelden = ("(wat je veranderde", "(welke commando's je draaide", "(wat er mis kan gaan")
+    eerste = t.splitlines()[0].strip() if t else ""
+    if eerste.startswith(voorbeelden):
+        rest = "\n".join(t.splitlines()[1:]).strip()
+        return rest if rest and not rest.startswith(voorbeelden) else ""
+    return t
 
 
 def _leeg(v: str) -> str:
@@ -223,7 +238,9 @@ def oplevering(output: Any) -> dict[str, Any]:
     ruw = str(output or "")
     tekst = _tekst_van(ruw)
     mac = ruw.split("## Oplevering (Mac)", 1)[1] if "## Oplevering (Mac)" in ruw else ""
-    uit: dict[str, Any] = {k.lower().replace("'", ""): _sectie(tekst, k) for k in KOPJES}
+    # Een kopje dat alleen de voorbeeldtekst uit de werkbon bevat (een CLI die de prompt
+    # terugzegt) is leeg -- 22 nov stond zo een oplevering zonder één commit op compleet.
+    uit: dict[str, Any] = {k.lower().replace("'", ""): _geen_voorbeeld(_sectie(tekst, k)) for k in KOPJES}
     for regel in mac.splitlines():
         if ":" in regel and regel.split(":", 1)[0].strip() in ("branch", "worktree"):
             k, v = regel.split(":", 1)
@@ -237,8 +254,10 @@ def oplevering(output: Any) -> dict[str, Any]:
     if (fout := motor_fout(ruw)):
         uit["motor_fout"] = fout
     ontbreekt = [k for k in KOPJES if not uit[k.lower().replace("'", "")]]
-    uit["compleet"] = (not ontbreekt and bool(uit.get("branch")) and not uit.get("niet_gecommit")
-                       and not uit.get("motor_fout"))
+    if not uit.get("commits"):
+        uit.setdefault("ontbreekt", [])
+    uit["compleet"] = (not ontbreekt and bool(uit.get("branch")) and bool(uit.get("commits"))
+                       and not uit.get("niet_gecommit") and not uit.get("motor_fout"))
     if ontbreekt:
         uit["ontbreekt"] = ontbreekt
     return uit
@@ -260,6 +279,8 @@ def oplevering_weigering(op: dict[str, Any] | None) -> str | None:
     mist: list[str] = [f"kopje {k}" for k in op.get("ontbreekt") or []]
     if not op.get("branch"):
         mist.append("een branch")
+    if not op.get("commits"):
+        mist.append("een commit (er is niets vastgelegd)")
     if op.get("niet_gecommit"):
         mist.append("alles gecommit (er staat nog werk open)")
     return ("De oplevering van de coding-agent is niet compleet: " + ", ".join(mist or ["onbekend"])

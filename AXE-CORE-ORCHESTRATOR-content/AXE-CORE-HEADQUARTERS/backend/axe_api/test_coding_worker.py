@@ -122,3 +122,15 @@ def test_lus_vraagt_geen_ok_voor_iets_dat_toch_geweigerd_wordt(monkeypatch):
     monkeypatch.setattr(agent_loop, "_shell", lambda cmd, cwd=None: {"exit_code": 0, "stdout": "x", "stderr": ""})
     uit = asyncio.run(agent_loop.run_agent_loop("x", "t", ev))   # geen ApprovalRequired
     assert uit["summary"].startswith("MILESTONE: blocked")
+
+
+def test_voorbeeldtekst_en_geen_commit_is_niet_compleet_en_codexfout_komt_door():
+    uit = ("user\n## Samenvatting\n(wat je veranderde, in gewone taal, 2-5 regels)\n## Tests\n(welke commando's je draaide "
+           "en de uitkomst, letterlijk)\n## Risico's\n(wat er mis kan gaan of wat je niet kon controleren; 'geen' mag alleen "
+           "als dat waar is)\nERROR: {\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":"
+           "\"The 'gpt-6-astra' model requires a newer version of Codex.\"}}\n\n## Oplevering (Mac)\nbranch: axe/x\ncommits:\n"
+           "(no output)\nniet gecommit:\n(no output)\ndiff:\n(no output)")
+    op = {**da.oplevering(uit), "tool": "codex.run"}
+    assert op["samenvatting"] == "" and not op["compleet"]
+    assert "newer version of Codex" in op["motor_fout"]
+    assert "codex.run" not in da.oplevering_weigering(op).split("Probeer")[1].split(" op dezelfde")[0]
