@@ -12,7 +12,14 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-const execFileP = promisify(execFile);
+const execFileRuw = promisify(execFile);
+// 22 nov gemeten: met stdin open wachten CLI's (opencode, codex) op invoer tot de
+// time-out, en dan staat de stoel op "Unknown". Niemand geeft hier invoer: meteen dicht.
+const execFileP = (bin, args, opts) => {
+  const p = execFileRuw(bin, args, opts);
+  p.child?.stdin?.end();
+  return p;
+};
 
 const FREE_MODELS = { opencode: 'opencode/beam-free', kilo: 'kilo/kilo-auto/free', agy: null };
 const freeChecks = new Map();
@@ -121,7 +128,7 @@ export function cursorStatusFromText(tekst, { hasApiKey = false } = {}) {
       const user = d.user && typeof d.user === 'object' ? d.user : d;
       const emailRaw = d.email || d.userEmail || user.email || d.account;
       const email = typeof emailRaw === 'string' && emailRaw.includes('@') ? emailRaw : null;
-      const auth = d.authenticated ?? d.loggedIn ?? d.logged_in;
+      const auth = d.authenticated ?? d.isAuthenticated ?? d.loggedIn ?? d.logged_in;
       if (typeof auth === 'boolean') return { loggedIn: auth, email: auth ? email : null };
       if (email) return { loggedIn: true, email };
     }
@@ -159,19 +166,26 @@ export function claudeStatusFromText(tekst) {
   }
 }
 
+// launchd geeft de worker alleen /opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin. Claude,
+// Cursor en OpenCode staan in ~/.local/bin: zonder die map vond de worker ze niet en
+// stond elke Claude-stoel op de iMac op "Unknown" (22 nov nagebootst).
+const CLI_MAPPEN = () => [join(homedir(), '.local/bin'), join(homedir(), '.bun/bin'), '/opt/homebrew/bin', '/usr/local/bin'];
+
 function withCliPath(env) {
-  const extra = '/opt/homebrew/bin:/usr/local/bin';
   const path = env.PATH || process.env.PATH || '';
-  if (path.split(':').includes('/opt/homebrew/bin')) return { ...env };
-  return { ...env, PATH: `${extra}:${path}` };
+  const al = new Set(path.split(':'));
+  const erbij = CLI_MAPPEN().filter(d => !al.has(d));
+  return erbij.length ? { ...env, PATH: [...erbij, path].filter(Boolean).join(':') } : { ...env };
 }
 
 function cliBin(env, keys, fallbackName) {
   for (const k of keys) {
     if (env[k]) return env[k];
   }
-  const homebrew = `/opt/homebrew/bin/${fallbackName}`;
-  if (existsSync(homebrew)) return homebrew;
+  for (const dir of CLI_MAPPEN()) {
+    const p = join(dir, fallbackName);
+    if (existsSync(p)) return p;
+  }
   return fallbackName;
 }
 
@@ -258,6 +272,14 @@ async function probeCodex(seat) {
   }
 }
 
+let cursorRij = Promise.resolve();
+/** Cursor-agent wil niet twee keer tegelijk: één aanroep tegelijk. */
+function naElkaar(werk) {
+  const volgende = cursorRij.then(werk, werk);
+  cursorRij = volgende.catch(() => undefined);
+  return volgende;
+}
+
 async function probeCursor(seat, env) {
   const keyNaam = seat.apiKeyEnv || 'CURSOR_API_KEY';
   const apiKey = env[keyNaam] || (seat.id === 'cursor' ? env.CURSOR_API_KEY : env.CURSOR2_API_KEY) || '';
@@ -265,14 +287,16 @@ async function probeCursor(seat, env) {
   const bin = cliBin(env, ['CURSOR_BIN', 'AXE_CURSOR_BIN'], 'cursor-agent');
   const childEnv = withCliPath({ ...process.env, ...env });
   if (seat.id === 'cursor2' && apiKey) childEnv.CURSOR_API_KEY = apiKey;
-  const draai = async (args) => {
+  const draai = (args) => naElkaar(async () => {
     try {
-      const { stdout, stderr } = await execFileP(bin, args, { env: childEnv, timeout: 8000 });
+      // 22 nov: twee cursor-agents tegelijk (cursor + cursor2) naast de andere stoelen
+      // liepen allebei in de 8 s time-out (los: 0,9 s) -> "Unknown". Na elkaar, 20 s.
+      const { stdout, stderr } = await execFileP(bin, args, { env: childEnv, timeout: 20_000 });
       return `${stdout || ''}${stderr || ''}`;
     } catch (err) {
       return `${err?.stdout || ''}${err?.stderr || ''}${err?.message || ''}`;
     }
-  };
+  });
   let tekst = await draai(['status', '--format', 'json']);
   let parsed = cursorStatusFromText(tekst, { hasApiKey });
   if (parsed.loggedIn == null || (parsed.loggedIn && !parsed.email)) {

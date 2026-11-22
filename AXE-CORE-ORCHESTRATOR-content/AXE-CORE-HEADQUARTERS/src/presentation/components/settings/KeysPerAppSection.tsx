@@ -128,16 +128,46 @@ export function KeysPerAppSection() {
 const SERVER_SLOT_TEST_EVENT = 'axe:server-slot-test';
 const serverSlotTests: Record<string, string> = {};
 
+const SERVER_SLOTS = [
+  ['Cerebras (VPS)', 'CEREBRAS_API_KEY'],
+  ['Groq 2', 'GROQ_AGENTS_API_KEY'],
+  ['Groq 3', 'GROQ_LIGHT_API_KEY'],
+  ['Groq 4', 'GROQ_RESERVE_API_KEY'],
+  ['OpenRouter 3', 'OPENROUTER3_API_KEY'],
+  ['OpenRouter 4', 'OPENROUTER4_API_KEY'],
+  ['OpenRouter 5', 'OPENROUTER5_API_KEY'],
+] as const;
+const SLOT_CACHE = 'axe.serverSlotTests';
+const SLOT_VERS_MS = 30 * 60_000;
+
+function leesSlotCache(): Record<string, string> {
+  try {
+    const ruw = JSON.parse(localStorage.getItem(SLOT_CACHE) || '{}') as Record<string, { s: string; t: number }>;
+    return Object.fromEntries(Object.entries(ruw).filter(([, v]) => Date.now() - v.t < SLOT_VERS_MS).map(([k, v]) => [k, v.s]));
+  } catch { return {}; }
+}
+
+function bewaarSlotCache(key: string, status: string): void {
+  try {
+    const ruw = JSON.parse(localStorage.getItem(SLOT_CACHE) || '{}') as Record<string, { s: string; t: number }>;
+    ruw[key] = { s: status, t: Date.now() };
+    localStorage.setItem(SLOT_CACHE, JSON.stringify(ruw));
+  } catch { /* geen opslag: dan volgende keer opnieuw testen */ }
+}
+
+/** Een 402 is geen kapotte sleutel maar geen tegoed: dat moet er zo staan. */
+export function slotTekst(result: string | undefined): string {
+  if (result === 'Works') return 'Connected';
+  if (result === 'Rate limited') return 'Rate limited';
+  if (result?.includes('402')) return 'No credits';
+  if (result === 'Broken' || result?.startsWith('Test failed')) return 'Failed';
+  if (result === 'Testing…') return 'Testing…';
+  if (result === 'Set') return 'Testing…';
+  return result ?? 'Not checked';
+}
+
 export function ServerProviderSlots({ compact = false }: { compact?: boolean } = {}) {
-  const slots = [
-    ['Cerebras (VPS)', 'CEREBRAS_API_KEY'],
-    ['Groq 2', 'GROQ_AGENTS_API_KEY'],
-    ['Groq 3', 'GROQ_LIGHT_API_KEY'],
-    ['Groq 4', 'GROQ_RESERVE_API_KEY'],
-    ['OpenRouter 3', 'OPENROUTER3_API_KEY'],
-    ['OpenRouter 4', 'OPENROUTER4_API_KEY'],
-    ['OpenRouter 5', 'OPENROUTER5_API_KEY'],
-  ];
+  const slots = SERVER_SLOTS;
   const [status, setStatus] = useState<Record<string, string>>(() => ({ ...serverSlotTests }));
   useEffect(() => {
     let active = true;
@@ -151,6 +181,26 @@ export function ServerProviderSlots({ compact = false }: { compact?: boolean } =
     }).catch(() => {});
     const sync = () => setStatus(previous => ({ ...previous, ...serverSlotTests }));
     window.addEventListener(SERVER_SLOT_TEST_EVENT, sync);
+    // 22 nov (Luka: "ik heb ze opnieuw op de VPS gezet en ze werkten, maar er staat Not
+    // tested"): de zijbalk toonde alleen dát een sleutel er stond. Nu test hij ze zelf,
+    // één voor één, hoogstens eens per half uur per Mac -- een test is een echte
+    // modelaanroep van één woord.
+    if (compact) {
+      const vers = leesSlotCache();
+      Object.assign(serverSlotTests, vers);
+      sync();
+      void (async () => {
+        for (const [, key] of SERVER_SLOTS) {
+          if (!active) return;
+          if (vers[key]) continue;
+          const uit = await testServerProviderKey(key).catch(() => ({ status: 'Test unavailable' }));
+          if (uit.status === 'Test unavailable') continue;
+          serverSlotTests[key] = uit.status;
+          bewaarSlotCache(key, uit.status);
+          window.dispatchEvent(new Event(SERVER_SLOT_TEST_EVENT));
+        }
+      })();
+    }
     return () => {
       active = false;
       window.removeEventListener(SERVER_SLOT_TEST_EVENT, sync);
@@ -168,7 +218,7 @@ export function ServerProviderSlots({ compact = false }: { compact?: boolean } =
     return <CompactStatusRow key={key} label={label}
       icon={key.startsWith('OPENROUTER') ? 'Router' : key.startsWith('GROQ') ? 'Rocket' : 'Zap'}
       accent={key.startsWith('GROQ') ? '#ec4899' : '#f59e0b'}
-      status={result === 'Works' ? 'Connected' : result === 'Rate limited' ? 'Rate limited' : failed ? 'Failed' : result === 'Set' ? 'Not tested' : result ?? 'Not checked'}
+      status={slotTekst(result)}
       tone={result === 'Works' ? 'ok' : failed ? 'fail' : 'idle'} />;
   })}</>;
   return <>{slots.map(([label, key]) => {
