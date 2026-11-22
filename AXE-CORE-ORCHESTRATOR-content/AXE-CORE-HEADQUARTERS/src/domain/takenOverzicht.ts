@@ -36,12 +36,18 @@ export interface OverzichtTaak {
   createdAt: number;
   /** Wanneer hij klaar ging; ontbreekt dan telt hij niet als "vandaag". */
   klaarOp?: number;
+  /** 22 nov: false = mislukt maar niets voor Luka (de AI pakt het op); hoort niet bij "Wacht op jou". */
+  voorLuka?: boolean;
 }
 
 export interface Secties<T extends OverzichtTaak> {
   wacht: T[];
   bezig: T[];
   klaarVandaag: T[];
+  /** Open en van een AI: start pas als iemand hem start ("doe de rij"). */
+  gepland: T[];
+  /** Mislukt, maar niets voor Luka. */
+  misluktAi: T[];
 }
 
 function zelfdeDag(a: number, b: number): boolean {
@@ -52,7 +58,9 @@ function zelfdeDag(a: number, b: number): boolean {
 export function verdeelSecties<T extends OverzichtTaak>(taken: T[], nu = Date.now()): Secties<T> {
   const nieuwst = (a: T, b: T) => (b.klaarOp ?? b.createdAt) - (a.klaarOp ?? a.createdAt);
   return {
-    wacht: taken.filter((t) => t.status === 'blocked').sort(nieuwst),
+    wacht: taken.filter((t) => t.status === 'blocked' && t.voorLuka !== false).sort(nieuwst),
+    gepland: taken.filter((t) => t.status === 'todo' && !/^luka$/i.test(t.assignee || '')).sort(nieuwst),
+    misluktAi: taken.filter((t) => t.status === 'blocked' && t.voorLuka === false).sort(nieuwst),
     bezig: taken.filter((t) => t.status === 'in-progress').sort(nieuwst),
     klaarVandaag: taken.filter((t) => t.status === 'done' && t.klaarOp != null && zelfdeDag(t.klaarOp, nu)).sort(nieuwst),
   };

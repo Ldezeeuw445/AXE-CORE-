@@ -3,7 +3,9 @@
  * wie), wat is vandaag klaar. Alleen echte rijen uit Tasks.tsx; een lege
  * sectie zegt dat ze leeg is in plaats van gevuld te worden.
  */
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { rijActieApi } from '@/infrastructure/gateways/axeCoreApiService';
 import { verdeelSecties, wieBezig, type OverzichtTaak } from '@/domain/takenOverzicht';
 import { zonderUuid } from '@/domain/approvals/wachtOpJou';
 
@@ -52,6 +54,43 @@ export function TakenSecties<T extends OverzichtTaak>({ taken, loading }: Props<
         leeg={loading ? 'Laden…' : 'Er loopt nu niets.'} />
       <Sectie titel="Klaar vandaag" taken={s.klaarVandaag} kleur="var(--success)"
         leeg={loading ? 'Laden…' : 'Vandaag nog niets afgerond.'} />
+      <Gepland aantal={s.gepland.length} misluktAi={s.misluktAi.length} />
     </div>
+  );
+}
+
+/**
+ * 22 nov (Luka: "geen idee of ik er nou wat mee moet"): de geplande AI-taken
+ * starten niet vanzelf. Dat staat er nu gewoon, met één knop die de rij start
+ * (backend/axe_api/rij.py: één voor één, nooit trading/geld/wissen).
+ */
+function Gepland({ aantal, misluktAi }: { aantal: number; misluktAi: number }) {
+  const [stand, setStand] = useState<string | null>(null);
+  const start = () => {
+    setStand('Bezig…');
+    void rijActieApi('begin')
+      .then((u) => setStand(u.toegevoegd ? `${u.toegevoegd} in de rij, één voor één` : 'Niets dat de AI zelf mag doen'))
+      .catch((e: unknown) => setStand(e instanceof Error ? e.message : 'Lukte niet'));
+  };
+  return (
+    <section className="axe-taken-sectie" data-axe-sectie="Gepland">
+      <header className="flex items-baseline gap-2">
+        <h3 className="text-[11px] font-semibold tracking-wide" style={{ color: 'var(--text-secondary)' }}>Gepland voor de AI</h3>
+        <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>{aantal}</span>
+      </header>
+      <p className="mt-2 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+        {aantal
+          ? 'Hier hoef je niets mee. Ze starten niet vanzelf; de rij werkt ze één voor één af.'
+          : 'Niets gepland.'}
+        {misluktAi ? ` ${misluktAi} mislukt, maar daar pakt de AI het zelf op.` : ''}
+      </p>
+      {aantal > 0 && (
+        <button type="button" onClick={start} disabled={stand === 'Bezig…'}
+          className="mt-2 inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-semibold"
+          style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-primary)' }}>
+          {stand ?? 'Start de rij'}
+        </button>
+      )}
+    </section>
   );
 }

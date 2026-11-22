@@ -2,6 +2,7 @@
  * Twee knoppen boven de composer: agents (live, één bron) en taken/meldingen.
  * Uitgeklapt is elke regel volledig leesbaar. Geen truncate.
  */
+import { isVoorLuka, zonderRuis } from '@/domain/taken/takenRuis';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
@@ -108,7 +109,14 @@ export function AxeAgentsBalk() {
         .limit(30);
       if (!levend || !data) return;
       const rijen = data as TaakRij[];
+      // 22 nov: zelfde regels als de Taken-tab -- geen Mac-stapjes, geen al-opgeloste of
+      // dubbele mislukkingen, en alleen wat echt van Luka is telt als "need attention".
+      const alsRuis = (r: TaakRij) => ({ id: r.id, title: r.title, status: r.status, capability: r.capability ?? null,
+        created_at: r.updated_at ?? '', error: (r.error && typeof r.error === 'object' ? r.error : null) as Record<string, unknown> | null });
+      const zichtbaar = new Set(zonderRuis(rijen.map(alsRuis)).map((r) => r.id));
       const vast = rijen.filter((r) => {
+        if (!zichtbaar.has(r.id)) return false;
+        if (!isVoorLuka(alsRuis(r))) return false;
         if (!['failed', 'blocked'].includes(r.status)) return false;
         if (r.metadata?.archived) return false;
         const err = r.error && typeof r.error === 'object' ? r.error as { archived?: boolean } : null;

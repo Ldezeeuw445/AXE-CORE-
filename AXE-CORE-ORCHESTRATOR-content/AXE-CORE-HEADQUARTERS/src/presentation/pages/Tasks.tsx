@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { isVoorLuka, zonderRuis } from '@/domain/taken/takenRuis';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -42,6 +43,8 @@ interface Task {
   dueAt?: number;
   /** Welke van de vijf apps. Uit metadata.app; onbekend valt terug op AXE Core. */
   app: AppId;
+  /** Mislukt: is dit iets voor Luka (sleutel, login, tegoed) of pakt de AI het op? */
+  voorLuka?: boolean;
   /**
    * Leerlus-episode (agent 'task'), uit metadata.episodeId. Alleen gezet voor
    * taken die via addTask() op deze pagina zijn aangemaakt -- planner-taken
@@ -77,6 +80,9 @@ function uiStatusOf(row: DurableTaskRun): TaskStatus {
   if (row.status === 'completed' || row.status === 'done') return 'done';
   if (row.status === 'failed' || row.status === 'rejected' || row.status === 'cancelled') return 'blocked';
   if (row.status === 'queued' || row.status === 'pending') return 'todo';
+  // 22 nov: een agent die vastzit of op een ok wacht is niet "Bezig" -- dat stond
+  // fout, en dan zag Luka niet dat er iets op hem wachtte.
+  if (row.status === 'blocked' || row.status === 'waiting_approval') return 'blocked';
   return 'in-progress';
 }
 
@@ -138,6 +144,7 @@ function normalizeRows(rows: DurableTaskRun[]): Task[] {
     dueAt: dueFromRow(row),
     app: appVan(row.metadata),
     episodeId: typeof row.metadata?.episodeId === 'string' ? row.metadata.episodeId : undefined,
+    voorLuka: row.status === 'failed' ? isVoorLuka(row) : undefined,
   }));
 }
 
@@ -170,7 +177,8 @@ export default function Tasks() {
       ]);
       // De desk is een extra bron: valt hij weg, dan blijft de rest staan.
       setNsTaken(desk.status === 'fulfilled' ? northseaTaken(desk.value.taken) : []);
-      const rows = lijst.status === 'fulfilled' ? lijst.value.tasks : [];
+      // 22 nov: Mac-stapjes, geannuleerd en al-opgeloste mislukkingen eruit (takenRuis).
+      const rows = zonderRuis(lijst.status === 'fulfilled' ? lijst.value.tasks : []);
       const plannerRows = planner.status === 'fulfilled' ? planner.value.taken.map(plannerAlsRij) : [];
       const alle = [...rows.filter(r => r.capability !== 'planner'), ...plannerRows];
       const waarheid = voegWerkSamen(alle.map((r) => taakAlsBron({

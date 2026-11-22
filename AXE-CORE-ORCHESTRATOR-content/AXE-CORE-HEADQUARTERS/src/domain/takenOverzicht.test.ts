@@ -16,7 +16,7 @@ describe('verdeelSecties', () => {
     expect(s.klaarVandaag.map((x) => x.id)).toEqual(['c']);
   });
   it('leeg blijft leeg (niets verzonnen)', () => {
-    expect(verdeelSecties([], NU)).toEqual({ wacht: [], bezig: [], klaarVandaag: [] });
+    expect(verdeelSecties([], NU)).toEqual({ wacht: [], bezig: [], klaarVandaag: [], gepland: [], misluktAi: [] });
   });
 });
 
@@ -64,5 +64,16 @@ describe('Nederlands', () => {
     expect(plannerStatusNL('failed')).toBe('Mislukt');
     expect(plannerStatusNL('pending', true)).toBe('Wacht op jou');
     expect(plannerStatusNL('pending')).toBe('Gepland');
+  });
+});
+
+describe('verdeelSecties 22 nov', () => {
+  it('mislukt-maar-niet-voor-Luka hoort niet bij Wacht op jou', () => {
+    const t = (id: string, status: 'blocked' | 'todo', voorLuka?: boolean, assignee = 'Developer') =>
+      ({ id, title: id, status, assignee, createdAt: 1, voorLuka });
+    const s = verdeelSecties([t('a', 'blocked', false), t('b', 'blocked', true), t('c', 'todo'), t('d', 'todo', undefined, 'luka')]);
+    expect(s.wacht.map((x) => x.id)).toEqual(['b']);
+    expect(s.misluktAi.map((x) => x.id)).toEqual(['a']);
+    expect(s.gepland.map((x) => x.id)).toEqual(['c']);
   });
 });
