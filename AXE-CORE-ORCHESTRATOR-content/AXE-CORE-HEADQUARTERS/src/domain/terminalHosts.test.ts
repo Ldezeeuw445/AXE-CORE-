@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  verbindingMisluktHint,
   alleHosts, kiesHost, maakHost, geldigWsAdres, INGEBOUWDE_HOSTS, hostVanDeEditor,
   hostSoort, bereikbaarHier, waaromGeenVerbinding, TERMINAL_POORT,
 } from '@/domain/terminalHosts';
@@ -279,5 +280,20 @@ describe('waaromGeenVerbinding', () => {
       waaromGeenVerbinding('leeg', true),
     ]);
     expect(regels.size).toBe(5);
+  });
+});
+
+describe('verbindingMisluktHint', () => {
+  const telefoon = { tauri: false, paginaHost: 'axeheadquarters.com' };
+  it('stuurt een Mac achter Tailscale niet naar de VPS (iPhone, 22 nov)', () => {
+    const hint = verbindingMisluktHint('wss://main-imac-luka.tail03735e.ts.net:4022/terminal?token=x', telefoon);
+    expect(hint).toMatch(/Tailscale/);
+    expect(hint).not.toMatch(/systemctl|VPS/);
+  });
+  it('geeft een VPS de server-controle', () => {
+    expect(verbindingMisluktHint('wss://api.axecompanion.com/terminal', telefoon)).toMatch(/systemctl status axe-terminal/);
+  });
+  it('zegt op de telefoon dat een Mac-vak alleen in de Mac-app werkt', () => {
+    expect(verbindingMisluktHint('ws://127.0.0.1:4022/terminal', telefoon)).toMatch(/only works in the AXE CORE Mac app/);
   });
 });

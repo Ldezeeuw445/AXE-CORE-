@@ -228,6 +228,20 @@ export function waaromGeenVerbinding(soort: HostSoort, bereikbaar: boolean): str
   }
 }
 
+/**
+ * De regel onder "[Connection failed]" in het terminalvak zelf.
+ *
+ * Gemeten 22 nov 2026 op Luka's iPhone: vak 7 (de iMac, achter Tailscale) gaf
+ * 1006 en het vak schreef "Check on the VPS: systemctl status axe-terminal".
+ * Dat is dezelfde fout als op 2 okt, maar dan in het vak in plaats van in de
+ * lijst: de lijst kreeg toen `waaromGeenVerbinding`, het vak bleef een vaste
+ * VPS-tekst houden. Nu leest het vak hetzelfde antwoord uit hetzelfde adres.
+ */
+export function verbindingMisluktHint(endpoint: string, omgeving: Omgeving): string {
+  const soort = hostSoort(endpoint);
+  return waaromGeenVerbinding(soort, bereikbaarHier(soort, omgeving));
+}
+
 export const ADRESSEN_SLEUTEL = 'axe_terminal_adressen';
 
 /** De host met een ingevuld adres, als dat er is. */
