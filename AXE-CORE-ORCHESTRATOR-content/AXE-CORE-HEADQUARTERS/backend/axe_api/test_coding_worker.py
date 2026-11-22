@@ -84,3 +84,41 @@ def test_weeklimiet_komt_als_echte_reden_door_en_stuurt_naar_een_andere_motor():
     assert "niet_gecommit" not in op and op["commits"] == "" and not op["compleet"]
     reden = da.oplevering_weigering(op)
     assert "weekly limit" in reden and "codex.run" in reden
+
+
+def test_nooit_luka_s_echte_checkout_van_branch_wisselen():
+    assert da.verzet_checkout("git.create_branch", {"branch": "feature/x"})
+    assert da.verzet_checkout("terminal.free", {"command": "git checkout feature/x"})
+    assert da.verzet_checkout("terminal.free", {"command": "cd repo && git switch -c y"})
+    wt = "/Users/luka/.axe/worktrees/axe-core-20261122-ab12"
+    assert da.verzet_checkout("git.create_branch", {"branch": "b", "path": wt}) is None
+    assert da.verzet_checkout("terminal.free", {"command": "git checkout -b b", "cwd": wt}) is None
+    assert da.verzet_checkout("terminal.free", {"command": "git status"}) is None
+    assert "error" in da.run_on_device("mini-van-luka-6", "git.create_branch", {"branch": "x"}, db=object())
+
+
+def test_codex_die_meteen_weigert_is_een_motorfout():
+    uit = ("error: unexpected argument '--approve-for-me' found\n\nUsage: codex exec [OPTIONS] [PROMPT]\n\n"
+           "## Oplevering (Mac)\nbranch: axe/20261122-aypkjk\ncommits:\n(no output)\ndiff:\n(no output)")
+    op = da.oplevering(uit)
+    assert op["motor_fout"].startswith("error: unexpected argument") and not op["compleet"]
+
+
+def test_lus_vraagt_geen_ok_voor_iets_dat_toch_geweigerd_wordt(monkeypatch):
+    import asyncio
+    import agent_loop
+    stappen = iter([
+        {"name": "run_on_device", "args": {"device": "mini", "tool": "terminal.free", "args": {"command": "git checkout feature/x"}}},
+        {"name": "finish", "args": {"summary": "Dit lukte niet: branch wisselen mag niet.", "verify_command": "ls x", "expect_in_output": "x"}},
+    ])
+
+    async def model(contents, key):
+        return {"parts": [{"functionCall": next(stappen)}]}
+
+    async def ev(*a):
+        pass
+
+    monkeypatch.setattr(agent_loop, "_call_model", model)
+    monkeypatch.setattr(agent_loop, "_shell", lambda cmd, cwd=None: {"exit_code": 0, "stdout": "x", "stderr": ""})
+    uit = asyncio.run(agent_loop.run_agent_loop("x", "t", ev))   # geen ApprovalRequired
+    assert uit["summary"].startswith("MILESTONE: blocked")

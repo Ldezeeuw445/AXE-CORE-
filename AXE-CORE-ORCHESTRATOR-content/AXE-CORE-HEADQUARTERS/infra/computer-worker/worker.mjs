@@ -582,7 +582,9 @@ async function runCodexWithFallback(prompt, root, seat, requestedModel) {
   // gpt-5-codex geeft model_not_found op een ChatGPT-login; astra/gpt-6 400.
   // Leeg = de CLI kiest zelf. Andere AXE_CODEX_MODEL-waarden blijven een pin.
   const model = /astra|gpt-6\b|gpt-5-codex/i.test(raw) ? '' : raw;
-  const base = ['exec', prompt, '-C', '.', '-s', 'workspace-write', '--approve-for-me'];
+  // 22 nov: codex 0.142 kent '--approve-for-me' niet meer ("unexpected argument") en
+  // weigerde ELKE run. `codex exec` vraagt niets: de sandbox (workspace-write) is de grens.
+  const base = ['exec', prompt, '-C', '.', '-s', 'workspace-write'];
   const child = seatChildEnv(seat);
   const tried = [];
 

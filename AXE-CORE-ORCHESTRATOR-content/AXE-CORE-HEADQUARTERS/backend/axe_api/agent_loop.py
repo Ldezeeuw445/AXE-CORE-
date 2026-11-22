@@ -1883,7 +1883,7 @@ async def _lus(
                 dargs = args.get("args") if isinstance(args.get("args"), dict) else {}
                 # Eerst: kan dit überhaupt? Anders geen goedkeuring vragen voor
                 # een actie die op de Mac gegarandeerd faalt (18 nov).
-                fout = device_actions.ontbrekend(tool, dargs)
+                fout = device_actions.ontbrekend(tool, dargs) or device_actions.verzet_checkout(tool, dargs)
                 key = None if (read_only or fout) else device_actions.approval_key(device, tool, dargs)
                 if key and normalize_command(key) not in pre_approved:
                     transcript.append({

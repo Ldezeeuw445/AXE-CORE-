@@ -183,6 +183,10 @@ def motor_fout(output: Any) -> str | None:
     try:
         d = json.loads(t)
     except ValueError:
+        # Geen JSON: een CLI die meteen weigert (codex: "error: unexpected argument ... Usage:").
+        eerste = next((r.strip() for r in t.splitlines() if r.strip()), "")
+        if eerste.lower().startswith("error:") and "usage:" in t.lower():
+            return " ".join(eerste.split())[:240]
         return None
     if isinstance(d, dict) and d.get("is_error"):
         return " ".join(str(d.get("result") or d.get("subtype") or "onbekende fout").split())[:240]
@@ -325,6 +329,29 @@ def is_cancelled(db, task_id: str) -> bool:
     return bool(rows) and rows[0].get("status") == "cancelled"
 
 
+WORKTREES = "/.axe/worktrees/"
+_GIT_VERZET = re.compile(r"\bgit\s+(checkout|switch|branch\s+-[mMdD]|reset\s+--hard|rebase|stash\s+(pop|apply)|merge|pull)\b")
+
+
+def verzet_checkout(tool: str, args: dict[str, Any]) -> str | None:
+    """Zou dit Luka's echte checkout van branch wisselen? Dan nooit (hard, niet per ok).
+
+    Gemeten 22 nov 16:34: een managertaak deed `git.create_branch` (safe_execute, dus
+    zonder vragen) op de AXE Core-checkout van de Mac mini -- de branch waar zijn
+    autosync op draait. Branches maken mag alleen in een eigen worktree van AXE
+    (~/.axe/worktrees/...); claude_code/codex/cursor.run maken die zelf aan."""
+    pad = str(args.get("path") or args.get("cwd") or "")
+    in_worktree = WORKTREES in pad
+    if tool == "git.create_branch" and not in_worktree:
+        return ("git.create_branch op Luka's eigen checkout is niet toegestaan (dat verzet de branch van zijn "
+                "autosync). claude_code.run / codex.run / cursor.run maken zelf een eigen worktree op een nieuwe "
+                "branch; werk daarin, of geef path=<die worktree>.")
+    if tool == "terminal.free" and not in_worktree and _GIT_VERZET.search(str(args.get("command") or "")):
+        return ("Branch wisselen, resetten of mergen in Luka's eigen checkout is niet toegestaan. Doe het in de "
+                "worktree onder ~/.axe/worktrees/ (cwd=<worktree>), of laat Luka het doen.")
+    return None
+
+
 def run_on_device(
     device: str,
     tool: str,
@@ -346,6 +373,8 @@ def run_on_device(
     fout = ontbrekend(tool, args)
     if fout:
         return {"error": fout}
+    if (verzet := verzet_checkout(tool, args)):
+        return {"error": verzet}
     if tool in AGENT_RUNS:
         args = {**args, "prompt": werkbon(str(args.get("prompt") or ""))}
     if workspace not in WORKSPACES:
