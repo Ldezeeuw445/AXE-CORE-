@@ -595,10 +595,15 @@ def _limit_message(text: str) -> str | None:
     return (m.group(1) if m else clean)[:280]
 
 
+# Een sleutel die de CLI weigert. cursor-agent schrijft dat als waarschuwing en
+# stopt met 1 (21-22 nov: elke "Build next step" op Cursor 2, met een
+# CURSOR2_API_KEY die Luka nooit maakte). Een sleutel die er staat is geen login.
+_SLEUTEL_GEWEIGERD = re.compile(r"(provided )?api key is invalid|invalid api key", re.I)
 _AUTH_FOUT = re.compile(
     r"not logged in|please (log|sign) in|login required|"
     r"failed to authenticate|authentication (failed|required)|"
-    r"oauth session expired|could not be refreshed|invalid_grant",
+    r"oauth session expired|could not be refreshed|invalid_grant|"
+    + _SLEUTEL_GEWEIGERD.pattern,
     re.I,
 )
 _LIMIET_KLOK = re.compile(r"try again at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?", re.I)
@@ -1499,6 +1504,9 @@ def _cursor_account(naam: str, motor: dict, binary: str) -> dict:
     tekst = _draai_status([binary, "status", "--format", "json"], motor, naam=naam)
     if not tekst.strip():
         tekst = _draai_status([binary, "about", "--format", "json"], motor, naam=naam)
+    if _SLEUTEL_GEWEIGERD.search(tekst):
+        # Gaat voor has_key: een geweigerde sleutel is uitgelogd, wat er verder ook staat.
+        return {"ingelogd": False, "account": None, "org_id": None}
     start, end = tekst.find("{"), tekst.rfind("}")
     if start >= 0 and end > start:
         try:
