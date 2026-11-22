@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 73 klaar, 56 gebouwd maar nog niet bewezen, 51 open (van 180).
+**Stand: 41% klaar** `████████░░░░░░░░░░░░` -- 74 klaar, 56 gebouwd maar nog niet bewezen, 50 open (van 180).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -15,7 +15,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
 | 4 — Computer use, browser, code-editor | 1 (33%) | 0 | 2 |
-| 5 — Luka kan het zelf | 2 (50%) | 0 | 2 |
+| 5 — Luka kan het zelf | 3 (75%) | 0 | 1 |
 | 6 — AXE als baas (Jarvis-route, niet letterlijk Jarvis) | 23 (92%) | 0 | 2 |
 | 7 — axe-commandolaag (CLI + hek, geen tweede agent) | 4 (57%) | 0 | 3 |
 <!-- stand:end -->
@@ -878,7 +878,8 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
 
 - [x] **5.1** `SLEUTELS.md` — waar elke sleutel woont.
 - [x] **5.2** `AGENTS.md` — waar elke assistent begint.
-- [ ] **5.3** `axe-status` bij elke rode regel zeggen wát je eraan doet.
+- [x] **5.3** `axe-status` bij elke rode regel zeggen wát je eraan doet.
+  *(22 nov: live gedraaid tegen de echte VPS. Vier valse rode regels weg -- de anon-sleutel zag door RLS niets en meldde core_tasks "niet leesbaar" en de leerlus "0 episodes"; nu wordt er bij leeg opnieuw via de VPS gemeten. AGENTS en DIENSTEN lezen ook via de VPS als de kluis-SSD er niet is. Ollama's 401 = beveiligd, groen. "Liggen eruit" zegt per soort de echte stap: alleen echte units herstarten (ollama, axe-terminal, gemeten), providers = sleutel testen, n8n draait niet op de VPS, axe_intel = Supabase-functie, trading niet aanraken. Lege kopjes zeggen dat ze leeg zijn.)*
 - [ ] **5.4** Strato: waarom valt de VPS uit? Op 7 sep was het ollama; op 9 sep
       viel hij hard weg (geen ping, poorten dicht) — dat is iets anders.
 
