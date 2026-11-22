@@ -187,3 +187,13 @@ def test_luka_geeft_een_geblokkeerd_probleem_vrij_met_done():
     assert mb.beslis(mis + [stap], "x", "v", NU)[0] == "maak"
     open_stap = {**stap, "status": "pending"}
     assert mb.beslis(mis + [open_stap], "x", "v", NU)[0] == "geblokkeerd"
+
+
+def test_done_in_de_takenlijst_geeft_ook_vrij():
+    """22 nov live: Luka drukte Done in de app-kolom; dat zette alleen metadata.uiStatus."""
+    from datetime import timedelta
+    mis = [{"status": "failed", "created_at": (NU - timedelta(hours=h)).isoformat(),
+            "metadata": {"vinger": "v", "idem": f"i{h}"}} for h in (5, 4)]
+    stap = {"capability": "stap", "status": "pending", "goal": "Dit probleem mislukte al twee keer (v).",
+            "created_at": (NU - timedelta(hours=1)).isoformat(), "metadata": {"uiStatus": "done"}}
+    assert mb.beslis(mis + [stap], "x", "v", NU)[0] == "maak"

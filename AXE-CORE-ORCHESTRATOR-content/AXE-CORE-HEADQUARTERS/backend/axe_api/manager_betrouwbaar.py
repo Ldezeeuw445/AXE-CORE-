@@ -76,7 +76,8 @@ def beslis(bestaand: list[dict[str, Any]], idem: str, vinger: str, nu: datetime)
     # Luka gaf het probleem weer vrij: hij zette de stap "... loopt vast" op Done. Mislukkingen
     # van daarvoor tellen niet meer (anders bleef het voor altijd geblokkeerd).
     vrij = [tijd(t) for t in bestaand
-            if str(t.get("capability")) == "stap" and str(t.get("status")) in KLAAR
+            if str(t.get("capability")) == "stap"
+            and (str(t.get("status")) in KLAAR or meta(t).get("uiStatus") == "done")
             and (meta(t).get("vinger") == vinger or vinger in str(t.get("goal") or ""))]
     vrij_sinds = max([v for v in vrij if v], default=None)
     if vrij_sinds:

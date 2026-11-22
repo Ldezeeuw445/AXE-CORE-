@@ -9,7 +9,7 @@ import { TabRuimte, Kaart, SchuifBalk, SectieBlok } from '@/presentation/compone
 import { AppTaken, AppCijfers, type AppTaak } from './taken/AppTaken';
 import { APPS, appMeta, appVan, metMetaApp, type AppId } from '@/domain/apps';
 import {
-  listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask, plannerTaken, northseaTab,
+  listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask, plannerTaken, northseaTab, stapAf,
   type DurableTaskRun, type PlannerTaak,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { isNorthseaWerk, northseaTaken, type WerkTaak } from '@/domain/northsea/werk';
@@ -45,6 +45,8 @@ interface Task {
   app: AppId;
   /** Mislukt: is dit iets voor Luka (sleutel, login, tegoed) of pakt de AI het op? */
   voorLuka?: boolean;
+  /** Een gedeelde stap (capability 'stap'): afsluiten gaat via stap-af. */
+  stap?: boolean;
   /**
    * Leerlus-episode (agent 'task'), uit metadata.episodeId. Alleen gezet voor
    * taken die via addTask() op deze pagina zijn aangemaakt -- planner-taken
@@ -145,6 +147,7 @@ function normalizeRows(rows: DurableTaskRun[]): Task[] {
     app: appVan(row.metadata),
     episodeId: typeof row.metadata?.episodeId === 'string' ? row.metadata.episodeId : undefined,
     voorLuka: row.status === 'failed' ? isVoorLuka(row) : undefined,
+    stap: row.capability === 'stap' || undefined,
   }));
 }
 
@@ -272,6 +275,18 @@ export default function Tasks() {
 
   const updateStatus = async (id: string, status: TaskStatus) => {
     const task = tasks.find(t => t.id === id);
+    // 22 nov: een stap (axe stap-nieuw, of "loopt vast" van een manager) sluit je met
+    // stap-af. Dit zette eerst alleen metadata.uiStatus, en dan bleef de stap open
+    // en gaf Luka's "Done" het probleem nooit vrij.
+    if (task?.stap && status === 'done') {
+      try {
+        await stapAf(id, 'Done in Taken', 'luka');
+        await refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Could not close step');
+      }
+      return;
+    }
     try {
       await updateDurableTask(id, {
         /* De app MOET mee. metadata wordt vervangen en niet samengevoegd:
