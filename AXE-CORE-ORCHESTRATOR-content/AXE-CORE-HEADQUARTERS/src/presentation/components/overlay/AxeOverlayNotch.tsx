@@ -6,7 +6,7 @@
  */
 import { berichtTijd, balkTijd } from '@/domain/overlay/notchWidgets';
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
-import { ArrowRight, Bot, CalendarDays, CheckCircle2, ChevronUp, History, Home, LayoutGrid, MessageSquare, Mic, Plus, Settings, SquareTerminal, Users, Paperclip, X } from 'lucide-react';
+import { ArrowRight, Bot, Check, CalendarDays, CheckCircle2, ChevronUp, History, Home, LayoutGrid, MessageSquare, Mic, Plus, Settings, SquareTerminal, Users, Paperclip, X } from 'lucide-react';
 import { claudeLive, klok, leesStand, type ClaudeLive } from '@/domain/overlay/claudeLive';
 import { vpsAuthHeaders, isTauriRuntime, VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 import {
@@ -30,7 +30,7 @@ import { syncManagerDraad, MANAGER_DRAAD_EVT } from '@/infrastructure/persistenc
 import { isVoorMij, landTekst } from '@/domain/portal/portal';
 import { claimWorp, getekendeLink, openWorpen } from '@/infrastructure/gateways/portalService';
 import { ditToestel } from '@/infrastructure/gateways/axeDeviceService';
-import { eerstvolgende, geluidVoor, homeStand, nieuwePeeks, PEEK_MS, zetInRij, type NotchMoment, type Peek } from '@/domain/overlay/notchPeeks';
+import { eerstvolgende, geluidVoor, homeStand, nieuwePeeks, PEEK_MS, zetInRij, type NotchMoment, type Peek, kiesOkStrook } from '@/domain/overlay/notchPeeks';
 import { geluidAan, speelToon, zetGeluid } from './notchToon';
 import { calendarJobs, gedeeldeStappen, logRitme, type GedeeldeStap } from '@/infrastructure/gateways/axeCoreApiService';
 import { ritmeStrook, type RitmeDag } from '@/domain/overlay/ritme';
@@ -672,8 +672,30 @@ export function AxeOverlayNotch({
   useEffect(() => {
     if (open && peekRij.length) setPeekRij([]);
   }, [open, peekRij.length]);
+  const okStrook = kiesOkStrook(
+    approvals.map((a) => ({ id: a.id, titel: a.title || a.kind || 'Approval', detail: a.wat || a.detail || '', gevaarlijk: isDangerousApproval(a) })),
+    open, Boolean(peek),
+  );
+  const [okBezig, setOkBezig] = useState(false);
+  const beslisOk = async (id: string, ja: boolean) => {
+    const a = approvals.find((x) => x.id === id);
+    if (!a || okBezig) return;
+    setOkBezig(true);
+    try {
+      await beslisApproval(a.task_id, a.id, ja, ja ? 'notch' : 'notch reject');
+      setApprovals((prev) => prev.filter((x) => x.id !== a.id));
+      setStatusNote(ja ? 'Goedgekeurd' : 'Afgewezen');
+    } catch (e) {
+      setStatusNote((e as Error).message);
+    } finally {
+      setOkBezig(false);
+    }
+  };
   useEffect(() => {
-    onPeekChange?.(Boolean(peek));
+    onPeekChange?.(Boolean(peek || okStrook));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(peek || okStrook)]);
+  useEffect(() => {
     if (!peek) return;
     const id = window.setTimeout(() => setPeekRij((r) => r.slice(1)), PEEK_MS);
     return () => window.clearTimeout(id);
@@ -1013,6 +1035,30 @@ export function AxeOverlayNotch({
           <span className="axe-ov__peek-tekst">{peek.tekst}</span>
           {peekRij.length > 1 && <span className="axe-ov__peek-meer">+{peekRij.length - 1}</span>}
         </button>
+      )}
+
+      {okStrook && (
+        <div className={`axe-ov__peek axe-ov__ok${okStrook.gevaarlijk ? ' axe-ov__ok--gevaar' : ''}`} role="group" aria-label="Approval waiting">
+          <button type="button" className="axe-ov__ok-tekst" onClick={() => { set(true); setTab('approvals'); }} title="Open approvals">
+            <span className="axe-ov__peek-titel">{okStrook.titel}</span>
+            <span className="axe-ov__peek-tekst">{okStrook.tekst}</span>
+            {okStrook.meer > 0 && <span className="axe-ov__peek-meer">+{okStrook.meer}</span>}
+          </button>
+          {okStrook.gevaarlijk ? (
+            <button type="button" className="axe-ov__ok-knop" onClick={() => void focusMainShell()}>Open</button>
+          ) : (
+            <>
+              <button type="button" className="axe-ov__ok-knop axe-ov__ok-knop--ja" disabled={okBezig}
+                onClick={() => void beslisOk(okStrook.id, true)} aria-label="Approve">
+                <Check size={14} strokeWidth={2.6} aria-hidden /> Approve
+              </button>
+              <button type="button" className="axe-ov__ok-knop" disabled={okBezig}
+                onClick={() => void beslisOk(okStrook.id, false)} aria-label="Reject">
+                <X size={14} strokeWidth={2.6} aria-hidden />
+              </button>
+            </>
+          )}
+        </div>
       )}
 
       {open && (

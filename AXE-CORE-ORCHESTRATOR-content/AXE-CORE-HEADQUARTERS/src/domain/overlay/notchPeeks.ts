@@ -172,3 +172,34 @@ export function geluidVoor(peeks: Peek[], stilSeconden: number | null, aan: bool
   if (peeks.some((p) => p.soort === 'claude-klaar' || p.soort === 'taak-klaar')) return 'klaar';
   return null;
 }
+
+/**
+ * Goedkeuren zonder uitklappen (22 nov, Luka: "dingen goedkeuren in de notch
+ * zonder hem helemaal groot uit te hoeven klappen"). Zolang er iets op Luka
+ * wacht en de notch dicht is, staat onder de balk één vaste strook met de
+ * bovenste goedkeuring (zoals in de Approvals-tab) en Approve / Reject. Een lopende peek gaat even voor (5 s),
+ * daarna komt de strook terug. Trade/betaling: alleen "Open", nooit hier ja.
+ */
+export interface OkStrook {
+  id: string;
+  titel: string;
+  tekst: string;
+  meer: number;
+  gevaarlijk: boolean;
+}
+
+export function kiesOkStrook(
+  goedkeuringen: Array<{ id: string; titel: string; detail?: string; gevaarlijk: boolean }>,
+  open: boolean,
+  peekBezig: boolean,
+): OkStrook | null {
+  if (open || peekBezig || goedkeuringen.length === 0) return null;
+  const g = goedkeuringen[0]; // dezelfde volgorde als de Approvals-tab
+  return {
+    id: g.id,
+    titel: g.gevaarlijk ? 'Open in AXE CORE' : 'Wacht op jou',
+    tekst: kort(g.detail ? `${g.titel} · ${g.detail}` : g.titel, 70),
+    meer: goedkeuringen.length - 1,
+    gevaarlijk: g.gevaarlijk,
+  };
+}

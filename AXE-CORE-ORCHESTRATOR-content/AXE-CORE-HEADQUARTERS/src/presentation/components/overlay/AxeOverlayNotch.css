@@ -1119,3 +1119,26 @@ button.axe-ov__pil { cursor: pointer; }
 .axe-ov__ritme > span { font-size: 10.5px; color: rgba(255, 255, 255, 0.45); }
 /* Met het ritme erbij: één regel in de Vandaag-kaart (Claude staat al als pil). */
 .axe-ov__widgets > .axe-ov__dag .axe-ov__home-regels li:nth-child(n+2) { display: none; }
+
+/* ── Goedkeuren zonder uitklappen (22 nov). Zelfde hoogte als een peek
+   (past in PEEK_EXTRA_H van FloatAxe), maar blijft staan tot je kiest. */
+.axe-ov__ok { cursor: default; gap: 6px; padding: 0 6px 0 4px; animation: axe-ov-peek-in 220ms ease-out both; }
+.axe-ov__ok:hover { border-color: rgba(255, 255, 255, 0.08); }
+.axe-ov__ok-tekst {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+  height: 100%; padding: 0 8px; border: 0; background: transparent; color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.axe-ov__ok .axe-ov__peek-titel { color: #fbbf24; }
+.axe-ov__ok--gevaar .axe-ov__peek-titel { color: #f87171; }
+.axe-ov__ok-knop {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px;
+  height: 30px; padding: 0 10px; border: 0; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1); color: var(--axe-notch-ink);
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.axe-ov__ok-knop:hover { background: rgba(255, 255, 255, 0.18); }
+.axe-ov__ok-knop--ja { background: #22c55e; color: #04110a; }
+.axe-ov__ok-knop--ja:hover { background: #34d671; }
+.axe-ov__ok-knop:disabled { opacity: .5; cursor: wait; }
+.axe-ov__ok-knop:focus-visible, .axe-ov__ok-tekst:focus-visible { outline: 2px solid var(--axe-notch-accent); outline-offset: 2px; }
