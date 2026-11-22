@@ -110,6 +110,9 @@ export function emailFromClaudeOauth(oauth) {
 
 export function cursorStatusFromText(tekst, { hasApiKey = false } = {}) {
   const raw = tekst || '';
+  // Een sleutel die Cursor weigert is geen login (22 nov: Cursor 2 stond op
+  // "ingelogd" door een ongeldige CURSOR2_API_KEY, en elke taak erop faalde).
+  if (/(provided )?api key is invalid|invalid api key/i.test(raw)) return { loggedIn: false, email: null };
   try {
     const start = raw.indexOf('{');
     const end = raw.lastIndexOf('}');
