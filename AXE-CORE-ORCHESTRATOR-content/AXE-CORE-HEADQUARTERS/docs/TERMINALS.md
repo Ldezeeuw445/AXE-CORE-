@@ -163,6 +163,16 @@ ollama list
 journalctl -u ollama -n 40 --no-pager
 ```
 
+### Mac mini vanaf de telefoon — `mac-mini-van-luka`
+
+In de Mac-app zijn vak 1 t/m 4 de shell op die Mac zelf (`127.0.0.1:4022`). In
+de PWA (telefoon, iPad, een andere computer) gaan dezelfde vakken naar de Mac
+mini via Tailscale: `wss://mac-mini-van-luka.tail03735e.ts.net:4022/terminal`
+(`voorDitApparaat` in `src/domain/terminalHosts.ts`). Sinds 22 nov 2026 staat
+Tailscale Serve daarvoor aan op de Mac mini, alleen binnen de tailnet:
+`tailscale serve --bg --https=4022 http://127.0.0.1:4022`.
+Uitzetten: `tailscale serve --https=4022 off`. Tailscale moet ook op de telefoon aan staan.
+
 ### iMac — `main-imac-luka` (gebruiker `lukadezeeuw`)
 
 **Terminal (vak 7):** `wss://main-imac-luka.tail03735e.ts.net:4022/terminal` —

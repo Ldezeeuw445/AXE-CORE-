@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   verbindingMisluktHint,
+  voorDitApparaat,
+  MAC_MINI_TAILNET_WS,
   alleHosts, kiesHost, maakHost, geldigWsAdres, INGEBOUWDE_HOSTS, hostVanDeEditor,
   hostSoort, bereikbaarHier, waaromGeenVerbinding, TERMINAL_POORT,
 } from '@/domain/terminalHosts';
@@ -295,5 +297,25 @@ describe('verbindingMisluktHint', () => {
   });
   it('zegt op de telefoon dat een Mac-vak alleen in de Mac-app werkt', () => {
     expect(verbindingMisluktHint('ws://127.0.0.1:4022/terminal', telefoon)).toMatch(/only works in the AXE CORE Mac app/);
+  });
+});
+
+describe('voorDitApparaat (iPhone, 22 nov: alleen de VPS-vakken werkten in de PWA)', () => {
+  const telefoon = { tauri: false, paginaHost: 'axeheadquarters.com' };
+  const macApp = { tauri: true, paginaHost: 'tauri.localhost' };
+  const vak = (id: string) => INGEBOUWDE_HOSTS.find(h => h.id === id)!;
+
+  it('stuurt een Mac-vak in de PWA naar de Mac mini via Tailscale', () => {
+    const h = voorDitApparaat(vak('mac-api'), telefoon);
+    expect(h.wsUrl).toBe(MAC_MINI_TAILNET_WS);
+    expect(hostSoort(h.wsUrl)).toBe('tailnet');
+    expect(bereikbaarHier(hostSoort(h.wsUrl), telefoon)).toBe(true);
+  });
+  it('laat een Mac-vak in de Mac-app op die Mac zelf', () => {
+    expect(voorDitApparaat(vak('mac-api'), macApp).wsUrl).toBe(`ws://127.0.0.1:${TERMINAL_POORT}/terminal`);
+  });
+  it('laat VPS en iMac zoals ze zijn', () => {
+    expect(voorDitApparaat(vak('vps-strato'), telefoon)).toEqual(vak('vps-strato'));
+    expect(voorDitApparaat(vak('imac'), telefoon)).toEqual(vak('imac'));
   });
 });
