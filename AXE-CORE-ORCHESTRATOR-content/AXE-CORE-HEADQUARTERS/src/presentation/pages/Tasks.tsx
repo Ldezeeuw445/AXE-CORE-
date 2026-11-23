@@ -21,6 +21,8 @@ import PhoneTasks from '@/presentation/pages/phone/PhoneTasks';
 import { TasksDesk } from '@/presentation/components/tasks/TasksDesk';
 import { TakenSecties } from '@/presentation/components/tasks/TakenSecties';
 import { WiensBeurt } from '@/presentation/components/tasks/WiensBeurt';
+import { KpiRij } from '@/presentation/components/settings/StatusKaart';
+import { verdeelSecties, wieBezig } from '@/domain/takenOverzicht';
 import { STATUS_NL } from '@/domain/takenOverzicht';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
@@ -405,6 +407,8 @@ export default function Tasks() {
     setAdding(true);
   };
 
+  const kp = verdeelSecties(tasks);
+
   if (phone) return <PhoneTasks />;
 
   return (
@@ -429,9 +433,12 @@ export default function Tasks() {
           projectkaarten waren onbereikbaar en de desk werd onder de planner
           platgedrukt. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-axe-taken-schuif="">
-      <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-      {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
-          twee regels die dat herhalen kosten op elke pagina ruimte. */}
+      {/* 23 nov (referentiemap): kop met kerncijfers, dan wie er aan zet is, dan de details. */}
+      <header className="axe-set-kop flex-none">
+        <div>
+          <h2>Tasks</h2>
+          <p>Who has the next move, what is running and what finished. Only things that need you count as waiting.</p>
+        </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <button
             onClick={() => { void autoRoute(); }}
@@ -450,7 +457,15 @@ export default function Tasks() {
             <Plus size={13} /> Nieuwe taak
           </button>
         </div>
-      </div>
+      </header>
+      <KpiRij tegels={[
+        { label: 'Waiting on you', waarde: String(kp.wacht.length), toon: kp.wacht.length ? 'warn' : undefined,
+          sub: kp.wacht[0]?.title ?? 'nothing needs you' },
+        { label: 'Running', waarde: String(kp.bezig.length), sub: wieBezig(kp.bezig) || 'nothing running' },
+        { label: 'Planned for AI', waarde: String(kp.gepland.length), sub: 'no action needed from you' },
+        { label: 'Done today', waarde: String(kp.klaarVandaag.length), toon: kp.klaarVandaag.length ? 'ok' : undefined,
+          sub: kp.misluktAi.length ? `${kp.misluktAi.length} failed, AI retries` : 'no failures' },
+      ]} />
 
       {/* 22 nov: wiens beurt -- de gedeelde stappen van elke AI (axe stap-nieuw / stap-af). */}
       <WiensBeurt />

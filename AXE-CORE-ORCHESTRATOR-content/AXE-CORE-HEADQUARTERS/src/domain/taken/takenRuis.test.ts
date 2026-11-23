@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isVoorLuka, zonderRuis, type RuisRij } from './takenRuis';
+import { isMacStap, isVoorLuka, zonderRuis, type RuisRij } from './takenRuis';
 
 const r = (id: string, title: string, status: string, uur: number, extra: Partial<RuisRij> = {}): RuisRij => ({
   id, title, status, created_at: new Date(Date.UTC(2026, 10, 22, uur)).toISOString(), ...extra,
@@ -35,5 +35,11 @@ describe('isVoorLuka', () => {
     expect(isVoorLuka(r('2', 'Fix', 'failed', 1, { error: { message: 'used all 40 steps without a verified result' } }))).toBe(false);
     expect(isVoorLuka(r('3', 'Ok?', 'waiting_approval', 1))).toBe(true);
     expect(isVoorLuka(r('4', 'Open', 'pending', 1))).toBe(false);
+  });
+
+  it('isMacStap herkent een Mac-stap, geen gewone taak', () => {
+    expect(isMacStap('claude_code.run · AXE Core · imac-3')).toBe(true);
+    expect(isMacStap('git.create_branch · AXE Core · mini-van-luka-6')).toBe(true);
+    expect(isMacStap('Projects Manager: Controleer de orchestrator')).toBe(false);
   });
 });

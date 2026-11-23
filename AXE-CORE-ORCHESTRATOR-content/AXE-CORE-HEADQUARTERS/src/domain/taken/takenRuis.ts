@@ -42,6 +42,11 @@ export function isVoorLuka(r: RuisRij): boolean {
 /** "git.create_branch · AXE Core · mini-van-luka-6": een Mac-stap, ook als een retry hem 'agentic' maakte. */
 const MAC_STAP = /^[a-z_]+\.[a-z_]+ · [^·]+ · [\w.-]+$/;
 
+/** Een Mac-stap hoort bij zijn taak, niet als eigen regel in een lijst (23 nov: ook niet bij "AI's turn"). */
+export function isMacStap(titel: string): boolean {
+  return MAC_STAP.test(titel.trim());
+}
+
 function sleutel(titel: string): string {
   return titel.replace(/\s+/g, ' ').trim().toLowerCase();
 }

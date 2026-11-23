@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { gedeeldeStappen, stapAf, type GedeeldeStap } from '@/infrastructure/gateways/axeCoreApiService';
 import { AXE_AGENTS } from '@/domain/agents/roster';
+import { isMacStap } from '@/domain/taken/takenRuis';
 
 function wieNaam(wie: string | null | undefined): string {
   const id = String(wie || '').toLowerCase();
@@ -61,6 +62,8 @@ export function WiensBeurt() {
     return () => window.clearInterval(t);
   }, [laad]);
   if (!st) return null;
+  // Mac-stappen (claude_code.run · AXE Core · imac-3) horen bij hun taak, niet als eigen beurt.
+  const aiBeurt = st.ai_beurt.filter((s) => !isMacStap(s.titel ?? ""));
   const af = (s: GedeeldeStap) => {
     if (!s.id) return;
     void stapAf(s.id, 'done by Luka in the Tasks tab').then(laad).catch(laad);
@@ -68,7 +71,7 @@ export function WiensBeurt() {
   return (
     <div className="axe-taken-secties mb-4 flex-none" data-axe-wiens-beurt="">
       <Kolom titel="Your turn" kleur="var(--warning)" stappen={st.jouw_beurt} leeg="Nothing waits on you." onAf={af} />
-      <Kolom titel="AI's turn" kleur="var(--accent-cyan)" stappen={st.ai_beurt} leeg="No AI has an open step." onAf={af} />
+      <Kolom titel="AI's turn" kleur="var(--accent-cyan)" stappen={aiBeurt} leeg="No AI has an open step." onAf={af} />
       <Kolom titel="Together" kleur="var(--success)" stappen={st.samen} leeg="No shared steps." onAf={af} />
     </div>
   );
