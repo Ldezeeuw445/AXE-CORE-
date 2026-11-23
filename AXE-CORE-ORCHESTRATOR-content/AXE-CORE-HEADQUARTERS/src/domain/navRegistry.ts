@@ -177,10 +177,77 @@ export const PRIMARY_NAV_PATHS = [
 /** Paths shown in the primary bar (same as PRIMARY_NAV_PATHS). */
 export const PRIMARY_NAV_SET = new Set<string>(PRIMARY_NAV_PATHS);
 
-/** Apps launcher (Meer): everything not on the primary bar, plus DAX. */
+/**
+ * Paden die alleen doorverwijzen (App.tsx `<Navigate>`). Ze blijven in NAV_ITEMS
+ * zodat chat en oude links ze kennen, maar Meer toont ze niet: Luka (22 nov) --
+ * "tabs die naar Home of Managers sturen moeten weg of gemaakt worden".
+ */
+export const DOORVERWIJZINGEN = new Set<string>([
+  '/thinkthanks', '/ai-core', '/agents', '/organization', '/maps-3d', '/eve', '/devices', '/terminal',
+]);
+
+/** Meer in groepen, met per tab één regel wat je er vindt (23 nov, referentiemap). */
+export const MEER_GROEPEN: { titel: string; paden: Record<string, string> }[] = [
+  { titel: 'Work', paden: {
+    '/wacht': 'Everything waiting on your yes or no',
+    '/brief': 'What happened while you were away',
+    '/ledger': 'Every run, per app, with failures',
+    '/notifications': 'Alerts from every app',
+    '/memory': 'Memories, lessons, session notes',
+    '/memory/trading': 'Trading lessons and decisions',
+    '/obsidian': 'The durable vault',
+    '/knowledge': 'Documents and knowledge base',
+  } },
+  { titel: 'Build & control', paden: {
+    '/bouwen': 'Build hub: projects and agents',
+    '/developer': 'Command center for developers',
+    '/browser': 'AXE browser',
+    '/computer-use': 'Let AXE use your Mac',
+    '/portal': 'Photo, file or clipboard to your Mac',
+    '/terminals': 'Mac mini · iMac · VPS shells',
+  } },
+  { titel: 'System', paden: {
+    '/systeem': 'System hub',
+    '/dax': 'DAX bots, always on',
+    '/mcp': 'MCP servers and tools',
+    '/cron-manager': 'Schedules and cron jobs',
+    '/infrastructure': 'Servers and stack status',
+    '/control-plane': 'Control plane',
+    '/table-editor': 'Database tables',
+    '/crewai': 'Old CrewAI page — the managers do this now',
+  } },
+  { titel: 'Apps & business', paden: {
+    '/companion': 'AXE Companion',
+    '/trading-intel': 'Trading research desk',
+    '/finance': 'Subscriptions and costs',
+    '/device': 'Phone and installs',
+    '/lock': 'Lock screen',
+    '/lock/pin': 'Android PIN',
+  } },
+];
+
+/** Meer als groepen: alleen tabs die er echt zijn; wat nergens past komt onder "Other". */
+export function meerGroepen(items: NavItem[] = meerNavItems()): { titel: string; items: (NavItem & { uitleg?: string })[] }[] {
+  const per = new Map(items.map((i) => [i.path, i]));
+  const gebruikt = new Set<string>();
+  const uit: { titel: string; items: (NavItem & { uitleg?: string })[] }[] = MEER_GROEPEN.map((g) => ({
+    titel: g.titel,
+    items: Object.entries(g.paden).flatMap(([pad, uitleg]) => {
+      const i = per.get(pad);
+      if (!i) return [];
+      gebruikt.add(pad);
+      return [{ ...i, uitleg }];
+    }),
+  }));
+  const rest = items.filter((i) => !gebruikt.has(i.path));
+  if (rest.length) uit.push({ titel: 'Other', items: rest });
+  return uit.filter((g) => g.items.length);
+}
+
+/** Apps launcher (Meer): everything not on the primary bar, plus DAX. Geen doorverwijzingen. */
 export function meerNavItems(): NavItem[] {
   const primary = PRIMARY_NAV_SET;
-  const extras = getAllNavItems().filter((i) => !primary.has(i.path));
+  const extras = getAllNavItems().filter((i) => !primary.has(i.path) && !DOORVERWIJZINGEN.has(i.path));
   // Prefer DAX near the top of Meer.
   extras.sort((a, b) => {
     if (a.path === '/dax') return -1;

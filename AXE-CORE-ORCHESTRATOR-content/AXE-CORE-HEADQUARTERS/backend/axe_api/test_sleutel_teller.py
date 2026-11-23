@@ -50,3 +50,15 @@ def test_samenvatting_vandaag_gisteren_week():
     assert s["calls_today"] == 10 and s["ok_today"] == 8 and s["limited_today"] == 1
     assert s["calls_yesterday"] == 4 and s["calls_7d"] == 14
     assert s["last_status"] == 429
+
+
+def test_429_zonder_tegoed_telt_als_402(monkeypatch):
+    monkeypatch.setenv("AXE_SLEUTEL_TELLER_UIT", "1")
+    monkeypatch.setenv("TEST_TELLER_API_KEY", "waarde-789")
+    st.leeg_buffer()
+    st.tel("waarde-789", 429, tekst='{"error":{"type":"insufficient_quota","code":"credit_balance_exhausted"}}')
+    st.tel("waarde-789", 429, tekst="Rate limit exceeded: free-models-per-day")
+    rij = st.leeg_buffer()[0]
+    assert rij["p_limiet"] == 2 and rij["p_status"] == 429
+    assert st.echte_status(429, "insufficient_quota") == 402
+    assert st.echte_status(429, "slow down") == 429

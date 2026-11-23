@@ -114,8 +114,24 @@ def volgorde(nu: Optional[float] = None) -> list[Aanbieder]:
     return ok
 
 
-def laat_rusten(naam: str, nu: Optional[float] = None) -> None:
-    _rust_tot[naam] = (_klok() if nu is None else nu) + RUST_S
+def laat_rusten(naam: str, nu: Optional[float] = None, seconden: Optional[float] = None) -> None:
+    _rust_tot[naam] = (_klok() if nu is None else nu) + (RUST_S if seconden is None else seconden)
+
+
+def rust_voor(status: int, headers: Any, tekst: str = "") -> Optional[float]:
+    """Hoe lang rusten na deze fout. Een minuutlimiet (429 met retry-after, Groq) is na
+    ~een minuut weer vrij; tien minuten rust maakte de gratis capaciteit onnodig krap
+    (23 nov). Geen tegoed, dagquotum of een kapotte sleutel: de gewone RUST_S."""
+    if status != 429:
+        return None
+    low = (tekst or "").lower()
+    if any(w in low for w in ("insufficient_quota", "credit", "per-day", "per day", "daily")):
+        return None
+    try:
+        na = float((headers or {}).get("retry-after") or "")
+    except (TypeError, ValueError):
+        return None
+    return max(15.0, min(na + 2.0, RUST_S))
 
 
 def vergeet_alles() -> None:
@@ -151,7 +167,7 @@ async def chat(messages: list[dict], max_tokens: int = 1024, timeout: float = 60
         _tel(a, res.status_code, res)
         if res.status_code != 200:
             if is_beschikbaarheidsfout(res.status_code, res.text):
-                laat_rusten(a.naam)
+                laat_rusten(a.naam, seconden=rust_voor(res.status_code, getattr(res, "headers", None), res.text))
                 fouten.append(f"{a.naam}: {res.status_code} {res.text[:90].strip()}")
                 continue
             raise RuntimeError(f"LLM error ({a.naam}): {res.text[:200]}")
@@ -174,7 +190,8 @@ def _tel(a: Aanbieder, status: int, res: Any = None) -> None:
         if res is not None and status == 200:
             gebruik = (res.json() or {}).get("usage") or {}
             tokens = int(gebruik.get("total_tokens") or 0)
-        sleutel_teller.tel(a.sleutel_env if not a.keyloos else None, status, tokens)
+        sleutel_teller.tel(a.sleutel_env if not a.keyloos else None, status, tokens,
+                           tekst=res.text[:400] if res is not None and status != 200 else None)
     except Exception:  # noqa: BLE001
         pass
 

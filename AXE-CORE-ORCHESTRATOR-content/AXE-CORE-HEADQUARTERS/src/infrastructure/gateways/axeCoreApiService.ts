@@ -628,6 +628,27 @@ export async function ledgerList(opts: { app?: string; source?: LedgerSource; ho
   return entries ?? [];
 }
 
+export interface LedgerTotal {
+  app: string;
+  source: string;
+  status: string;
+  n: number;
+  laatste_at: string | null;
+  laatste_fout_naam: string | null;
+  laatste_fout_at: string | null;
+}
+
+/** Grootboek dat klopt: tellers over het hele venster + regels zonder gelukte routine-crons. */
+export async function ledgerOverview(opts: { hours?: number; limit?: number; failsOnly?: boolean; source?: LedgerSource } = {}): Promise<{ entries: LedgerEntry[]; totals: LedgerTotal[] }> {
+  const q = new URLSearchParams();
+  if (opts.source) q.set('source', opts.source);
+  q.set('hours', String(opts.hours ?? 168));
+  q.set('limit', String(opts.limit ?? 500));
+  if (opts.failsOnly) q.set('fails_only', 'true');
+  const r = await call<{ entries: LedgerEntry[]; totals: LedgerTotal[] }>('GET', `/ledger/overview?${q.toString()}`);
+  return { entries: r.entries ?? [], totals: r.totals ?? [] };
+}
+
 export interface CalendarJobItem {
   key: string;
   job_key: string;

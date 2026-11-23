@@ -19,9 +19,10 @@ import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { appMeta } from '@/domain/apps';
 import {
-  appVanRegel, bronWoord, duurTekst, filterRegels, standPerApp, statusWoord, uitkomst, type AppFilter,
+  appVanRegel, bronWoord, duurTekst, filterRegels, standUitTotalen, statusWoord, uitkomst, type AppFilter, type GrootboekTotaal,
 } from '@/domain/grootboek';
-import { calendarJobs, ledgerList, type CalendarJob, type LedgerEntry } from '@/infrastructure/gateways/axeCoreApiService';
+import { calendarJobs, ledgerOverview, type CalendarJob, type LedgerEntry } from '@/infrastructure/gateways/axeCoreApiService';
+import { KpiRij } from '@/presentation/components/settings/StatusKaart';
 
 const BRONNEN: ZuilItem[] = [
   { id: 'alle', label: 'All', kleur: 'var(--text-primary)', icoon: <Layers size={17} /> },
@@ -49,6 +50,8 @@ export default function Grootboek() {
   const [bron, setBron] = useState<string>('alle');
   const [uren, setUren] = useState(168);
   const [regels, setRegels] = useState<LedgerEntry[]>([]);
+  const [totalen, setTotalen] = useState<GrootboekTotaal[] | null>(null);
+  const [alleenFout, setAlleenFout] = useState(false);
   const [jobs, setJobs] = useState<CalendarJob[]>([]);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
@@ -56,10 +59,10 @@ export default function Grootboek() {
   const haal = async () => {
     setBezig(true);
     const [r, j] = await Promise.allSettled([
-      ledgerList({ hours: uren, limit: 2000 }),
+      ledgerOverview({ hours: uren, limit: 1000, failsOnly: alleenFout }),
       calendarJobs(new Date(), new Date(Date.now() + 24 * 3600 * 1000)),
     ]);
-    if (r.status === 'fulfilled') { setRegels(r.value); setFout(null); } else { setFout(String(r.reason?.message ?? r.reason)); }
+    if (r.status === 'fulfilled') { setRegels(r.value.entries); setTotalen(r.value.totals as GrootboekTotaal[]); setFout(null); } else { setFout(String(r.reason?.message ?? r.reason)); }
     if (j.status === 'fulfilled') setJobs(j.value.jobs);
     setBezig(false);
   };
@@ -70,11 +73,16 @@ export default function Grootboek() {
     const t = setInterval(() => { void haal(); }, 60_000);
     return () => { clearTimeout(eerst); clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uren]);
+  }, [uren, alleenFout]);
 
   const zichtbaar = useMemo(() => filterRegels(regels, app, bron), [regels, app, bron]);
-  const stand = useMemo(() => standPerApp(filterRegels(regels, 'alle', bron)), [regels, bron]);
-  const mislukt = zichtbaar.filter(r => uitkomst(r.status) === 'fout').length;
+  // Tellers van de server over het HELE venster (core_ledger_stand), niet van de afgekapte regels.
+  const stand = useMemo(() => standUitTotalen((totalen ?? []).filter(t => bron === 'alle' || t.source === bron)), [totalen, bron]);
+  const som = stand.reduce((a, s) => ({ totaal: a.totaal + s.totaal, goed: a.goed + s.goed, fout: a.fout + s.fout, bezig: a.bezig + s.bezig }),
+    { totaal: 0, goed: 0, fout: 0, bezig: 0 });
+  const slaagt = som.goed + som.fout ? Math.round((som.goed / (som.goed + som.fout)) * 1000) / 10 : null;
+  const mislukt = som.fout;
+  const laden = totalen === null;
   const zichtbareJobs = jobs
     .filter(j => app === 'alle' || appVanRegel(j.app) === app)
     .sort((a, b) => (a.next_run_at ?? '9').localeCompare(b.next_run_at ?? '9'));
@@ -83,7 +91,7 @@ export default function Grootboek() {
     <motion.div className="axe-tabruimte axe-ledger-v3 flex min-h-0 flex-1 flex-col pt-4 sm:pt-6" data-axe-ledger="v3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       <TopbalkSlot>
         <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-secondary)' }}>
-          {bezig && regels.length === 0 ? 'Laden…' : `${zichtbaar.length} rows · ${mislukt} failed · latest ${VENSTERS.find(v => v.uren === uren)?.label}`}
+          {laden ? 'Loading…' : `${som.totaal} runs · ${mislukt} failed · ${VENSTERS.find(v => v.uren === uren)?.label}`}
         </span>
       </TopbalkSlot>
 
@@ -138,42 +146,52 @@ export default function Grootboek() {
         </div>
       </TabRail>
 
-      <div className="mb-4 flex flex-none items-center gap-2">
-        {VENSTERS.map(v => (
-          <button key={v.uren} onClick={() => setUren(v.uren)} className="px-2 py-1 text-xs"
-            style={{ color: uren === v.uren ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
-            {v.label}
+      <header className="axe-set-kop flex-none">
+        <div>
+          <h2>Ledger</h2>
+          <p>Everything AXE ran, for every app: jobs on the VPS and Mac, Supabase cron and tasks. Counts cover the whole window.</p>
+        </div>
+        <div className="axe-set-pillen">
+          {VENSTERS.map(v => (
+            <button key={v.uren} type="button" onClick={() => setUren(v.uren)}
+              className={`axe-set-pil${uren === v.uren ? ' is-info' : ''}`}>{v.label}</button>
+          ))}
+          <button type="button" onClick={() => setAlleenFout(v => !v)} className={`axe-set-pil${alleenFout ? ' is-bad' : ''}`}>
+            Failures only
           </button>
-        ))}
-        <button onClick={() => { void haal(); }} disabled={bezig} className="ml-auto flex items-center gap-1.5 px-2 py-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-          <RefreshCw size={12} className={bezig ? 'animate-spin' : ''} /> Refresh
-        </button>
-      </div>
+          <button type="button" onClick={() => { void haal(); }} disabled={bezig} className="axe-set-pil inline-flex items-center gap-1.5">
+            <RefreshCw size={11} className={bezig ? 'animate-spin' : ''} /> Refresh
+          </button>
+        </div>
+      </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {fout && <div className="mb-4 text-sm" style={{ color: 'var(--m-broken)' }}>Grootboek niet bereikbaar: {fout}</div>}
 
-        {/* Per app de stand, in het ritme van drie kolommen. Klik = die app. */}
-        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <KpiRij tegels={[
+          { label: 'Runs', waarde: laden ? '…' : som.totaal.toLocaleString('nl-NL'), sub: VENSTERS.find(v => v.uren === uren)?.label },
+          { label: 'Failed', waarde: laden ? '…' : som.fout.toLocaleString('nl-NL'), toon: som.fout ? 'bad' : undefined,
+            sub: stand.find(s2 => s2.laatsteFout)?.laatsteFout ? `last: ${[...stand].filter(s2 => s2.laatsteFout).sort((a, b) => b.laatsteFout!.at.localeCompare(a.laatsteFout!.at))[0].laatsteFout!.name}` : 'no failures' },
+          { label: 'Success rate', waarde: slaagt == null ? '–' : `${slaagt}%`, toon: slaagt != null && slaagt < 95 ? 'warn' : 'ok', sub: 'finished runs' },
+          { label: 'Running now', waarde: laden ? '…' : String(som.bezig), sub: 'tasks and jobs in progress' },
+        ]} />
+
+        {/* Per app de stand over het hele venster. Klik = die app. */}
+        <div className="axe-gb-apps">
           {stand.map(s => {
             const m = appMeta(s.app);
             return (
-              <button key={s.app} onClick={() => setApp(app === s.app ? 'alle' : s.app)} className="axe-cron text-left" data-aan={app === s.app ? 'ja' : undefined}>
-                <header className="axe-cron-kop">
-                  <div className="min-w-0">
-                    <div className="axe-cron-titel" style={{ color: m.kleur }}>{m.label}</div>
-                    <div className="axe-cron-onder">{s.totaal === 0 ? 'Niets in dit venster.' : `${s.totaal} rows`}</div>
-                  </div>
-                  <div className="axe-cron-tellers">
-                    {s.goed > 0 && <span className="axe-cron-stand" data-stand="goed"><i className="axe-cron-stip" />{s.goed} gelukt</span>}
-                    {s.fout > 0 && <span className="axe-cron-stand" data-stand="stuk"><i className="axe-cron-stip" />{s.fout} mislukt</span>}
-                    {s.bezig + s.open > 0 && <span style={{ color: 'var(--text-muted)' }}>{s.bezig + s.open} open</span>}
-                  </div>
-                </header>
+              <button key={s.app} type="button" onClick={() => setApp(app === s.app ? 'alle' : s.app)}
+                className="axe-gb-app" data-aan={app === s.app ? 'ja' : undefined} style={{ ['--app-kleur' as string]: m.kleur }}>
+                <span className="axe-gb-app-titel" title={m.label}>{m.label}</span>
+                <b>{laden ? '…' : s.totaal === 0 ? '0' : s.totaal.toLocaleString('nl-NL')}<small> runs</small></b>
+                <span className="axe-gb-app-tellers">
+                  <span className="is-ok">{s.goed.toLocaleString('nl-NL')} ok</span>
+                  {s.fout > 0 && <span className="is-fout">{s.fout} failed</span>}
+                  {s.bezig + s.open > 0 && <span>{s.bezig + s.open} open</span>}
+                </span>
                 {s.laatsteFout && (
-                  <div className="axe-cron-leeg truncate" style={{ color: 'var(--m-broken)' }} title={s.laatsteFout.detail}>
-                    Last error: {s.laatsteFout.name} · {tijd(s.laatsteFout.at)}
-                  </div>
+                  <span className="axe-gb-app-fout" title={s.laatsteFout.name}>Last error · {s.laatsteFout.name} · {tijd(s.laatsteFout.at)}</span>
                 )}
               </button>
             );
@@ -203,7 +221,9 @@ export default function Grootboek() {
                 })}
               </tbody>
             </table>
-            {zichtbaar.length === 0 && !bezig && <div className="axe-cron-leeg">Nothing in this window for this choice.</div>}
+            {laden && <div className="axe-cron-leeg">Loading…</div>}
+            {!laden && zichtbaar.length === 0 && <div className="axe-cron-leeg">{alleenFout ? 'No failures in this window.' : 'Nothing in this window for this choice.'}</div>}
+            {!laden && !alleenFout && <div className="axe-cron-leeg">Successful minute crons are counted above but not listed. Latest {Math.min(zichtbaar.length, 500)} rows shown.</div>}
           </div>
         </section>
       </div>

@@ -1193,7 +1193,8 @@ async def proxy_ai(body: dict = Body(...)):
                 r = await client.post(chat_url, headers=headers, json={"model": model, "messages": messages, **({"tools": tools} if tools else {}), **({"tool_choice": tool_choice} if tool_choice else {}), "max_tokens": 4096, "temperature": 0.7})
                 try:  # verbruik per sleutel; alleen sleutels van deze server hebben een naam
                     import sleutel_teller
-                    sleutel_teller.tel(key, r.status_code, int(((r.json() or {}).get("usage") or {}).get("total_tokens") or 0) if r.status_code == 200 else 0)
+                    sleutel_teller.tel(key, r.status_code, int(((r.json() or {}).get("usage") or {}).get("total_tokens") or 0) if r.status_code == 200 else 0,
+                                       tekst=r.text[:400] if r.status_code != 200 else None)
                 except Exception:  # noqa: BLE001
                     pass
                 if r.is_error:
@@ -3618,7 +3619,7 @@ async def provider_key_test(key: str):
             })
         try:  # een test is ook een echte aanroep: telt mee in het verbruik
             import sleutel_teller
-            sleutel_teller.tel(key, response.status_code)
+            sleutel_teller.tel(key, response.status_code, tekst=response.text[:400] if response.status_code != 200 else None)
         except Exception:  # noqa: BLE001
             pass
         if response.is_success and response.json().get("choices"):
@@ -4663,6 +4664,30 @@ async def ledger(app_id: Optional[str] = None, source: Optional[str] = None, hou
     rows = sb().rpc("core_ledger", {"p_since": since.isoformat(), "p_app": app_id, "p_source": source,
                                     "p_limit": max(1, min(limit, 2000))}).execute().data or []
     return {"entries": rows, "since": since.isoformat(), "apps": list(_planning.APPS)}
+
+
+@app.get("/ledger/overview", dependencies=[AUTH])
+async def ledger_overview(app_id: Optional[str] = None, source: Optional[str] = None, hours: int = 168,
+                          limit: int = 500, fails_only: bool = False):
+    """Grootboek dat klopt (23 nov): tellers over het hele venster + de regels die ertoe doen.
+
+    /ledger kapt op 2000 regels en de minuut-crons vullen die in ~16 uur. Hier komen de
+    tellers uit core_ledger_stand (alles, per app/bron/status) en de regels uit
+    core_ledger_belangrijk (zonder gelukte routine-crons; optioneel alleen mislukte)."""
+    if app_id is not None and app_id not in _planning.APPS:
+        raise HTTPException(400, f"app_id must be one of {_planning.APPS}")
+    if source is not None and source not in ("schedule", "planner", "launchd", "northsea", "manual", "pg_cron", "task"):
+        raise HTTPException(400, "invalid source")
+    since = datetime.now(timezone.utc) - timedelta(hours=max(1, min(hours, 24 * 90)))
+
+    def lees():
+        stand = sb().rpc("core_ledger_stand", {"p_since": since.isoformat(), "p_source": source}).execute().data or []
+        rijen = sb().rpc("core_ledger_belangrijk", {"p_since": since.isoformat(), "p_app": app_id, "p_source": source,
+                                                    "p_limit": max(1, min(limit, 2000)), "p_alleen_fout": bool(fails_only)}).execute().data or []
+        return stand, rijen
+
+    stand, rijen = await asyncio.to_thread(lees)
+    return {"entries": rijen, "totals": stand, "since": since.isoformat(), "apps": list(_planning.APPS)}
 
 
 @app.get("/calendar/jobs", dependencies=[AUTH])

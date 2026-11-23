@@ -56,6 +56,16 @@ def naam_van(waarde: Optional[str], env: Optional[Mapping[str, str]] = None) -> 
     return gevonden
 
 
+_GEEN_TEGOED = ("insufficient_quota", "credit_balance", "no credits", "out of credits", "billing")
+
+
+def echte_status(status: Optional[int], tekst: Optional[str] = None) -> Optional[int]:
+    """Een 429 die eigenlijk 'geen tegoed' is (OpenAI: insufficient_quota) telt als 402."""
+    if status == 429 and tekst and any(w in tekst.lower() for w in _GEEN_TEGOED):
+        return 402
+    return status
+
+
 def soort(status: Optional[int]) -> str:
     if status == 200:
         return "ok"
@@ -64,11 +74,15 @@ def soort(status: Optional[int]) -> str:
     return "mislukt"
 
 
-def tel(sleutel: Optional[str], status: Optional[int], tokens: int = 0, nu: Optional[datetime] = None) -> Optional[str]:
-    """Tel één aanroep. `sleutel` mag een waarde of een env-naam zijn. Geeft de naam terug."""
+def tel(sleutel: Optional[str], status: Optional[int], tokens: int = 0, nu: Optional[datetime] = None,
+        tekst: Optional[str] = None) -> Optional[str]:
+    """Tel één aanroep. `sleutel` mag een waarde of een env-naam zijn. Geeft de naam terug.
+
+    `tekst` is (het begin van) het foutantwoord: daarmee wordt een 429 'geen tegoed' een 402."""
     naam = naam_van(sleutel)
     if not naam:
         return None
+    status = echte_status(status, tekst)
     dag = (nu or datetime.now(timezone.utc)).date().isoformat()
     s = soort(status)
     with _slot:

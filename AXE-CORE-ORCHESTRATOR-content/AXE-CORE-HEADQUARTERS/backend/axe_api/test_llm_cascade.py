@@ -142,3 +142,19 @@ def test_zijn_alle_betaalde_aanbieders_leeg_dan_antwoordt_de_modelbox(monkeypatc
 
     monkeypatch.setattr(lc.httpx, "AsyncClient", Client)
     assert asyncio.run(lc.chat([{"role": "user", "content": "hoi"}])) == ("van de eigen box", "ollama")
+
+
+def test_minuutlimiet_rust_kort_dagquotum_en_tegoed_lang():
+    import llm_cascade as lc
+    assert lc.rust_voor(429, {"retry-after": "40"}) == 42.0
+    assert lc.rust_voor(429, {"retry-after": "1"}) == 15.0
+    assert lc.rust_voor(429, {"retry-after": "40"}, "Rate limit exceeded: free-models-per-day") is None
+    assert lc.rust_voor(429, {"retry-after": "40"}, '{"type":"insufficient_quota"}') is None
+    assert lc.rust_voor(429, {}) is None
+    assert lc.rust_voor(402, {"retry-after": "5"}) is None
+    lc.vergeet_alles()
+    lc.laat_rusten("x", nu=100.0, seconden=30.0)
+    assert lc._rust_tot["x"] == 130.0
+    lc.laat_rusten("y", nu=100.0)
+    assert lc._rust_tot["y"] == 100.0 + lc.RUST_S
+    lc.vergeet_alles()

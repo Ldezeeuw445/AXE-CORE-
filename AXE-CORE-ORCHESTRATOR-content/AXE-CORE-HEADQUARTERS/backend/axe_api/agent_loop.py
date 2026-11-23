@@ -1325,7 +1325,8 @@ async def _call_openai_compat(
 
         sleutel_teller.tel(api_key, response.status_code,
                            int(((response.json() or {}).get("usage") or {}).get("total_tokens") or 0)
-                           if response.status_code == 200 else 0)
+                           if response.status_code == 200 else 0,
+                           tekst=response.text[:400] if response.status_code != 200 else None)
     except Exception:  # noqa: BLE001
         pass
     if response.status_code != 200:

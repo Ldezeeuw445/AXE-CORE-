@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { appMeta } from './apps';
 import {
-  agendaVanJobs, bronWoord, duurTekst, filterAgenda, filterRegels, standPerApp, statusWoord, uitkomst, type GrootboekRegel,
+  agendaVanJobs, bronWoord, duurTekst, filterAgenda, filterRegels, standPerApp, standUitTotalen, statusWoord, uitkomst, type GrootboekRegel,
 } from './grootboek';
 
 const regel = (over: Partial<GrootboekRegel>): GrootboekRegel => ({
@@ -65,5 +65,18 @@ describe('grootboek', () => {
     expect([uitkomst('completed'), uitkomst('timeout'), uitkomst('running'), uitkomst('pending')]).toEqual(['goed', 'fout', 'bezig', 'open']);
     expect([bronWoord('launchd'), bronWoord('schedule', 'vps'), bronWoord('task')]).toEqual(['Mac-onderhoud', 'job op de VPS', 'taak']);
     expect([duurTekst(250), duurTekst(4200), duurTekst(95000), duurTekst(null)]).toEqual(['250 ms', '4.2 s', '1 min 35 s', '']);
+  });
+
+  it('standUitTotalen telt het hele venster, niet de afgekapte regels (23 nov)', () => {
+    const stand = standUitTotalen([
+      { app: 'axe_core', source: 'schedule', status: 'ok', n: 48000, laatste_at: '2026-11-23T16:00:00Z', laatste_fout_naam: 'x', laatste_fout_at: '2026-11-23T16:00:00Z' },
+      { app: 'axe_core', source: 'task', status: 'failed', n: 7, laatste_at: '2026-11-23T15:00:00Z', laatste_fout_naam: 'Build', laatste_fout_at: '2026-11-23T15:00:00Z' },
+      { app: 'axe_core', source: 'schedule', status: 'fail', n: 3, laatste_at: '2026-11-22T15:00:00Z', laatste_fout_naam: 'Oud', laatste_fout_at: '2026-11-22T15:00:00Z' },
+    ]);
+    const axe = stand.find((s) => s.app === 'axe_core')!;
+    expect(axe.totaal).toBe(48010);
+    expect(axe.goed).toBe(48000);
+    expect(axe.fout).toBe(10);
+    expect(axe.laatsteFout?.name).toBe('Build');
   });
 });

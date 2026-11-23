@@ -120,6 +120,40 @@ export function standPerApp(regels: readonly GrootboekRegel[]): AppStand[] {
   return APPS.map(a => stand.get(a.id)!);
 }
 
+/** Eén telrij uit /ledger/overview (core_ledger_stand): alles in het venster, niet afgekapt. */
+export interface GrootboekTotaal {
+  app: string;
+  source: string;
+  status: string;
+  n: number;
+  laatste_at: string | null;
+  laatste_fout_naam: string | null;
+  laatste_fout_at: string | null;
+}
+
+/**
+ * Per app de stand uit de servertellers (23 nov). standPerApp telde de opgehaalde
+ * regels, en die kapten op 2000 -- "7 dagen" was dan minder dan een dag.
+ */
+export function standUitTotalen(totalen: readonly GrootboekTotaal[]): AppStand[] {
+  const stand = new Map<AppId, AppStand>(APPS.map(a => [a.id, { app: a.id, totaal: 0, goed: 0, fout: 0, bezig: 0, open: 0, laatsteFout: null }]));
+  for (const t of totalen) {
+    const s = stand.get(appVanRegel(t.app));
+    if (!s) continue;
+    const n = Number(t.n) || 0;
+    s.totaal += n;
+    const u = uitkomst(t.status);
+    s[u] += n;
+    if (u === 'fout' && t.laatste_fout_at && (!s.laatsteFout || t.laatste_fout_at > s.laatsteFout.at)) {
+      s.laatsteFout = {
+        at: t.laatste_fout_at, app: t.app, source: t.source, kind: 'run', name: t.laatste_fout_naam ?? '',
+        status: t.status, duration_ms: null, detail: '', ref_id: `${t.app}:${t.source}:${t.status}`,
+      };
+    }
+  }
+  return APPS.map(a => stand.get(a.id)!);
+}
+
 /** De geplande jobs als agenda-items, in de kleur van hun app. */
 export function agendaVanJobs(items: readonly AgendaJob[]): RoosterItem[] {
   const uit: RoosterItem[] = [];
