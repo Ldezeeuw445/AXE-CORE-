@@ -3616,6 +3616,11 @@ async def provider_key_test(key: str):
                 "model": model, "messages": [{"role": "user", "content": "Reply OK"}],
                 "max_tokens": 128,
             })
+        try:  # een test is ook een echte aanroep: telt mee in het verbruik
+            import sleutel_teller
+            sleutel_teller.tel(key, response.status_code)
+        except Exception:  # noqa: BLE001
+            pass
         if response.is_success and response.json().get("choices"):
             return {"status": "Works"}
         return {"status": "Rate limited" if response.status_code == 429 else f"Test failed ({response.status_code})"}
