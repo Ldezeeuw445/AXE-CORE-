@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shlex
 from datetime import datetime
@@ -53,7 +54,9 @@ AUTEUR = ("AXE DAX developer", f"{EIGENAAR}@users.noreply.github.com")
 # (node, python3 en git zijn er; deno niet). Geen testcommando = nooit zelf mergen.
 REPOS: dict[str, dict[str, str]] = {
     "axon-memory": {
-        "bouwlijst": "docs/tasks.json",
+        # 23 nov: Luka koos één lijst. docs/tasks.json is bevroren; de bouwlijst
+        # staat in AXON zelf en AXE Core haalt er de taak uit (volgende_axon_taak).
+        "bouwlijst": "the AXON build list (workspace axon-memory-app)",
         "regels": "CLAUDE.md",
         "test": "npm ci --no-audit --no-fund --loglevel=error && npm run test:naming && npm run build",
     },
@@ -63,6 +66,74 @@ REPOS: dict[str, dict[str, str]] = {
         "test": "",
     },
 }
+# ── De AXON-bouwlijst ───────────────────────────────────────────────────────
+# Luka, 22 nov: "de axon memory manager in axe core heeft de build list, en de
+# coding agents bouwen eraan door tot het 100% af is". Het gratis model in de
+# DAX kan niet zelf bij AXON, dus AXE Core leest de lijst, kiest één taak en
+# geeft die mee; na een eigen merge vinkt AXE `built` aan. `tested` nooit: dat
+# is voor wie het echt gemeten heeft.
+AXON_MCP = os.environ.get("AXON_MCP_URL", "https://mcp.axon-memory.com").rstrip("/")
+AXON_WERKRUIMTE = "axon-memory-app"
+# Fasen die over de huidige repo gaan: A (de motor), M (mobiel en desktop), U
+# (de feel). De oudere letters beschrijven de gearchiveerde axon-memory-app.
+AXON_FASEN = tuple(f.strip() for f in os.environ.get("AXON_DAX_FASEN", "A,M,U").split(",") if f.strip())
+# Wat alleen Luka kan: billing, een dashboardinstelling, deployen vanaf de mini,
+# en alles wat hij zelf moet beoordelen.
+ALLEEN_LUKA = re.compile(r"luka|deploy|billing|turn on|dashboard", re.IGNORECASE)
+
+
+def _axon(http: httpx.Client, key: str, tool: str, args: dict[str, Any]) -> Any:
+    """Eén MCP-aanroep op de AXON-gateway. Geeft de JSON uit de tekst terug."""
+    r = http.post(AXON_MCP, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                                     "Accept": "application/json, text/event-stream"},
+                  json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                        "params": {"name": tool, "arguments": args}})
+    r.raise_for_status()
+    tekst = r.text
+    m = re.search(r"^data: (\{.*\})\s*$", tekst, re.MULTILINE)
+    body = json.loads(m.group(1) if m else tekst)
+    if body.get("error"):
+        raise ValueError(f"AXON {tool}: {body['error'].get('message', 'error')}")
+    inhoud = ((body.get("result") or {}).get("content") or [{}])[0].get("text") or ""
+    try:
+        return json.loads(inhoud)
+    except ValueError:
+        return inhoud
+
+
+def volgende_axon_taak(http: httpx.Client, key: str) -> dict[str, Any] | None:
+    """De eerste open, nog niet gebouwde taak in A/M/U die geen Luka-werk is."""
+    lijst = _axon(http, key, "list_tasks", {"workspace": AXON_WERKRUIMTE})
+    for t in (lijst.get("open") if isinstance(lijst, dict) else None) or []:
+        code = str(t.get("code") or "")
+        fase = re.match(r"[A-Z]+", code)
+        if not fase or fase.group(0) not in AXON_FASEN or t.get("built"):
+            continue
+        if ALLEEN_LUKA.search(str(t.get("title") or "")):
+            continue
+        return {"code": code, "title": str(t.get("title") or ""), "detail": str(t.get("detail") or "")[:2500]}
+    return None
+
+
+def markeer_gebouwd(taak: dict[str, Any] | None, pr: str | None, http: httpx.Client | None = None) -> bool:
+    """Na een eigen merge: `built` op de AXON-lijst. Gooit nooit."""
+    key = os.environ.get("AXON_API_KEY", "").strip()
+    if not taak or not key:
+        return False
+    eigen = http is None
+    http = http or httpx.Client(timeout=20)
+    try:
+        _axon(http, key, "mark_built", {"workspace": AXON_WERKRUIMTE, "code": taak["code"],
+                                         "note": f"AXE DAX developer, merged: {pr or 'no PR url'}"})
+        return True
+    except (httpx.HTTPError, ValueError, KeyError) as e:
+        log.warning("dax-bouw: mark_built %s mislukt (%s)", taak.get("code"), type(e).__name__)
+        return False
+    finally:
+        if eigen:
+            http.close()
+
+
 # Welke repo de dienst om de beurt een taak geeft.
 BEURT = ("axon-memory", "AXE-CORE-")
 
@@ -203,7 +274,8 @@ def _merge(http: httpx.Client, token: str, repo: str, nummer: int, titel: str) -
 
 
 def afronden(ux: Any, prep: dict[str, Any], repo: str, titel: str, verslag: str, taak_id: str, *,
-             token: str | None = None, http: httpx.Client | None = None) -> dict[str, Any]:
+             token: str | None = None, http: httpx.Client | None = None,
+             taak: dict[str, Any] | None = None) -> dict[str, Any]:
     """Controle, tests, commit, push, PR en eventueel zelf mergen. Gooit nooit."""
     pad, branch, basis = prep["pad"], prep["branch"], prep.get("basis") or "origin/main"
     try:
@@ -258,6 +330,8 @@ def afronden(ux: Any, prep: dict[str, Any], repo: str, titel: str, verslag: str,
             uit["pr"] = pr.get("html_url")
             if zelf and pr.get("number"):
                 uit["gemerged"] = _merge(http, token, repo, int(pr["number"]), titel)
+                if uit["gemerged"] and taak:
+                    uit["axon_gebouwd"] = markeer_gebouwd(taak, uit["pr"])
         except (httpx.HTTPError, KeyError, ValueError) as e:
             uit.setdefault("pr", None)
             uit["reden_geen_pr"] = f"GitHub: {type(e).__name__}"
@@ -269,9 +343,21 @@ def afronden(ux: Any, prep: dict[str, Any], repo: str, titel: str, verslag: str,
         return {"veranderd": None, "gepusht": False, "reden": f"{type(e).__name__}: {e}"[:300]}
 
 
-def contract(prep: dict[str, Any], repo: str) -> str:
+def contract(prep: dict[str, Any], repo: str, taak: dict[str, Any] | None = None) -> str:
     """Wat de agent te horen krijgt bovenop de taak."""
     info = REPOS.get(repo, {})
+    if taak:
+        return (
+            f"\n\n[AXE DAX build contract] You work in {prep['pad']} on branch {prep['branch']} "
+            f"(fresh from {prep.get('basis')}). Read {info.get('regels', 'the repo rules')} first and follow it. "
+            f"Build exactly this task from the AXON build list, and nothing else: {taak['code']} — {taak['title']}.\n"
+            f"What it says:\n{taak['detail']}\n"
+            "Implement it completely with tests. Do NOT edit docs/tasks.json: it is frozen history. "
+            "Do NOT commit, push or merge: when you stop, AXE checks for secrets, runs the repo's tests, "
+            "commits, pushes this branch, opens the PR and, after a merge, ticks the task built in AXON. "
+            "Never touch billing, auth/RLS, migrations or deploy config; those always wait for Luka. "
+            f"End with a short report: {taak['code']}, what changed, what you ran."
+        )
     return (
         f"\n\n[AXE DAX build contract] You work in {prep['pad']} on branch {prep['branch']} "
         f"(fresh from {prep.get('basis')}). Read {info.get('regels', 'the repo rules')} first and follow it. "
@@ -365,21 +451,36 @@ def plan_bouwtaak(db: Any, nu: datetime) -> dict[str, Any]:
     vorige = next(((r.get("payload") or {}).get("repo") for r in laatste if (r.get("payload") or {}).get("dax_bouw")), None)
     i = (BEURT.index(vorige) + 1) % len(BEURT) if vorige in BEURT else 0
     repo = BEURT[i]
+    taak: dict[str, Any] | None = None
+    if repo == "axon-memory":
+        key = os.environ.get("AXON_API_KEY", "").strip()
+        if not key:
+            return {"gepland": False, "reden": "no AXON_API_KEY: cannot read the AXON build list"}
+        try:
+            with httpx.Client(timeout=20) as http:
+                taak = volgende_axon_taak(http, key)
+        except (httpx.HTTPError, ValueError) as exc:
+            return {"gepland": False, "reden": f"AXON build list unreadable ({type(exc).__name__})"}
+        if not taak:
+            return {"gepland": False, "reden": "nothing open on the AXON build list for the DAX"}
     rij = {
-        "title": f"DAX build: next task in {repo}",
-        "goal": (f"Take the next open task from the build list of {repo} that fits one run, "
+        "title": f"DAX build: {taak['code']} — {taak['title']}"[:180] if taak else f"DAX build: next task in {repo}",
+        "goal": (f"Build {taak['code']} from the AXON build list: {taak['title']}" if taak else
+                 f"Take the next open task from the build list of {repo} that fits one run, "
                  "build it with tests, and report what changed."),
         "status": "queued", "priority": "medium", "source_app": "axe_core",
         "requested_by": "dax-bouw", "capability": "agentic", "assignee": "developer",
         "execution_mode": "patch",
-        "payload": {"repo": repo, "dax_bouw": True, "free_models": True, "crew": False},
+        "payload": {"repo": repo, "dax_bouw": True, "free_models": True, "crew": False,
+                    **({"axon_taak": taak} if taak else {})},
         "metadata": {"dax_bouw": True, "app": "axe_core", "gepland_op": nu.isoformat()},
     }
     try:
         data = db.table("core_tasks").insert(rij).execute().data or []
     except Exception as exc:  # noqa: BLE001
         return {"gepland": False, "reden": f"insert failed: {type(exc).__name__}"}
-    return {"gepland": True, "repo": repo, "taak": (data[0] if data else {}).get("id")}
+    return {"gepland": True, "repo": repo, "taak": (data[0] if data else {}).get("id"),
+            **({"axon": taak["code"]} if taak else {})}
 
 
 def diensten() -> tuple[dict[str, Any], ...]:

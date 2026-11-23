@@ -219,9 +219,11 @@ class _Db:
         return Q()
 
 
-def test_de_dienst_geeft_om_de_beurt_een_taak_en_nooit_twee_tegelijk():
+def test_de_dienst_geeft_om_de_beurt_een_taak_en_nooit_twee_tegelijk(monkeypatch):
     from datetime import datetime, timezone
     nu = datetime(2026, 10, 28, 16, 20, tzinfo=timezone.utc)
+    monkeypatch.setenv("AXON_API_KEY", "k")
+    monkeypatch.setattr(db_, "volgende_axon_taak", lambda http, key: {"code": "U3", "title": "Nothing over text", "detail": "d"})
     db = _Db()
     eerste = db_.plan_bouwtaak(db, nu)
     assert eerste["gepland"] is True and eerste["repo"] == "axon-memory"
@@ -270,3 +272,78 @@ def test_sleutelfouten_verdwijnen_uit_home_maar_andere_fouten_blijven(monkeypatc
     assert a["status"] == "cancelled" and a["metadata"]["archived"] is True and a["error"]["archived"] is True
     assert "vps-github-key" in a["metadata"]["archive_reason"] and "could not read Username" in a["error"]["message"]
     assert b["status"] == "failed" and c["status"] == "failed"
+
+
+# ── 23 nov: de bouwlijst staat in AXON, niet meer in docs/tasks.json ─────────
+
+def _axon_lijst(open_taken, gezien=None):
+    def handler(request: httpx.Request):
+        body = json.loads(request.content)
+        if gezien is not None:
+            gezien.append((request.headers.get("authorization"), body["params"]["name"], body["params"]["arguments"]))
+        if body["params"]["name"] == "list_tasks":
+            tekst = json.dumps({"open": open_taken, "finished": []})
+        else:
+            tekst = "marked built"
+        return httpx.Response(200, text="event: message\ndata: " + json.dumps(
+            {"jsonrpc": "2.0", "id": 1, "result": {"content": [{"type": "text", "text": tekst}]}}) + "\n\n")
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_de_dax_pakt_de_eerste_open_taak_die_hij_mag_bouwen():
+    gezien = []
+    http = _axon_lijst([
+        {"code": "W4", "title": "Old app work", "built": False, "detail": ""},
+        {"code": "A1", "title": "A0-2 · CI never starts: the GitHub account is locked on billing", "built": False},
+        {"code": "A4", "title": "A-DEPLOY · One deploy round ships eleven finished engine fixes", "built": False},
+        {"code": "A5", "title": "Every item carries its id", "built": True},
+        {"code": "U8", "title": "One walkthrough on a phone, judged by Luka", "built": False},
+        {"code": "U3", "title": "Nothing draws over text on a phone", "built": False, "detail": "the composer"},
+    ], gezien)
+    taak = db_.volgende_axon_taak(http, "sleutel")
+    assert taak == {"code": "U3", "title": "Nothing draws over text on a phone", "detail": "the composer"}
+    assert gezien == [("Bearer sleutel", "list_tasks", {"workspace": "axon-memory-app"})]
+
+
+def test_niets_te_doen_op_de_lijst_is_geen_taak():
+    assert db_.volgende_axon_taak(_axon_lijst([{"code": "U1", "title": "x", "built": True}]), "k") is None
+
+
+def test_zonder_axon_sleutel_geen_bouwtaak_in_axon_memory(monkeypatch):
+    from datetime import datetime, timezone
+    monkeypatch.delenv("AXON_API_KEY", raising=False)
+    db = _Db()
+    uit = db_.plan_bouwtaak(db, datetime(2026, 11, 23, 16, 20, tzinfo=timezone.utc))
+    assert uit["gepland"] is False and "AXON_API_KEY" in uit["reden"] and not db.ingevoegd
+
+
+def test_de_gekozen_taak_gaat_mee_in_de_rij_en_het_contract(monkeypatch):
+    from datetime import datetime, timezone
+    monkeypatch.setenv("AXON_API_KEY", "k")
+    taak = {"code": "U3", "title": "Nothing draws over text on a phone", "detail": "the composer"}
+    monkeypatch.setattr(db_, "volgende_axon_taak", lambda http, key: taak)
+    db = _Db()
+    uit = db_.plan_bouwtaak(db, datetime(2026, 11, 23, 16, 20, tzinfo=timezone.utc))
+    rij = db.ingevoegd[0]
+    assert uit["axon"] == "U3" and rij["payload"]["axon_taak"] == taak and rij["title"].startswith("DAX build: U3")
+    c = db_.contract({"pad": "/w", "branch": "dax/x", "basis": "origin/main"}, "axon-memory", taak)
+    assert "U3 — Nothing draws over text on a phone" in c and "the composer" in c and "docs/tasks.json: it is frozen" in c
+
+
+def test_na_een_eigen_merge_wordt_de_taak_gebouwd_in_axon(omgeving, monkeypatch):
+    ux, prep, _ = omgeving
+    (Path_ := __import__("pathlib").Path)(prep["pad"], "app.js").write_text("export const a = 2;\n")
+    gebouwd = []
+    monkeypatch.setattr(db_, "markeer_gebouwd", lambda taak, pr, http=None: gebouwd.append((taak["code"], pr)) or True)
+    http, _ = github(merged=True)
+    uit = db_.afronden(ux, prep, "axon-memory", "DAX build: U3 — x", "done", "abc123-taak",
+                       token="t", http=http, taak={"code": "U3", "title": "x", "detail": ""})
+    assert uit.get("gemerged") is True and uit.get("axon_gebouwd") is True
+    assert gebouwd == [("U3", "https://github.com/Ldezeeuw445/axon-memory/pull/40")]
+
+
+def test_markeer_gebouwd_roept_mark_built_aan_en_nooit_mark_tested(monkeypatch):
+    monkeypatch.setenv("AXON_API_KEY", "k")
+    gezien = []
+    assert db_.markeer_gebouwd({"code": "U3"}, "https://pr/1", http=_axon_lijst([], gezien)) is True
+    assert [g[1] for g in gezien] == ["mark_built"] and gezien[0][2]["code"] == "U3"

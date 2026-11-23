@@ -558,7 +558,7 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
             branch_name = bouw_prep["branch"]
             await context.event("axe.progress", f"DAX build: {bouw_repo} on {branch_name}.", {
                 "repo": bouw_repo, "branch": branch_name, "basis": bouw_prep.get("basis")})
-            agent_request += dax_bouw.contract(bouw_prep, bouw_repo)
+            agent_request += dax_bouw.contract(bouw_prep, bouw_repo, payload.get("axon_taak"))
         elif agent_id == "developer":
             agent_request += (
                 "\n\n[AXE execution contract] You own this coding run. Work in an isolated "
@@ -602,7 +602,8 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
             import dax_bouw
             publicatie = await asyncio.to_thread(
                 dax_bouw.afronden, uitvoerder, bouw_prep, bouw_repo,
-                str(task.get("title") or "DAX build"), str(output.get("summary") or ""), str(task["id"]))
+                str(task.get("title") or "DAX build"), str(output.get("summary") or ""), str(task["id"]),
+                taak=payload.get("axon_taak"))
             output = {**output, "publicatie": publicatie}
             regel = ("merged" if publicatie.get("gemerged") else
                      f"PR {publicatie['pr']}" if publicatie.get("pr") else
