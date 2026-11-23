@@ -42,7 +42,7 @@ import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
 import {
-  alleHosts, maakHost, geldigWsAdres, metAdres, isKlaar,
+  alleHosts, maakHost, geldigWsAdres, metAdres, isKlaar, voorDitApparaat,
   HOSTS_SLEUTEL, ADRESSEN_SLEUTEL, TERMINAL_POORT,
   hostSoort, bereikbaarHier, waaromGeenVerbinding,
   type TerminalHost,
@@ -103,7 +103,13 @@ export default function TerminalsPage() {
   const [gekozenId, setGekozenId] = useState<string>(() => lees(GEKOZEN_SLEUTEL, 'deze-mac'));
 
   const hosts = useMemo(
-    () => alleHosts(eigen).map(h => metAdres(h, adressen)),
+    () =>
+      alleHosts(eigen).map(h =>
+        voorDitApparaat(metAdres(h, adressen), {
+          tauri: isTauriRuntime(),
+          paginaHost: typeof location === 'undefined' ? '' : location.hostname,
+        }),
+      ),
     [eigen, adressen],
   );
 

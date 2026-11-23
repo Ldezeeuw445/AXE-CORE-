@@ -242,6 +242,27 @@ export function verbindingMisluktHint(endpoint: string, omgeving: Omgeving): str
   return waaromGeenVerbinding(soort, bereikbaarHier(soort, omgeving));
 }
 
+/**
+ * De Mac mini achter Tailscale Serve: poort 4022 van de tailnet naar de
+ * shell-server die AXE CORE daar zelf start. Aangezet op 22 nov 2026
+ * (`tailscale serve --bg --https=4022 http://127.0.0.1:4022`), alleen binnen
+ * de tailnet; dezelfde muur als overal (Supabase-token + toegestane gebruikers).
+ */
+export const MAC_MINI_TAILNET_WS = `wss://mac-mini-van-luka.tail03735e.ts.net:${TERMINAL_POORT}/terminal`;
+
+/**
+ * Een Mac-vak op het apparaat waar je nu bent.
+ *
+ * Gemeten 22 nov 2026 op Luka's iPhone: in de PWA werkten alleen de VPS-vakken.
+ * De Mac-vakken staan op `127.0.0.1`, en dat is daar de telefoon. In de Mac-app
+ * blijft `127.0.0.1` gewoon die Mac; overal anders gaat zo'n vak naar de Mac
+ * mini (het brein), via Tailscale. Een adres dat je zelf invulde blijft staan.
+ */
+export function voorDitApparaat(host: TerminalHost, omgeving: Omgeving): TerminalHost {
+  if (hostSoort(host.wsUrl) !== 'lokaal' || opDezeMachine(omgeving)) return host;
+  return { ...host, wsUrl: MAC_MINI_TAILNET_WS };
+}
+
 export const ADRESSEN_SLEUTEL = 'axe_terminal_adressen';
 
 /** De host met een ingevuld adres, als dat er is. */
