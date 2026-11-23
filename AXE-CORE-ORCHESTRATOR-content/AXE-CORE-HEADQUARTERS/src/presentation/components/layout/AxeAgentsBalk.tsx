@@ -4,7 +4,7 @@
  */
 import { isVoorLuka, zonderRuis } from '@/domain/taken/takenRuis';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import { agentById } from '@/domain/agents/roster';
 import { balkLabel, jobLoopt } from '@/domain/tierRouter/axeJobRegels';
@@ -78,6 +78,8 @@ export function AxeAgentsBalk() {
   const jobs = useAxeJobStore((s) => s.jobs);
   const server = useServerAgents();
   const nav = useNavigate();
+  // Op Home de volle kaarten; op elke andere tab één slanke regel, zodat de tab meer ruimte houdt (23 nov).
+  const opHome = useLocation().pathname === '/';
   const [agentsOpen, setAgentsOpen] = useState(false);
   const [takenOpen, setTakenOpen] = useState(false);
   const [meldingen, setMeldingen] = useState<Melding[]>([]);
@@ -199,7 +201,7 @@ export function AxeAgentsBalk() {
   };
 
   return (
-    <div className="axe-home-pillen" data-axe-home-pillen>
+    <div className={`axe-home-pillen${opHome ? '' : ' is-slank'}`} data-axe-home-pillen>
       <div
         className="axe-home-pill"
         data-axe-home-pill="agents"

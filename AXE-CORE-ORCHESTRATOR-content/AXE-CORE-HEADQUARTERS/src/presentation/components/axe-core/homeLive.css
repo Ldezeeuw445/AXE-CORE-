@@ -879,3 +879,8 @@
   .axe-home-pill-knop { gap: 7px; padding: 7px 9px; }
   .axe-home-pill-pijl, .axe-home-pill-cta { display: none; }
 }
+/* Buiten Home: de balken boven de composer op één slanke regel (23 nov). */
+.axe-home-pillen.is-slank { padding-bottom: 6px; }
+.axe-home-pillen.is-slank .axe-home-pill-knop { padding: 5px 10px; }
+.axe-home-pillen.is-slank .axe-home-pill-sub { display: none; }
+.axe-home-pillen.is-slank .axe-home-pill-cta { height: 22px; padding: 0 10px; }

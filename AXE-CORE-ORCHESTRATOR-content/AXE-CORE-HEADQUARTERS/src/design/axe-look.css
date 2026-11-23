@@ -10165,3 +10165,17 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-gb-app-tellers .is-fout { color: #fca5a5; }
 .axe-gb-app-fout { font-size: 10.5px; color: #fca5a5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 button.axe-set-pil { border: 0; cursor: pointer; }
+
+/* Tabs eindigen boven de composer; zonder overgang leek de inhoud eronder te
+   verdwijnen (Luka 23 nov). Een zachte rand onderaan zegt "dit schuift door". */
+:root[data-look] .axe-shell main:has(.axe-tabruimte, [data-axe-tasks], [data-axe-settings])::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--bg-base, #000));
+  z-index: 5;
+}
