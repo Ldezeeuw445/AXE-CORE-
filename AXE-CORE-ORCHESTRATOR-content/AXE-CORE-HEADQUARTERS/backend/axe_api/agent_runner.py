@@ -216,7 +216,12 @@ def _free_cmd(name):
         if name == "agy":
             return [binary, "--sandbox", "--mode", "plan" if mode == "plan" else "accept-edits", "-p", prompt]
         agent = "plan" if mode == "plan" else ("code" if name == "kilo" else "build")
-        return [binary, "run", "--pure", "--format", "json", "--agent", agent, "-m", FREE_MODELS[name], "--", prompt]
+        # 23 nov gemeten: de Planner faalde 3x achter elkaar met "run ended with an
+        # auto-rejected permission; pass --auto for autonomous use". Headless is er
+        # niemand die ja zegt, dus elke schrijfstap werd geweigerd. --auto alleen
+        # bij schrijven (zoals Cursor --force); plan blijft alleen-lezen.
+        auto = [] if mode == "plan" else ["--auto"]
+        return [binary, "run", "--pure", "--format", "json", "--agent", agent, *auto, "-m", FREE_MODELS[name], "--", prompt]
     return command
 
 
