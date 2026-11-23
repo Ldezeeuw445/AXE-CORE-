@@ -22,3 +22,10 @@ dist
 dist-runner
 e2e/home-live-layout/test-results/
 e2e/phone-a17/test-results/
+
+# Lokale sleutels voor AXE Companion/Stripe op de Mac mini (23 nov). Dit
+# bestand stond daar los en blokkeerde sinds 22 nov elke autosync-build
+# ("Deze bestanden kent git niet"); sleutels horen nooit in git.
+scripts/companion-stripe-env.sh
+# Playwright-uitvoer, geen werk.
+/test-results/
