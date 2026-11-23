@@ -7,6 +7,8 @@ import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { NAAST_CORE, appVan, appMeta as appInfo, type AppId } from '@/domain/apps';
 import { CronTabel, type TabelActies, type KolomTekst } from './cron/CronTabel';
 import { toast } from '@/presentation/components/shared/toast';
+import { KpiRij, FixKaart } from '@/presentation/components/settings/StatusKaart';
+import { cronStand, overHoeLang } from '@/domain/cronStand';
 import { AlertCircle, Bot, Globe, MessageSquare, Plus, RefreshCw, Terminal, Workflow, X } from 'lucide-react';
 import {
   cronListSchedules, cronCreateSchedule, cronUpdateSchedule, cronDeleteSchedule,
@@ -207,6 +209,7 @@ export default function CronManager() {
 
   const voorApp = (app: AppId) => schedules.filter(s => scheduleApp(s) === app);
   const activeCount = schedules.filter(s => s.enabled).length;
+  const stand = cronStand(schedules);
 
   const openNew = () => { setDraft(draftForApp(activeApp)); setAdding(true); };
   /* De + op een tabelkop opent het formulier VOOR die app. Zonder dit moest je
@@ -287,9 +290,34 @@ export default function CronManager() {
         </div>
       </div>
 
-      {/* De enige schuif: foutmelding, het nieuwe-schema-formulier en de lijst
-          samen. De app-tabs erboven blijven staan. */}
+      {/* De enige schuif: kerncijfers, foutmelding, het nieuwe-schema-formulier
+          en de lijst samen. De app-tabs erboven blijven staan. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
+      {!loading && (
+        <div className="mb-4 flex flex-col gap-3">
+          <KpiRij tegels={[
+            { label: 'Active', waarde: String(stand.actief), toon: stand.actief ? 'ok' : undefined,
+              sub: `of ${schedules.length} schedules` },
+            { label: 'Paused', waarde: String(stand.gepauzeerd), toon: stand.gepauzeerd ? 'muted' : undefined,
+              sub: stand.gepauzeerd ? 'switched off' : 'nothing paused' },
+            { label: 'Last run failed', waarde: String(stand.fout.length), toon: stand.fout.length ? 'bad' : 'ok',
+              sub: stand.fout[0]?.name ?? 'all green' },
+            { label: 'Next run', waarde: overHoeLang(stand.volgende?.next_run_at ?? null),
+              sub: stand.volgende?.name ?? 'nothing planned' },
+          ]} />
+          <FixKaart regels={stand.fout.slice(0, 4).map(f => ({
+            id: f.id,
+            wat: f.name,
+            waarom: (f.consecutive_failures ?? 0) > 1 ? `failed ${f.consecutive_failures}x in a row` : 'last run failed',
+            actie: (
+              <button type="button" className="axe-set-knop" disabled={busy.has(f.id)}
+                onClick={() => { const s = schedules.find(x => x.id === f.id); if (s) void runNow(s); }}>
+                Run again
+              </button>
+            ),
+          }))} />
+        </div>
+      )}
       {error && (
         <div className="mb-4 px-4 py-3 rounded-xl flex items-center gap-2 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--error)' }}>
           <AlertCircle size={14} /> {error}
