@@ -308,7 +308,7 @@ describe('Settings toont Accounts', () => {
     // heet nog steeds Subscriptions (CodingSeatsSection titel).
     expect(settings).toMatch(/id: 'accounts', label: 'Accounts'/);
     expect(settings).toMatch(/sectie === 'accounts' && \([\s\S]{0,120}<CodingSeatsSection \/>/);
-    expect(settings).toMatch(/id: 'usage', label: 'Usage'/);
+    expect(settings).toMatch(/id: 'usage', label: 'Usage( & costs)?'/);
     expect(settings).toMatch(/sectie === 'usage' && <UsageCreditsSection \/>/);
     expect(settings.match(/<CodingSeatsSection \/>/g)?.length).toBe(1);
     expect(settings.match(/<AgentMotorenSection \/>/g)?.length).toBe(1);
@@ -324,8 +324,24 @@ describe('Settings toont Accounts', () => {
     expect(seats).toMatch(/bruikbaarOp/);
     expect(seats).toMatch(/watMoetLukaDoen/);
     expect(seats).toMatch(/verspildeStoelen/);
-    expect(seats).toMatch(/titel="Subscriptions"/);
+    // 23 nov: de kop heet Accounts, net als de sectie in de rail.
+    expect(seats).toMatch(/titel="Accounts"/);
     const kaart = readFileSync(new URL('../presentation/components/settings/StatusKaart.tsx', import.meta.url), 'utf8');
     expect(kaart).toMatch(/isEchteLimietMelding/);
+  });
+
+  it('een lege CLI-map zonder login en zonder e-mail is geen rood abonnement (23 nov)', () => {
+    const vers = new Date().toISOString();
+    const rijen = [
+      stoel({ id: 'mini-6:claude', seat_id: 'claude', email: 'a@x.nl', logged_in: true, last_seen_at: vers, machine: 'mini-van-luka-6' }),
+      stoel({ id: 'mini-6:claude4', seat_id: 'claude4', email: null, logged_in: false, last_seen_at: vers, machine: 'mini-van-luka-6' }),
+      stoel({ id: 'imac-3:claude4', seat_id: 'claude4', email: null, logged_in: false, last_seen_at: vers, machine: 'imac-3' }),
+      stoel({ id: 'imac-3:claude3', seat_id: 'claude3', email: 'b@x.nl', logged_in: false, last_seen_at: vers, machine: 'imac-3' }),
+    ];
+    const { kaarten, ongebruikt } = groepeerAbonnementen(rijen);
+    expect(ongebruikt.map((g) => g.stoel.id)).toContain('claude4');
+    expect(kaarten.some((k) => k.seatIds.includes('claude4'))).toBe(false);
+    // Verlopen login met e-mail blijft een kaart: daar moet Luka wél iets.
+    expect(kaarten.some((k) => k.email === 'b@x.nl' || k.seatIds.includes('claude3'))).toBe(true);
   });
 });

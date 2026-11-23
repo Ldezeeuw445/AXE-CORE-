@@ -9,7 +9,7 @@ import { CompactStatusRow } from '@/presentation/components/widgets/ModelStatusW
  * Default ~/.claude uitgelogd is een kleine 'not used'-kaart.
  */
 import { useEffect, useState } from 'react';
-import { SectieKop, StatusKaart, geleden, kort } from '@/presentation/components/settings/StatusKaart';
+import { FixKaart, PaginaKop, StatusKaart, geleden, kort } from '@/presentation/components/settings/StatusKaart';
 import {
   abonnementKaartStand,
   groepeerAbonnementen,
@@ -172,7 +172,7 @@ export function CodingSeatsSection({ compact = false }: { compact?: boolean } = 
     const reset = vensterReset(v?.sessie?.reset || v?.week?.reset) || resetTekst(getoond);
     const label = MOTOR_LABEL[stoel.id as keyof typeof MOTOR_LABEL] || ({ agy: 'Google Antigravity', kilo: 'Kilo Auto Free', opencode: 'OpenCode Free' } as Record<string, string>)[stoel.id] || stoel.label;
     const machines = groep.bruikbaarOp.length
-      ? `Usable on ${groep.bruikbaarOp.join(', ')}`
+      ? `Runs on ${groep.bruikbaarOp.join(' and ')}`
       : gratis ? 'Availability unconfirmed' : 'No recent login confirmation';
     const geschiedenis = kaartMelding(kaart.geschiedenis ?? g?.last_limit_message);
     if (compact) {
@@ -193,7 +193,7 @@ export function CodingSeatsSection({ compact = false }: { compact?: boolean } = 
         accent={ACCENT[groep.provider] || 'var(--text-secondary)'}
         rol={`${gratis ? 'Free CLI · ' : ''}${v?.plan ? `${v.plan} plan · ` : ''}${machines}${door.length ? ` · ${door.join(', ')}` : ''}`}
         stand={stoelen == null ? { toon: 'muted', tekst: 'Checking' } : (groep.nietGebruikt ? { toon: 'muted', tekst: 'Not used' } : verifieer ? { toon: 'warn', tekst: 'Verify account' } : kaart.stand)}
-        keuze={(rood || actie) && !groep.nietGebruikt ? (
+        keuze={(rood || actie) && !groep.nietGebruikt && !groep.bruikbaarOp.length ? (
           <code
             title={actie || stoel.login_command}
             style={{ display: 'block', fontSize: 10, color: 'var(--error)', overflow: 'auto', whiteSpace: 'nowrap' }}
@@ -211,10 +211,32 @@ export function CodingSeatsSection({ compact = false }: { compact?: boolean } = 
           ...(planner?.dagbudget ? [{ label: 'Planner today', waarde: `${vandaag}/${planner.dagbudget}`, pct: (vandaag / planner.dagbudget) * 100 }] : []),
           ...(g && g.ok_7d + g.failed_7d > 0 ? [{ label: 'Success 7d', waarde: `${g.ok_7d}/${g.ok_7d + g.failed_7d}`, pct: (g.ok_7d / (g.ok_7d + g.failed_7d)) * 100, goed: true }] : []),
         ]}
-        melding={stoel.current_task || geschiedenis || undefined}
+        melding={stoel.current_task
+          // Een oude login-fout op een kaart die nu gewoon werkt spreekt zichzelf tegen.
+          || (groep.bruikbaarOp.length && geschiedenis && /login|logged out|not logged/i.test(geschiedenis) ? undefined : geschiedenis)
+          || undefined}
       />
     );
   };
+
+  const labelVan = (id: string, fallback: string) => MOTOR_LABEL[id as keyof typeof MOTOR_LABEL]
+    || ({ agy: 'Google Antigravity', kilo: 'Kilo Auto Free', opencode: 'OpenCode Free' } as Record<string, string>)[id] || fallback;
+  const fixRegels = groepen.kaarten.flatMap((groep) => {
+    if (groep.nietGebruikt) return [];
+    const getoond = { ...groep.stoel, email: toonStoelEmail(groep.stoel) };
+    const verifieer = moetAccountVerifieren(getoond);
+    const actie = watMoetLukaDoen(getoond);
+    if (!verifieer && (groep.bruikbaarOp.length || !actie)) return [];
+    const naam = labelVan(groep.stoel.id, groep.stoel.label);
+    return [{
+      id: groep.key,
+      wat: naam,
+      waarom: verifieer ? `${groep.provider === 'agy' ? 'Google' : 'The provider'} wants you to verify the account${getoond.email || groep.email ? ` (${getoond.email || groep.email})` : ''}.`
+        : 'Not logged in on either Mac. Run this once on the Mac mini:',
+      actie: verifieer ? undefined : <code title={actie || ''}>{actie}</code>,
+    }];
+  });
+  const werkend = groepen.kaarten.filter((g) => !g.nietGebruikt && g.bruikbaarOp.length > 0).length;
 
   if (compact) return <>{groepen.kaarten.length
     ? groepen.kaarten.map(kaartVoor)
@@ -222,15 +244,16 @@ export function CodingSeatsSection({ compact = false }: { compact?: boolean } = 
 
   return (
     <div className="axe-motoren">
-      <SectieKop
-        titel="Subscriptions"
-        uitleg="One card per account. Status from core_coding_seats (fresh < 5 min) on Mac mini and iMac. A null row on the other machine never overrides logged_in=true. Missing CLIs stay hidden."
+      <PaginaKop
+        titel="Accounts"
+        uitleg="One card per subscription. If it works on one of your Macs, it works in AXE — each card says where it runs."
+        pillen={stoelen == null ? [] : [
+          { tekst: `${werkend} work`, toon: 'ok' },
+          ...(fixRegels.length ? [{ tekst: `${fixRegels.length} need${fixRegels.length === 1 ? 's' : ''} you`, toon: 'bad' as const }] : []),
+          ...(groepen.ongebruikt.length ? [{ tekst: `${groepen.ongebruikt.length} not used`, toon: 'muted' as const }] : []),
+        ]}
       />
-      {verspild.map((v) => (
-        <p key={v.email} className="axe-agentkaart-melding" style={{ color: 'var(--warning)', marginBottom: 12 }}>
-          {v.email} is logged into two CLI folders on {v.machines.join(' and ')} — they share one quota. Same account on Mac mini and iMac is fine.
-        </p>
-      ))}
+      <FixKaart regels={fixRegels} />
       {fout && <p className="axe-agentkaart-melding">{fout}</p>}
       <div className="axe-agent-raster axe-agent-raster--ruim" data-axe-seats-raster data-axe-gelijk="seats">
         {groepen.kaarten.map(kaartVoor)}
@@ -245,10 +268,18 @@ export function CodingSeatsSection({ compact = false }: { compact?: boolean } = 
         )}
       </div>
       {groepen.ongebruikt.length > 0 && (
-        <div className="axe-agent-raster" style={{ marginTop: 12, justifyContent: 'start' }}>
-          {groepen.ongebruikt.map(kaartVoor)}
-        </div>
+        <>
+          <p className="axe-set-stil">Not used — no login needed while the accounts above work.</p>
+          <div className="axe-agent-raster" style={{ marginTop: 8, justifyContent: 'start' }}>
+            {groepen.ongebruikt.map(kaartVoor)}
+          </div>
+        </>
       )}
+      {verspild.map((v) => (
+        <p key={v.email} className="axe-set-stil">
+          {v.email} is logged into two CLI folders on {v.machines.join(' and ')}; they share one quota.
+        </p>
+      ))}
     </div>
   );
 }

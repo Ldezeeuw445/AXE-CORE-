@@ -94,3 +94,58 @@ export function StatusKaart({ naam, accent, rol, stand, keuze, stats, balken, me
     </div>
   );
 }
+
+/**
+ * Settings-kop in de stijl van de referentiemap (23 nov): titel, één zin
+ * uitleg en rechts de stand als pillen ("7 work · 2 need you").
+ */
+export function PaginaKop({ titel, uitleg, pillen }: {
+  titel: string;
+  uitleg: string;
+  pillen?: { tekst: string; toon: Toon }[];
+}) {
+  return (
+    <header className="axe-set-kop">
+      <div>
+        <h2>{titel}</h2>
+        <p>{uitleg}</p>
+      </div>
+      {pillen && pillen.length > 0 && (
+        <div className="axe-set-pillen">
+          {pillen.map((p) => <span key={p.tekst} className={`axe-set-pil is-${p.toon}`}>{p.tekst}</span>)}
+        </div>
+      )}
+    </header>
+  );
+}
+
+/** Rij kerncijfers bovenaan een Settings-pagina. */
+export function KpiRij({ tegels }: { tegels: { label: string; waarde: string; sub?: string; toon?: Toon }[] }) {
+  return (
+    <section className="axe-set-kpis" aria-label="Key figures">
+      {tegels.map((t) => (
+        <div key={t.label} className={`axe-set-kpi${t.toon ? ` is-${t.toon}` : ''}`}>
+          <span>{t.label}</span>
+          <b>{t.waarde}</b>
+          {t.sub && <small>{t.sub}</small>}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/** "Needs a fix": alleen wat echt van Luka is, met één knop per regel. */
+export function FixKaart({ regels }: { regels: { id: string; wat: string; waarom?: string; actie?: ReactNode }[] }) {
+  if (!regels.length) return null;
+  return (
+    <section className="axe-set-fix" aria-label="Needs a fix">
+      <p className="axe-set-fix-kop">Needs a fix</p>
+      {regels.map((r) => (
+        <div key={r.id} className="axe-set-fix-regel">
+          <span><b>{r.wat}</b>{r.waarom ? <> — <em>{r.waarom}</em></> : null}</span>
+          {r.actie}
+        </div>
+      ))}
+    </section>
+  );
+}

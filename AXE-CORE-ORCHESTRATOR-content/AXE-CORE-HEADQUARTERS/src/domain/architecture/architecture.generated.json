@@ -418,6 +418,10 @@
       "kind": "migration"
     },
     {
+      "path": "supabase/migrations/20261123120000_sleutel_verbruik.sql",
+      "kind": "migration"
+    },
+    {
       "path": "supabase/northsea/migrations/20260916150000_p0_a_columns.sql",
       "kind": "migration"
     },
@@ -2491,7 +2495,8 @@
         "supabase/migrations/20261118120000_axe_approval_inbox.sql",
         "supabase/migrations/20261119090000_axe_portal.sql",
         "supabase/migrations/20261119100000_axe_ops_cron_lichter.sql",
-        "supabase/migrations/20261120090000_geheugen_indexen.sql"
+        "supabase/migrations/20261120090000_geheugen_indexen.sql",
+        "supabase/migrations/20261123120000_sleutel_verbruik.sql"
       ]
     },
     {
@@ -2957,6 +2962,20 @@
       },
       "sources": [
         "supabase/migrations/20260916220000_een_planner_en_grootboek.sql"
+      ]
+    },
+    {
+      "id": "table:pqnngpcgbdwxavbatbia:core_key_usage",
+      "kind": "table",
+      "label": "core_key_usage",
+      "appId": "app:axe_core",
+      "details": {
+        "schema": "public",
+        "table": "core_key_usage",
+        "projectRef": "pqnngpcgbdwxavbatbia"
+      },
+      "sources": [
+        "supabase/migrations/20261123120000_sleutel_verbruik.sql"
       ]
     },
     {
@@ -5015,6 +5034,16 @@
       ]
     },
     {
+      "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_key_usage",
+      "source": "supabase:pqnngpcgbdwxavbatbia",
+      "target": "table:pqnngpcgbdwxavbatbia:core_key_usage",
+      "relation": "has-table",
+      "label": "has-table",
+      "sources": [
+        "supabase/migrations/20261123120000_sleutel_verbruik.sql"
+      ]
+    },
+    {
       "id": "has-table:supabase:pqnngpcgbdwxavbatbia:table:pqnngpcgbdwxavbatbia:core_livekit_rooms",
       "source": "supabase:pqnngpcgbdwxavbatbia",
       "target": "table:pqnngpcgbdwxavbatbia:core_livekit_rooms",
@@ -6453,7 +6482,8 @@
         "supabase/migrations/20261118120000_axe_approval_inbox.sql",
         "supabase/migrations/20261119090000_axe_portal.sql",
         "supabase/migrations/20261119100000_axe_ops_cron_lichter.sql",
-        "supabase/migrations/20261120090000_geheugen_indexen.sql"
+        "supabase/migrations/20261120090000_geheugen_indexen.sql",
+        "supabase/migrations/20261123120000_sleutel_verbruik.sql"
       ]
     },
     {

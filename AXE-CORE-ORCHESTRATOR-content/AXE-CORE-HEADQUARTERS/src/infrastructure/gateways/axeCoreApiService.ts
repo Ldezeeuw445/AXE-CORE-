@@ -1149,6 +1149,20 @@ export interface KeyRow {
   /** Id in Models & Tests; de app vult de status daaruit aan. */
   provider?: string | null;
   warning?: string;
+  /** Verbruik uit core_key_usage (sleutel_teller.py); ontbreekt tot de eerste aanroep. */
+  usage?: KeyUsage;
+}
+
+export interface KeyUsage {
+  calls_today: number;
+  ok_today: number;
+  failed_today: number;
+  limited_today: number;
+  tokens_today: number;
+  calls_yesterday: number;
+  calls_7d: number;
+  last_status: number | null;
+  last_at: string | null;
 }
 
 export interface KeysPerApp {

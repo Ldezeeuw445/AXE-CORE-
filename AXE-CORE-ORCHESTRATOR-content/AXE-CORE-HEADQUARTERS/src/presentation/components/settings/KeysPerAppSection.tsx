@@ -9,7 +9,8 @@ import { CompactStatusRow } from '@/presentation/components/widgets/ModelStatusW
  * "Not visible" is eerlijk: die sleutel staat ergens waar de VPS niet kan kijken.
  */
 import { useEffect, useState } from 'react';
-import { Kaart, KaartRaster, SectieBlok } from '@/presentation/components/layout/tabMaatstaf';
+import { FixKaart, KpiRij, PaginaKop } from '@/presentation/components/settings/StatusKaart';
+import { sleutelFixes, sleutelKpis, sleutelPil, verbruikTekst } from '@/domain/sleutelOverzicht';
 import { testServerProviderKey, keysOverview, type KeyRow, type KeysPerApp, type KeyStatus } from '@/infrastructure/gateways/axeCoreApiService';
 import { leesProviderOpslag } from '@/domain/providers';
 import type { ProviderConn } from '@/domain/providerConnections';
@@ -40,58 +41,49 @@ function metModellen(apps: KeysPerApp[]): KeysPerApp[] {
   });
 }
 
-function Stand({ status }: { status: KeyStatus }) {
-  const s = STAND[status] ?? STAND.unseen;
-  return (
-    <span style={{ color: s.kleur, fontSize: 10.5, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-      {s.tekst}
-    </span>
-  );
-}
-
-function Regel({ k }: { k: KeyRow }) {
-  return (
-    <li className="py-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-      <div className="flex items-baseline justify-between gap-3">
-        <code className="text-[11.5px] break-all" style={{ color: 'var(--text-primary)' }}>{k.name}</code>
-        <Stand status={k.status} />
-      </div>
-      <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-        {k.purpose}
-        {k.need && <span style={{ color: 'var(--text-muted)' }}> · {NODIG[k.need] ?? k.need}</span>}
-      </p>
-      <p className="text-[10.5px] mt-0.5" style={{ color: 'var(--text-muted)' }} title={k.detail}>
-        {k.where} · {k.detail}
-      </p>
-      {k.warning && (
-        <p className="text-[10.5px] mt-0.5" style={{ color: 'var(--warning)' }}>{k.warning}</p>
-      )}
-    </li>
-  );
-}
-
-function AppKaart({ app }: { app: KeysPerApp }) {
+function AppTabel({ app }: { app: KeysPerApp }) {
   const rijen = [...app.keys].sort(
     (a, b) => VOLGORDE.indexOf(a.status) - VOLGORDE.indexOf(b.status) || a.name.localeCompare(b.name),
   );
-  const c = app.counts;
-  const kop = c.broken ? 'broken' : c.missing ? 'missing' : 'works';
+  const max = Math.max(1, ...rijen.map((k) => k.usage?.calls_today ?? 0));
   return (
-    <Kaart titel={app.app} actie={<Stand status={kop as KeyStatus} />}>
-      <p className="text-[11px] mb-2" style={{ color: 'var(--text-muted)' }}>
-        {app.keys.length} keys · {c.works} working · {c.present} set · {c.missing} missing · {c.broken} broken ·{' '}
-        {c.unseen} not visible · {c.optional ?? 0} optional · {c.unused ?? 0} not used · reported by {app.manager}
-      </p>
-      <ul>
-        {rijen.map((k) => <Regel key={k.name} k={k} />)}
-      </ul>
-    </Kaart>
+    <section className="axe-set-tabel" aria-label={`Keys ${app.app}`}>
+      <table>
+        <thead>
+          <tr><th>Key</th><th>Used for</th><th>Where</th><th>Usage</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {rijen.map((k) => {
+            const pil = sleutelPil(k);
+            const pct = k.usage?.calls_today ? Math.max(4, (k.usage.calls_today / max) * 100) : 0;
+            const kleur = pil.toon === 'bad' ? '#f87171' : pil.toon === 'warn' ? '#fbbf24' : '#34d399';
+            return (
+              <tr key={k.name}>
+                <td><code>{k.name}</code></td>
+                <td>
+                  {k.purpose}
+                  {k.need && k.need !== 'required' && <span className="axe-set-dim"> · {NODIG[k.need] ?? k.need}</span>}
+                  {k.warning && <div className="axe-set-waarschuwing">{k.warning}</div>}
+                </td>
+                <td className="axe-set-dim" title={k.detail}>{k.where}</td>
+                <td className="axe-set-verbruik">
+                  <span>{verbruikTekst(k)}</span>
+                  {pct > 0 && <i><em style={{ width: `${pct}%`, background: kleur }} /></i>}
+                </td>
+                <td><span className={`axe-set-pil is-${pil.toon}`}>{pil.tekst}</span></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
   );
 }
 
 export function KeysPerAppSection() {
   const [apps, setApps] = useState<KeysPerApp[] | null>(null);
   const [fout, setFout] = useState<string | null>(null);
+  const [gekozen, setGekozen] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -105,23 +97,55 @@ export function KeysPerAppSection() {
     return () => { alive = false; window.clearInterval(timer); };
   }, []);
 
+  const lijst = apps ?? [];
+  const kp = sleutelKpis(lijst);
+  const fixes = sleutelFixes(lijst);
+  const actief = lijst.find((a) => a.app === gekozen) ?? lijst[0];
+  const verschil = kp.gisteren ? Math.round(((kp.vandaag - kp.gisteren) / kp.gisteren) * 100) : null;
+
   return (
-    <SectieBlok
-      id="keys"
-      titel="KEYS PER APP"
-      extra={<span className="font-mono text-[10.5px]" style={{ color: 'var(--text-muted)' }}>names and status only · never values</span>}
-    >
-      <p className="text-[11.5px] mb-3" style={{ color: 'var(--text-secondary)' }}>
-        Works = proven by a feed, a real trade or Models & Tests. Set = on the AXE Core VPS, not proven yet.
-        Missing = required and not on the VPS. Not visible = lives somewhere the VPS cannot look (Companion
-        server, Supabase, Settings → Keys). Optional and Not used never need action.
-      </p>
+    <div id="keys" data-axe-sectie="keys">
+      <PaginaKop
+        titel="Keys per app"
+        uitleg="Every key an app uses, where it lives, how much it was used today and whether it works. Names only — never values."
+        pillen={apps ? [
+          { tekst: `${kp.werkt} work`, toon: 'ok' },
+          ...(kp.stuk ? [{ tekst: `${kp.stuk} broken`, toon: 'bad' as const }] : []),
+          ...(kp.limiet ? [{ tekst: `${kp.limiet} rate limited`, toon: 'warn' as const }] : []),
+        ] : []}
+      />
+      {apps && (
+        <KpiRij tegels={[
+          { label: 'Keys', waarde: String(kp.totaal), sub: `${kp.werkt} proven working` },
+          { label: 'Not working', waarde: String(kp.stuk + kp.limiet), toon: kp.stuk ? 'bad' : kp.limiet ? 'warn' : undefined,
+            sub: `${kp.stuk} broken · ${kp.limiet} limited` },
+          { label: 'Calls today', waarde: String(kp.vandaag),
+            sub: verschil == null ? 'counting since 23 Nov' : `${verschil >= 0 ? '+' : ''}${verschil}% vs yesterday` },
+          { label: 'Tokens today', waarde: kp.tokens >= 1000 ? `${Math.round(kp.tokens / 1000)}k` : String(kp.tokens), sub: 'all apps together' },
+        ]} />
+      )}
+      <FixKaart regels={fixes.map((f) => ({ id: f.naam, wat: f.naam, waarom: f.waarom }))} />
       {fout && <p className="axe-agentkaart-melding">{fout}</p>}
-      {!apps && !fout && <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Checking keys…</p>}
-      <KaartRaster ruim>
-        {(apps ?? []).map((a) => <AppKaart key={a.app} app={a} />)}
-      </KaartRaster>
-    </SectieBlok>
+      {!apps && !fout && <p className="axe-set-stil">Checking keys…</p>}
+      {lijst.length > 1 && (
+        <div className="axe-set-tabs" role="tablist" aria-label="Apps">
+          {lijst.map((a) => {
+            const slecht = a.keys.filter((k) => sleutelPil(k).toon === 'bad').length;
+            return (
+              <button key={a.app} type="button" role="tab" aria-selected={a.app === actief?.app}
+                className={a.app === actief?.app ? 'is-actief' : undefined} onClick={() => setGekozen(a.app)}>
+                {a.app}<span>{a.keys.length}</span>{slecht ? <b>{slecht}</b> : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {actief && <AppTabel app={actief} />}
+      <p className="axe-set-stil">
+        Works = a real call succeeded (or a feed / Models & Tests proved it). Set = on the VPS, not proven yet.
+        Not visible = lives where the VPS cannot look. Usage is counted on the VPS per key since 23 Nov.
+      </p>
+    </div>
   );
 }
 

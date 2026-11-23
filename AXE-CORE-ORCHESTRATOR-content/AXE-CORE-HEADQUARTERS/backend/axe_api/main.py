@@ -1191,6 +1191,11 @@ async def proxy_ai(body: dict = Body(...)):
                 if key:
                     headers["Authorization"] = f"Bearer {key}"
                 r = await client.post(chat_url, headers=headers, json={"model": model, "messages": messages, **({"tools": tools} if tools else {}), **({"tool_choice": tool_choice} if tool_choice else {}), "max_tokens": 4096, "temperature": 0.7})
+                try:  # verbruik per sleutel; alleen sleutels van deze server hebben een naam
+                    import sleutel_teller
+                    sleutel_teller.tel(key, r.status_code, int(((r.json() or {}).get("usage") or {}).get("total_tokens") or 0) if r.status_code == 200 else 0)
+                except Exception:  # noqa: BLE001
+                    pass
                 if r.is_error:
                     err = r.json().get("error", {}).get("message", f"{provider} HTTP {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else f"{provider} HTTP {r.status_code}"
                     raise HTTPException(502, err)
@@ -3572,7 +3577,19 @@ async def claude_subscriptions_usage(fresh: int = 0):
 async def keys_overview():
     """Keys per app: naam, doel, plek en status. Nooit een waarde (sleutels.py)."""
     import sleutels as _sl
-    return await asyncio.to_thread(_sl.lees, sb())
+    uit = await asyncio.to_thread(_sl.lees, sb())
+    # Verbruik per sleutel (sleutel_teller.py, 23 nov). Ontbreekt de tabel, dan zonder.
+    try:
+        import sleutel_teller as _st
+        verbruik = await asyncio.to_thread(_st.lees, sb())
+        for app_rij in uit.get("apps") or []:
+            for k in app_rij.get("keys") or []:
+                if k.get("name") in verbruik:
+                    k["usage"] = verbruik[k["name"]]
+        uit["usage_since"] = "2026-11-23"
+    except Exception as exc:  # noqa: BLE001
+        log.warning("keys usage: %s", exc)
+    return uit
 
 
 @app.post("/keys/provider-test/{key}", dependencies=[AUTH])

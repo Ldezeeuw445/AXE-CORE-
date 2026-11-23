@@ -2083,9 +2083,9 @@ export default function SettingsPage() {
   const SETTINGS_NAV: { id: string; label: string }[] = [
     { id: 'agents', label: 'Agents' },
     { id: 'accounts', label: 'Accounts' },
-    { id: 'usage', label: 'Usage' },
-    { id: 'providers', label: 'Providers' },
     { id: 'keys', label: 'Keys per app' },
+    { id: 'usage', label: 'Usage & costs' },
+    { id: 'providers', label: 'Providers' },
     { id: 'voice', label: 'Voice' },
     { id: 'trust', label: 'Trust' },
     { id: 'routing', label: 'Routing' },
@@ -2133,10 +2133,10 @@ export default function SettingsPage() {
         )}
 
         {sectie === 'accounts' && (
-        <SectieBlok id="accounts" titel="ACCOUNTS">
+        <div id="accounts" data-axe-sectie="accounts">
           <CodingSeatsSection />
           <PreferencesV3Card />
-        </SectieBlok>
+        </div>
         )}
 
         {sectie === 'usage' && <UsageCreditsSection />}

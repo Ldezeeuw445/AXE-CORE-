@@ -278,12 +278,17 @@ export function groepeerAbonnementen(stoelen: CodingSeat[]): { kaarten: Abonneme
     restPerSeat.set(sid, lijst);
   }
 
+  const providerWerkt = new Set(zichtbaar.filter((s) => s.logged_in === true).map((s) => providerVanSeat(stoelSleutel(s), s.provider)));
   const ongebruiktSeats: CodingSeat[][] = [];
   for (const [sid, rijen] of restPerSeat) {
     const hosts = [...groepen.entries()].filter(([, rows]) => rows.some((r) => stoelSleutel(r) === sid));
     if (hosts.length === 1) {
       hosts[0][1].push(...rijen);
-    } else if (rijen.every(stoelNietGebruikt)) {
+    } else if (rijen.every(stoelNietGebruikt) || (rijen.every((r) => r.logged_in !== true && !(r.email || '').trim()) && providerWerkt.has(providerVanSeat(sid, rijen[0]?.provider)))) {
+      // 23 nov (Luka: "rood terwijl alles is ingelogd"): een CLI-map zonder login
+      // én zonder e-mail, terwijl een ander account van die app wél werkt, is nooit een account geweest -- geen kapot abonnement,
+      // alleen een map die niet in gebruik is. Een verlopen login houdt zijn
+      // e-mail en blijft dus wél een (rode) kaart.
       ongebruiktSeats.push(rijen);
     } else {
       groepen.set(`seat:${sid}`, rijen);

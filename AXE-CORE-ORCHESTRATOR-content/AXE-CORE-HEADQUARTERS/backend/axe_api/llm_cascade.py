@@ -146,7 +146,9 @@ async def chat(messages: list[dict], max_tokens: int = 1024, timeout: float = 60
         except httpx.HTTPError as e:
             laat_rusten(a.naam)
             fouten.append(f"{a.naam}: {e.__class__.__name__}")
+            _tel(a, 0)
             continue
+        _tel(a, res.status_code, res)
         if res.status_code != 200:
             if is_beschikbaarheidsfout(res.status_code, res.text):
                 laat_rusten(a.naam)
@@ -161,6 +163,20 @@ async def chat(messages: list[dict], max_tokens: int = 1024, timeout: float = 60
             _laatste_goed = a.naam
         return tekst, a.naam
     raise RuntimeError("Geen LLM bereikbaar voor de browser-agent -- " + ("; ".join(fouten) or "geen enkele sleutel ingesteld"))
+
+
+def _tel(a: Aanbieder, status: int, res: Any = None) -> None:
+    """Verbruik per sleutel (sleutel_teller.py); faalt nooit."""
+    try:
+        import sleutel_teller
+
+        tokens = 0
+        if res is not None and status == 200:
+            gebruik = (res.json() or {}).get("usage") or {}
+            tokens = int(gebruik.get("total_tokens") or 0)
+        sleutel_teller.tel(a.sleutel_env if not a.keyloos else None, status, tokens)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 async def status() -> dict[str, Any]:

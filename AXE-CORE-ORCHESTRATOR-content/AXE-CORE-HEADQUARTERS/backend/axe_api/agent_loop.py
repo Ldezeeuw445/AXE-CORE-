@@ -1320,6 +1320,14 @@ async def _call_openai_compat(
             url, json=payload,
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         )
+    try:  # verbruik per sleutel (sleutel_teller.py); faalt nooit
+        import sleutel_teller
+
+        sleutel_teller.tel(api_key, response.status_code,
+                           int(((response.json() or {}).get("usage") or {}).get("total_tokens") or 0)
+                           if response.status_code == 200 else 0)
+    except Exception:  # noqa: BLE001
+        pass
     if response.status_code != 200:
         raise _provider_fout(model, response)
 

@@ -64,7 +64,7 @@ describe('Settings houdt Subscriptions én Usage & Credits', () => {
     // Agents eerst (wie gebruikt wat, online, kiezen).
     expect(settings).toMatch(/id: 'accounts', label: 'Accounts'/);
     expect(settings).toMatch(/<CodingSeatsSection \/>/);
-    expect(settings).toMatch(/id: 'usage', label: 'Usage'/);
+    expect(settings).toMatch(/id: 'usage', label: 'Usage( & costs)?'/);
     expect(settings).toMatch(/sectie === 'usage' && <UsageCreditsSection \/>/);
     expect(settings).toMatch(/useState\('agents'\)/);
   });
