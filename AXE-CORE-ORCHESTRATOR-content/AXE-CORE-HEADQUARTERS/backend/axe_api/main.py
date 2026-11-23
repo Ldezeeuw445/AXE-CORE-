@@ -1193,8 +1193,7 @@ async def proxy_ai(body: dict = Body(...)):
                 r = await client.post(chat_url, headers=headers, json={"model": model, "messages": messages, **({"tools": tools} if tools else {}), **({"tool_choice": tool_choice} if tool_choice else {}), "max_tokens": 4096, "temperature": 0.7})
                 try:  # verbruik per sleutel; alleen sleutels van deze server hebben een naam
                     import sleutel_teller
-                    sleutel_teller.tel(key, r.status_code, int(((r.json() or {}).get("usage") or {}).get("total_tokens") or 0) if r.status_code == 200 else 0,
-                                       tekst=r.text[:400] if r.status_code != 200 else None)
+                    sleutel_teller.tel(key, r.status_code, int(((r.json() or {}).get("usage") or {}).get("total_tokens") or 0) if r.status_code == 200 else 0)
                 except Exception:  # noqa: BLE001
                     pass
                 if r.is_error:
@@ -3619,7 +3618,7 @@ async def provider_key_test(key: str):
             })
         try:  # een test is ook een echte aanroep: telt mee in het verbruik
             import sleutel_teller
-            sleutel_teller.tel(key, response.status_code, tekst=response.text[:400] if response.status_code != 200 else None)
+            sleutel_teller.tel(key, response.status_code)
         except Exception:  # noqa: BLE001
             pass
         if response.is_success and response.json().get("choices"):
