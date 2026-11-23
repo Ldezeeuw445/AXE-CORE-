@@ -551,29 +551,101 @@
   color: var(--text-muted);
 }
 
+/* Boven de composer (Luka 22 nov): workers links, meldingen rechts, samen
+   precies zo breed als de composer en elk de helft. Kaartstijl uit de
+   referentiemap: donkere kaart, kop + subregel, toast-knop rechts. */
 .axe-home-pillen {
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  flex-wrap: wrap;
-  padding: 0 8px 6px;
+  padding: 0 0 8px;
+  width: 100%;
+  align-items: start;
 }
 
 .axe-home-pill {
-  width: fit-content;
-  max-width: min(420px, 100%);
-  background: var(--surface-bg, #0a0c0c);
-  border: 1px solid var(--tint-line);
-  border-radius: 10px;
+  min-width: 0;
+  background: rgba(14, 17, 21, 0.9);
+  border: 1px solid var(--tint-line, rgba(255, 255, 255, 0.07));
+  border-radius: 14px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
 }
 
 .axe-home-pill-knop {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 10px;
+  padding: 8px 12px;
   text-align: left;
   width: 100%;
+  min-width: 0;
+}
+
+.axe-home-pill-gezichten {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 18px;
+}
+.axe-home-pill-gezichten > * + * { margin-left: -4px; }
+
+.axe-home-pill-icoon {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+}
+.axe-home-pill-icoon.is-fout { background: rgba(248, 113, 113, 0.14); color: #fca5a5; }
+.axe-home-pill-icoon.is-ok { background: rgba(52, 211, 153, 0.14); color: #34d399; }
+
+.axe-home-pill-tekst {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.axe-home-pill-kop {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.axe-home-pill-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.axe-home-pill-pijl {
+  color: var(--text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.axe-home-pill-cta {
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--text-primary, #e6e8eb);
+  color: #0b0d10;
 }
 
 .axe-home-pill-lijst {
@@ -711,3 +783,99 @@
 }
 .axe-home-tab.is-aandacht .axe-home-tab-tal { background: rgba(251, 146, 60, 0.2); color: rgb(251, 146, 60); }
 .axe-home-live .axe-home-tab-lijf, :root[data-look] .axe-home-live .axe-home-tab-lijf { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px 12px 10px; }
+
+/* ═══ Kerncijfers boven de orb (Luka 22 nov, referentiemap KPI-tegels) ═══ */
+.axe-home-kpis {
+  position: fixed;
+  top: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100vw - 2 * (var(--axe-home-rail-inset) + var(--axe-home-rail-breed) + 20px)));
+  display: grid;
+  --axe-kpi-kolommen: 4;
+  grid-template-columns: repeat(var(--axe-kpi-kolommen), minmax(0, 1fr));
+  gap: 10px;
+  z-index: 15;
+}
+.axe-home-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(14, 17, 21, 0.78);
+  border: 1px solid var(--tint-line, rgba(255, 255, 255, 0.07));
+  backdrop-filter: blur(10px);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.axe-home-kpi:hover { border-color: rgba(34, 211, 238, 0.35); background: rgba(18, 22, 27, 0.9); }
+.axe-home-kpi-label {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.axe-home-kpi-waarde {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.axe-home-kpi-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.axe-home-kpi.is-let-op .axe-home-kpi-waarde { color: #fbbf24; }
+.axe-home-kpi.is-goed .axe-home-kpi-waarde { color: #34d399; }
+.axe-home-kpi.is-fout .axe-home-kpi-waarde { color: #f87171; }
+/* Te smal tussen de rails: twee tegels per rij, en op kleine schermen weg. */
+@media (max-width: 1180px) {
+  .axe-home-kpis { --axe-kpi-kolommen: 2; width: min(380px, 40vw); }
+}
+@media (max-width: 900px) { .axe-home-kpis { display: none; } }
+
+/* Feed-rijen in de tabkaarten: gezicht, naam + pil, één regel wat hij doet. */
+.axe-home-feed-rij {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 7px 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.045);
+  min-width: 0;
+}
+.axe-home-feed-rij:first-child { border-top: 0; }
+.axe-home-feed-rij > :first-child { flex-shrink: 0; margin-top: 1px; }
+.axe-home-feed-tekst { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.axe-home-feed-kop { display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; }
+.axe-home-feed-kop b { font-weight: 600; }
+.axe-home-feed-tijd { margin-left: auto; font-size: 10.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.axe-home-feed-sub {
+  font-size: 11.5px; color: var(--text-secondary, #a3aab5);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.axe-home-feed-pil {
+  margin-left: auto; padding: 1px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 600;
+}
+.axe-home-feed-pil.is-ok { background: rgba(52, 211, 153, 0.12); color: #34d399; }
+.axe-home-feed-pil.is-fout { background: rgba(248, 113, 113, 0.12); color: #fca5a5; }
+.axe-home-tab-lijf { overflow-y: auto; }
+/* Telefoon: twee gezichtjes is genoeg, de tekst gaat voor. */
+@media (max-width: 639px) {
+  .axe-home-pill-gezichten > :nth-child(n + 3) { display: none; }
+  .axe-home-pill-knop { gap: 7px; padding: 7px 9px; }
+  .axe-home-pill-pijl, .axe-home-pill-cta { display: none; }
+}

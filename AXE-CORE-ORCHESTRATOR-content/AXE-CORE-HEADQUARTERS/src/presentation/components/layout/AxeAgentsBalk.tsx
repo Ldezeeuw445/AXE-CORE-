@@ -18,6 +18,7 @@ import { useServerAgents, verversServerAgents } from '@/presentation/components/
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { fixDurableTask, retryDurableTask } from '@/infrastructure/gateways/axeCoreApiService';
 import { speakGlobal } from '@/infrastructure/gateways/globalTts';
+import { AxeGezicht } from '@/presentation/components/axe-core/AxeGezicht';
 import '@/presentation/components/axe-core/homeLive.css';
 
 const STAND: Record<string, string> = {
@@ -90,8 +91,8 @@ export function AxeAgentsBalk() {
     })),
   });
   const label = werkPulseTekst(stand.werkend, stand.goedkeuringen.length);
-  const namen = stand.namen.length ? ` · ${stand.namen.join(', ')}` : '';
-  const kop = `${label}${namen}`;
+  // Eén driehoekje per agent die nu werkt, in zijn eigen kleur (max 5).
+  const gezichten = [...new Map(stand.lopend.map((t) => [t.agent, { agent: t.agent, kleur: t.kleur }])).values()].slice(0, 5);
   // balkLabel blijft de gedeelde kop voor 0/1/N zonder OK-suffix (wiring + tests).
   void balkLabel(stand.werkend);
 
@@ -212,8 +213,18 @@ export function AxeAgentsBalk() {
           aria-expanded={agentsOpen}
           data-axe-agents-balk
         >
-          <span style={stip(stand.werkend > 0 || stand.goedkeuringen.length > 0)} />
-          <span className="text-[11px]" style={{ color: 'var(--text-primary)' }}>{kop}</span>
+          <span className="axe-home-pill-gezichten" aria-hidden="true">
+            {gezichten.length
+              ? gezichten.map((g) => <AxeGezicht key={g.agent} kleur={g.kleur} stemming="werkt" size={18} label={g.agent} />)
+              : <span style={stip(stand.goedkeuringen.length > 0)} />}
+          </span>
+          <span className="axe-home-pill-tekst">
+            <span className="axe-home-pill-kop">{label}</span>
+            <span className="axe-home-pill-sub">
+              {stand.namen.length ? stand.namen.join(', ') : 'Managers and DAX bots are on standby'}
+            </span>
+          </span>
+          <span className="axe-home-pill-pijl" aria-hidden="true">{agentsOpen ? '▾' : '▴'}</span>
         </button>
         {agentsOpen && (
           <ul className="axe-home-pill-lijst">
@@ -288,8 +299,16 @@ export function AxeAgentsBalk() {
           aria-expanded={takenOpen}
           data-axe-taken-balk
         >
-          <span style={stip(misluktN > 0, misluktN > 0)} />
-          <span className="text-[11px]" style={{ color: 'var(--text-primary)' }}>{takenKop}</span>
+          <span className={`axe-home-pill-icoon${misluktN > 0 ? ' is-fout' : meldingen.length ? ' is-ok' : ''}`} aria-hidden="true">
+            {misluktN > 0 ? '!' : meldingen.length ? '✓' : '·'}
+          </span>
+          <span className="axe-home-pill-tekst">
+            <span className="axe-home-pill-kop">{takenKop}</span>
+            <span className="axe-home-pill-sub">
+              {meldingen[0] ? `${meldingen[0].titel} — ${meldingen[0].regel}` : 'Nothing needs you right now'}
+            </span>
+          </span>
+          {meldingen.length > 0 && <span className="axe-home-pill-cta">{takenOpen ? 'Close' : 'View'}</span>}
         </button>
         {takenOpen && (
           <ul className="axe-home-pill-lijst">

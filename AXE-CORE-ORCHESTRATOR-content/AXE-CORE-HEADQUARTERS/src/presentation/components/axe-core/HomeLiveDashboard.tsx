@@ -10,6 +10,8 @@ import { codingSeatsHeartbeat, fixDurableTask, retryDurableTask } from '@/infras
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 import { groepeerAbonnementen, stoelSleutel, type CodingSeat } from '@/domain/codingSeats';
 import { haalWachtOpJou } from '@/application/approvals/wachtOpJou';
+import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { AxeGezicht } from './AxeGezicht';
 import './homeLive.css';
 
 function Regel({ kleur, children }: { kleur?: string; children: ReactNode }) {
@@ -101,6 +103,48 @@ function TabKaart({ kant, tabs, standaard }: {
   );
 }
 
+/** Kerncijfer-tegel boven de orb (referentiemap: KPI-tegels). */
+function Kpi({ label, waarde, sub, toon, onClick }: {
+  label: string;
+  waarde: ReactNode;
+  sub: string;
+  toon?: 'let-op' | 'goed' | 'fout';
+  onClick?: () => void;
+}) {
+  return (
+    <button type="button" className={`axe-home-kpi${toon ? ` is-${toon}` : ''}`} onClick={onClick} data-axe-home-kpi={label}>
+      <span className="axe-home-kpi-label">{label}</span>
+      <span className="axe-home-kpi-waarde">{waarde}</span>
+      <span className="axe-home-kpi-sub">{sub}</span>
+    </button>
+  );
+}
+
+/** Hoeveel taken vandaag klaar en mislukt zijn, elke 2 minuten opnieuw geteld. */
+function useVandaag(): { klaar: number | null; mislukt: number | null } {
+  const [tel, setTel] = useState<{ klaar: number | null; mislukt: number | null }>({ klaar: null, mislukt: null });
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    let levend = true;
+    const laad = async () => {
+      if (document.hidden) return;
+      const middernacht = new Date();
+      middernacht.setHours(0, 0, 0, 0);
+      const sinds = middernacht.toISOString();
+      const [k, m] = await Promise.all([
+        sb.from('core_tasks').select('id', { count: 'exact', head: true }).in('status', ['done', 'completed']).gte('updated_at', sinds),
+        sb.from('core_tasks').select('id', { count: 'exact', head: true }).eq('status', 'failed').gte('updated_at', sinds),
+      ]);
+      if (levend) setTel({ klaar: k.count ?? null, mislukt: m.count ?? null });
+    };
+    void laad();
+    const t = window.setInterval(() => void laad(), 120_000);
+    return () => { levend = false; window.clearInterval(t); };
+  }, []);
+  return tel;
+}
+
 function recentRegel(t: LiveTaak): { tekst: string; actie?: TaakActie } {
   if (t.stand !== 'failed') return { tekst: `${t.voortgang} ${t.agent} · ${t.titel}` };
   const fout = taakFoutVan(t.fout || t.titel, t.titel);
@@ -173,6 +217,7 @@ export function HomeLiveDashboard() {
   });
 
   const seats = seatsRegels(stand);
+  const vandaag = useVandaag();
 
   const lijfLopend = (
     <>
@@ -180,12 +225,16 @@ export function HomeLiveDashboard() {
           items={stand.lopend}
           leeg={<Regel kleur="var(--text-muted)">No running tasks or missions right now.</Regel>}
           render={(t) => (
-            <Regel key={t.id}>
-              <span style={{ color: t.kleur }}>{t.agent}</span>
-              {' · '}
-              {t.titel}
-              {t.voortgang ? <span style={{ color: 'var(--text-muted)' }}> · {t.voortgang}</span> : null}
-            </Regel>
+            <div key={t.id} className="axe-home-feed-rij">
+              <AxeGezicht kleur={t.kleur} stemming="werkt" size={16} label={t.agent} />
+              <div className="axe-home-feed-tekst">
+                <span className="axe-home-feed-kop">
+                  <b style={{ color: t.kleur }}>{t.agent}</b>
+                  {t.voortgang ? <span className="axe-home-feed-tijd">{t.voortgang}</span> : null}
+                </span>
+                <span className="axe-home-feed-sub">{t.titel.replace(/^Work on:\s*/i, '')}</span>
+              </div>
+            </div>
           )}
         />
     </>
@@ -198,11 +247,21 @@ export function HomeLiveDashboard() {
           leeg={<Regel kleur="var(--text-muted)">No recent completed or failed tasks in this feed.</Regel>}
           render={(t) => {
             const r = recentRegel(t);
+            const mis = t.stand === 'failed';
             return (
-              <Regel key={t.id} kleur={t.kleur}>
-                <span data-axe-home-feed={t.stand === 'failed' ? 'fail' : 'ok'}>{r.tekst}</span>
-                <Actie actie={r.actie} taskId={t.taskId} />
-              </Regel>
+              <div key={t.id} className="axe-home-feed-rij">
+                <AxeGezicht kleur={t.kleur} stemming={mis ? 'fout' : 'klaar'} size={16} label={t.agent} />
+                <div className="axe-home-feed-tekst">
+                  <span className="axe-home-feed-kop">
+                    <b style={{ color: t.kleur }}>{t.agent}</b>
+                    <span className={`axe-home-feed-pil ${mis ? 'is-fout' : 'is-ok'}`} data-axe-home-feed={mis ? 'fail' : 'ok'}>
+                      {mis ? 'Failed' : 'Done'}
+                    </span>
+                  </span>
+                  <span className="axe-home-feed-sub" title={r.tekst}>{mis ? r.tekst.split(' · ').slice(1).join(' · ') : t.titel}</span>
+                  <Actie actie={r.actie} taskId={t.taskId} />
+                </div>
+              </div>
             );
           }}
         />
@@ -245,8 +304,26 @@ export function HomeLiveDashboard() {
 
   const okTal = stand.goedkeuringen.length + elders;
   const seatsSlecht = seats.filter((r) => r.kleur === 'var(--err)').length;
+  const stoelenKlaar = stoelen.filter((s) => s.logged_in === true && !s.rate_limited).length;
+  const stoelenVol = stoelen.filter((s) => s.rate_limited).length;
 
   return (
+    <>
+    <div className="axe-home-kpis" data-axe-home-kpis>
+      <Kpi label="Waiting on you" waarde={okTal} toon={okTal ? 'let-op' : undefined}
+        sub={okTal ? `${stand.goedkeuringen.length} AXE · ${elders} NorthSea` : 'Nothing to approve'}
+        onClick={() => navigate('/wacht')} />
+      <Kpi label="Working now" waarde={stand.werkend}
+        sub={stand.namen.length ? stand.namen.slice(0, 3).join(', ') : 'Agents on standby'}
+        onClick={() => navigate('/managers')} />
+      <Kpi label="Done today" waarde={vandaag.klaar ?? '–'} toon={vandaag.mislukt ? undefined : 'goed'}
+        sub={vandaag.mislukt == null ? 'Counting…' : `${vandaag.mislukt} failed today`}
+        onClick={() => navigate('/tasks')} />
+      <Kpi label="Model seats" waarde={stoelen.length ? `${stoelenKlaar}/${stoelen.length}` : '–'}
+        toon={stoelen.length && !stoelenKlaar ? 'fout' : undefined}
+        sub={stoelenVol ? `${stoelenVol} at their limit` : stoelen.length ? 'Ready to code' : 'No heartbeat yet'}
+        onClick={() => navigate('/settings')} />
+    </div>
     <div className="axe-home-live" data-axe-home-live>
       <div className="axe-home-live-cluster" data-axe-home-live-cluster="links">
         <TabKaart kant="links" standaard="lopend" tabs={[
@@ -262,8 +339,7 @@ export function HomeLiveDashboard() {
           { id: 'seats', titel: 'Seats · DAX · Cron', aantal: seatsSlecht, lijf: lijfSeats, aandacht: seatsSlecht > 0 },
         ]} />
       </div>
-
-
     </div>
+    </>
   );
 }

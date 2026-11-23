@@ -104,4 +104,20 @@ describe('homeLiveStand', () => {
     expect(regels.some((r) => r.tekst.includes('Claude-abonnement 4'))).toBe(true);
     expect(regels.some((r) => r.tekst.includes('Energy snapshot'))).toBe(true);
   });
+
+  it('een uitgelogd account is niet rood als een ander account van die app werkt', () => {
+    const nu = new Date().toISOString();
+    const stand = homeLiveStand({
+      agents: {},
+      stoelen: [
+        { id: 'claude', logged_in: true, rate_limited: false, current_task: 'idle', last_seen_at: nu, config_exists: true },
+        { id: 'claude4', logged_in: false, rate_limited: false, current_task: 'idle', last_seen_at: nu, config_exists: true },
+      ],
+    });
+    const regels = seatsRegels(stand);
+    const vier = regels.find((r) => r.tekst.includes('Claude-abonnement 4'));
+    expect(vier?.tekst).toContain('Not in use');
+    expect(vier?.kleur).not.toBe('var(--err)');
+    expect(vier?.actie).toBeUndefined();
+  });
 });

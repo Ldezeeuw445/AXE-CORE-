@@ -225,16 +225,25 @@ export function homeLiveStand(in_: {
 export function seatsRegels(stand: HomeLiveStand): LiveRegel[] {
   const uit: LiveRegel[] = [];
   const gezien = new Set<string>();
+  // 23 nov (Luka): "accounts staan rood terwijl alles is ingelogd". Werkt er een
+  // ander account van dezelfde app, dan is een uitgelogd account niet stuk maar
+  // gewoon niet in gebruik. "Unknown" is nog niet gecontroleerd, geen fout.
+  const app = (naam: string) => naam.replace(/\s*\d+\s*$/, '').replace(/\s*\(.*\)\s*$/, '').trim().toLowerCase();
+  const werkendeApps = new Set(stand.stoelen.filter((s) => s.toon === 'ok' || s.toon === 'info').map((s) => app(s.naam || s.id)));
   for (const s of stand.stoelen) {
-    const slecht = s.toon === 'bad' || s.stand === 'Logged out' || s.stand === 'Offline';
-    const tekst = `${s.naam || s.id} · ${s.stand}${s.taak && s.taak !== 'idle' && s.taak !== 'not used' ? ` · ${s.taak}` : ''}`;
+    const uitgelogd = s.stand === 'Logged out' || s.stand === 'Offline';
+    const reserve = uitgelogd && werkendeApps.has(app(s.naam || s.id));
+    const standTekst = reserve ? 'Not in use · another account works'
+      : s.stand === 'Unknown' ? 'Not checked yet' : s.stand;
+    const slecht = !reserve && (s.toon === 'bad' || uitgelogd);
+    const tekst = `${s.naam || s.id} · ${standTekst}${s.taak && s.taak !== 'idle' && s.taak !== 'not used' ? ` · ${s.taak}` : ''}`;
     if (gezien.has(tekst)) continue;
     gezien.add(tekst);
     uit.push({
       id: `seat-${s.id}`,
       tekst,
       kleur: s.toon === 'ok' || s.toon === 'info' ? 'var(--ok)' : slecht ? 'var(--err)' : 'var(--text-muted)',
-      actie: s.stand === 'Logged out' || s.stand === 'Offline' ? 'reconnect' : s.stand === 'Rate limited' ? 'retry' : undefined,
+      actie: uitgelogd && !reserve ? 'reconnect' : s.stand === 'Rate limited' ? 'retry' : undefined,
     });
   }
   for (const d of stand.dax) {
