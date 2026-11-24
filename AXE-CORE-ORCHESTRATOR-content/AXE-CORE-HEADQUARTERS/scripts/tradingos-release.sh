@@ -68,22 +68,61 @@ LIVE="$(curl -fsS -m 5 "$HEALTH_URL" 2>/dev/null \
 # 18 nov ging de site twee keer live via een route zonder proxies; intel-proxy
 # bleef op 14:51 UTC staan en deze check zag alleen een bijgewerkte site.
 EDGE="$(cat "$HOME/.tradingos-serve/edge.commit" 2>/dev/null || true)"
+
+# "Nu releasen" op afstand (24 nov, Luka: "Nu starten via AXE"). De worker weigert
+# terecht een vrije shell op orchestrator, dus komt het verzoek als een core_tasks-rij:
+# capability tradingos_release, status pending. Geen opdracht, geen argumenten: alleen
+# "release main nu één keer", ook als Luka achter de Mac zit of deze commit al eens
+# mislukte. De uitkomst gaat terug in dezelfde rij. De sleutel via stdin, nooit als argument.
+VERZOEK=""
+sb() {  # $1 = methode, $2 = pad + query, $3 = body (optioneel)
+  [[ -n "${SUPABASE_URL:-}" && -n "${SUPABASE_SERVICE_ROLE:-}" ]] || return 1
+  printf 'apikey: %s\nAuthorization: Bearer %s\n' "$SUPABASE_SERVICE_ROLE" "$SUPABASE_SERVICE_ROLE" \
+    | curl -s -m 10 -X "$1" "$SUPABASE_URL/rest/v1/$2" -H @- -H "Content-Type: application/json" \
+        -H "Prefer: return=representation" ${3:+-d "$3"}
+}
+verzoek_zet() {  # $1 = status, $2 = uitleg
+  [[ -n "$VERZOEK" ]] || return 0
+  local body
+  body="$(python3 -c 'import json,sys; print(json.dumps({"status":sys.argv[1],"result":{"output":sys.argv[2][:1900]}}))' "$1" "$2")" || return 0
+  sb PATCH "core_tasks?id=eq.$VERZOEK" "$body" >/dev/null || true
+}
+# Wie het verzoek pakt: van pending naar running, zodat twee rondes het niet allebei doen.
+KANDIDAAT="$(sb GET 'core_tasks?capability=eq.tradingos_release&status=eq.pending&select=id&order=created_at.asc&limit=1' \
+  | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r[0]["id"] if isinstance(r,list) and r else "")' 2>/dev/null || true)"
+if [[ "$KANDIDAAT" =~ ^[0-9a-f-]{36}$ ]]; then
+  GEPAKT="$(sb PATCH "core_tasks?id=eq.$KANDIDAAT&status=eq.pending" '{"status":"running"}' \
+    | python3 -c 'import json,sys; r=json.load(sys.stdin); print("ja" if isinstance(r,list) and r else "")' 2>/dev/null || true)"
+  if [[ "$GEPAKT" == "ja" ]]; then
+    VERZOEK="$KANDIDAAT"
+    TRADINGOS_NU=1
+    rm -f "$MISLUKT"
+    log "release gevraagd via AXE (core_tasks $VERZOEK)"
+    # Stopt het script onderweg, dan blijft het verzoek niet op 'running' hangen.
+    trap 'verzoek_zet failed "stopped before the release finished; see ~/Library/Logs/tradingos-release.log"' EXIT
+  fi
+fi
+klaar_zonder_release() {  # $1 = uitleg
+  if [[ -n "$VERZOEK" ]]; then trap - EXIT; verzoek_zet "${2:-completed}" "$1"; fi
+  exit 0
+}
+
 if [[ -n "$LIVE" && "${LIVE:0:7}" == "${DOEL:0:7}" ]]; then
-  [[ -n "$EDGE" && "${EDGE:0:7}" == "${DOEL:0:7}" ]] && exit 0
+  [[ -n "$EDGE" && "${EDGE:0:7}" == "${DOEL:0:7}" ]] && klaar_zonder_release "Already live: tradingosapp.com and both proxies run $DOEL."
   # Schrijft de release-mac.sh op main die marker niet, dan zou elke ronde een
   # nieuwe release volgen: dan alleen de site tellen, zoals vóór 18 nov.
-  git -C "$REPO" show origin/main:scripts/release-mac.sh 2>/dev/null | grep -q 'edge.commit' || exit 0
+  git -C "$REPO" show origin/main:scripts/release-mac.sh 2>/dev/null | grep -q 'edge.commit' || klaar_zonder_release "Already live: tradingosapp.com runs $DOEL."
   # Proxies achter (of nooit vastgelegd): alleen releasen als er sinds hun
   # commit iets aan de functies veranderde; zonder vastgelegde commit één keer.
   if [[ -n "$EDGE" ]] && git -C "$REPO" diff --quiet "$EDGE" "origin/main" -- supabase/functions src/engine src/lib/aisVesselFilter.ts 2>/dev/null; then
-    exit 0
+    klaar_zonder_release "Already live: tradingosapp.com runs $DOEL; the proxies have not changed since $EDGE."
   fi
   log "site is bij ($LIVE), proxies op ${EDGE:-onbekend} — release voor engine-proxy + intel-proxy"
   LIVE="${LIVE} (proxies ${EDGE:-?})"
   rm -f "$GEDAAN"
 fi
 # Antwoordt de site even niet, dan niet elke ronde dezelfde commit opnieuw.
-[[ -z "$LIVE" && "$(cat "$GEDAAN" 2>/dev/null)" == "$DOEL" ]] && exit 0
+[[ -z "$VERZOEK" && -z "$LIVE" && "$(cat "$GEDAAN" 2>/dev/null)" == "$DOEL" ]] && exit 0
 
 # Een commit die al eens mislukte niet elke 5 minuten opnieuw. De merker draagt
 # ook de versie van dit script: een reparatie hier probeert dezelfde commit nog één keer.
@@ -99,7 +138,7 @@ if [[ -n "$(git -C "$REPO" status --porcelain --untracked-files=no)" ]]; then
   # Er wordt in die checkout gewerkt; release-mac.sh zou toch weigeren.
   log "main is $DOEL, live is ${LIVE:-?}, maar $REPO heeft open wijzigingen — gewacht"
   meld_wacht "uncommitted changes in $REPO ($(git -C "$REPO" status --porcelain --untracked-files=no | head -3 | awk '{print $2}' | tr '\n' ' ')). Fix: git -C $REPO status, then commit, stash or git checkout -- ."
-  exit 0
+  klaar_zonder_release "Not released: $REPO on this Mac has uncommitted changes. Commit, stash or discard them first." failed
 fi
 
 # Niet bouwen terwijl Luka werkt: een build trekt de 8 GB-Mac leeg.
@@ -150,6 +189,7 @@ if [[ "$GELUKT" == "1" ]]; then
   rm -f "$MISLUKT"
   echo "$DOEL" > "$GEDAAN"
   log "klaar: Trading OS live op $DOEL"
+  trap - EXIT; verzoek_zet completed "Released: tradingosapp.com and both proxies now run $DOEL."
   osascript -e "display notification \"Trading OS staat live op $DOEL.\" with title \"Trading OS\"" 2>/dev/null || true
 else
   cat "$RUN" >> "$LOG"
@@ -163,6 +203,7 @@ else
   rm -f "$RUN"
   echo "$MERKER" > "$MISLUKT"
   log "release van $DOEL MISLUKT — zie hierboven; de vorige versie blijft live"
+  trap - EXIT; verzoek_zet failed "Release of $DOEL failed; tradingosapp.com stays on ${LIVE:-the previous version}. Last lines: ${STAART:-?}"
   osascript -e "display notification \"Release $DOEL mislukte; de vorige versie blijft live.\" with title \"Trading OS\"" 2>/dev/null || true
   meld warning "Trading OS release of $DOEL failed on $(scutil --get LocalHostName 2>/dev/null || hostname -s); tradingosapp.com stays on ${LIVE:-the previous version}. Last lines: ${STAART:-?} — Log: ~/Library/Logs/tradingos-release.log. It retries on the next commit to main; to retry this one: rm ~/Library/Logs/tradingos-release.mislukt"
 fi
