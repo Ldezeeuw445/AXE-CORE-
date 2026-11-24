@@ -315,12 +315,17 @@ def lees_stoelen(db: Any) -> list[dict[str, Any]]:
     if db is None:
         return []
     try:
-        from stoelen_actueel import actuele_stoelen  # spooknamen eruit (20 nov)
+        from stoelen_actueel import actuele_stoelen, met_worker_hartslag  # spooknamen eruit (20 nov)
 
-        return actuele_stoelen(list(
+        rijen = list(
             db.table("core_coding_seats").select("*")
             .order("last_seen_at", desc=True).limit(300).execute().data or []
-        ))
+        )
+        try:
+            workers = db.table("core_computer_workers").select("device_id,heartbeat_at").execute().data or []
+        except Exception:  # noqa: BLE001
+            workers = []
+        return actuele_stoelen(met_worker_hartslag(rijen, workers))
     except Exception as exc:  # noqa: BLE001
         log.warning("core_coding_seats lezen faalde: %s", exc)
         return []

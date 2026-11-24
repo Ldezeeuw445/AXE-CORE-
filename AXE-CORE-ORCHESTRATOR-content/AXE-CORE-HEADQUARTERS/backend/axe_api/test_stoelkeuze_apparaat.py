@@ -20,10 +20,12 @@ class Db:
     def execute(self):
         r = type("R", (), {})()
         if self._t == "core_computer_workers":
-            r.data = [{"device_id": d, "host": d, "workspaces": ["AXE Core"], "heartbeat_at": NU.isoformat()}
+            r.data = [{"device_id": d, "host": d, "workspaces": ["AXE Core"],
+                       "heartbeat_at": datetime.now(timezone.utc).isoformat()}
                       for d in ("imac-3", "mac-mini-van-luka-6")]
         elif self._t == "core_coding_seats":
-            r.data = self.stoelen
+            # Vers: in de volle suite draaien hier eerst minuten aan andere tests.
+            r.data = [{**x, "last_seen_at": datetime.now(timezone.utc).isoformat()} for x in self.stoelen]
         elif self._t == "core_tasks" and self.inserts and not getattr(self, "_g", False):
             self._g = True
             r.data = [{"id": "t1"}]
@@ -103,3 +105,19 @@ def test_gewone_uitvoer_maakt_geen_stoel_vol():
     da._VOLLE_STOELEN.clear()
     assert da.onthoud_volle_stoel("imac-3", "claude3", '{"result":"Test toegevoegd"}') is None
     assert not da._VOLLE_STOELEN
+
+
+def test_trage_stoelmeting_telt_met_verse_worker_hartslag():
+    oud = (datetime.now(timezone.utc) - timedelta(minutes=6)).isoformat()
+    db = Db([])
+    db.stoelen = [stoel("claude2", "mac-mini-van-luka-6")]
+    # Db ververst last_seen_at altijd; hier expliciet oud maken:
+    db.execute_orig = db.execute
+
+    def oud_execute():
+        r = db.execute_orig()
+        if db._t == "core_coding_seats":
+            r.data = [{**x, "last_seen_at": oud} for x in r.data]
+        return r
+    db.execute = oud_execute
+    assert da.list_devices(db)[0]["coding_seats_free"] == ["claude2"]

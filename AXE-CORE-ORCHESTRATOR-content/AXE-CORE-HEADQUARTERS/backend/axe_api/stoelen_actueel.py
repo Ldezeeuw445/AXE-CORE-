@@ -43,3 +43,22 @@ def actuele_stoelen(rijen: list[dict[str, Any]]) -> list[dict[str, Any]]:
             nieuwste[label] = (t, str(r.get("machine")))
     houd = {m for _t, m in nieuwste.values()}
     return [r for r in rijen if mac_label(r.get("machine")) is None or str(r.get("machine")) in houd]
+
+
+def met_worker_hartslag(rijen: list[dict[str, Any]], workers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Stoelrij krijgt de verste van (eigen tijd, hartslag van zijn worker).
+
+    24 nov gemeten: de worker meet alle 12 stoelen met hun CLI's; op een drukke
+    Mac duurt dat minuten, dus een stoelrij was meestal ouder dan de 180 s van
+    stoel_vrij. Gevolg: het brein van een manager zag nul vrije stoelen terwijl
+    de Mac mini er twee had, en wachtte steeds 5 min op "capaciteit". Of de Mac
+    leeft staat in core_computer_workers (elke 15 s); de stoelrij zegt alleen
+    wat de stoel is (ingelogd, limiet)."""
+    hart = {str(w.get("device_id")): _tijd(w.get("heartbeat_at")) for w in workers or []}
+    uit = []
+    for r in rijen:
+        h = hart.get(str(r.get("machine")), 0.0)
+        if h > _tijd(r.get("last_seen_at")):
+            r = {**r, "last_seen_at": datetime.fromtimestamp(h).astimezone().isoformat()}
+        uit.append(r)
+    return uit

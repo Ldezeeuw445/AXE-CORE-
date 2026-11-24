@@ -393,6 +393,13 @@ def _vrije_stoelen(db, nu: float) -> dict[str, list[str]]:
             "seat_id,machine,logged_in,rate_limited,rate_limit_until,last_seen_at").execute().data or []
     except Exception:  # noqa: BLE001
         return {}
+    # Leven = worker-hartslag (15 s); de stoelmeting zelf kan minuten duren.
+    try:
+        from stoelen_actueel import met_worker_hartslag
+        workers = db.table("core_computer_workers").select("device_id,heartbeat_at").execute().data or []
+        rijen = met_worker_hartslag(rijen, workers)
+    except Exception:  # noqa: BLE001
+        pass
     uit: dict[str, list[str]] = {}
     for r in rijen:
         m = r.get("machine")
