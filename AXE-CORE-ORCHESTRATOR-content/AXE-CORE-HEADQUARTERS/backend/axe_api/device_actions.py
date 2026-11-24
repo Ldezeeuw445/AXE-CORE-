@@ -371,18 +371,52 @@ def kies_stoel(tool: str, vrij: list[str] | None) -> str | bool | None:
 # (device, stoel) -> epoch tot wanneer vol. Wat de VPS zelf terugkreeg van een
 # agent-run; geldt ook als de Mac nog oude worker-code draait die het niet meldt.
 _VOLLE_STOELEN: dict[tuple[str, str], float] = {}
+# Bewaard over herstarts heen (elke deploy herstart de taak-worker). Alleen op de VPS.
+_VOLLE_STOELEN_BESTAND = "/opt/axe-core-api/.volle-stoelen.json"
+
+
+def _laad_volle_stoelen() -> None:
+    try:
+        with open(_VOLLE_STOELEN_BESTAND, encoding="utf-8") as f:
+            for k, tot in json.load(f).items():
+                mac, _, stoel = k.partition("|")
+                if float(tot) > time.time():
+                    _VOLLE_STOELEN[(mac, stoel)] = float(tot)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _bewaar_volle_stoelen() -> None:
+    if not os.path.isdir(os.path.dirname(_VOLLE_STOELEN_BESTAND)):
+        return
+    try:
+        nu = time.time()
+        tmp = _VOLLE_STOELEN_BESTAND + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({f"{m}|{s}": t for (m, s), t in _VOLLE_STOELEN.items() if t > nu}, f)
+        os.replace(tmp, _VOLLE_STOELEN_BESTAND)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+_laad_volle_stoelen()
 
 
 def onthoud_volle_stoel(device: str, stoel: str, uitvoer: str, nu: float | None = None) -> float | None:
     if not device or not stoel:
         return None
     try:
-        from agent_runner import parse_limiet_tot
+        from agent_runner import _auth_fout, parse_limiet_tot
     except Exception:  # noqa: BLE001
         return None
     tot = parse_limiet_tot(uitvoer, nu)
+    if not tot and _auth_fout(uitvoer[:4000]):
+        # 24 nov: Cursor meldde zich "ingelogd" met een sleutel die hij zelf weigert
+        # ("The provided API key is invalid"); het brein koos hem steeds opnieuw.
+        tot = (time.time() if nu is None else nu) + 6 * 3600
     if tot:
         _VOLLE_STOELEN[(_mac(device), stoel)] = tot
+        _bewaar_volle_stoelen()
     return tot
 
 

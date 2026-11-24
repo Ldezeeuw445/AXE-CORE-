@@ -54,3 +54,26 @@ def test_volle_stoel_volgt_de_mac_ook_na_een_nieuwe_naam():
     gekozen = pr.kies_stoel(pr.lees_stoelen(db), familie="claude")
     assert gekozen["seat_id"] == "claude2" and gekozen["machine"] == "mac-mini-van-luka-6"
     da._VOLLE_STOELEN.clear()
+
+
+def test_geweigerde_sleutel_maakt_de_stoel_onbruikbaar():
+    import device_actions as da
+    da._VOLLE_STOELEN.clear()
+    uit = "\x1b[33m⚠ Warning: The provided API key is invalid.\x1b[0m\nThe API key was loaded from CURSOR_API_KEY."
+    assert da.onthoud_volle_stoel("mac-mini-van-luka-6", "cursor2", uit)
+    db = Db({"core_coding_seats": [{**rij("mac-mini-van-luka-6", "cursor2", 0), "provider": "cursor", "runs_7d": 0},
+                                   {**rij("mac-mini-van-luka-6", "claude2", 0), "runs_7d": 30}],
+             "core_computer_workers": []})
+    assert pr.kies_stoel(pr.lees_stoelen(db))["seat_id"] == "claude2"
+    da._VOLLE_STOELEN.clear()
+
+
+def test_volle_stoelen_overleven_een_herstart(tmp_path, monkeypatch):
+    import device_actions as da
+    monkeypatch.setattr(da, "_VOLLE_STOELEN_BESTAND", str(tmp_path / "v.json"))
+    da._VOLLE_STOELEN.clear()
+    da.onthoud_volle_stoel("imac-3", "claude3", "You've hit your session limit · resets 8:20am")
+    da._VOLLE_STOELEN.clear()
+    da._laad_volle_stoelen()
+    assert da.stoel_vol_tot("main-imac-luka", "claude3") > time.time()
+    da._VOLLE_STOELEN.clear()
