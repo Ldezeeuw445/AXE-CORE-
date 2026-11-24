@@ -189,6 +189,13 @@ if [[ -f "$OV_PL" || -d "/Applications/AXE Overlay.app" ]]; then
   done
   log "oude AXE Overlay naar de Prullenmand ($BAK)"
 fi
+# Agent-worktrees opruimen, ELKE ronde en vóór de build (24 nov: op beide Macs
+# 300+ mappen van 121 MB, schijf vol, build faalde). Komt uit de verse checkout,
+# dus werkt ook als de app-build van deze Mac faalt. Open werk blijft altijd.
+NODE_BIN="$(command -v node 2>/dev/null || ls /opt/homebrew/bin/node /usr/local/bin/node 2>/dev/null | head -1)"
+if [[ -n "$NODE_BIN" && -d "$HOME/.axe/worktrees" ]]; then
+  OPGERUIMD="$("$NODE_BIN" "$HIER/infra/computer-worker/ruim-worktrees.mjs" 2>&1 | tail -1)" && log "$OPGERUIMD"
+fi
 # De onafhankelijke bewaker bijwerken, ook als de API al luistert of de app
 # deze ronde niet gebouwd wordt. De installer weigert een niet-agent-host.
 if [[ -x "$HIER/backend/axe_api/.venv-local/bin/python" && -f "$HIER/backend/axe_api/.env.local" ]]; then

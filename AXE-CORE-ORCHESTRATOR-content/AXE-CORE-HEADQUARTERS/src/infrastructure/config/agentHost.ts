@@ -126,6 +126,21 @@ async function lokaalAntwoordt(): Promise<boolean> {
 }
 
 /**
+ * De lokale agent antwoordde net niet (24 nov: de Mac mini bouwt zichzelf opnieuw
+ * na elke push en is dan even weg; de NorthSea Desk toonde "Cannot reach
+ * mac-mini..."). Onthoud dat voor de probe-TTL, zodat de volgende aanroepen
+ * meteen naar de VPS gaan in plaats van weer 60 s op de dode host te mikken.
+ * Alleen in 'auto': wie 'lokaal' koos, wil de fout zien.
+ */
+export function markeerLokaalOnbereikbaar(): boolean {
+  if (agentHostVoorkeur() !== 'auto') return false;
+  probeUitslag = false;
+  probeOp = Date.now();
+  laatsteHost = 'vps';
+  return true;
+}
+
+/**
  * De basis-URL voor codeeragent-aanroepen.
  *
  * @param vpsBasis waar de rest van de app naartoe praat.

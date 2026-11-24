@@ -87,7 +87,7 @@ export async function veegWorktrees(git, map, repoVoor, nu = Date.now()) {
     hoofden.add(hoofd);
     let leeftijdUur = 0;
     try { leeftijdUur = (nu - (await stat(pad)).mtimeMs) / 3_600_000; } catch { continue; }
-    try { uit.push(await ruimWorktree(git, hoofd, pad, { leeftijdUur })); }
+    try { uit.push({ ...(await ruimWorktree(git, hoofd, pad, { leeftijdUur })), leeftijdUur }); }
     catch (e) { uit.push({ pad, actie: 'fout', reden: String(e?.message ?? e).slice(0, 200) }); }
   }
   for (const h of hoofden) { try { await git(h, 'worktree', 'prune'); } catch { /* best effort */ } }

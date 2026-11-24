@@ -20,7 +20,7 @@ import type { LockscreenMarket } from '@/domain/lockMarkets';
 import type { TabData, TabNaam } from '@/domain/northsea/tabs/typen';
 import type { KeystoreEntry, OpsCronJob, OpsCronRun } from '@/domain/controlPlane';
 import { axeCoreApiUrl, axeCoreApiExtraHeaders, axeApiAuthHeaders } from '@/infrastructure/config/apiUrl';
-import { agentBasis } from '@/infrastructure/config/agentHost';
+import { agentBasis, markeerLokaalOnbereikbaar } from '@/infrastructure/config/agentHost';
 import { editorRepoHeaders } from '@/infrastructure/config/editorRepo';
 
 // axeCoreApiUrl() only rewrites this to a direct api.axecompanion.com call
@@ -87,20 +87,32 @@ async function call<T = unknown>(
 ): Promise<T> {
   const basis = await basisVoor(path);
   const url = `${basis}${path}`;
+  const opties = (u: string): RequestInit => ({
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...axeCoreApiExtraHeaders(),
+      ...axeApiAuthHeaders(u),
+      ...(path.startsWith('/preview/') ? editorRepoHeaders() : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
   let res: Response;
   try {
-    res = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...axeCoreApiExtraHeaders(),
-        ...axeApiAuthHeaders(url),
-        ...(path.startsWith('/preview/') ? editorRepoHeaders() : {}),
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    res = await fetch(url, opties(url));
   } catch (e) {
-    throw onbereikbaar(url, e);
+    // NorthSea-gegevens zijn op de VPS dezelfde (gemeten 24 nov: zelfde velden).
+    // Is de Mac mini even weg, dan de VPS -- niet stil: agentHostStand() zegt 'vps'.
+    // Nooit voor /claude/*: dan zou de agent in de deploy-kopie werken.
+    if (basis === BASE_URL || !path.startsWith('/northsea/') || !markeerLokaalOnbereikbaar()) {
+      throw onbereikbaar(url, e);
+    }
+    const vpsUrl = `${BASE_URL}${path}`;
+    try {
+      res = await fetch(vpsUrl, opties(vpsUrl));
+    } catch {
+      throw onbereikbaar(url, e);
+    }
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
