@@ -618,6 +618,9 @@ _HUIDIGE_AGENT_WS: contextvars.ContextVar[dict[str, Any] | None] = contextvars.C
 )
 # 19 nov: de roster-id van deze beurt, voor de managercontext.
 _HUIDIGE_AGENT: contextvars.ContextVar[str | None] = contextvars.ContextVar("axe_agent", default=None)
+# Sprint 5 (24 nov): de opdracht (voor relevante lessen) en de taak (voor memory-refs).
+_HUIDIGE_DOEL: contextvars.ContextVar[str] = contextvars.ContextVar("axe_doel", default="")
+_HUIDIGE_TAAK: contextvars.ContextVar[str | None] = contextvars.ContextVar("axe_taak", default=None)
 
 _HUIDIGE_DEVICE: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "axe_pinned_device", default=None,
@@ -680,7 +683,7 @@ def systeem_prompt() -> str:
             f"Luka pinned this job to {pinned}. Use run_on_device with that "
             "device. Do not switch machine."
         )
-    mgr = _manager_context(_HUIDIGE_AGENT.get())
+    mgr = _manager_context(_HUIDIGE_AGENT.get(), doel=_HUIDIGE_DOEL.get(), taak_id=_HUIDIGE_TAAK.get())
     if mgr:
         extra.append(mgr)
     log = _gedeeld_log_context()
@@ -696,7 +699,25 @@ _LOG_CACHE: dict[str, Any] = {"t": 0.0, "tekst": ""}
 _MGR_CACHE: dict[str, tuple[float, str]] = {}
 
 
-def _manager_context(agent: str | None, nu: float | None = None) -> str:
+_LESREFS_GEDAAN: set[str] = set()
+
+
+def _bewaar_lesrefs(db: Any, taak_id: str | None, ids: list[str]) -> None:
+    """Memory-refs: welke lessen in de context van deze taak stonden (taak.metadata.used_lessons).
+    taak_verslag telt bij het afronden per les goed/slecht. Eén keer per taak."""
+    if not taak_id or not ids or taak_id in _LESREFS_GEDAAN:
+        return
+    _LESREFS_GEDAAN.add(taak_id)
+    try:
+        rij = (db.table("core_tasks").select("metadata").eq("id", taak_id).limit(1).execute().data or [{}])[0]
+        meta = rij.get("metadata") if isinstance(rij.get("metadata"), dict) else {}
+        db.table("core_tasks").update({"metadata": {**meta, "used_lessons": ids[:5]}}).eq("id", taak_id).execute()
+    except Exception:  # noqa: BLE001 -- een memory-ref breekt nooit een taak
+        pass
+
+
+def _manager_context(agent: str | None, nu: float | None = None, doel: str = "",
+                     taak_id: str | None = None) -> str:
     """19 nov (audit, punt 1): de compacte wereld van déze manager -- open taken,
     wat op Luka wacht, wat mislukte, wat hij zelf deed, wat hij mag.
     Per manager hooguit eens per minuut gelezen."""
@@ -704,7 +725,8 @@ def _manager_context(agent: str | None, nu: float | None = None) -> str:
     if not agent:
         return ""
     nu = _t.time() if nu is None else nu
-    vorig = _MGR_CACHE.get(agent)
+    sleutel = f"{agent}|{(doel or '')[:200]}"
+    vorig = _MGR_CACHE.get(sleutel)
     if vorig and nu - vorig[0] < 60:
         return vorig[1]
     tekst = ""
@@ -712,10 +734,11 @@ def _manager_context(agent: str | None, nu: float | None = None) -> str:
         import manager_context as _mc
         db = _db_voor_stoelen()
         if db is not None:
-            tekst = _mc.lees_context(db, agent)
+            tekst, _b, ids = _mc.lees_context_met_lessen(db, agent, doel=doel or None)
+            _bewaar_lesrefs(db, taak_id, ids)
     except Exception:  # noqa: BLE001
         tekst = ""
-    _MGR_CACHE[agent] = (nu, tekst)
+    _MGR_CACHE[sleutel] = (nu, tekst)
     return tekst
 
 
@@ -1662,6 +1685,8 @@ async def run_agent_loop(
     fiche = _HUIDIGE_BRIEF.set(brief)
     ws_fiche = _HUIDIGE_AGENT_WS.set(agent_ws)
     agent_fiche = _HUIDIGE_AGENT.set(agent)
+    doel_fiche = _HUIDIGE_DOEL.set(str(request_text or "")[:2000])
+    taak_fiche = _HUIDIGE_TAAK.set(str(task_id) if task_id else None)
     device_fiche = _HUIDIGE_DEVICE.set(pinned if pinned in ("vps", "mac-mini", "imac") else None)
     dax_fiche = _HUIDIGE_DAX.set(dax)
     gratis_fiche = _ALLEEN_GRATIS.set(bool(alleen_gratis))
@@ -1683,6 +1708,8 @@ async def run_agent_loop(
         _HUIDIGE_WORKSPACE.reset(werkplek_fiche)
         _HUIDIGE_AGENT_WS.reset(ws_fiche)
         _HUIDIGE_AGENT.reset(agent_fiche)
+        _HUIDIGE_DOEL.reset(doel_fiche)
+        _HUIDIGE_TAAK.reset(taak_fiche)
         _HUIDIGE_DEVICE.reset(device_fiche)
         _HUIDIGE_DAX.reset(dax_fiche)
         _ALLEEN_GRATIS.reset(gratis_fiche)

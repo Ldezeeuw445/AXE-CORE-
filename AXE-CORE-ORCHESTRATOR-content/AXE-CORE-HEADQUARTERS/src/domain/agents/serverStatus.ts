@@ -44,6 +44,28 @@ export interface ServerPendingApproval {
   task_id?: string | null;
 }
 
+export interface DaxWerk {
+  open: number;
+  wacht: number;
+  mislukt_24u: number;
+  klaar_24u: number;
+  laatste_klaar: string | null;
+  stand: 'needs_you' | 'working' | 'failing' | 'idle';
+  regel: string;
+}
+
+/**
+ * Statuswoord van een DAX-bot uit zijn echte werk, niet een vast 'Ready'.
+ * Slaapt zijn computer en heeft hij niets te doen, dan zegt hij dat.
+ */
+export function daxWerkLabel(werk: DaxWerk, computerWakker: boolean | null): { label: string; tone: 'live' | 'busy' | 'idle' | 'wait' } {
+  if (werk.stand === 'needs_you') return { label: 'Needs you', tone: 'wait' };
+  if (werk.stand === 'working') return { label: 'Working', tone: 'busy' };
+  if (werk.stand === 'failing') return { label: 'Failing', tone: 'wait' };
+  if (computerWakker === false) return { label: 'Asleep', tone: 'idle' };
+  return { label: 'Idle', tone: 'live' };
+}
+
 export interface ServerAgent {
   agent: string;
   status: ServerAgentStatus;
@@ -75,6 +97,8 @@ export interface ServerAgent {
   /** Abonnement-CLI's die ín de DAX zijn ingelogd (claude_logged_in, codex_logged_in). */
   dax_engines?: Record<string, boolean>;
   dax_notes?: string[];
+  /** Sprint 4 (24 nov): alleen DAX-bots -- status uit hun eigen taken (backend dax_werk.py). */
+  werk?: DaxWerk;
 }
 
 /** Na zoveel minuten zonder heartbeat telt een DAX niet meer als wakker (wacht tikt elke 5 min). */

@@ -35,8 +35,55 @@ REGELS = (
     "Zelf doen (niet vragen): lezen, uitzoeken, plannen, taken starten, code in een eigen branch met tests, "
     "NorthSea-vervolgmails binnen de vaste regel, opruimen van je eigen dubbele voorstellen.\n"
     "Eerst Luka's ja: deploy naar productie, database-migratie, geld/orders/abonnementen, mail buiten de "
-    "vaste regel, iets verwijderen, inloggen/betalen. Vraag het in je eigen gesprek, één keer, met waarom."
+    "vaste regel, iets verwijderen, inloggen/betalen. Vraag het in je eigen gesprek, één keer, met waarom.\n"
+    "Past een les hieronder op deze taak, zeg dat in je antwoord aan Luka: \"Ik gebruik de les van <datum>: ...\"."
 )
+
+# Sprint 5 (24 nov): lessen op relevantie, niet alleen de nieuwste. Woorden die
+# niets zeggen tellen niet mee in de overlap.
+_STOP = set("""de het een en of van in op te voor met aan bij dat die dit is zijn niet maar als ook
+naar om uit dan wel nog al tot door over the a an and or of to in on for with at by is are be it this that
+werkte mislukt waarom volgende keer toepassen hoe besluit taak luka""".split())
+LES_UITKOMST = "les_uitkomst"
+
+
+def _woorden(t: Any) -> set[str]:
+    import re as _re
+    return {w for w in _re.findall(r"[a-z0-9_]{4,}", str(t or "").lower()) if w not in _STOP}
+
+
+def kies_lessen(rijen: list[dict[str, Any]], doel: str | None, uitkomst: dict[str, int] | None = None,
+                n: int = 3) -> list[dict[str, Any]]:
+    """De n beste lessen voor dit doel: overlap met het doel, plus hoe vaak de les
+    eerder hielp (+) of niet (-); bij gelijke stand de nieuwste. Zonder doel: de nieuwste,
+    maar een les die vaker schaadde dan hielp valt weg."""
+    uitkomst = uitkomst or {}
+    doelw = _woorden(doel)
+
+    def score(r: dict[str, Any]) -> tuple[float, str]:
+        overlap = len(doelw & _woorden(r.get("body"))) if doelw else 0
+        return (overlap * 2 + uitkomst.get(str(r.get("id")), 0), str(r.get("created_at") or ""))
+
+    bruikbaar = [r for r in rijen if uitkomst.get(str(r.get("id")), 0) > -2]
+    return sorted(bruikbaar, key=score, reverse=True)[:n]
+
+
+def les_datum(r: dict[str, Any]) -> str:
+    try:
+        t = datetime.fromisoformat(str(r.get("created_at")).replace("Z", "+00:00"))
+        return f"{t.day} {('jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec')[t.month - 1]}"
+    except (TypeError, ValueError):
+        return "eerder"
+
+
+def tel_uitkomsten(rijen: list[dict[str, Any]]) -> dict[str, int]:
+    """'<les_id> good|bad' -> {les_id: +goed -slecht}."""
+    tel: dict[str, int] = {}
+    for r in rijen:
+        delen = str(r.get("body") or "").split()
+        if len(delen) >= 2 and delen[1] in ("good", "bad"):
+            tel[delen[0]] = tel.get(delen[0], 0) + (1 if delen[1] == "good" else -1)
+    return tel
 
 
 def groep_van(naam: str | None) -> tuple[str, tuple[str, ...]]:
@@ -100,8 +147,8 @@ def bouw_context(
         # Audit 22 nov: niet dezelfde fout twee keer. Luka's lessen eerst (wet),
         # dan de ervaring uit je eigen taken (taak_verslag.ervaring).
         delen.append("Lessen (Luka's regels gaan voor; volg ze):\n" + "\n".join(
-            f"- {'Luka' if l.get('to_agent') == 'lessen' else 'ervaring'}: "
-            f"{_kort(' '.join(str(l.get('body') or '').replace('#', '').split()), 200)}" for l in lessen[:6]))
+            f"- {'Luka' if l.get('to_agent') == 'lessen' else 'ervaring'}, les van {les_datum(l)}: "
+            f"{_kort(' '.join(str(l.get('body') or '').replace('#', '').split()), 200)}" for l in lessen[:5]))
     if verslagen:
         # Punt 4 (19 nov): wat zijn vorige taken opleverden, zodat hij niet
         # opnieuw begint of blind herhaalt (taak_verslag.py).
@@ -121,7 +168,7 @@ def bronnen(taken: list, mislukt: list, eigen: list, wacht: list, verslagen: lis
     """Welke herinneringen dit antwoord stuurden (zichtbaar in de chat)."""
     return {k: len(v) for k, v in (("open_taken", taken[:6]), ("mislukt", mislukt[:4]),
                                      ("eigen_berichten", eigen[:5]), ("wacht_op_luka", wacht[:3]),
-                                     ("taakverslagen", verslagen[:4]), ("lessen", (lessen or [])[:6])) if v}
+                                     ("taakverslagen", verslagen[:4]), ("lessen", (lessen or [])[:5])) if v}
 
 
 def lees_context(db: Any, agent: str | None, nu: datetime | None = None) -> str:
@@ -130,10 +177,17 @@ def lees_context(db: Any, agent: str | None, nu: datetime | None = None) -> str:
 
 
 def lees_context_met_bronnen(db: Any, agent: str | None,
-                             nu: datetime | None = None) -> tuple[str, dict[str, int]]:
+                             nu: datetime | None = None, doel: str | None = None) -> tuple[str, dict[str, int]]:
+    tekst, bronnen_, _ids = lees_context_met_lessen(db, agent, nu, doel)
+    return tekst, bronnen_
+
+
+def lees_context_met_lessen(db: Any, agent: str | None, nu: datetime | None = None,
+                            doel: str | None = None) -> tuple[str, dict[str, int], list[str]]:
+    """Zoals lees_context_met_bronnen, plus de id's van de lessen die erin staan (memory-refs)."""
     kern, namen = groep_van(agent)
     if not namen:
-        return "", {}
+        return "", {}, []
     nu = nu or datetime.now(timezone.utc)
 
     def lees(fn):
@@ -156,11 +210,16 @@ def lees_context_met_bronnen(db: Any, agent: str | None,
     verslagen = lees(lambda: db.table("core_manager_messages").select("body,created_at")
                      .eq("to_agent", "log").in_("from_agent", list(namen)).like("body", "Taakverslag%")
                      .order("created_at", desc=True).limit(4).execute().data)
-    luka = lees(lambda: db.table("core_manager_messages").select("body,created_at,to_agent")
-                .eq("to_agent", "lessen").order("created_at", desc=True).limit(3).execute().data)
-    ervaring = lees(lambda: db.table("core_manager_messages").select("body,created_at,to_agent")
+    luka = lees(lambda: db.table("core_manager_messages").select("id,body,created_at,to_agent")
+                .eq("to_agent", "lessen").order("created_at", desc=True).limit(12).execute().data)
+    ervaring = lees(lambda: db.table("core_manager_messages").select("id,body,created_at,to_agent")
                     .eq("to_agent", "ervaring").in_("from_agent", list(namen))
-                    .order("created_at", desc=True).limit(3).execute().data)
-    lessen = (luka or [])[:3] + (ervaring or [])[:3]
+                    .order("created_at", desc=True).limit(25).execute().data)
+    uitkomst = tel_uitkomsten(lees(lambda: db.table("core_manager_messages").select("body")
+                                   .eq("to_agent", LES_UITKOMST).order("created_at", desc=True)
+                                   .limit(300).execute().data))
+    # Max 5: Luka's 2 relevantste (wet), dan 3 eigen ervaringen.
+    lessen = kies_lessen(luka or [], doel, uitkomst, 2) + kies_lessen(ervaring or [], doel, uitkomst, 3)
+    ids = [str(l.get("id")) for l in lessen if l.get("id")]
     return (bouw_context(kern, taken, mislukt, eigen, wacht, nu, verslagen, lessen),
-            bronnen(taken, mislukt, eigen, wacht, verslagen, lessen))
+            bronnen(taken, mislukt, eigen, wacht, verslagen, lessen), ids)

@@ -58,7 +58,7 @@ import {
   nieuwRelayMsg,
 } from '@/domain/agents/managerChatOpslag';
 import { amsterdamKlok } from '@/domain/tijd';
-import type { ServerAgent } from '@/domain/agents/serverStatus';
+import { daxRegel, daxWerkLabel, type ServerAgent } from '@/domain/agents/serverStatus';
 
 const SUBTITELS: Partial<Record<AxeAgentId, string>> = {
   axe: 'Boss · jouw hoofdassistent',
@@ -109,6 +109,8 @@ function statusVoor(
   if (srv?.status === 'BLOCKED' || srv?.status === 'ERROR') {
     return { label: 'Blocked', tone: 'wait' };
   }
+  // Sprint 4: een DAX-bot meldt wat hij echt doet (taken + zijn computer), geen 'Ready'.
+  if (srv?.werk) return daxWerkLabel(srv.werk, srv.dax_computer ? (daxRegel(srv)?.wakker ?? null) : null);
   if (agent.id === 'tradingos') return { label: 'Demo', tone: 'idle' };
   if (srv && srv.status !== 'SLEEPING') return { label: 'Live', tone: 'live' };
   return { label: 'Ready', tone: 'live' };
@@ -458,7 +460,9 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
             </span>
             <span className="axe-managers-room-status" data-tone={status.tone}>
               {opts?.orch ? 'Orchestrator' : status.label}
-              {!isBoss(a.id) && srv?.current_action ? ` · ${srv.current_action.slice(0, 40)}` : ''}
+              {!isBoss(a.id) && srv?.werk?.regel
+                ? ` · ${srv.werk.regel.slice(0, 70)}`
+                : !isBoss(a.id) && srv?.current_action ? ` · ${srv.current_action.slice(0, 40)}` : ''}
             </span>
           </span>
         </button>

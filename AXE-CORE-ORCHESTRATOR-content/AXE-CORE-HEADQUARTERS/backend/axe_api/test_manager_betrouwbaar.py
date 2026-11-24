@@ -156,7 +156,7 @@ def test_mislukte_managertaak_wordt_een_les_die_terugkomt():
     les = db.rijen["core_manager_messages"][0]
     assert les["to_agent"] == "ervaring" and "Waarom: timeout op Supabase" in les["body"]
     tekst = mc.lees_context(db, "northseamgr", NU)
-    assert "ervaring: Mislukt: Repareer planner" in tekst
+    assert "ervaring, les van " in tekst and "Mislukt: Repareer planner" in tekst
 
 
 def test_gewone_taak_geeft_geen_ervaring():

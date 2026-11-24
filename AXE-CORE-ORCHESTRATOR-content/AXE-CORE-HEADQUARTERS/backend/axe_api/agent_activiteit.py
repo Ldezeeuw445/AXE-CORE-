@@ -13,6 +13,7 @@ een worker die weg is, en de kernel geeft die taak vanzelf aan een ander.
 """
 from __future__ import annotations
 
+from dax_werk import DAX_BOTS, feed_meting, werk as dax_werk_status
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterable
@@ -706,8 +707,33 @@ class Activiteit:
                 "last_event_at": recent[0].get("created_at") if recent else None,
             })
             koppel_pending(str(agent), status, per_taak, per_agent)
+            # Sprint 4 (24 nov): een DAX-bot krijgt zijn status uit zijn eigen werk.
+            if str(agent) in DAX_BOTS:
+                try:
+                    status["werk"] = dax_werk_status(
+                        str(agent), taken, datetime.now(timezone.utc),
+                        pending_ok=len(per_agent.get(str(agent)) or []),
+                        meting=self._feed_meting() if str(agent) == "trading" else None,
+                    )
+                except Exception:  # noqa: BLE001 -- status mag de lijst nooit breken
+                    pass
             uit.append(status)
         return uit
+
+    _FEEDS_CACHE: tuple[float, str | None] = (0.0, None)
+
+    def _feed_meting(self) -> str | None:
+        t, v = Activiteit._FEEDS_CACHE
+        if _monotoon() - t < 300:
+            return v
+        try:
+            rijen = (self._db().table("intel_sync_log").select("feed_id,last_sync_at,last_error")
+                     .limit(200).execute().data) or []
+            v = feed_meting(rijen, datetime.now(timezone.utc)) if rijen else None
+        except Exception:  # noqa: BLE001
+            v = None
+        Activiteit._FEEDS_CACHE = (_monotoon(), v)
+        return v
 
     def sinds(self, sinds: str) -> dict[str, Any]:
         """Wat er veranderde sinds Luka er was. Alleen uit echte events.

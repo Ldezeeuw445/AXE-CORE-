@@ -137,8 +137,35 @@ def schrijf(db: Any, taak: dict[str, Any], status: str, result: dict[str, Any] |
         return False
     episode(db, taak, status, result, tekst)
     ervaring(db, taak, status, verslag(taak, status, result, error))
+    les_uitkomsten(db, taak, status)
     review_stap(db, taak, status, result)
     return True
+
+
+def les_uitkomsten(db: Any, taak: dict[str, Any], status: str) -> int:
+    """Sprint 5 (24 nov): versterk of verzwak de lessen die in de context van deze taak
+    stonden (memory-refs in metadata.used_lessons, gezet door agent_loop). Klaar = good,
+    mislukt = bad; geannuleerd zegt niets over de les. manager_context.kies_lessen telt ze."""
+    if status not in ("completed", "failed"):
+        return 0
+    try:
+        tid = str(taak.get("id") or "")
+        meta = taak.get("metadata") if isinstance(taak.get("metadata"), dict) else {}
+        ids = meta.get("used_lessons")
+        if not ids and tid:
+            rij = (db.table("core_tasks").select("metadata").eq("id", tid).limit(1).execute().data or [{}])[0]
+            ids = (rij.get("metadata") or {}).get("used_lessons") if isinstance(rij.get("metadata"), dict) else None
+        if not ids:
+            return 0
+        uit = "good" if status == "completed" else "bad"
+        n = 0
+        for lid in list(ids)[:5]:
+            db.table("core_manager_messages").insert({"from_agent": wie(taak), "to_agent": "les_uitkomst",
+                                                      "kind": "report", "body": f"{lid} {uit} {tid}"}).execute()
+            n += 1
+        return n
+    except Exception:  # noqa: BLE001 -- nooit een taak breken
+        return 0
 
 
 def review_tekst(taak: dict[str, Any], op: dict[str, Any]) -> tuple[str, str]:
