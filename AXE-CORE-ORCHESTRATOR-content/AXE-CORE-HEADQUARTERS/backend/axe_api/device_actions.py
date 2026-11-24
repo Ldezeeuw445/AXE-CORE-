@@ -170,6 +170,11 @@ def werkbon(opdracht: str) -> str:
         "(3) de bestaande tests van wat je raakte groen zijn en de typecheck geen nieuwe fouten geeft, "
         "(4) alles gecommit is op de huidige branch. Niet mergen, niet deployen, niet pushen naar "
         "orchestrator of main. Lukt iets niet, zeg dat eerlijk in plaats van het te verbergen.\n\n"
+        "TESTEN (24 nov: kale `pytest` en `python3 -m pytest` staan NIET op de Macs): voor de "
+        "Python-backend ga je eerst naar AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api "
+        "en draai je daar `uvx --with-requirements requirements.txt --with pytest pytest -q <testbestand>`; "
+        "voor de app (TypeScript) in AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS "
+        "`npx vitest run <pad>`. Niets installeren.\n\n"
         "EINDIG je antwoord met precies deze drie kopjes:\n"
         "## Samenvatting\n(wat je veranderde, in gewone taal, 2-5 regels)\n"
         "## Tests\n(welke commando's je draaide en de uitkomst, letterlijk)\n"
@@ -233,6 +238,14 @@ def _sectie(tekst: str, kop: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+_NIET_GETEST = re.compile(
+    r"no module named pytest|command not found|requires approval|niet\s+(ge)?draaid|"
+    r"(kon|kan|konden)\b[^.\n]{0,60}\bniet\b[^.\n]{0,30}(draaien|testen|uitvoeren)|liep\b[^.\n]{0,40}\bniet\b|"
+    r"geen tests?\s+(ge)?draaid|not (been )?run|could not run|couldn't run|unable to run",
+    re.I,
+)
+
+
 def oplevering(output: Any) -> dict[str, Any]:
     """Samenvatting / tests / risico's van de agent + de git-feiten van de Mac."""
     ruw = str(output or "")
@@ -254,11 +267,15 @@ def oplevering(output: Any) -> dict[str, Any]:
     if (fout := motor_fout(ruw)):
         uit["motor_fout"] = fout
     ontbreekt = [k for k in KOPJES if not uit[k.lower().replace("'", "")]]
+    # 24 nov live: "## Tests: liep niet door: No module named pytest" telde als compleet.
+    if uit.get("tests") and _NIET_GETEST.search(uit["tests"]):
+        uit["niet_getest"] = " ".join(uit["tests"].split())[:300]
     if not uit.get("commits"):
         uit.setdefault("ontbreekt", [])
     # 24 nov: 'bewaard' = de worker legde open werk zelf vast omdat de agent dat niet
     # deed. Het werk is veilig op de branch, maar niet door de agent getest: niet klaar.
     uit["compleet"] = (not ontbreekt and bool(uit.get("branch")) and bool(uit.get("commits"))
+                       and not uit.get("niet_getest")
                        and not uit.get("niet_gecommit") and not uit.get("motor_fout")
                        and not uit.get("bewaard"))
     if ontbreekt:
@@ -286,6 +303,8 @@ def oplevering_weigering(op: dict[str, Any] | None) -> str | None:
         mist.append("een commit (er is niets vastgelegd)")
     if op.get("niet_gecommit"):
         mist.append("alles gecommit (er staat nog werk open)")
+    if op.get("niet_getest"):
+        mist.append("tests die echt draaiden (de agent schreef: \"" + str(op["niet_getest"])[:160] + "\")")
     if op.get("bewaard"):
         mist.append(f"tests en een eigen commit (de agent committe niet zelf; de Mac bewaarde het werk "
                     f"op {op.get('branch') or 'de branch'} als {op['bewaard']} -- laat het testen en afmaken)")
