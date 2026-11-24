@@ -92,3 +92,10 @@ def test_mislukte_agent_run_maakt_de_stoel_een_uur_onbruikbaar():
     assert da.onthoud_stoel_fout("main-imac-luka", "codex", "Codex model_not_found: ...")
     assert 3000 < da.stoel_vol_tot("imac-3", "codex") - time.time() <= 3600
     da._VOLLE_STOELEN.clear()
+
+
+def test_time_out_blokkeert_de_stoel_niet():
+    import device_actions as da
+    da._VOLLE_STOELEN.clear()
+    assert da.onthoud_stoel_fout("mac-mini-van-luka-6", "claude", "timed out after 900s -- werk bewaard op axe/x als abc") is None
+    assert da.stoel_vol_tot("mac-mini-van-luka-6", "claude") == 0

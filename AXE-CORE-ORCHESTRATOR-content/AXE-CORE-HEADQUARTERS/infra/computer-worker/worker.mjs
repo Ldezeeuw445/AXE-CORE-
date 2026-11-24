@@ -941,7 +941,12 @@ async function execute(payload) {
         '--allowedTools', ...CLAUDE_MAG_DRAAIEN];
       const model = String(args.model ?? '').trim();
       if (model) argv.push('--model', model);
-      const uit = await run(bin, argv, root, seatChildEnv(seat), AGENT_TIMEOUT_MS);
+      let uit;
+      try {
+        uit = await run(bin, argv, root, seatChildEnv(seat), AGENT_TIMEOUT_MS);
+      } catch (e) {
+        throw await metBewaardWerk(e, root, hoofdRoot, basis, branch);
+      }
       noteerLimiet(seat, uit); // 24 nov: anders bleef een stoel op zijn sessielimiet "vrij"
       return metOplevering(root, branch, basis, hoofdRoot, uit);
     }
@@ -958,8 +963,7 @@ async function execute(payload) {
         // 24 nov: codex 'model_not_found' gooide hier, en de worktree van de run bleef
         // staan -- 216 mislukte runs = 219 mappen op de iMac. Leeg = meteen weg.
         noteerLimiet(seat, String(e?.message ?? e));
-        await naRunOpruimen(root, hoofdRoot, basis);
-        throw e;
+        throw await metBewaardWerk(e, root, hoofdRoot, basis, branch);
       }
       noteerLimiet(seat, uit);
       return metOplevering(root, branch, basis, hoofdRoot, uit);
@@ -973,7 +977,12 @@ async function execute(payload) {
       const model = String(args.model ?? '').trim();
       if (model) argv.push('--model', model);
       const seat = String(args.seat ?? 'cursor');
-      const uit = await run(bin, argv, root, seatChildEnv(seat), AGENT_TIMEOUT_MS);
+      let uit;
+      try {
+        uit = await run(bin, argv, root, seatChildEnv(seat), AGENT_TIMEOUT_MS);
+      } catch (e) {
+        throw await metBewaardWerk(e, root, hoofdRoot, basis, branch);
+      }
       noteerLimiet(seat, uit);
       return metOplevering(root, branch, basis, hoofdRoot, uit);
     }
@@ -1012,6 +1021,17 @@ async function metOplevering(root, branch, basis, hoofdRoot, uit) {
 async function bewaarOpenWerk(root, hoofdRoot) {
   if (!root.startsWith(WORKTREE_MAP + sep) || root === hoofdRoot) return '';
   try { return await bewaarWerk(gitStreng, root); } catch { return ''; }
+}
+
+/* 24 nov live: Claude Code op de Mac mini repareerde de corporateJets-feed maar liep
+   na 900 s af voor hij committe; de VPS zag alleen "timed out" en zijn werk lag los
+   in de map. Een run die gooit (time-out, codex-fout) legt open werk nu vast op zijn
+   EIGEN axe/-branch en zegt dat in de fout; een lege map gaat meteen weg. */
+async function metBewaardWerk(e, root, hoofdRoot, basis, branch) {
+  const bewaard = await bewaarOpenWerk(root, hoofdRoot);
+  if (!bewaard) await naRunOpruimen(root, hoofdRoot, basis);
+  const msg = String(e?.message ?? e);
+  return new Error(bewaard ? `${msg} -- werk bewaard op ${branch} als ${bewaard}` : msg);
 }
 
 /* 24 nov: een run zonder commits en zonder wijzigingen laat niets achter --

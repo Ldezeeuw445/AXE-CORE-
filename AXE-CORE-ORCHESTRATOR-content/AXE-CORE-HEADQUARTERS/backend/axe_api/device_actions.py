@@ -442,7 +442,8 @@ def onthoud_volle_stoel(device: str, stoel: str, uitvoer: str, nu: float | None 
 def onthoud_stoel_fout(device: str, stoel: str, fout: str, nu: float | None = None) -> float | None:
     """Een agent-run die faalde: limiet/sleutel zoals altijd, anders een uur niet meer kiezen."""
     tot = onthoud_volle_stoel(device, stoel, fout, nu)
-    if tot or not device or not stoel:
+    if tot or not device or not stoel or "timed out" in (fout or "").lower():
+        # Een time-out is een grote klus, geen kapotte stoel (24 nov: corporateJets, 900 s).
         return tot
     tot = (time.time() if nu is None else nu) + 3600
     _VOLLE_STOELEN[(_mac(device), stoel)] = tot
