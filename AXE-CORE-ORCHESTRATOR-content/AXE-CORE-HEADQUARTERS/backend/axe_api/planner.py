@@ -558,7 +558,10 @@ LUKA_BRONNEN = ("luka",)
 LUKA_ROUTES = ("user", "axe_tier_router", "axe-core")
 ECHTE_OORSPRONG = ("vervolg", "storing")
 VOLGENDE_STAP = ("blocked", "failed", "waiting_approval", "retrying")
-OK_STATUS = ("ok", "success", "succeeded")
+# "skipped" (24 nov): een cron die bewust niet draaide -- buiten de uren, of
+# wachtend op Luka's autorisatie (Review Desk) -- is geen storing. Er kwam elke
+# keer een "Fix:"-taak van die een agent niet kan oplossen.
+OK_STATUS = ("ok", "success", "succeeded", "skipped")
 
 
 def is_luka_vraag(rij: dict) -> bool:
@@ -768,6 +771,24 @@ def planner_pass(gevraagd: list[dict], kapot: list[dict]) -> list[dict]:
             "agent": p.get("agent") or "axe-core",
             "soort": p.get("soort") or "cron",
         })
+    return uit
+
+
+def storing_taken_te_sluiten(open_taken: list[dict], kapot: list[dict]) -> list[str]:
+    """Open "Fix:"-taken waarvan de bron niet meer kapot is (24 nov).
+
+    Gemeten: "Fix: ... sleutel dax-northsea-01" bleef sinds 21 nov open terwijl
+    de bron die dag al klaar was; elke ronde liet Claude er 5 minuten op vastlopen
+    en de ronde telde als 'fail'. Alleen pending (een lopende run maakt zichzelf af).
+    """
+    nog_kapot = {str(p.get("id")) for p in kapot if p.get("id")}
+    uit = []
+    for t in open_taken:
+        meta = t.get("metadata") or {}
+        bron = meta.get("bron_id") or (t.get("payload") or {}).get("bron_id")
+        if (str(t.get("status") or "") == "pending" and meta.get("oorsprong") == "storing"
+                and bron and str(bron) not in nog_kapot):
+            uit.append(str(t.get("id")))
     return uit
 
 
@@ -1489,6 +1510,8 @@ class Planner:
 
     def _echte_storingen(self) -> list[dict]:
         kapot: list[dict] = []
+        self._storingen_compleet = False
+        gelezen = 0
         try:
             crons = (self.sb().table("core_schedules")
                      .select("id,name,job_key,last_status,enabled,metadata")
@@ -1503,6 +1526,7 @@ class Planner:
                     "soort": "cron",
                     "agent": "axe-core",
                 })
+            gelezen += 1
         except Exception as e:  # noqa: BLE001
             log.warning("planner: crons lezen faalde: %s", e)
         try:
@@ -1524,9 +1548,38 @@ class Planner:
                     "soort": "northsea",
                     "agent": meta.get("agent") or t.get("assignee") or "maps-agent",
                 })
+            gelezen += 1
         except Exception as e:  # noqa: BLE001
             log.warning("planner: northsea-wacht lezen faalde: %s", e)
+        self._storingen_compleet = gelezen == 2
         return kapot
+
+    def _sluit_herstelde_storingen(self, kapot: list[dict]) -> int:
+        """Fix-taken dicht als hun bron weer goed is. Niets als de storingen niet
+        volledig gelezen konden worden: dan weten we het niet."""
+        if not getattr(self, "_storingen_compleet", False):
+            return 0
+        open_taken: list[dict] = []
+        for agent in AGENTS:
+            open_taken.extend(self._open_taken(agent))
+        ids = storing_taken_te_sluiten(open_taken, kapot)
+        nu = datetime.now(timezone.utc).isoformat()
+        for tid in ids:
+            try:
+                rij = next((r for r in open_taken if str(r.get("id")) == tid), {})
+                meta = dict(rij.get("metadata") or {})
+                meta["uiStatus"] = "done"
+                meta["gesloten_omdat"] = "bron hersteld"
+                self.sb().table("core_tasks").update({
+                    "status": "cancelled",
+                    "cancelled_at": nu,
+                    "updated_at": nu,
+                    "metadata": meta,
+                    "error": {"message": "source is no longer failing; nothing to fix"},
+                }).eq("id", tid).eq("status", "pending").eq("capability", "planner").execute()
+            except Exception as e:  # noqa: BLE001
+                log.warning("planner: herstelde storing sluiten faalde voor %s: %s", tid, e)
+        return len(ids)
 
     def _open_echte_bronnen(self) -> set[str]:
         gezien: set[str] = set()
@@ -1626,7 +1679,9 @@ class Planner:
         try:
             verslag["verzonnen_gesloten"] = self._sluit_verzonnen_eenmaal(staat)
             verslag["yes_needed_dedupe"] = self._sluit_yes_needed_duplicaten_eenmaal(staat)
-            voorstellen = planner_pass(self._luka_werk(), self._echte_storingen())
+            kapot = self._echte_storingen()
+            verslag["storing_hersteld_gesloten"] = self._sluit_herstelde_storingen(kapot)
+            voorstellen = planner_pass(self._luka_werk(), kapot)
             al_open = self._open_echte_bronnen()
             gemaakt: list[dict] = []
             for v in voorstellen:
