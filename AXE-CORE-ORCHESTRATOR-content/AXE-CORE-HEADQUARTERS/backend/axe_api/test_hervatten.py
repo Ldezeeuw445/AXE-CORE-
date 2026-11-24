@@ -51,3 +51,12 @@ def test_ander_doel_hervat_niet(monkeypatch, tmp_path):
         asyncio.run(al.run_agent_loop("doe X", "taak-2", ev))
     asyncio.run(al.run_agent_loop("doe iets anders", "taak-2", ev))
     assert not any("Resuming" in e for e in events)
+
+
+def test_uitstel_voor_de_eerste_stap_bewaart_niets(monkeypatch, tmp_path):
+    gezien, events, ev = _lus(monkeypatch, tmp_path, ["wacht", KLAAR])
+    with pytest.raises(WaitingForCapacity):
+        asyncio.run(al.run_agent_loop("doe Y", "taak-3", ev))
+    assert not any(f.name.startswith(".axe-hervat.json") for f in tmp_path.iterdir())
+    asyncio.run(al.run_agent_loop("doe Y", "taak-3", ev))
+    assert not any("Resuming" in e for e in events)

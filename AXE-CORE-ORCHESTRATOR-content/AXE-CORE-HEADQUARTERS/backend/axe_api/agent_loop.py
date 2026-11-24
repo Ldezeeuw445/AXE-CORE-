@@ -1754,7 +1754,7 @@ def _hervat_pad() -> str | None:
 
 def _bewaar_hervatting(doel: str, contents, transcript, stap: int, oplevering, coding: bool) -> None:
     pad = _hervat_pad()
-    if not pad:
+    if not pad or not transcript:  # nog niets gedaan: niets om naar terug te gaan
         return
     try:
         tmp = pad + ".tmp"
