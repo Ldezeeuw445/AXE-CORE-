@@ -1718,10 +1718,17 @@ async def run_agent_loop(
             raise TaskCancelled(f"task {task_id} was cancelled")
 
     try:
-        return await _lus(
+        uit = await _lus(
             request_text, task_id, on_event, pre_approved, read_only,
             api_key, stop_gevraagd,
         )
+        _wis_hervatting()
+        return uit
+    except (WaitingForCapacity, asyncio.CancelledError):
+        raise  # wachten op capaciteit of een herstart van de worker: hervatting blijft staan
+    except BaseException:  # klaar, mislukt, goedkeuring (die start bewust opnieuw): weg
+        _wis_hervatting()
+        raise
     finally:
         _HUIDIGE_BRIEF.reset(fiche)
         _HUIDIGE_WORKSPACE.reset(werkplek_fiche)
@@ -1732,6 +1739,56 @@ async def run_agent_loop(
         _HUIDIGE_DEVICE.reset(device_fiche)
         _HUIDIGE_DAX.reset(dax_fiche)
         _ALLEEN_GRATIS.reset(gratis_fiche)
+
+
+_HERVAT_BESTAND = ".axe-hervat.json"
+_HERVAT_MAX_UUR = 24
+
+
+def _hervat_pad() -> str | None:
+    taak, map_ = _HUIDIGE_TAAK.get(), _HUIDIGE_WORKSPACE.get()
+    if not taak or not map_:
+        return None
+    return os.path.join(map_, f"{_HERVAT_BESTAND}.{taak}")
+
+
+def _bewaar_hervatting(doel: str, contents, transcript, stap: int, oplevering, coding: bool) -> None:
+    pad = _hervat_pad()
+    if not pad:
+        return
+    try:
+        tmp = pad + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"doel": str(doel)[:2000], "stap": stap, "contents": contents, "transcript": transcript,
+                       "oplevering": oplevering, "coding": coding, "bewaard_op": time.time()}, f)
+        os.replace(tmp, pad)
+    except Exception as e:  # noqa: BLE001
+        log.warning("[agent_loop] hervatting bewaren faalde: %s", e)
+
+
+def _lees_hervatting(doel: str) -> dict[str, Any] | None:
+    """Alleen voor dezelfde taak en hetzelfde doel, en niet ouder dan een dag."""
+    pad = _hervat_pad()
+    if not pad or not os.path.exists(pad):
+        return None
+    try:
+        with open(pad, encoding="utf-8") as f:
+            d = json.load(f)
+        if (d.get("doel") != str(doel)[:2000] or time.time() - float(d.get("bewaard_op") or 0) > _HERVAT_MAX_UUR * 3600
+                or not isinstance(d.get("contents"), list) or int(d.get("stap") or 0) < 1):
+            return None
+        return d
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _wis_hervatting() -> None:
+    pad = _hervat_pad()
+    if pad:
+        try:
+            os.remove(pad)
+        except OSError:
+            pass
 
 
 async def _lus(
@@ -1755,8 +1812,16 @@ async def _lus(
     laatste_oplevering: dict[str, Any] | None = None
     coding_gevraagd = False
     zonder_actie = 0
+    eerste_stap = 1
+    hervat = _lees_hervatting(request_text)
+    if hervat:
+        contents, transcript = hervat["contents"], hervat["transcript"]
+        laatste_oplevering, coding_gevraagd = hervat.get("oplevering"), bool(hervat.get("coding"))
+        eerste_stap = int(hervat["stap"])
+        await on_event("axe.progress", f"Resuming at step {eerste_stap} after waiting for capacity "
+                       f"({len(transcript)} earlier steps kept).", {"hervat": eerste_stap})
 
-    for step in range(1, MAX_STEPS + 1):
+    for step in range(eerste_stap, MAX_STEPS + 1):
         if time.monotonic() - started > WALL_CLOCK_SECONDS:
             raise RuntimeError(
                 f"ran out of time after {step - 1} steps "
@@ -1764,7 +1829,14 @@ async def _lus(
             )
 
         await stop_gevraagd()
-        content = await _call_model(contents, api_key)
+        try:
+            content = await _call_model(contents, api_key)
+        except WaitingForCapacity:
+            # 24 nov live (corporateJets): 14x uitgesteld, en elke poging begon weer bij
+            # stap 1 -- dezelfde logs opnieuw, een nieuwe stoelrun van minuten. Bewaar waar
+            # hij was; de volgende poging gaat daar verder.
+            _bewaar_hervatting(request_text, contents, transcript, step, laatste_oplevering, coding_gevraagd)
+            raise
         parts = content.get("parts") or []
         contents.append({"role": "model", "parts": parts})
 
