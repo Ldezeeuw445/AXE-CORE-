@@ -192,10 +192,10 @@ def test_jets_stoppen_bij_blijvende_429_na_backoff_en_roteren_per_uur():
         if len(gevraagd) >= 3:
             return 429, ""
         return 200, json.dumps({"ac": []})
-    import pytest
-    with pytest.raises(RuntimeError, match="429"):
-        w.haal_jets(get, 0, NU.replace(hour=0), backoff=0)
     # Twee staarten gelukt; de derde blijft 429 geven over alle backoff-pogingen.
+    # Die twee antwoorden zijn echte data: geen fout, wel eerlijk 'limiet' in info.
+    rijen, info = w.haal_jets(get, 0, NU.replace(hour=0), backoff=0)
+    assert info["limiet"] is True and info["los_gevraagd"] == 2
     assert len(gevraagd) == 2 + w.ADSB_BACKOFF_POGINGEN
     eerste_uur = gevraagd[0]
     gevraagd.clear()
@@ -203,6 +203,17 @@ def test_jets_stoppen_bij_blijvende_429_na_backoff_en_roteren_per_uur():
                 else (gevraagd.append(u.rsplit("/", 1)[1]) or (200, json.dumps({"ac": []}))),
                 0, NU.replace(hour=1), backoff=0)
     assert gevraagd[0] != eerste_uur and len(gevraagd) == w.JETS_PER_RONDE
+
+
+def test_jets_meteen_afgekapt_zonder_enig_antwoord_is_een_fout():
+    import pytest
+
+    def get(url, _h=None):
+        if url.endswith(("/ladd", "/pia")):
+            return 200, json.dumps({"ac": []})
+        return 429, ""
+    with pytest.raises(RuntimeError, match="429"):
+        w.haal_jets(get, 0, NU.replace(hour=0), backoff=0)
 
 
 def test_jets_eerste_staart_via_losse_vraag():

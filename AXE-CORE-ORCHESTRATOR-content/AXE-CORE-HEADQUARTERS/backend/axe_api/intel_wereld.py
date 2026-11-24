@@ -328,8 +328,11 @@ def haal_jets(get: Getter, pauze: float, nu: datetime | None = None,
             per_staart[reg["tail"].upper()] = ac[0]
         if pauze:
             time.sleep(pauze)
-    if limiet and not per_staart:
-        # Niets gezien én afgekapt: dat is geen "0 jets in de lucht".
+    if limiet and not per_staart and not gevraagd:
+        # Meteen afgekapt, geen enkele staart beantwoord: dat is geen "0 jets in de lucht".
+        # 24 nov 19:35/20:35: 4 staarten antwoordden ('niet in de lucht'), de 5e gaf 429 --
+        # dat telde als fout en de feed bleef op 18:35 staan. Die 4 antwoorden zijn echte,
+        # verse data; de afgekapte ronde staat eerlijk in info (limiet, los_gevraagd).
         raise RuntimeError(f"adsb_lol limiet (429) na {gevraagd} losse vragen; niets in beeld")
     if len(bulk_fouten) == 2 and not gevraagd:
         raise RuntimeError("adsb_lol onbereikbaar: " + "; ".join(bulk_fouten) + ("; 429" if limiet else ""))
