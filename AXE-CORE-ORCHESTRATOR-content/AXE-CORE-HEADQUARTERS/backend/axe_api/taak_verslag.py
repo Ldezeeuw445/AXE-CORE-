@@ -44,6 +44,10 @@ def verslag(taak: dict[str, Any], status: str, result: dict[str, Any] | None = N
             werkte = f"bewijs: {_kort(ver.get('command') or 'gecontroleerd', 120)}"
         elif ver:
             werkte = "gecontroleerd"
+    acc = r.get("acceptatie") if isinstance(r.get("acceptatie"), dict) else {}
+    if acc.get("regel"):
+        # Sprint 3: de meting voor -> na hoort bij wat werkte, niet alleen het bewijs van de agent.
+        werkte = (werkte + "; " if werkte else "") + f"acceptatie: {_kort(acc['regel'], 200)}"
     faalde = "" if gelukt else _fout(error or r.get("error")) or "onbekende fout"
     if gelukt and op and op.get("compleet") is False:
         faalde = f"niet compleet: {', '.join(op.get('ontbreekt') or []) or 'niet alles gecommit'}"

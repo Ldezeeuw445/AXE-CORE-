@@ -100,7 +100,7 @@ def test_weiger_task_worker_zonder_agent_loop_imports():
          "beslis_beleid.py", "missies.py", "mission_engine.py", "dax.py",
          "northsea_desk_handler.py", "provider_router.py", "dax_bouw.py", "bouw_publiceer.py",
          "stoelen_actueel.py",  # provider_router leest hem sinds 20 nov (aa839810)
-         "klaar_regels.py", "sleutel_teller.py"},  # agent_loop sinds 22/23 nov
+         "klaar_regels.py", "sleutel_teller.py", "acceptatie.py"},  # agent_loop sinds 22/23 nov; acceptatie 24 nov
     ) == []
     assert vs.ontbrekende_worker_imports({"push_meldingen.py"}, set()) == []
 

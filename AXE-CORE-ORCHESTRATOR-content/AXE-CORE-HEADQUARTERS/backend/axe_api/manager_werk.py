@@ -510,10 +510,14 @@ def maak_taak(db: Any, agent: str, opdracht: str, nu: datetime, bron_id: Any = N
         if besluit == "geblokkeerd":
             _escaleer(db, agent, opdracht, vinger)
         return None
+    import acceptatie as _acc
+    acc = _acc.maak(db, opdracht)
+    acc_tekst = _acc.doel_tekst(acc)
     rij = {
         "title": f"{NAAM.get(agent, agent).split(' (')[0]}: {opdracht[:90]}",
         "goal": (f"You are {agent}, one of the AXE managers, working for Luka like Grok Bot does: you do the work "
                  f"yourself. Task from your conversation with Luka:\n\n{opdracht}\n\n"
+                 + (f"{acc_tekst}\n\n" if acc_tekst else "") +
                  "Use your tools: read the relevant code, logs and state, then act. Stay inside your limits "
                  "(no mail, no money, no orders, no approvals on Luka's behalf, no production deploys outside the "
                  "normal path, no deleting). If something truly needs Luka (a login, a payment, a decision), say "
@@ -527,7 +531,7 @@ def maak_taak(db: Any, agent: str, opdracht: str, nu: datetime, bron_id: Any = N
         "execution_mode": "execute",
         "metadata": {"agent": agent, "manager": True, "uit_gesprek": True, "bericht_id": bron_id, "app": "axe_core",
                      "app_naam": APP_VAN.get(agent, ""), "idem": idem, "vinger": vinger,
-                     "poging": _mb.poging(bestaand, vinger)},
+                     "poging": _mb.poging(bestaand, vinger), "acceptatie": acc},
         "created_at": nu.isoformat(),
     }
     try:

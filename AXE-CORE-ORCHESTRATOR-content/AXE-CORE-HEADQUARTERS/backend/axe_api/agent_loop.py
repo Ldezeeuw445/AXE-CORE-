@@ -1854,6 +1854,21 @@ async def _lus(
                     "expect": expect, "exit_code": proof.get("exit_code"), "passed": passed,
                 })
 
+                acc_oordeel = None
+                if passed:
+                    # Sprint 3: het bewijs van de agent zegt dat er iets bestaat; de acceptatie
+                    # meet opnieuw of het probleem echt weg is (feed: voor -> na).
+                    import acceptatie as _acceptatie
+                    acc_oordeel = await asyncio.to_thread(
+                        _acceptatie.na_meting_voor_taak, _db_voor_stoelen(), _HUIDIGE_TAAK.get())
+                    if (acc_weigering := _acceptatie.weigering(acc_oordeel)):
+                        transcript.append({"step": step, "tool": "finish", "refused": "acceptatie",
+                                           "acceptatie": acc_oordeel.get("regel")})
+                        await on_event("verification.failed", "Acceptance not met: " + acc_oordeel["regel"][:300],
+                                       {"acceptatie": acc_oordeel.get("regel")})
+                        responses.append({"functionResponse": {"name": "finish", "response": {
+                            "accepted": False, "reason": acc_weigering}}})
+                        continue
                 if passed:
                     await on_event(
                         "verification.passed",
@@ -1861,6 +1876,7 @@ async def _lus(
                         {"verify_command": verify_command, "expect": expect},
                     )
                     return {
+                        **({"acceptatie": {k: v for k, v in acc_oordeel.items() if k != "na"}} if acc_oordeel else {}),
                         **motor_velden(),
                         "summary": summary,
                         "steps_used": step,

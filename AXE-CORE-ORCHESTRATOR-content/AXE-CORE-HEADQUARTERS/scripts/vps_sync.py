@@ -163,6 +163,8 @@ MANIFEST = {
     "/opt/axe-core-api/rij.py": ("backend/axe_api/rij.py", "axe-core-api"),
     "/opt/axe-core-api/manager_betrouwbaar.py": ("backend/axe_api/manager_betrouwbaar.py", "axe-core-api"),
     "/opt/axe-core-api/klaar_regels.py": ("backend/axe_api/klaar_regels.py", "axe-task-worker"),
+    # Sprint 3 (24 nov): acceptatie per taaktype, meting voor/na. manager_werk maakt hem, agent_loop toetst hem.
+    "/opt/axe-core-api/acceptatie.py": ("backend/axe_api/acceptatie.py", "axe-task-worker"),
     "/opt/axe-core-api/manager_context.py": ("backend/axe_api/manager_context.py", "axe-core-api"),
     "/opt/axe-core-api/taak_voortgang.py": ("backend/axe_api/taak_voortgang.py", "axe-task-worker"),
     "/opt/axe-core-api/taak_verslag.py": ("backend/axe_api/taak_verslag.py", "axe-task-worker"),
@@ -251,13 +253,13 @@ OPTIONAL_WHEN_MISSING = {
 # Wie wie nodig heeft. Ship je de één zonder de ander, dan start de worker niet.
 WORKER_IMPORTS = {
     "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py", "northsea_desk_handler.py", "dax_bouw.py", "bouw_publiceer.py"),
-    "agent_loop.py": ("klaar_regels.py", "device_actions.py", "agent_workspace.py", "beslis_beleid.py", "provider_router.py", "sleutel_teller.py"),
+    "agent_loop.py": ("klaar_regels.py", "device_actions.py", "agent_workspace.py", "beslis_beleid.py", "provider_router.py", "sleutel_teller.py", "acceptatie.py"),
     "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "grok_managers.py", "taak_fout.py", "gezondheid.py", "memory_schrijfhek.py", "geheimen.py", "device_notify.py", "modelbox.py", "northsea_mailwachter.py", "sleutels.py", "stoelen_actueel.py", "stem_vloer.py", "manager_draad.py", "northsea_opruimen.py", "rij.py", "sleutel_teller.py", "markt_dag.py", "mt5_bridge_status.py", "dax_werk.py"),
     "memory_schrijfhek.py": ("geheimen.py",),
     "provider_router.py": ("stoelen_actueel.py",),
     "staande_diensten.py": ("manager_werk.py", "grok_managers.py", "dax_bouw.py", "intel_bewaker.py", "intel_feeds.py",
                             "intel_wereld.py", "intel_jets_registry.json"),
-    "manager_werk.py": ("rij.py", "gedeeld_log.py", "manager_betrouwbaar.py", "manager_context.py"),
+    "manager_werk.py": ("rij.py", "gedeeld_log.py", "manager_betrouwbaar.py", "manager_context.py", "acceptatie.py"),
     "taak_verslag.py": ("manager_betrouwbaar.py", "klaar_regels.py"),
     "manager_betrouwbaar.py": ("klaar_regels.py",),
     "rij.py": ("gedeeld_log.py",),
