@@ -257,6 +257,13 @@ class TaskWorker:
 
     async def _draai(self, task: dict[str, Any], heeft_slot: bool = False) -> bool:
         handler = kies_handler(self.handlers, task.get("capability") or "general")
+        if not handler and task.get("capability") == "planner" and hasattr(self.repo, "geef_terug_aan_planner"):
+            # Van de Planner op de Mac, niet van ons: teruggeven i.p.v. laten falen.
+            terug = await asyncio.to_thread(
+                self.repo.geef_terug_aan_planner, task["id"], self.worker_id, task["lease_token"],
+            )
+            if terug:
+                return False
         if not handler:
             await asyncio.to_thread(
                 self.repo.transition,

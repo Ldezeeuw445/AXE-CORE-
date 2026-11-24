@@ -343,6 +343,28 @@ class TaskRepository:
             "p_delay_seconds": delay_seconds, "p_reason": reason,
         }).execute().data
 
+    def geef_terug_aan_planner(self, task_id: str, worker_id: str, lease_token: str) -> bool:
+        """Een planner-taak die toch in de VPS-rij belandde: terug op 'pending'.
+
+        De VPS heeft geen handler voor 'planner'; de Planner op de Mac claimt zijn
+        eigen taken alleen als ze 'pending' staan. Eerst liet de worker ze als
+        no_handler falen (24 nov: 'Build next step: Trading OS' met klaar werk
+        erin). Alleen met de eigen lease; de poging komt terug.
+        """
+        rij = (self._db().table("core_tasks").select("attempt").eq("id", task_id)
+               .eq("lease_token", lease_token).limit(1).execute().data) or []
+        if not rij:
+            return False
+        bijgewerkt = (self._db().table("core_tasks").update({
+            "status": "pending", "worker_id": None, "lease_token": None,
+            "lease_expires_at": None, "heartbeat_at": None,
+            "attempt": max(0, int(rij[0].get("attempt") or 0) - 1),
+        }).eq("id", task_id).eq("lease_token", lease_token).execute().data) or []
+        if bijgewerkt:
+            self.append_event(task_id, "task.returned", actor_type="worker", actor_id=worker_id,
+                              message="Planner task returned to the Planner (no VPS handler).")
+        return bool(bijgewerkt)
+
     def transition(
         self, task_id: str, status: str, *, worker_id: str | None = None,
         lease_token: str | None = None, result: dict[str, Any] | None = None,

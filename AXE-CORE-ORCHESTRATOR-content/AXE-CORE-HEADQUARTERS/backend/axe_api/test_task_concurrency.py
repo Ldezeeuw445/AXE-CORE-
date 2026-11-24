@@ -403,3 +403,27 @@ def test_terugzetten_na_stop_crasht_nooit():
             raise RuntimeError("lease_lost")
 
     assert tw.terugzetten_na_stop(Kapot(), maak_taak(2), None, "w") is False
+
+
+def test_planner_taak_gaat_terug_naar_de_planner_in_plaats_van_falen():
+    class Repo(NepRepo):
+        def __init__(self, taken):
+            super().__init__(taken)
+            self.teruggegeven: list[str] = []
+
+        def geef_terug_aan_planner(self, task_id, worker_id, lease_token):
+            self.teruggegeven.append(task_id)
+            return True
+
+    repo = Repo([maak_taak(1, capability="planner")])
+    worker = TaskWorker(repo, {"agentic": lambda t, c: None}, worker_id="vps:slot-0")
+    asyncio.run(worker.run_once())
+    assert repo.teruggegeven == ["taak-1"]
+    assert ("taak-1", "failed") not in repo.overgangen
+
+
+def test_onbekende_capability_faalt_nog_steeds_als_no_handler():
+    repo = NepRepo([maak_taak(2, capability="iets_onbekends")])
+    worker = TaskWorker(repo, {"agentic": lambda t, c: None}, worker_id="vps:slot-0")
+    asyncio.run(worker.run_once())
+    assert ("taak-2", "failed") in repo.overgangen
