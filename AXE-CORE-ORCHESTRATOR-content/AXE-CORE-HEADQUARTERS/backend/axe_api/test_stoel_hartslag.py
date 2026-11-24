@@ -41,3 +41,15 @@ def test_lees_stoelen_gebruikt_de_hartslag():
     db = Db({"core_coding_seats": [rij("mac-mini-van-luka-6", "claude", 6)],
              "core_computer_workers": [{"device_id": "mac-mini-van-luka-6", "heartbeat_at": NU.isoformat()}]})
     assert pr.kies_stoel(pr.lees_stoelen(db), familie="claude")["seat_id"] == "claude"
+
+
+def test_volle_stoel_volgt_de_mac_ook_na_een_nieuwe_naam():
+    import device_actions as da
+    da._VOLLE_STOELEN.clear()
+    uit = '{"result":"You\'ve hit your session limit · resets 8:20am (Europe/Amsterdam)"}'
+    assert da.onthoud_volle_stoel("imac-3", "claude3", uit)
+    db = Db({"core_coding_seats": [rij("main-imac-luka", "claude3", 0), rij("mac-mini-van-luka-6", "claude2", 0)],
+             "core_computer_workers": []})
+    gekozen = pr.kies_stoel(pr.lees_stoelen(db), familie="claude")
+    assert gekozen["seat_id"] == "claude2" and gekozen["machine"] == "mac-mini-van-luka-6"
+    da._VOLLE_STOELEN.clear()

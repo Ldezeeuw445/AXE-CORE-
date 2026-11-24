@@ -382,8 +382,18 @@ def onthoud_volle_stoel(device: str, stoel: str, uitvoer: str, nu: float | None 
         return None
     tot = parse_limiet_tot(uitvoer, nu)
     if tot:
-        _VOLLE_STOELEN[(device, stoel)] = tot
+        _VOLLE_STOELEN[(_mac(device), stoel)] = tot
     return tot
+
+
+def _mac(device: str) -> str:
+    """iMac / Mac mini: apparaatnamen wisselen na een herstart (imac-3 -> main-imac-luka)."""
+    from stoelen_actueel import mac_label
+    return mac_label(device) or str(device)
+
+
+def stoel_vol_tot(machine: str, stoel: str) -> float:
+    return _VOLLE_STOELEN.get((_mac(machine), stoel), 0.0)
 
 
 def _vrije_stoelen(db, nu: float) -> dict[str, list[str]]:
@@ -417,7 +427,7 @@ def _vrije_stoelen(db, nu: float) -> dict[str, list[str]]:
             nog_vol = bool(tot) and datetime.fromisoformat(str(tot).replace("Z", "+00:00")).timestamp() > nu
         except ValueError:
             nog_vol = bool(r.get("rate_limited"))
-        nog_vol = nog_vol or _VOLLE_STOELEN.get((m, str(r.get("seat_id"))), 0) > nu
+        nog_vol = nog_vol or stoel_vol_tot(m, str(r.get("seat_id"))) > nu
         if r.get("logged_in") and not nog_vol:
             lijst.append(str(r.get("seat_id")))
     return uit

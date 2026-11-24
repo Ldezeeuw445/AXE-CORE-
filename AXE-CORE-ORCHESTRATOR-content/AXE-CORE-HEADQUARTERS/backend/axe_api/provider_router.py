@@ -311,6 +311,23 @@ def meld_tegoed_eenmaal(
         return False
 
 
+def _met_vps_limieten(rijen: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Limieten die de VPS zelf terugkreeg (device_actions), ook als de Mac ze nog niet meldt."""
+    try:
+        from device_actions import stoel_vol_tot
+    except Exception:  # noqa: BLE001
+        return rijen
+    nu = time.time()
+    uit = []
+    for r in rijen:
+        tot = stoel_vol_tot(str(r.get("machine") or ""), str(r.get("seat_id") or ""))
+        if tot > nu:
+            r = {**r, "rate_limited": True,
+                 "rate_limit_until": datetime.fromtimestamp(tot, timezone.utc).isoformat()}
+        uit.append(r)
+    return uit
+
+
 def lees_stoelen(db: Any) -> list[dict[str, Any]]:
     if db is None:
         return []
@@ -325,7 +342,7 @@ def lees_stoelen(db: Any) -> list[dict[str, Any]]:
             workers = db.table("core_computer_workers").select("device_id,heartbeat_at").execute().data or []
         except Exception:  # noqa: BLE001
             workers = []
-        return actuele_stoelen(met_worker_hartslag(rijen, workers))
+        return _met_vps_limieten(actuele_stoelen(met_worker_hartslag(rijen, workers)))
     except Exception as exc:  # noqa: BLE001
         log.warning("core_coding_seats lezen faalde: %s", exc)
         return []
