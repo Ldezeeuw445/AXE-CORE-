@@ -54,6 +54,18 @@ export async function ruimWorktree(git, hoofdRepo, pad, { basis = null, naRun = 
   return { pad, actie, branch: f.branch };
 }
 
+/** Open werk van een agent vastleggen op zijn EIGEN axe/-branch. '' als er niets
+ *  te bewaren is of de branch niet van een agent-run is (nooit orchestrator). */
+export async function bewaarWerk(git, root) {
+  const branch = await git(root, 'branch', '--show-current');
+  if (!branch.startsWith('axe/')) return '';
+  if (!(await git(root, 'status', '--porcelain'))) return '';
+  await git(root, 'add', '-A');
+  await git(root, 'commit', '--no-verify', '-m',
+    'AXE: werk van de agent bewaard (agent committe niet zelf; niet getest)');
+  return (await git(root, 'rev-parse', '--short', 'HEAD')) + ' (door de worker vastgelegd, niet getest)';
+}
+
 /** Hoofdcheckout van een worktree, uit zijn .git-bestand ("gitdir: <repo>/.git/worktrees/<naam>"). */
 export async function hoofdRepoVan(pad, lees) {
   try {

@@ -38,7 +38,7 @@ import { fileURLToPath } from 'node:url';
 import { reportCodingSeats } from './codingSeats.mjs';
 import { maakLeesWeigering, naarDezeMac } from './leesRegels.mjs';
 import { schakel as macSchakel } from './macSchakelaars.mjs';
-import { ruimWorktree, veegWorktrees, hoofdRepoVan } from './worktreeOpruim.mjs';
+import { ruimWorktree, veegWorktrees, hoofdRepoVan, bewaarWerk } from './worktreeOpruim.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -664,6 +664,18 @@ const gitStreng = async (root, ...a) => {
   return r.out === '(no output)' ? '' : r.out;
 };
 const WORKTREE_MAP = join(homedir(), '.axe', 'worktrees');
+/* 24 nov: met alleen acceptEdits weigerde Claude Code headless ELK shell-commando --
+   geen tests, geen commit ("git add/git commit zijn hier geblokkeerd", 23 nov). De
+   werkbon vraagt "af is af: getest en gecommit". Dit is precies wat daarvoor nodig is;
+   push, merge, rm, curl en vrije shell blijven dicht. */
+const CLAUDE_MAG_DRAAIEN = [
+  'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git log:*)', 'Bash(git show:*)',
+  'Bash(git add:*)', 'Bash(git commit:*)',
+  'Bash(npx vitest:*)', 'Bash(npx tsc:*)', 'Bash(npx eslint:*)', 'Bash(npm test:*)', 'Bash(npm run test:*)',
+  'Bash(npm run typecheck:*)', 'Bash(npm run lint:*)',
+  'Bash(python3 -m pytest:*)', 'Bash(pytest:*)', 'Bash(uvx --with-requirements requirements.txt --with pytest pytest:*)',
+  'Bash(node --test:*)', 'Bash(node --check:*)',
+];
 const startBuild = git(REPO, 'rev-parse', '--short', 'HEAD').then(s => s.trim()).catch(() => '');
 /** Moet gelijk zijn aan COMPUTER_PROTOCOL in src/domain/tools/computerProtocol.ts (een test houdt ze gelijk). */
 const WORKER_PROTOCOL = 1;
@@ -924,7 +936,8 @@ async function execute(payload) {
       if (!prompt) throw new Error('claude_code.run needs a prompt');
       const bin = vindBin('claude', 'AXE_CLAUDE_BIN');
       const seat = String(args.seat ?? 'claude');
-      const argv = ['-p', prompt, '--output-format', 'json', '--permission-mode', 'acceptEdits'];
+      const argv = ['-p', prompt, '--output-format', 'json', '--permission-mode', 'acceptEdits',
+        '--allowedTools', ...CLAUDE_MAG_DRAAIEN];
       const model = String(args.model ?? '').trim();
       if (model) argv.push('--model', model);
       return metOplevering(root, branch, basis, hoofdRoot, await run(bin, argv, root, seatChildEnv(seat), AGENT_TIMEOUT_MS));
@@ -959,15 +972,29 @@ async function execute(payload) {
    blok (device_actions.oplevering) naast de drie kopjes van de agent zelf. */
 async function metOplevering(root, branch, basis, hoofdRoot, uit) {
   if (!basis) return uit;
+  const bewaard = await bewaarOpenWerk(root, hoofdRoot);
   const veilig = async (...a) => { try { return (await git(root, ...a)).trim(); } catch { return ''; } };
   const commits = await veilig('log', '--oneline', `${basis}..HEAD`);
   const diff = await veilig('diff', '--stat', basis);
   const open = await veilig('status', '--porcelain');
   return `${uit}\n\n## Oplevering (Mac)\nbranch: ${branch}\nworktree: ${root}\n`
+    + (bewaard ? `bewaard: ${bewaard}\n` : '')
     + `commits:\n${commits || '(geen commits)'}\n`
     + (open ? `niet gecommit:\n${open}\n` : '')
     + `diff:\n${diff || '(geen wijzigingen)'}\n`
     + await naRunOpruimen(root, hoofdRoot, basis);
+}
+
+/* 24 nov (Luka: "niet iets voor niks gemaakt"): een agent die bestanden aanpaste
+   maar niet committe -- Claude Code mocht headless geen git draaien, Codex' sandbox
+   kan .git van een worktree niet schrijven -- liet zijn werk los in de map achter.
+   Vier echte, goede wijzigingen lagen zo op 23 nov ongezien in ~/.axe/worktrees.
+   Nu legt de worker zulk werk zelf vast op de EIGEN axe/-branch van de run (nooit
+   op orchestrator): het gaat niet verloren en de review ziet het. 'bewaard:' zegt
+   de VPS dat de agent het niet zelf testte en committe -- dus niet klaar. */
+async function bewaarOpenWerk(root, hoofdRoot) {
+  if (!root.startsWith(WORKTREE_MAP + sep) || root === hoofdRoot) return '';
+  try { return await bewaarWerk(gitStreng, root); } catch { return ''; }
 }
 
 /* 24 nov: een run zonder commits en zonder wijzigingen laat niets achter --

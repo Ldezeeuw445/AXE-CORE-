@@ -1,15 +1,22 @@
 /**
  * intelProxyGateway — calls Trading OS's `intel-proxy` Supabase edge
  * function (same Supabase project this app already uses) for the OSINT map
- * layers that AXE Core's own VPS (`/osint/all`, see osint.ts) doesn't carry:
- * GDELT conflict/war-zone events, NOAA weather alerts, WHO health alerts,
- * corporate jets (ADS-B + named-owner registry) and AIS vessels.
+ * layers that AXE Core's own VPS doesn't carry: GDELT conflict/war-zone
+ * events, NOAA weather alerts, WHO health alerts and AIS vessels.
+ *
+ * Corporate jets are the exception: the proxy's `corporateJets` action needs
+ * a logged-in session or an Unusual Whales token and has given 401 since
+ * that subscription lapsed (see intel_wereld.py's docstring, 9 nov 2026).
+ * `fetchCorporateJets` below reads the VPS's own `/osint/air` instead — the
+ * same ADS-B feed enriched with the CORPORATE_JETS registry that already
+ * runs live, free, and without the proxy.
  *
  * Every function here returns [] on any failure (network, auth, missing
  * provider key, malformed response) — never a placeholder point. The map
  * layer simply shows nothing for that source rather than guessing.
  */
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { osintLayer } from '@/infrastructure/gateways/axeCoreApiService';
 
 async function callIntelProxy<T>(action: string, args: Record<string, unknown> = {}): Promise<T | null> {
   const sb = getSupabase();
@@ -100,21 +107,27 @@ export interface JetPoint extends MapPoint {
 }
 
 export async function fetchCorporateJets(): Promise<JetPoint[]> {
-  const res = await callIntelProxy<{ data?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>('corporateJets', {});
-  const rows = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+  let rows: Array<Record<string, unknown>>;
+  try {
+    const layer = await osintLayer('air');
+    rows = layer.status === 'error' ? [] : layer.items;
+  } catch {
+    return [];
+  }
   const out: JetPoint[] = [];
   for (const r of rows) {
+    if (r.is_corporate !== true) continue;
     const lat = num(r.lat), lon = num(r.lon);
     if (lat === null || lon === null) continue;
-    const operator = String(r.company ?? 'Unknown operator');
+    const operator = String(r.owner ?? r.callsign ?? 'Unknown operator');
     out.push({
       id: `jet-${String(r.icao24 ?? out.length)}`,
       lat, lon,
       label: operator,
-      detail: typeof r.aircraft === 'string' ? r.aircraft : undefined,
+      detail: typeof r.aircraft_model === 'string' ? r.aircraft_model : undefined,
       operator,
-      altitude: num(r.altitude) ?? 0,
-      speed: num(r.speed) ?? 0,
+      altitude: num(r.altitude_ft) ?? 0,
+      speed: num(r.speed_kt) ?? 0,
       source: 'ADS-B',
     });
   }

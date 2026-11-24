@@ -29,6 +29,15 @@ from typing import Any
 
 WACHTRIJ_VAST_NA = timedelta(hours=2)
 ACTIEF_VAST_NA = timedelta(hours=2)
+# 23 nov: "Zelf oplossen: Sleutel dax-northsea-01 werkt niet" stond 2 dagen in
+# 'running' -- actief_vast meldde het keer op keer, maar de self-fix-taak die
+# dat opleverde heeft geen schrijfrecht op core_tasks en kon de oude rij dus
+# nooit zelf afsluiten. agent_loop's eigen harde budget is 1800s; een taak die
+# daar vele malen voorbij is kreeg zijn lease nooit terug (worker weg, niemand
+# claimt hem opnieuw) en komt nooit meer vanzelf los. Zes uur is ruim voorbij
+# elke eerlijke poging (ook met DAX-herkansingen): daarna is het geen "nog
+# bezig" meer maar dood.
+ACTIEF_DOOD_NA = timedelta(hours=6)
 VOORSTEL_OUD_NA = timedelta(days=30)
 LUKA_WACHT_LANG_NA = timedelta(days=1)
 MAX_OPRUIMEN_PER_PULSE = 20
@@ -98,6 +107,16 @@ def wees_wachters(rijen: list[dict[str, Any]], met_kaart: set[str], nu: datetime
     """
     return [r for r in rijen if r.get("status") == "waiting_approval" and str(r.get("id")) not in met_kaart
             and _leeftijd(r, nu) >= LUKA_WACHT_LANG_NA and not NIET_VANZELF_WEG.search(str(r.get("title") or ""))]
+
+
+def vastgelopen_actieve_taken(rijen: list[dict[str, Any]], nu: datetime) -> list[dict[str, Any]]:
+    """ACTIEF-taken die al zo lang stilstaan dat ze dood zijn, niet "nog bezig".
+
+    Ouder: oudste eerst, zodat `_faal_vastgelopen_taken` bij MAX_OPRUIMEN_PER_PULSE
+    de langst vastzittende als eerste opruimt.
+    """
+    return sorted((r for r in rijen if r.get("status") in ACTIEF and _leeftijd(r, nu) >= ACTIEF_DOOD_NA),
+                  key=lambda r: _leeftijd(r, nu), reverse=True)
 
 
 def dubbele_voorstellen(rijen: list[dict[str, Any]]) -> list[dict[str, Any]]:

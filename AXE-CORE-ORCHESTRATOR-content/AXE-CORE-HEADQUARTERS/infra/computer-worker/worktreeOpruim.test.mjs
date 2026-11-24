@@ -5,7 +5,7 @@ import { mkdtempSync, writeFileSync, readFileSync, existsSync, utimesSync } from
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { beslis, ruimWorktree, veegWorktrees, hoofdRepoVan } from './worktreeOpruim.mjs';
+import { beslis, ruimWorktree, veegWorktrees, hoofdRepoVan, bewaarWerk } from './worktreeOpruim.mjs';
 
 test('beslis: open werk blijft altijd, lege run gaat weg, commits houden de branch', () => {
   assert.equal(beslis({ open: ' M a.ts', commits: 0, leeftijdUur: 99, naRun: false }), 'laten');
@@ -61,4 +61,20 @@ test('echte git: veegronde haalt oude schone weg, houdt branch met commits en op
   assert.ok(!existsSync(leeg) && !existsSync(werk) && existsSync(open) && existsSync(jong));
   assert.equal(g(repo, 'branch', '--list', 'axe/werk').replace('*', '').trim(), 'axe/werk', 'het werk blijft op de branch');
   assert.equal(readFileSync(join(open, 'c.txt'), 'utf8'), 'nog niet gecommit');
+});
+
+test('echte git: open werk van een agent wordt op zijn eigen branch bewaard, nooit op orchestrator', async () => {
+  const { repo, maak } = repoMetWorktrees();
+  const wt = maak('run1');
+  writeFileSync(join(wt, 'nieuw.ts'), 'export const x = 1;\n');
+  writeFileSync(join(wt, 'a.txt'), 'aangepast');
+  const uit = await bewaarWerk(gitStreng, wt);
+  assert.match(uit, /^[0-9a-f]{7,} \(door de worker vastgelegd, niet getest\)$/);
+  assert.equal(g(wt, 'status', '--porcelain'), '');
+  assert.equal(g(repo, 'show', 'axe/run1:nieuw.ts'), 'export const x = 1;');
+  assert.equal(await bewaarWerk(gitStreng, wt), '', 'niets meer te bewaren');
+
+  writeFileSync(join(repo, 'b.txt'), 'op orchestrator');
+  assert.equal(await bewaarWerk(gitStreng, repo), '', 'orchestrator wordt nooit aangeraakt');
+  assert.equal(g(repo, 'status', '--porcelain'), '?? b.txt');
 });

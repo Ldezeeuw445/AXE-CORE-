@@ -672,6 +672,35 @@ def _sluit_wees_wachters(db: Any, rijen: list[dict[str, Any]], nu: datetime) -> 
     return gedaan
 
 
+def _faal_vastgelopen_taken(db: Any, rijen: list[dict[str, Any]], nu: datetime) -> list[dict[str, Any]]:
+    """ACTIEF-taken die al > ACTIEF_DOOD_NA geen beweging maken: zelf force-failen.
+
+    23 nov: een self-fix-taak (`_eerst_zelf`) kan een vastgelopen rij in
+    core_tasks nooit zelf sluiten -- hij heeft geen schrijfrecht op die tabel,
+    alleen run_shell/read_file/write_file. Zonder dit bleef "actief_vast" dus
+    elke pulse opnieuw dezelfde onuitvoerbare taak uitzetten. Terug op
+    'failed' is veilig: `claim_next_core_task` claimt nooit een 'failed'-rij,
+    en de metadata wijst terug hoe je hem herstart als het toch een levende
+    taak was.
+    """
+    import projecten_bewaker as pb
+    gedaan = []
+    for r in pb.vastgelopen_actieve_taken(rijen, nu)[:pb.MAX_OPRUIMEN_PER_PULSE]:
+        meta = r.get("metadata") if isinstance(r.get("metadata"), dict) else {}
+        try:
+            db.table("core_tasks").update({
+                "status": "failed",
+                "error": {"code": "stuck_no_progress",
+                          "message": f"projectsmgr: geen beweging na {pb._duur(pb._leeftijd(r, nu))}, force-failed"},
+                "metadata": {**meta, "opgeruimd_door": "projectsmgr", "reden": "vastgelopen: geen beweging, nooit afgesloten",
+                             "opgeruimd_op": nu.isoformat(), "terugzetten": "status weer op queued om opnieuw te proberen"},
+            }).eq("id", r["id"]).eq("status", r["status"]).execute()
+            gedaan.append(r)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("projectsmgr: kon vastgelopen taak %s niet force-failen (%s)", r.get("id"), exc)
+    return gedaan
+
+
 def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
     """Eigenaar van de takenlijst: ziet wat stilstaat, ruimt dubbels op, roept
     Luka alleen voor wat hij zelf niet kan oplossen."""
@@ -682,7 +711,8 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
     rijen = [r for r in rijen if r.get("id") not in weg]
     gearchiveerd = _archiveer_verouderde_voorstellen(db, rijen, nu)
     wees = _sluit_wees_wachters(db, rijen, nu)
-    weg = {r.get("id") for r in gearchiveerd} | {r.get("id") for r in wees}
+    vastgelopen = _faal_vastgelopen_taken(db, rijen, nu)
+    weg = {r.get("id") for r in gearchiveerd} | {r.get("id") for r in wees} | {r.get("id") for r in vastgelopen}
     rijen = [r for r in rijen if r.get("id") not in weg]
 
     bevindingen = pb.beoordeel(rijen, nu)
@@ -703,7 +733,9 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
             [f"{len(gearchiveerd)} verouderde voorstellen gearchiveerd (een maand niemand opgepakt, terug te zetten): "
              + "; ".join(str(r.get('title'))[:60] for r in gearchiveerd[:3])] if gearchiveerd else []) + (
             [f"{len(wees)} taken gesloten die op jouw ja wachtten zonder dat er een kaart was (je kon ze nergens goedkeuren): "
-             + "; ".join(str(r.get('title'))[:60] for r in wees[:3])] if wees else []), app="AXE Core",
+             + "; ".join(str(r.get('title'))[:60] for r in wees[:3])] if wees else []) + (
+            [f"{len(vastgelopen)} vastgelopen taken force-failed (geen beweging, terug te zetten op queued): "
+             + "; ".join(str(r.get('title'))[:60] for r in vastgelopen[:3])] if vastgelopen else []), app="AXE Core",
         rustig="Op de takenlijst staat niets stil.")
     return {
         "job": "projects and tasks",
@@ -713,6 +745,7 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
         "opgeruimd": len(opgeruimd),
         "gearchiveerd": len(gearchiveerd),
         "wees_gesloten": len(wees),
+        "vastgelopen_gefaald": len(vastgelopen),
         "chat": chat,
         "dagoverzicht": overzicht,
         "gerapporteerd": gerapporteerd,

@@ -134,3 +134,14 @@ def test_voorbeeldtekst_en_geen_commit_is_niet_compleet_en_codexfout_komt_door()
     assert op["samenvatting"] == "" and not op["compleet"]
     assert "newer version of Codex" in op["motor_fout"]
     assert "codex.run" not in da.oplevering_weigering(op).split("Probeer")[1].split(" op dezelfde")[0]
+
+
+def test_door_de_mac_bewaard_werk_is_veilig_maar_niet_klaar():
+    """24 nov: de agent committe niet zelf; de worker legde het werk vast op de
+    eigen branch. Niets kwijt, maar ook niet getest: de lus zegt niet 'klaar'."""
+    mac = MAC.replace("worktree: /x\n", "worktree: /x\nbewaard: abc1234 (door de worker vastgelegd, niet getest)\n")
+    op = da.oplevering(mac)
+    assert op["bewaard"].startswith("abc1234") and op["commits"]
+    assert not op["compleet"]
+    reden = da.oplevering_weigering(op)
+    assert reden and "axe/2026-11-22-ab12" in reden and "NIET klaar" in reden

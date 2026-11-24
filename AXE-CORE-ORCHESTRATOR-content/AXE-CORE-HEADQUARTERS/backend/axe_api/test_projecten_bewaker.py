@@ -167,3 +167,62 @@ def test_wees_wachter_zonder_kaart_wordt_gesloten_met_kaart_niet():
     ]
     # b heeft een open kaart; c is een sleutel (blijft); d is te vers.
     assert [r["id"] for r in pb.wees_wachters(rijen, {"b"}, NU)] == ["a"]
+
+
+def test_vastgelopen_actieve_taken_pas_dood_na_zes_uur():
+    from datetime import timedelta
+    rijen = [
+        # 23 nov: precies de taak uit het veld -- 2 dagen in 'running', geen beweging.
+        {"id": "dood1", "status": "running", "title": "Zelf oplossen: Sleutel dax-northsea-01 werkt niet",
+         "updated_at": (NU - timedelta(days=2)).isoformat()},
+        {"id": "dood2", "status": "verifying", "title": "Oudste dood", "updated_at": (NU - timedelta(hours=7)).isoformat()},
+        # Binnen actief_vast (>2u) maar nog geen 6u: nog een eerlijke poging, niet force-failen.
+        {"id": "nog_bezig", "status": "running", "title": "Nog bezig", "updated_at": (NU - timedelta(hours=3)).isoformat()},
+        {"id": "net_begonnen", "status": "planning", "title": "Net begonnen", "updated_at": NU.isoformat()},
+        {"id": "wacht", "status": "queued", "title": "In de wachtrij", "updated_at": (NU - timedelta(days=2)).isoformat()},
+    ]
+    dood = pb.vastgelopen_actieve_taken(rijen, NU)
+    assert [r["id"] for r in dood] == ["dood1", "dood2"]  # oudste eerst
+
+
+def test_vastgelopen_zelf_oplossen_taak_wordt_force_failed_niet_opnieuw_gespawnd():
+    """23 nov, het veld: 'Zelf oplossen: Sleutel dax-northsea-01 werkt niet' stond
+    2 dagen in 'running'. Die self-fix-taak kan de eigen rij nooit zelf sluiten
+    (geen schrijfrecht op core_tasks), dus moet projectsmgr het zelf doen --
+    in plaats van elke pulse opnieuw een even onuitvoerbare taak te spawnen."""
+    from datetime import timedelta
+    db = FakeDb()
+    db.db["core_tasks"] = [
+        {"id": "stuck1", "status": "running", "title": "Zelf oplossen: Sleutel dax-northsea-01 werkt niet",
+         "assignee": "projectsmgr", "requested_by": "projectsmgr",
+         "updated_at": (NU - timedelta(days=2)).isoformat(), "metadata": {"zelf_fix": "sleutel_technisch"}},
+    ]
+    uit = gm.run_projectsmgr(db, NU)
+    assert uit["vastgelopen_gefaald"] == 1
+    rij = next(r for r in db.rows("core_tasks") if r["id"] == "stuck1")
+    assert rij["status"] == "failed"
+    assert rij["metadata"]["reden"] == "vastgelopen: geen beweging, nooit afgesloten"
+    assert rij["error"]["code"] == "stuck_no_progress"
+    # Geen tweede, even onuitvoerbare "Zelf oplossen"-taak voor dezelfde melding.
+    titels = [r.get("title") for r in db.rows("core_tasks")]
+    assert titels.count("Zelf oplossen: Sleutel dax-northsea-01 werkt niet") == 1
+    chat = [r for r in db.rows("core_manager_messages") if r["from_agent"] == "projectsmgr" and r["to_agent"] == "luka"]
+    assert chat and "vastgelopen" in chat[0]["body"]
+
+
+def test_nog_geen_zes_uur_blijft_bij_bestaande_actief_vast_pad():
+    """Regressie: een taak die nog maar 3 uur stilstaat (binnen actief_vast,
+    buiten actief_dood) moet het bestaande 'eerst zelf proberen'-pad blijven
+    volgen -- niet meteen force-failed worden."""
+    from datetime import timedelta
+    db = FakeDb()
+    db.db["core_tasks"] = [
+        {"id": "nog1", "status": "running", "title": "Nog bezig met iets", "assignee": "code-agent",
+         "updated_at": (NU - timedelta(hours=3)).isoformat(), "metadata": {}},
+    ]
+    uit = gm.run_projectsmgr(db, NU)
+    assert uit["vastgelopen_gefaald"] == 0
+    rij = next(r for r in db.rows("core_tasks") if r["id"] == "nog1")
+    assert rij["status"] == "running"
+    assert "actief_vast" in uit["bevindingen"]
+    assert "Zelf oplossen: Taken hangen halverwege" in [r.get("title") for r in db.rows("core_tasks")]

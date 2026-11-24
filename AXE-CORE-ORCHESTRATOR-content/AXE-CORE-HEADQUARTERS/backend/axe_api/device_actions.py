@@ -242,7 +242,7 @@ def oplevering(output: Any) -> dict[str, Any]:
     # terugzegt) is leeg -- 22 nov stond zo een oplevering zonder één commit op compleet.
     uit: dict[str, Any] = {k.lower().replace("'", ""): _geen_voorbeeld(_sectie(tekst, k)) for k in KOPJES}
     for regel in mac.splitlines():
-        if ":" in regel and regel.split(":", 1)[0].strip() in ("branch", "worktree"):
+        if ":" in regel and regel.split(":", 1)[0].strip() in ("branch", "worktree", "bewaard"):
             k, v = regel.split(":", 1)
             uit[k.strip()] = v.strip()
     na_commits = mac.split("\ncommits:", 1)[1] if "\ncommits:" in mac else ""
@@ -256,8 +256,11 @@ def oplevering(output: Any) -> dict[str, Any]:
     ontbreekt = [k for k in KOPJES if not uit[k.lower().replace("'", "")]]
     if not uit.get("commits"):
         uit.setdefault("ontbreekt", [])
+    # 24 nov: 'bewaard' = de worker legde open werk zelf vast omdat de agent dat niet
+    # deed. Het werk is veilig op de branch, maar niet door de agent getest: niet klaar.
     uit["compleet"] = (not ontbreekt and bool(uit.get("branch")) and bool(uit.get("commits"))
-                       and not uit.get("niet_gecommit") and not uit.get("motor_fout"))
+                       and not uit.get("niet_gecommit") and not uit.get("motor_fout")
+                       and not uit.get("bewaard"))
     if ontbreekt:
         uit["ontbreekt"] = ontbreekt
     return uit
@@ -283,6 +286,9 @@ def oplevering_weigering(op: dict[str, Any] | None) -> str | None:
         mist.append("een commit (er is niets vastgelegd)")
     if op.get("niet_gecommit"):
         mist.append("alles gecommit (er staat nog werk open)")
+    if op.get("bewaard"):
+        mist.append(f"tests en een eigen commit (de agent committe niet zelf; de Mac bewaarde het werk "
+                    f"op {op.get('branch') or 'de branch'} als {op['bewaard']} -- laat het testen en afmaken)")
     return ("De oplevering van de coding-agent is niet compleet: " + ", ".join(mist or ["onbekend"])
             + ". Stuur hem terug met een kleinere, duidelijkere opdracht, of zeg eerlijk wat er mist. "
               "Je bent NIET klaar.")

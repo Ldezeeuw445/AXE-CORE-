@@ -111,6 +111,14 @@ ACTIES = (
                "(deliver to support@northseacommodity.com) and save. Forgot the password: "
                "'Forgot password?' on the sign-in screen.",
     },
+    {
+        "id": "unusual-whales-key",
+        "title": "Unusual Whales: get a new key (401 since August blocks market-tide/options intel and Companion's intel-proxy)",
+        "how": "Get a new key at unusualwhales.com, then set UNUSUAL_WHALES_API_KEY on the VPS "
+               "(/opt/axe-core-api/.env, then systemctl restart axe-core-api) and UNUSUAL_WHALES_TOKEN "
+               "as a Supabase Edge secret for the Companion project. See "
+               "docs/programma/incidenten/2026-10-15-intel-proxy-unusual-whales.md.",
+    },
 )
 
 Meting = Callable[..., Awaitable[tuple[Optional[bool], str]]]
@@ -305,6 +313,32 @@ async def _northsea_inbound(client, supabase_url, key, env, nu):
     return n > 0, f"{n} inbound mails reached the desk in the last 7 days"
 
 
+UNUSUAL_WHALES_VERS_VENSTER = timedelta(minutes=45)  # elke 15 min een snapshot; drie gemist is geen ruis meer
+
+
+async def _unusual_whales_sleutel(client, supabase_url, key, env, nu):
+    """UNUSUAL_WHALES_API_KEY geeft 401 sinds augustus (sleutels.py, en het incident van
+    15 okt voor Companion's intel-proxy): de ingest in /cron/tick (_ingest_unusual_whales)
+    schrijft dan niets in intel_market_tide en logt alleen een waarschuwing, zonder dat
+    iemand dat ziet. Een vers geschreven rij is het bewijs dat de sleutel weer werkt."""
+    r = await client.get(supabase_url + "/rest/v1/intel_market_tide", headers=_rest(key),
+                         params={"select": "snapshot_time", "order": "snapshot_time.desc", "limit": "1"})
+    rijen = r.json() if r.is_success else None
+    if not isinstance(rijen, list):
+        return None, f"cannot measure: intel_market_tide answered {r.status_code}"
+    if not rijen:
+        return False, "intel_market_tide has no rows yet"
+    try:
+        laatst = datetime.fromisoformat(str(rijen[0].get("snapshot_time")).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None, "cannot measure: snapshot_time is not a timestamp"
+    if laatst.tzinfo is None:
+        laatst = laatst.replace(tzinfo=timezone.utc)
+    vers = nu - laatst <= UNUSUAL_WHALES_VERS_VENSTER
+    tijd = rijen[0].get("snapshot_time")
+    return vers, (f"last intel_market_tide snapshot {tijd}" if vers else f"stale since {tijd}")
+
+
 METINGEN: dict[str, Meting] = {
     "build-loop-canon": _bouwlus_canon,
     "product-registry": _productregister,
@@ -315,6 +349,7 @@ METINGEN: dict[str, Meting] = {
     "phone-push": _push_abonnement,
     "northsea-inventory-job-off": _inventaris_uit,
     "northsea-gmail-routing": _northsea_inbound,
+    "unusual-whales-key": _unusual_whales_sleutel,
 }
 
 

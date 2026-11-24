@@ -71,6 +71,9 @@ def wereld(gedaan: bool, lus_rijen: int | None = None, functions_live: bool | No
             q = request.url.params
             assert q["direction"] == "eq.inbound" and q["is_synthetic"] == "is.false"
             return httpx.Response(206, headers={"content-range": f"0-0/{2 if gedaan else 0}"}, json=[])
+        if pad.endswith("/intel_market_tide"):
+            tijd = "2026-10-17T07:20:00+00:00" if gedaan else "2026-10-14T09:00:00+00:00"
+            return httpx.Response(200, json=[{"snapshot_time": tijd}])
         return httpx.Response(404)
 
     return handler, posts
@@ -183,7 +186,7 @@ def test_herinnering_pas_vanaf_acht_uur_en_een_keer_per_dag():
     assert ea.herinnering(stand, VOOR_ACHT, None) is None
     datum, tekst = ea.herinnering(stand, NA_ACHT, None)
     assert datum == "2026-10-17"
-    assert tekst.startswith("Owner actions: 9 open\n1. Build loop")
+    assert tekst.startswith("Owner actions: 10 open\n1. Build loop")
     assert "deploy.sh check" in tekst
     assert ea.herinnering(stand, NA_ACHT, "2026-10-17") is None
 
@@ -206,7 +209,7 @@ def test_herinner_schrijft_een_rij_per_dag_met_vast_id(tmp_path):
     assert len(posts) == 1
     rij = posts[0]
     assert rij["recipient"] == ea.USER_ID and rij["type"] == "warning"
-    assert rij["message"].startswith("Owner actions: 9 open")
+    assert rij["message"].startswith("Owner actions: 10 open")
     # Zelfde datum, zelfde id: een herhaalde poging na een timeout wordt geen tweede rij.
     assert rij["id"] == "%s" % ea.uuid.uuid5(ea.uuid.NAMESPACE_URL, "axe-eigenaar-acties/2026-10-17")
 
@@ -250,3 +253,27 @@ def test_northsea_routing_is_pas_af_als_er_echte_mail_binnenkomt():
     handler, _ = wereld(gedaan=True)
     assert meting(handler, ea._northsea_inbound)[0] is True
     assert meting(handler, ea._northsea_inbound, env={})[0] is None
+
+
+def test_unusual_whales_sleutel_is_pas_af_als_er_een_verse_snapshot_staat():
+    """401 sinds augustus laat _ingest_unusual_whales niets schrijven; alleen een
+    vers geschreven rij in intel_market_tide bewijst dat de nieuwe sleutel werkt."""
+    handler, _ = wereld(gedaan=False)
+    done, gemeten = meting(handler, ea._unusual_whales_sleutel)
+    assert done is False and "stale since 2026-10-14" in gemeten
+    handler, _ = wereld(gedaan=True)
+    done, gemeten = meting(handler, ea._unusual_whales_sleutel)
+    assert done is True and "2026-10-17" in gemeten
+
+    def geen_rijen(request):
+        if request.url.path.endswith("/intel_market_tide"):
+            return httpx.Response(200, json=[])
+        return wereld(gedaan=True)[0](request)
+    assert meting(geen_rijen, ea._unusual_whales_sleutel) == (False, "intel_market_tide has no rows yet")
+
+    def onbereikbaar(request):
+        if request.url.path.endswith("/intel_market_tide"):
+            return httpx.Response(503)
+        return wereld(gedaan=True)[0](request)
+    done, gemeten = meting(onbereikbaar, ea._unusual_whales_sleutel)
+    assert done is None and "cannot measure" in gemeten
