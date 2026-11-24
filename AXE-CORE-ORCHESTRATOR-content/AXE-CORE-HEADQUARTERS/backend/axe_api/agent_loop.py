@@ -1818,6 +1818,12 @@ async def _lus(
         contents, transcript = hervat["contents"], hervat["transcript"]
         laatste_oplevering, coding_gevraagd = hervat.get("oplevering"), bool(hervat.get("coding"))
         eerste_stap = int(hervat["stap"])
+        # 24 nov live: de rem (MAX_ZONDER_ACTIE) begon na elke hervatting weer bij 0, dus
+        # een taak die alleen tekst gaf liep stap 4..10 door, één stap per poging.
+        for t in reversed(transcript):
+            if t.get("tool") is not None:
+                break
+            zonder_actie += 1
         await on_event("axe.progress", f"Resuming at step {eerste_stap} after waiting for capacity "
                        f"({len(transcript)} earlier steps kept).", {"hervat": eerste_stap})
 
@@ -1848,6 +1854,29 @@ async def _lus(
             # failure -- talking instead of doing -- so push it back to work
             # rather than accepting the prose as a result.
             said = " ".join(texts).strip() or "(nothing)"
+            # 24 nov live (corporateJets): de stoel zei elke stap "fix staat al live, niets te
+            # wijzigen" maar kon nooit finish roepen -- geen commit, dus geen oplevering. Heeft
+            # de taak een MEETBARE acceptatie (feed: voor -> na) en is die nu echt gehaald, dan
+            # is dat het bewijs: de meting, niet de tekst. Niet gehaald = gewoon doorgaan.
+            if said != "(nothing)" and not klaar_regels.geeft_falen_toe(said):
+                import acceptatie as _acceptatie
+                acc_tekst = await asyncio.to_thread(
+                    _acceptatie.na_meting_voor_taak, _db_voor_stoelen(), _HUIDIGE_TAAK.get())
+                if acc_tekst and acc_tekst.get("gehaald"):
+                    await on_event("verification.passed", "Acceptance measured and met: "
+                                   + acc_tekst["regel"][:300], {"acceptatie": acc_tekst.get("regel")})
+                    transcript.append({"step": step, "tool": "finish", "via": "acceptatie",
+                                       "acceptatie": acc_tekst.get("regel")})
+                    return {
+                        "acceptatie": {k: v for k, v in acc_tekst.items() if k != "na"},
+                        **motor_velden(),
+                        "summary": said[:1500],
+                        "steps_used": step,
+                        **({"oplevering": laatste_oplevering} if laatste_oplevering else {}),
+                        "verification": {"passed": True, "checks": [{
+                            "name": "acceptatie", "passed": True, "regel": acc_tekst.get("regel")}]},
+                        "transcript": transcript,
+                    }
             zonder_actie += 1
             if zonder_actie >= MAX_ZONDER_ACTIE:
                 # 24 nov: zonder rem duwde dit tot 40 stappen door, elk een nieuwe run.

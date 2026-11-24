@@ -60,3 +60,37 @@ def test_uitstel_voor_de_eerste_stap_bewaart_niets(monkeypatch, tmp_path):
     assert not any(f.name.startswith(".axe-hervat.json") for f in tmp_path.iterdir())
     asyncio.run(al.run_agent_loop("doe Y", "taak-3", ev))
     assert not any("Resuming" in e for e in events)
+
+
+TEKST = {"parts": [{"text": "De fix staat al live; niets te wijzigen."}]}
+
+
+def test_rem_telt_door_over_een_hervatting(monkeypatch, tmp_path):
+    """24 nov live: stap 4..10 elk 'no action', omdat de teller na elk uitstel op 0 begon."""
+    import acceptatie
+    monkeypatch.setattr(acceptatie, "na_meting_voor_taak", lambda db, tid: None)
+    gezien, events, ev = _lus(monkeypatch, tmp_path, [SHELL, TEKST, TEKST, "wacht", TEKST, KLAAR])
+    with pytest.raises(WaitingForCapacity):
+        asyncio.run(al.run_agent_loop("doe Z", "taak-4", ev))
+    with pytest.raises(RuntimeError, match="without taking an action"):
+        asyncio.run(al.run_agent_loop("doe Z", "taak-4", ev))
+
+
+def test_gehaalde_feed_acceptatie_maakt_tekst_tot_klaar(monkeypatch, tmp_path):
+    import acceptatie
+    oordeel = {"soort": "feed", "gehaald": True, "regel": "feed corporateJets: ... = gehaald", "na": {}}
+    monkeypatch.setattr(acceptatie, "na_meting_voor_taak", lambda db, tid: oordeel)
+    gezien, events, ev = _lus(monkeypatch, tmp_path, [TEKST])
+    uit = asyncio.run(al.run_agent_loop("repareer feed corporateJets", "taak-5", ev))
+    assert uit["acceptatie"]["gehaald"] is True
+    assert uit["verification"]["checks"][0]["name"] == "acceptatie"
+
+
+def test_niet_gehaalde_acceptatie_blijft_geen_klaar(monkeypatch, tmp_path):
+    import acceptatie
+    oordeel = {"soort": "feed", "gehaald": False, "regel": "NIET gehaald", "na": {}}
+    monkeypatch.setattr(acceptatie, "na_meting_voor_taak", lambda db, tid: oordeel)
+    gezien, events, ev = _lus(monkeypatch, tmp_path, [TEKST, TEKST, TEKST])
+    with pytest.raises(RuntimeError, match="without taking an action"):
+        asyncio.run(al.run_agent_loop("repareer feed corporateJets", "taak-6", ev))
+    assert any("no action taken" in e for e in events)
