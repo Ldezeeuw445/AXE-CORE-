@@ -2,6 +2,7 @@ import {
   Globe, Code, FileCode, Wrench, Braces, ChevronLeft, ChevronRight, X,
   Activity, Cpu, Mic, Zap, Server, Lightbulb,
 } from 'lucide-react';
+import { mt5BridgeRegel, type Mt5BridgeMeting } from '@/domain/mt5BridgeStand';
 import { useEffect, useState } from 'react';
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
@@ -167,6 +168,7 @@ function VpsHealthWidget() {
   const [modelbox, setModelbox] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [gcp, setGcp] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [gcpConfigured, setGcpConfigured] = useState(false);
+  const [mt5, setMt5] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
 
   useEffect(() => {
     let cancelled = false;
@@ -242,9 +244,13 @@ function VpsHealthWidget() {
         const ms = Math.round(performance.now() - t0);
         if (!res.ok) {
           setGcp({ status: 'degraded', latencyMs: ms, detail: `HTTP ${res.status}` });
+          setMt5({ status: 'degraded', latencyMs: null, detail: `not measured (API box HTTP ${res.status})` });
           return;
         }
         const data = await res.json().catch(() => null);
+        // MT5-bridge-server (24 nov): zelfde meting, één aanroep.
+        const regel = mt5BridgeRegel(data?.mt5_bridge as Mt5BridgeMeting | undefined);
+        setMt5({ status: regel.status, latencyMs: regel.latencyMs, detail: regel.label });
         const entry = data?.gcp_ollama as { configured?: boolean; reachable?: boolean; models?: number; latency_ms?: number } | undefined;
         if (!entry?.configured) {
           setGcpConfigured(false);
@@ -262,6 +268,7 @@ function VpsHealthWidget() {
       } catch {
         if (cancelled) return;
         setGcp({ status: 'offline', latencyMs: null, detail: 'unreachable' });
+        setMt5({ status: 'offline', latencyMs: null, detail: 'API box unreachable — not measured' });
       }
     };
 
@@ -301,6 +308,8 @@ function VpsHealthWidget() {
       )}
       <div style={{ height: 1, background: 'var(--border-subtle)' }} />
       <VpsRow label="Ollama box" origin={OLLAMA_HEALTH_URL} state={modelbox} />
+      <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+      <VpsRow label="MT5 bridge" origin="Strato · 31.70.196.19" state={mt5} />
       {gcpConfigured && (
         <>
           <div style={{ height: 1, background: 'var(--border-subtle)' }} />

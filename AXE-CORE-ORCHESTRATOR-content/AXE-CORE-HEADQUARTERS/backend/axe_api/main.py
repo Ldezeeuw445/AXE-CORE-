@@ -3322,6 +3322,15 @@ async def _check_vps_services() -> dict:
     except Exception as e:  # noqa: BLE001
         results["claude_code"] = {"configured": False, "reachable": False, "error": str(e)[:150]}
 
+    # MT5-bridge-server (Strato, 24 nov): verbonden = de machine antwoordt; werkt =
+    # alleen met MT5_BRIDGE_HEALTH_URL. Zie mt5_bridge_status.py.
+    try:
+        import mt5_bridge_status
+        async with httpx.AsyncClient(timeout=5) as client:
+            results["mt5_bridge"] = await mt5_bridge_status.meet(client)
+    except Exception as e:  # noqa: BLE001
+        results["mt5_bridge"] = {"configured": True, "reachable": False, "stand": "offline", "error": str(e)[:150]}
+
     return results
 
 

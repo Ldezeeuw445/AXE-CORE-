@@ -66,6 +66,7 @@ const SERVICE_DISPLAY_NAMES: Record<string, string> = {
   axe_intel: 'AXE Intel',
   axe_core_api: 'AXE Core API (VPS)',
   claude_code: 'Claude Code (Branch C)',
+  mt5_bridge: 'MT5 bridge server (Strato)',
 };
 
 // The VPS agent bridges (openhands/openjarvis/openclaw/kilocode/hermes) live
@@ -334,6 +335,12 @@ const SERVICES: Array<{
   {
     key: 'claude_code',
     check: async () => vpsAgentStatus('claude_code'),
+  },
+  {
+    // 24 nov: de MT5-bridge-server. De VPS meet hem; meta.stand zegt of de bridge
+    // zelf gemeten werkt ('works') of alleen de machine antwoordt ('connected').
+    key: 'mt5_bridge',
+    check: async () => vpsAgentStatus('mt5_bridge'),
   },
   {
     key: 'hermes',
