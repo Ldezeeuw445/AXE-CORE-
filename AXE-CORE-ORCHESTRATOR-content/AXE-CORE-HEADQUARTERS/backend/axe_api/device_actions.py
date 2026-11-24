@@ -368,6 +368,24 @@ def kies_stoel(tool: str, vrij: list[str] | None) -> str | bool | None:
     return passend[0] if passend else False
 
 
+# (device, stoel) -> epoch tot wanneer vol. Wat de VPS zelf terugkreeg van een
+# agent-run; geldt ook als de Mac nog oude worker-code draait die het niet meldt.
+_VOLLE_STOELEN: dict[tuple[str, str], float] = {}
+
+
+def onthoud_volle_stoel(device: str, stoel: str, uitvoer: str, nu: float | None = None) -> float | None:
+    if not device or not stoel:
+        return None
+    try:
+        from agent_runner import parse_limiet_tot
+    except Exception:  # noqa: BLE001
+        return None
+    tot = parse_limiet_tot(uitvoer, nu)
+    if tot:
+        _VOLLE_STOELEN[(device, stoel)] = tot
+    return tot
+
+
 def _vrije_stoelen(db, nu: float) -> dict[str, list[str]]:
     """Per machine de ingelogde coding-stoelen zonder actieve limiet. Leeg bij twijfel."""
     try:
@@ -392,6 +410,7 @@ def _vrije_stoelen(db, nu: float) -> dict[str, list[str]]:
             nog_vol = bool(tot) and datetime.fromisoformat(str(tot).replace("Z", "+00:00")).timestamp() > nu
         except ValueError:
             nog_vol = bool(r.get("rate_limited"))
+        nog_vol = nog_vol or _VOLLE_STOELEN.get((m, str(r.get("seat_id"))), 0) > nu
         if r.get("logged_in") and not nog_vol:
             lijst.append(str(r.get("seat_id")))
     return uit
@@ -530,6 +549,7 @@ def run_on_device(
             antwoord = {"device": device, "tool": tool, "ok": True, "output": uit}
             if tool in AGENT_RUNS:
                 antwoord["oplevering"] = oplevering(uit)
+                onthoud_volle_stoel(device, str(args.get("seat") or ""), str(uit or ""))
             return antwoord
         if r["status"] in ("failed", "cancelled"):
             return {"device": device, "tool": tool, "ok": False,

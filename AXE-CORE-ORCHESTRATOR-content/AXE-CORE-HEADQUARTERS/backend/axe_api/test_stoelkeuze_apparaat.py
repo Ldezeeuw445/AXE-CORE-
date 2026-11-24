@@ -83,3 +83,23 @@ def test_gevraagde_vrije_stoel_blijft_staan():
     da.run_on_device("mac-mini-van-luka-6", "claude_code.run", {"prompt": "x", "seat": "claude"}, db=db,
                      sleep=lambda s: None)
     assert db.inserts[0]["payload"]["args"]["seat"] == "claude"
+
+
+def test_vps_onthoudt_een_volle_stoel_ook_als_de_mac_hem_vrij_meldt():
+    da._VOLLE_STOELEN.clear()
+    db = Db([stoel("claude3", "imac-3"), stoel("claude2", "mac-mini-van-luka-6")])
+    uit = '{"is_error":true,"result":"You\'ve hit your session limit · resets 8:20am (Europe/Amsterdam)"}'
+    assert da.onthoud_volle_stoel("imac-3", "claude3", uit)
+    lijst = da.list_devices(db)
+    assert lijst[0]["device"] == "mac-mini-van-luka-6"
+    assert [d for d in lijst if d["device"] == "imac-3"][0]["coding_seats_free"] == []
+    fout = da.run_on_device("imac-3", "claude_code.run", {"prompt": "x", "seat": "claude3"}, db=db,
+                            sleep=lambda s: None)
+    assert "mac-mini-van-luka-6" in fout["error"]
+    da._VOLLE_STOELEN.clear()
+
+
+def test_gewone_uitvoer_maakt_geen_stoel_vol():
+    da._VOLLE_STOELEN.clear()
+    assert da.onthoud_volle_stoel("imac-3", "claude3", '{"result":"Test toegevoegd"}') is None
+    assert not da._VOLLE_STOELEN
