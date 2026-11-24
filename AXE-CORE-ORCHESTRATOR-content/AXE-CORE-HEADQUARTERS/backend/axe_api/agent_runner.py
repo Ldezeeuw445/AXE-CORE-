@@ -590,13 +590,18 @@ def _usage_transaction(mutator):
                     fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
+# "You've hit your session limit · resets 8:20am" (Claude Code, 24 nov) hoort erbij.
+_LIMIET_WOORDEN = r"usage limit|rate limit|session limit|weekly limit|hit your limit|quota exceeded|too many requests|\b429\b"
+
+
 def _limit_message(text: str) -> str | None:
-    if not re.search(r"usage limit|rate limit|quota exceeded|too many requests|\b429\b", text or "", re.I):
+    if not re.search(_LIMIET_WOORDEN, text or "", re.I):
         return None
     # Keep the useful clause (often contains "try again at …"), never the whole
     # stderr transcript.
     clean = " ".join((text or "").split())
-    m = re.search(r"(.{0,90}(?:usage limit|rate limit|quota exceeded|too many requests|\b429\b).{0,180})", clean, re.I)
+    m = (re.search(r"(.{0,90}(?:" + _LIMIET_WOORDEN.replace("|\\b429\\b", "") + r").{0,180})", clean, re.I)
+         or re.search(r"(.{0,90}(?:" + _LIMIET_WOORDEN + r").{0,180})", clean, re.I))
     return (m.group(1) if m else clean)[:280]
 
 
@@ -611,7 +616,7 @@ _AUTH_FOUT = re.compile(
     + _SLEUTEL_GEWEIGERD.pattern,
     re.I,
 )
-_LIMIET_KLOK = re.compile(r"try again at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?", re.I)
+_LIMIET_KLOK = re.compile(r"(?:try again at|resets(?: at)?)\s+(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?", re.I)
 SEAT_VOLGORDE = ("claude", "claude2", "claude3", "claude4", "codex", "codex2", "codex3", "cursor", "cursor2", "kilo", "opencode", "agy")
 _SEAT_BUSY: dict[str, dict] = {}
 _SEAT_LIMIT: dict[str, dict] = {}
@@ -652,7 +657,7 @@ def parse_limiet_tot(tekst: str, nu: float | None = None) -> float | None:
     m = _LIMIET_KLOK.search(tekst or "")
     if not m:
         return nu + 3600
-    uur, minuut = int(m.group(1)), int(m.group(2))
+    uur, minuut = int(m.group(1)), int(m.group(2) or 0)
     ampm = (m.group(3) or "").upper()
     if ampm == "PM" and uur < 12:
         uur += 12

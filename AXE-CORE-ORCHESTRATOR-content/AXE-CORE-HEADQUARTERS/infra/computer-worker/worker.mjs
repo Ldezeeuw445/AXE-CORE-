@@ -35,7 +35,7 @@ import { resolve, sep, join, dirname, relative } from 'node:path';
 import { homedir, hostname, tmpdir } from 'node:os';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { reportCodingSeats } from './codingSeats.mjs';
+import { reportCodingSeats, noteerLimiet } from './codingSeats.mjs';
 import { maakLeesWeigering, naarDezeMac } from './leesRegels.mjs';
 import { schakel as macSchakel } from './macSchakelaars.mjs';
 import { ruimWorktree, veegWorktrees, hoofdRepoVan, bewaarWerk } from './worktreeOpruim.mjs';
@@ -940,7 +940,9 @@ async function execute(payload) {
         '--allowedTools', ...CLAUDE_MAG_DRAAIEN];
       const model = String(args.model ?? '').trim();
       if (model) argv.push('--model', model);
-      return metOplevering(root, branch, basis, hoofdRoot, await run(bin, argv, root, seatChildEnv(seat), AGENT_TIMEOUT_MS));
+      const uit = await run(bin, argv, root, seatChildEnv(seat), AGENT_TIMEOUT_MS);
+      noteerLimiet(seat, uit); // 24 nov: anders bleef een stoel op zijn sessielimiet "vrij"
+      return metOplevering(root, branch, basis, hoofdRoot, uit);
     }
 
     case 'codex.run': {
@@ -948,7 +950,9 @@ async function execute(payload) {
       if (!prompt) throw new Error('codex.run needs a prompt');
       const seat = String(args.seat ?? 'codex');
       const model = String(args.model ?? '').trim();
-      return metOplevering(root, branch, basis, hoofdRoot, await runCodexWithFallback(prompt, root, seat, model));
+      const uit = await runCodexWithFallback(prompt, root, seat, model);
+      noteerLimiet(seat, uit);
+      return metOplevering(root, branch, basis, hoofdRoot, uit);
     }
 
     case 'cursor.run': {
@@ -958,7 +962,10 @@ async function execute(payload) {
       const argv = ['-p', prompt, '--output-format', 'json', '--force'];
       const model = String(args.model ?? '').trim();
       if (model) argv.push('--model', model);
-      return metOplevering(root, branch, basis, hoofdRoot, await run(bin, argv, root, seatChildEnv(String(args.seat ?? 'cursor')), AGENT_TIMEOUT_MS));
+      const seat = String(args.seat ?? 'cursor');
+      const uit = await run(bin, argv, root, seatChildEnv(seat), AGENT_TIMEOUT_MS);
+      noteerLimiet(seat, uit);
+      return metOplevering(root, branch, basis, hoofdRoot, uit);
     }
 
     default:

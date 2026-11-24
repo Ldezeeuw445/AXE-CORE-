@@ -342,7 +342,59 @@ def list_devices(db=None, now: Callable[[], float] = time.time) -> list[dict[str
             "seconds_since_heartbeat": int(age),
             "workspaces": ws,
         })
-    return sorted(out, key=lambda d: (not d["online"], d["device"]))
+    vrij = _vrije_stoelen(db, now())
+    for d in out:
+        if d["device"] in vrij:
+            d["coding_seats_free"] = vrij[d["device"]]
+    # 24 nov live: alfabetisch zette "imac-3" boven de Mac mini; het model pakte
+    # de eerste en liep daar tegen een volle stoel aan. Volgorde = de regel uit de
+    # prompt: online eerst, dan een Mac met vrije coding-stoel, dan de Mac mini.
+    return sorted(out, key=lambda d: (not d["online"], d["device"] in vrij and not vrij[d["device"]],
+                                      "mini" not in d["device"], d["device"]))
+
+
+_STOEL_FAMILIE = {"claude_code.run": "claude", "codex.run": "codex", "cursor.run": "cursor"}
+
+
+def kies_stoel(tool: str, vrij: list[str] | None) -> str | bool | None:
+    """Vrije stoel van de juiste soort, False als er bekend géén is, None als we het niet weten.
+
+    24 nov live: claude_code.run ging zonder stoel naar de standaardlogin van de
+    iMac, die op zijn sessielimiet zat, terwijl de Mac mini er twee vrij had."""
+    if vrij is None:
+        return None
+    soort = _STOEL_FAMILIE.get(tool)
+    passend = [s for s in vrij if soort and re.sub(r"\d+$", "", s) == soort]
+    return passend[0] if passend else False
+
+
+def _vrije_stoelen(db, nu: float) -> dict[str, list[str]]:
+    """Per machine de ingelogde coding-stoelen zonder actieve limiet. Leeg bij twijfel."""
+    try:
+        rijen = db.table("core_coding_seats").select(
+            "seat_id,machine,logged_in,rate_limited,rate_limit_until,last_seen_at").execute().data or []
+    except Exception:  # noqa: BLE001
+        return {}
+    uit: dict[str, list[str]] = {}
+    for r in rijen:
+        m = r.get("machine")
+        if not m:
+            continue
+        try:
+            gezien = datetime.fromisoformat(str(r.get("last_seen_at")).replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            continue
+        if nu - gezien > HEARTBEAT_STALE_S:
+            continue
+        lijst = uit.setdefault(m, [])
+        tot = r.get("rate_limit_until")
+        try:
+            nog_vol = bool(tot) and datetime.fromisoformat(str(tot).replace("Z", "+00:00")).timestamp() > nu
+        except ValueError:
+            nog_vol = bool(r.get("rate_limited"))
+        if r.get("logged_in") and not nog_vol:
+            lijst.append(str(r.get("seat_id")))
+    return uit
 
 
 def is_cancelled(db, task_id: str) -> bool:
@@ -422,6 +474,16 @@ def run_on_device(
         # tempts the model to answer from memory.
         return {"error": f"{known[device]['label']} is offline (last heartbeat "
                          f"{known[device]['seconds_since_heartbeat']}s ago)."}
+    if tool in AGENT_RUNS and not args.get("seat"):
+        keuze = kies_stoel(tool, known[device].get("coding_seats_free"))
+        if keuze is False:
+            andere = [d["label"] + " (" + d["device"] + ")" for d in apparaten
+                      if d["online"] and d["device"] != device and kies_stoel(tool, d.get("coding_seats_free"))]
+            return {"error": f"{known[device]['label']} has no free logged-in seat for {tool} "
+                             "(all logged out or at their limit)."
+                             + (f" Use {andere[0]} instead." if andere else " No other Mac has one either; wait.")}
+        if keuze:
+            args = {**args, "seat": keuze}
 
     row = db.table("core_tasks").insert({
         "capability": CAPABILITY,

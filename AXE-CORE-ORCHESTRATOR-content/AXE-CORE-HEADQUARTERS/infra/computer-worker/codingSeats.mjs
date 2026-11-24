@@ -6,7 +6,7 @@
  * current task and last known limit; this file merges that with a live probe.
  */
 import { execFile } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
 import { readFile, mkdtemp, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -144,8 +144,12 @@ export function cursorStatusFromText(tekst, { hasApiKey = false } = {}) {
   return { loggedIn: null, email: null };
 }
 
+// "You've hit your session limit · resets 8:20am" (Claude Code, 24 nov) viel
+// buiten de oude lijst: de stoel bleef "vrij" en kreeg de volgende taak ook.
+export const LIMIET_RE = /usage limit|rate limit|session limit|weekly limit|hit your limit|quota exceeded|too many requests|\b429\b/i;
+
 export function isRealLimitMessage(bericht) {
-  if (!/usage limit|rate limit|quota exceeded|too many requests|\b429\b/i.test(bericht || '')) return false;
+  if (!LIMIET_RE.test(bericht || '')) return false;
   if (/eindigde met|ended with/i.test(bericht || '')) return false;
   return true;
 }
@@ -200,11 +204,11 @@ export function seatConfigured(seat, home = homedir(), env = process.env) {
 }
 
 export function parseLimitReset(bericht, now = Date.now()) {
-  if (!/usage limit|rate limit|quota exceeded|too many requests|\b429\b/i.test(bericht || '')) return null;
-  const m = (bericht || '').match(/try again at\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!LIMIET_RE.test(bericht || '')) return null;
+  const m = (bericht || '').match(/(?:try again at|resets(?: at)?)\s+(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
   if (!m) return now + 60 * 60 * 1000;
   let uur = Number(m[1]);
-  const minuut = Number(m[2]);
+  const minuut = Number(m[2] ?? 0);
   const helft = m[3]?.toUpperCase();
   if (helft === 'PM' && uur < 12) uur += 12;
   if (helft === 'AM' && uur === 12) uur = 0;
@@ -316,9 +320,38 @@ export function readSeatSnapshot(home = homedir()) {
     || { seats: {}, events: [] };
 }
 
+const LIMIETEN_BESTAND = (home) => join(home, '.axe', 'worker-seat-limits.json');
+
+/** Limiet die een worker-run zelf zag (claude_code.run enz.) onthouden.
+ *  Eigen bestand: coding-seats.json schrijft de Mac-backend telkens opnieuw. */
+export function noteerLimiet(seatId, uitvoer, { home = homedir(), now = Date.now() } = {}) {
+  const tekst = String(uitvoer ?? '');
+  if (!seatId || !isRealLimitMessage(tekst)) return null;
+  // Eerst de leesbare zin ("hit your session limit · resets 8:20am"), dan pas een kale 429.
+  const rond = (bron) => tekst.match(new RegExp(`[^\\n"]{0,90}(?:${bron})[^\\n"]{0,120}`, 'i'));
+  const regel = (rond(LIMIET_RE.source.replace('|\\b429\\b', '')) || rond(LIMIET_RE.source) || [tekst])[0].slice(0, 280);
+  const tot = parseLimitReset(regel, now) ?? now + 60 * 60 * 1000;
+  const pad = LIMIETEN_BESTAND(home);
+  const alles = readJsonSyncSafe(pad) || {};
+  alles[seatId] = { limit_until: Math.round(tot / 1000), limit_message: regel, ts: Math.round(now / 1000) };
+  try {
+    mkdirSync(join(home, '.axe'), { recursive: true });
+    writeFileSync(`${pad}.tmp`, JSON.stringify(alles));
+    renameSync(`${pad}.tmp`, pad);
+  } catch { /* best effort: de taak zelf is al klaar */ }
+  return alles[seatId];
+}
+
 export async function collectSeats({ env = process.env, home = homedir() } = {}) {
   const snap = readSeatSnapshot(home);
-  const snapSeats = snap.seats && typeof snap.seats === 'object' ? snap.seats : {};
+  const snapSeats = { ...(snap.seats && typeof snap.seats === 'object' ? snap.seats : {}) };
+  const eigen = readJsonSyncSafe(LIMIETEN_BESTAND(home)) || {};
+  for (const [id, lim] of Object.entries(eigen)) {
+    const oud = snapSeats[id] || {};
+    if (Number(lim?.limit_until || 0) > Number(oud.limit_until || 0)) {
+      snapSeats[id] = { ...oud, limit_until: lim.limit_until, limit_message: lim.limit_message };
+    }
+  }
   const events = Array.isArray(snap.events) ? snap.events : [];
   const now = Date.now();
 
