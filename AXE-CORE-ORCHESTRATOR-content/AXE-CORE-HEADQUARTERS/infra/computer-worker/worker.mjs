@@ -61,8 +61,10 @@ const env = {
   ...loadEnvFile(join(REPO, 'backend/axe_api/.env.local')),
   ...process.env,
 };
-// launchd PATH is smal; claude/codex/cursor-agent staan in Homebrew.
-env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH || '/usr/bin:/bin'}`;
+// launchd PATH is smal; claude/codex/cursor-agent staan in Homebrew, uv/uvx (het
+// testcommando uit de werkbon) in ~/.local/bin. 24 nov live: de agent op de Mac mini
+// kreeg 'command not found: uvx' en kon de tests dus nooit draaien.
+env.PATH = `${join(homedir(), '.local/bin')}:/opt/homebrew/bin:/usr/local/bin:${env.PATH || '/usr/bin:/bin'}`;
 process.env.PATH = env.PATH;
 
 const SUPABASE_URL = env.SUPABASE_URL ?? env.VITE_SUPABASE_URL;
