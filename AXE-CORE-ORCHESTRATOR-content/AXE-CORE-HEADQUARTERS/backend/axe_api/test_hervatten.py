@@ -104,3 +104,12 @@ def test_meting_wint_van_agent_die_zegt_dat_hij_het_niet_kon_nagaan(monkeypatch,
     gezien, events, ev = _lus(monkeypatch, tmp_path, [twijfel])
     uit = asyncio.run(al.run_agent_loop("repareer feed corporateJets", "taak-7", ev))
     assert uit["summary"].startswith("Acceptance measured and met")
+
+
+def test_lus_meet_om_de_5_stappen_en_stopt_als_gehaald(monkeypatch, tmp_path):
+    import acceptatie
+    oordeel = {"soort": "feed", "gehaald": True, "regel": "feed corporateJets: ... = gehaald", "na": {}}
+    monkeypatch.setattr(acceptatie, "na_meting_voor_taak", lambda db, tid: oordeel)
+    gezien, events, ev = _lus(monkeypatch, tmp_path, [SHELL] * 10)
+    uit = asyncio.run(al.run_agent_loop("repareer feed corporateJets", "taak-8", ev))
+    assert uit["steps_used"] == al.ACCEPTATIE_ELKE_N

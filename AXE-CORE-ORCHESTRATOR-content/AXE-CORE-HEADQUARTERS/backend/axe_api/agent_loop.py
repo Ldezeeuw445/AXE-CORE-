@@ -70,6 +70,7 @@ from provider_router import (
 # reply; the durable worker holds a lease and heartbeats, so a long run is fine.
 MAX_STEPS = 40
 MAX_ZONDER_ACTIE = 3
+ACCEPTATIE_ELKE_N = 5
 WALL_CLOCK_SECONDS = 1800
 
 # Per-command ceiling. Long enough for an install or a build, short enough that
@@ -1827,6 +1828,28 @@ async def _lus(
         await on_event("axe.progress", f"Resuming at step {eerste_stap} after waiting for capacity "
                        f"({len(transcript)} earlier steps kept).", {"hervat": eerste_stap})
 
+    async def klaar_door_meting(stap: int, notitie: str) -> dict[str, Any] | None:
+        """Taak met een MEETBARE acceptatie (feed: voor -> na) die nu gehaald is: klaar,
+        met de meting als bewijs. None = niets te meten of (nog) niet gehaald."""
+        import acceptatie as _acceptatie
+        acc = await asyncio.to_thread(_acceptatie.na_meting_voor_taak, _db_voor_stoelen(), _HUIDIGE_TAAK.get())
+        if not (acc and acc.get("gehaald")):
+            return None
+        await on_event("verification.passed", "Acceptance measured and met: " + acc["regel"][:300],
+                       {"acceptatie": acc.get("regel")})
+        transcript.append({"step": stap, "tool": "finish", "via": "acceptatie", "acceptatie": acc.get("regel")})
+        return {
+            "acceptatie": {k: v for k, v in acc.items() if k != "na"},
+            **motor_velden(),
+            "summary": ("Acceptance measured and met: " + acc["regel"][:400]
+                        + (". Agent note: " + notitie[:1100] if notitie else ".")),
+            "steps_used": stap,
+            **({"oplevering": laatste_oplevering} if laatste_oplevering else {}),
+            "verification": {"passed": True, "checks": [{
+                "name": "acceptatie", "passed": True, "regel": acc.get("regel")}]},
+            "transcript": transcript,
+        }
+
     for step in range(eerste_stap, MAX_STEPS + 1):
         if time.monotonic() - started > WALL_CLOCK_SECONDS:
             raise RuntimeError(
@@ -1861,26 +1884,8 @@ async def _lus(
             # Ook als de stoel zegt dat hij iets niet zelf kon nagaan (24 nov live: "ik kon de
             # logs niet lezen ... als de feed al vers is, is er niets meer te doen"): de meting
             # beslist, en de samenvatting zegt eerlijk dat de meting het bewijs is.
-            if said != "(nothing)":
-                import acceptatie as _acceptatie
-                acc_tekst = await asyncio.to_thread(
-                    _acceptatie.na_meting_voor_taak, _db_voor_stoelen(), _HUIDIGE_TAAK.get())
-                if acc_tekst and acc_tekst.get("gehaald"):
-                    await on_event("verification.passed", "Acceptance measured and met: "
-                                   + acc_tekst["regel"][:300], {"acceptatie": acc_tekst.get("regel")})
-                    transcript.append({"step": step, "tool": "finish", "via": "acceptatie",
-                                       "acceptatie": acc_tekst.get("regel")})
-                    return {
-                        "acceptatie": {k: v for k, v in acc_tekst.items() if k != "na"},
-                        **motor_velden(),
-                        "summary": ("Acceptance measured and met: " + acc_tekst["regel"][:400]
-                                    + ". Agent note: " + said[:1100]),
-                        "steps_used": step,
-                        **({"oplevering": laatste_oplevering} if laatste_oplevering else {}),
-                        "verification": {"passed": True, "checks": [{
-                            "name": "acceptatie", "passed": True, "regel": acc_tekst.get("regel")}]},
-                        "transcript": transcript,
-                    }
+            if said != "(nothing)" and (klaar := await klaar_door_meting(step, said)):
+                return klaar
             zonder_actie += 1
             if zonder_actie >= MAX_ZONDER_ACTIE:
                 # 24 nov: zonder rem duwde dit tot 40 stappen door, elk een nieuwe run.
@@ -2155,7 +2160,13 @@ async def _lus(
             })
 
         contents.append({"role": "user", "parts": responses})
+        # 24 nov live (adf08f3a): 38 stappen zoeken in logs terwijl de feed al gemeten
+        # gehaald was; het model wist dat niet en liep tegen de 40. Om de 5 stappen meten.
+        if step % ACCEPTATIE_ELKE_N == 0 and (klaar := await klaar_door_meting(step, "")):
+            return klaar
 
+    if (klaar := await klaar_door_meting(MAX_STEPS, "")):
+        return klaar
     raise RuntimeError(
         f"used all {MAX_STEPS} steps without a verified result. "
         "The transcript is preserved on the task for the next attempt."
