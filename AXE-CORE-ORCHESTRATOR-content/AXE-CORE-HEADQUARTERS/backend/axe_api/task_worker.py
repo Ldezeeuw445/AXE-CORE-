@@ -332,7 +332,10 @@ class TaskWorker:
             await context.event(
                 "task.deferred",
                 str(wacht)[:500],
-                {"retry_after_s": wacht.retry_after_s, "errors": wacht.errors[:8]},
+                {"retry_after_s": wacht.retry_after_s,
+                 # Stoelfouten eerst: met [:8] vielen ze altijd achter de afkoelende API's weg.
+                 "errors": ([e for e in wacht.errors if e.startswith("seat/")]
+                            + [e for e in wacht.errors if not e.startswith("seat/")])[:10]},
             )
             await asyncio.to_thread(
                 self.repo.defer,

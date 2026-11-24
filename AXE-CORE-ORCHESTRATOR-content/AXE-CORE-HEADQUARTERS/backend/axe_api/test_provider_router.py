@@ -582,3 +582,69 @@ def test_onvolledige_oplevering_blijft_tekst():
     assert "text" in pr.parse_seat_antwoord(bewaard)["parts"][0]
     zonder = SEAT_KLAAR.replace("5ecbc9bc test(push): tweede tik", "(no output)")
     assert "text" in pr.parse_seat_antwoord(zonder)["parts"][0]
+
+
+def test_mislukte_stoel_koelt_af_en_de_volgende_ronde_kiest_een_andere(monkeypatch):
+    """24 nov live: codex op de iMac gaf model_not_found (run 'failed'), werd niet gekoeld
+    en 216x opnieuw gekozen; 219 worktrees, de schijf liep weer vol."""
+    import agent_loop
+
+    monkeypatch.setattr(agent_loop, "_AFKOELING", {})
+    monkeypatch.setattr(agent_loop, "_STOEL_AFKOELING", {})
+    for k in ("GROQ_API_KEY", "OPENAI_API_KEY", "CEREBRAS_API_KEY", "GEMINI_API_KEY", "XAI_API_KEY", "GROK_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+
+    async def ollama(_c):
+        raise RuntimeError("ollama down")
+
+    rijen = [stoel("codex", remaining_week=90), stoel("claude2", remaining_week=40)]
+    gekozen = []
+
+    def runner(_device, _tool, args, **_k):
+        gekozen.append(args["seat"])
+        if args["seat"] == "codex":
+            return {"ok": False, "error": "Codex model_not_found: this ChatGPT account does not support the model"}
+        return {"ok": True, "output": "Seat took over the cycle."}
+
+    monkeypatch.setattr(agent_loop, "_call_ollama_begrensd", ollama)
+    monkeypatch.setattr(agent_loop, "lees_stoelen", lambda _db=None: rijen)
+    monkeypatch.setattr(agent_loop, "_stoel_runner", runner)
+    monkeypatch.setattr(agent_loop, "_stoel_db", lambda: NepDB(core_notifications=[]))
+
+    token = agent_loop._HUIDIGE_AGENT_WS.set({"agent": "companionmgr", "role": "x"})
+    try:
+        try:
+            asyncio.run(agent_loop._call_model([{"role": "user", "parts": [{"text": "x"}]}], None))
+            raise AssertionError("had moeten wachten")
+        except pr.WaitingForCapacity as wacht:
+            assert wacht.retry_after_s <= 60  # claude2 is nog vrij
+            assert any(e.startswith("seat/codex") for e in wacht.errors)
+        uit = asyncio.run(agent_loop._call_model([{"role": "user", "parts": [{"text": "x"}]}], None))
+    finally:
+        agent_loop._HUIDIGE_AGENT_WS.reset(token)
+    assert gekozen == ["codex", "claude2"]
+    assert uit["parts"][0]["text"] == "Seat took over the cycle."
+
+
+def test_alle_stoelen_mislukt_wacht_lang(monkeypatch):
+    import agent_loop
+    monkeypatch.setattr(agent_loop, "_AFKOELING", {})
+    monkeypatch.setattr(agent_loop, "_STOEL_AFKOELING", {})
+    for k in ("GROQ_API_KEY", "OPENAI_API_KEY", "CEREBRAS_API_KEY", "GEMINI_API_KEY", "XAI_API_KEY", "GROK_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+
+    async def ollama(_c):
+        raise RuntimeError("ollama down")
+
+    monkeypatch.setattr(agent_loop, "_call_ollama_begrensd", ollama)
+    monkeypatch.setattr(agent_loop, "lees_stoelen", lambda _db=None: [stoel("codex", remaining_week=90)])
+    monkeypatch.setattr(agent_loop, "_stoel_runner", lambda *_a, **_k: {"ok": False, "error": "model_not_found"})
+    monkeypatch.setattr(agent_loop, "_stoel_db", lambda: NepDB(core_notifications=[]))
+    token = agent_loop._HUIDIGE_AGENT_WS.set({"agent": "companionmgr", "role": "x"})
+    try:
+        try:
+            asyncio.run(agent_loop._call_model([{"role": "user", "parts": [{"text": "x"}]}], None))
+        except pr.WaitingForCapacity as wacht:
+            assert wacht.retry_after_s > 60
+    finally:
+        agent_loop._HUIDIGE_AGENT_WS.reset(token)

@@ -84,3 +84,11 @@ def test_reset_tijd_in_de_genoemde_zone():
     t0 = datetime(2026, 11, 24, 6, 40, tzinfo=timezone.utc).timestamp()
     t = parse_limiet_tot("You've hit your session limit · resets 8:20am (Europe/Amsterdam)", t0)
     assert datetime.fromtimestamp(t, timezone.utc) == datetime(2026, 11, 24, 7, 20, tzinfo=timezone.utc)
+
+
+def test_mislukte_agent_run_maakt_de_stoel_een_uur_onbruikbaar():
+    import device_actions as da
+    da._VOLLE_STOELEN.clear()
+    assert da.onthoud_stoel_fout("main-imac-luka", "codex", "Codex model_not_found: ...")
+    assert 3000 < da.stoel_vol_tot("imac-3", "codex") - time.time() <= 3600
+    da._VOLLE_STOELEN.clear()

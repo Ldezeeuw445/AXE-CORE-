@@ -78,3 +78,24 @@ test('echte git: open werk van een agent wordt op zijn eigen branch bewaard, noo
   assert.equal(await bewaarWerk(gitStreng, repo), '', 'orchestrator wordt nooit aangeraakt');
   assert.equal(g(repo, 'status', '--porcelain'), '?? b.txt');
 });
+
+test('basiscommit die al (onder een andere sha) upstream staat telt als geen werk', async () => {
+    const g = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' });
+    const origin = mkdtempSync(join(tmpdir(), 'axe-up-'));
+    g(origin, 'init', '-q', '-b', 'orchestrator');
+    g(origin, 'config', 'user.email', 't@t'); g(origin, 'config', 'user.name', 't');
+    writeFileSync(join(origin, 'a.txt'), '1'); g(origin, 'add', '.'); g(origin, 'commit', '-qm', 'basis');
+    const repo = mkdtempSync(join(tmpdir(), 'axe-lok-'));
+    g(repo, 'clone', '-q', origin, '.');
+    g(repo, 'config', 'user.email', 't@t'); g(repo, 'config', 'user.name', 't');
+    // lokaal een commit, upstream dezelfde wijziging met een andere sha
+    writeFileSync(join(repo, 'b.txt'), 'x'); g(repo, 'add', '.'); g(repo, 'commit', '-qm', 'lokaal');
+    writeFileSync(join(origin, 'b.txt'), 'x'); g(origin, 'add', '.'); g(origin, 'commit', '-qm', 'zelfde, andere sha');
+    g(repo, 'fetch', '-q');
+    const pad = join(mkdtempSync(join(tmpdir(), 'axe-wt-')), 'run');
+    g(repo, 'worktree', 'add', '-q', '-b', 'axe/x', pad, 'HEAD');
+    g(repo, 'reset', '-q', '--hard', 'origin/orchestrator'); // lokale orchestrator gaat mee met upstream
+    const git = async (cwd, ...a) => g(cwd, ...a);
+    const uit = await ruimWorktree(git, repo, pad, { leeftijdUur: 5 });
+    assert.equal(uit.actie, 'weg_met_branch');
+});

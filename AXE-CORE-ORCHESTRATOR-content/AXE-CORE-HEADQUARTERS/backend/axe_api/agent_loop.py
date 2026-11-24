@@ -1443,6 +1443,14 @@ def _db_voor_stoelen():
         return None
 
 
+def _stoel_koelt_niet(r: dict[str, Any], nu_mono: float) -> bool:
+    """Niet in afkoeling, op stoelnaam (limiet geldt voor het account) of op machine:stoel."""
+    for k in (str(r.get("seat_id") or ""), str(r.get("id") or "")):
+        if k and _STOEL_AFKOELING.get(k, 0) > nu_mono:
+            return False
+    return True
+
+
 async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> dict[str, Any]:
     """Try each provider in turn until one answers.
 
@@ -1600,7 +1608,7 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
         # opnieuw: dat gaf op de iMac honderden claude_code.run's per uur (en een
         # volle schijf). Hij komt terug na zijn afkoeling.
         nu_mono = time.monotonic()
-        rijen = [r for r in rijen if _STOEL_AFKOELING.get(str(r.get("seat_id") or r.get("id") or ""), 0) <= nu_mono]
+        rijen = [r for r in rijen if _stoel_koelt_niet(r, nu_mono)]
         stoel = kies_stoel(rijen, familie=familie)
         if stoel:
             try:
@@ -1623,11 +1631,16 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
                 _LAATSTE_MOTOR.set(f"seat/{stoel.get('seat_id')}")
                 return parse_seat_antwoord(str(raw.get("output") or ""))
             errors.append(f"seat/{stoel.get('seat_id')}: {str(raw.get('error') or 'no output')[:150]}")
+            # Elke mislukte stoel koelt af, niet alleen een limietmelding. 24 nov: codex op de
+            # iMac gaf model_not_found (taak 'failed', dus geen limiettekst), werd niet gekoeld
+            # en direct weer gekozen: 216 runs in 2 uur, 219 worktrees, schijf liep weer vol.
+            _STOEL_AFKOELING[str(stoel.get("id") or stoel.get("seat_id") or "")] = (
+                time.monotonic() + STOEL_AFKOELING_S)
         wacht = vroegste_stoel_vrij(rijen)
-        # Nog een andere vrije stoel over? Dan niet wachten op de eerste die
-        # vrijkomt (24 nov: 1,5 uur geparkeerd terwijl de Mac mini er twee had).
-        mislukt = str((stoel or {}).get("id") or "")
-        if any(str(r.get("id") or "") != mislukt for r in rijen if stoel_vrij(r)):
+        # Nog een andere vrije, niet-afkoelende stoel over? Dan niet wachten op de eerste
+        # die vrijkomt (24 nov: 1,5 uur geparkeerd terwijl de Mac mini er twee had).
+        nu_mono = time.monotonic()
+        if any(stoel_vrij(r) and _stoel_koelt_niet(r, nu_mono) for r in rijen):
             wacht = min(wacht, 60)
         raise WaitingForCapacity(
             f"waiting for capacity — {samenvatting}",

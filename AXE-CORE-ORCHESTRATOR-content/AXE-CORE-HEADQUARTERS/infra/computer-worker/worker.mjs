@@ -951,7 +951,16 @@ async function execute(payload) {
       if (!prompt) throw new Error('codex.run needs a prompt');
       const seat = String(args.seat ?? 'codex');
       const model = String(args.model ?? '').trim();
-      const uit = await runCodexWithFallback(prompt, root, seat, model);
+      let uit;
+      try {
+        uit = await runCodexWithFallback(prompt, root, seat, model);
+      } catch (e) {
+        // 24 nov: codex 'model_not_found' gooide hier, en de worktree van de run bleef
+        // staan -- 216 mislukte runs = 219 mappen op de iMac. Leeg = meteen weg.
+        noteerLimiet(seat, String(e?.message ?? e));
+        await naRunOpruimen(root, hoofdRoot, basis);
+        throw e;
+      }
       noteerLimiet(seat, uit);
       return metOplevering(root, branch, basis, hoofdRoot, uit);
     }

@@ -38,7 +38,17 @@ async function feiten(git, pad, basis) {
     ? await veilig('rev-list', '--count', `${basis}..HEAD`)
     // Zonder bekend begin: commits die nergens anders op een andere branch staan.
     : await veilig('rev-list', '--count', 'HEAD', '--not', '--exclude=' + branch, '--branches');
-  return { open, branch, commits: Number(tel ?? NaN) };
+  let commits = Number(tel ?? NaN);
+  if (!basis && commits > 0) {
+    // 24 nov: 211 mappen bleven staan op een basiscommit die alleen lokaal bestond
+    // (dezelfde wijziging staat op origin onder een andere sha, na een rebase).
+    // Telt alleen wat inhoudelijk NIET al upstream staat; geen upstream = niets veranderen.
+    for (const up of ['origin/orchestrator', 'origin/main']) {
+      const n = await veilig('rev-list', '--count', '--cherry-pick', '--right-only', '--no-merges', `${up}...HEAD`);
+      if (n !== null && n !== '' && !n.startsWith('fatal')) { commits = Math.min(commits, Number(n)); break; }
+    }
+  }
+  return { open, branch, commits };
 }
 
 /** Voert de beslissing uit. hoofdRepo = de checkout waar de worktree bij hoort. */

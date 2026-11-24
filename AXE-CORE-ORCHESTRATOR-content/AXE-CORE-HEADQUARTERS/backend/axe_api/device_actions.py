@@ -439,6 +439,17 @@ def onthoud_volle_stoel(device: str, stoel: str, uitvoer: str, nu: float | None 
     return tot
 
 
+def onthoud_stoel_fout(device: str, stoel: str, fout: str, nu: float | None = None) -> float | None:
+    """Een agent-run die faalde: limiet/sleutel zoals altijd, anders een uur niet meer kiezen."""
+    tot = onthoud_volle_stoel(device, stoel, fout, nu)
+    if tot or not device or not stoel:
+        return tot
+    tot = (time.time() if nu is None else nu) + 3600
+    _VOLLE_STOELEN[(_mac(device), stoel)] = tot
+    _bewaar_volle_stoelen()
+    return tot
+
+
 def _mac(device: str) -> str:
     """iMac / Mac mini: apparaatnamen wisselen na een herstart (imac-3 -> main-imac-luka)."""
     from stoelen_actueel import mac_label
@@ -622,7 +633,11 @@ def run_on_device(
                 onthoud_volle_stoel(device, str(args.get("seat") or ""), str(uit or ""))
             return antwoord
         if r["status"] in ("failed", "cancelled"):
-            return {"device": device, "tool": tool, "ok": False,
-                    "error": (r.get("error") or {}).get("message") or r["status"]}
+            fout = (r.get("error") or {}).get("message") or r["status"]
+            if tool in AGENT_RUNS and r["status"] == "failed":
+                # 24 nov: codex 'model_not_found' faalde 216x op rij; ook een kapotte run is
+                # een stoel die even niet bruikbaar is (bewaard over een deploy heen).
+                onthoud_stoel_fout(device, str(args.get("seat") or ""), str(fout))
+            return {"device": device, "tool": tool, "ok": False, "error": fout}
     return {"device": device, "tool": tool, "ok": False,
             "error": f"no answer from {device} within {wacht_s}s"}
