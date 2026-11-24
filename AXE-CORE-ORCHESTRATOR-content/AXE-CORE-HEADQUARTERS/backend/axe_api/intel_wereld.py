@@ -27,6 +27,14 @@ verse data lieten zien. `run_proxy` vraagt elk uur de proxy precies wat de apps
 krijgen, en schrijft per feed de bron, het aantal rijen of de fout in de log.
 Nul rijen is een fout, geen verse ronde.
 
+24 nov: CBOE weigert sinds november elke geautomatiseerde vraag (403); de proxy
+haalt optieketens nu bij Nasdaq (Trading OS #165). De tide-stand die de proxy
+dan geeft, bewaart `run_proxy` ook in intel_market_tide: de Trading OS Manager
+en de desk-lanen lezen hun marktsignaal uit die tabel, en die stond sinds
+31 augustus stil (Unusual Whales, de enige vuller, is opgezegd). Alleen een
+volledige echte stand (bias, ratio, beide premies, tijd van de sessie), één
+rij per sessie. De opties zelf worden niet bewaard: de apps vragen de proxy.
+
 Alleen lezen bij de bron. Geen orders, geen mail.
 """
 from __future__ import annotations
@@ -307,7 +315,7 @@ def haal_jets(get: Getter, pauze: float, nu: datetime | None = None) -> tuple[li
     }
 
 
-# ── live via de gedeelde intel-proxy (alleen meten, niets opslaan) ─────────
+# ── live via de gedeelde intel-proxy (meten; alleen de tide-stand bewaren) ─
 
 # feed_id in intel_sync_log → actie die de apps aan intel-proxy vragen
 PROXY_FEEDS: tuple[tuple[str, str], ...] = (
@@ -352,6 +360,36 @@ def proxy_rijen(body: Any) -> int:
     return 0
 
 
+TIDE_BIAS = ("bullish", "bearish", "neutral")
+
+
+def tide_rij(data: Any) -> dict[str, Any] | None:
+    """De stand van de proxy als rij voor intel_market_tide. None zonder volledige
+    echte stand: 'unavailable' (geen putvolume) of een ontbrekend getal wordt
+    niet ingevuld, want het signaal leest dit als actuele bias."""
+    if not isinstance(data, dict):
+        return None
+    bias, tijd = data.get("bias"), data.get("timestamp")
+    call, put, ratio = _getal(data.get("netCallPremium")), _getal(data.get("netPutPremium")), _getal(data.get("callPutRatio"))
+    if bias not in TIDE_BIAS or call is None or put is None or ratio is None or not isinstance(tijd, str) or not tijd:
+        return None
+    return {"net_call_premium": call, "net_put_premium": put, "call_put_ratio": ratio, "bias": bias,
+            "snapshot_time": tijd}
+
+
+def bewaar_tide(db: Any, data: Any) -> int:
+    """Eén rij per sessie: de proxy geeft uren (een weekend) dezelfde stand."""
+    rij = tide_rij(data)
+    if rij is None:
+        return 0
+    al = (db.table("intel_market_tide").select("id").eq("snapshot_time", rij["snapshot_time"])
+          .limit(1).execute().data) or []
+    if al:
+        return 0
+    db.table("intel_market_tide").insert([rij]).execute()
+    return 1
+
+
 def peil_proxy_feed(db: Any, nu: datetime, feed: str, action: str, post: Poster) -> dict[str, Any]:
     """Eén feed: wat geeft de proxy nu? Fout of nul rijen = oude stand blijft oud."""
     bron = "intel-proxy"
@@ -369,6 +407,12 @@ def peil_proxy_feed(db: Any, nu: datetime, feed: str, action: str, post: Poster)
         uit: dict[str, Any] = {"rijen": n, "bron": bron}
         if isinstance(body.get("aisstream_note"), str):
             uit["let_op"] = body["aisstream_note"][:200]
+        if feed == "marketTide":
+            # Bewaren mislukt = de feed is nog steeds vers; alleen het signaal blijft oud.
+            try:
+                uit["tide_bewaard"] = bewaar_tide(db, body.get("data"))
+            except Exception as exc:  # noqa: BLE001
+                uit["tide_niet_bewaard"] = str(exc)[:200]
         return uit
     except Exception as exc:  # noqa: BLE001
         _log_sync(db, feed, bron, 0, str(exc)[:300], nu)
