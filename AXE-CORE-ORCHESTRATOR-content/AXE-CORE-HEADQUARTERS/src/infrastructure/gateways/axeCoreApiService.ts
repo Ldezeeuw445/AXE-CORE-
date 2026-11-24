@@ -1346,6 +1346,23 @@ export interface McpHubTest {
   sleutelnaam?: string;
   tools?: { name: string; description: string }[];
 }
+/** Dagkoers voor de NorthSea-desk (koper, Brent, DXY) via de VPS, bron Yahoo.
+ *  ok=false = geen prijs; er wordt nooit een koers verzonnen (backend/axe_api/markt_dag.py). */
+export interface DeskDagkoers {
+  ok: boolean;
+  symbol: string;
+  label?: string;
+  source?: string;
+  last?: number;
+  changePct?: number | null;
+  bars?: Array<{ t: number; c: number }>;
+  error?: string;
+}
+
+export function deskDagkoers(symbol: 'XCUUSD' | 'BCOUSD' | 'DXY'): Promise<DeskDagkoers> {
+  return call('GET', `/market/daily?symbol=${encodeURIComponent(symbol)}`);
+}
+
 // NorthSea: de commodity desk leest AXE Commodities alleen-lezen via de
 // MCP-hub op de agent-host (backend/axe_api/northsea.py).
 export function northseaOverzicht(vers = false): Promise<NorthseaOverzicht> {

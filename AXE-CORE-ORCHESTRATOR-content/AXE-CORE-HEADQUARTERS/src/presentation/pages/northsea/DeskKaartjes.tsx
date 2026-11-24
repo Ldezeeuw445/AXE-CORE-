@@ -10,12 +10,16 @@
  * fetchMarketSnapshot eindigt, als alle bronnen falen, in een VERZONNEN reeks
  * rond 100 (zie de uitleg daar). Op een trading-scherm heeft dat al eens een
  * echte order gekost. Hier geldt dezelfde les: `synthetic` is "geen prijs",
- * en dan staat er "No price feed" in plaats van een koers. Koper en de
- * dollarindex hebben (september 2026) geen bron in AXE; Brent wel (BCOUSD).
+ * en dan staat er "No price feed" in plaats van een koers.
+ *
+ * 24 nov: koper en DXY kwamen nooit binnen (stooq: CORS in de browser, en nu een
+ * bot-controle), en Brent toonde 100,31 terwijl de Brent-future op 86,60 stond.
+ * Nu alle drie via de VPS (`/market/daily`, Yahoo, server-side). Geen prijs = "No
+ * price feed", nooit een gok.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
+import { deskDagkoers } from '@/infrastructure/gateways/axeCoreApiService';
 import type { DeskTellers } from '@/domain/northsea/desk';
 import { geld } from '@/domain/northsea/desk';
 import type { NorthseaOverzicht } from '@/domain/northsea/chase';
@@ -26,8 +30,8 @@ interface Markt {
   eenheid?: string;
 }
 
-const MARKTEN: Markt[] = [
-  { symbool: 'XCUUSD', label: 'Copper' },
+const MARKTEN: Array<Markt & { symbool: 'XCUUSD' | 'BCOUSD' | 'DXY' }> = [
+  { symbool: 'XCUUSD', label: 'Copper', eenheid: '/ lb' },
   { symbool: 'BCOUSD', label: 'Brent Crude', eenheid: '/ bbl' },
   { symbool: 'DXY', label: 'DXY' },
 ];
@@ -152,11 +156,11 @@ export function DeskKaartjes({ data, tellers, routes, kies }: {
     let weg = false;
     const haal = () => {
       for (const m of MARKTEN) {
-        fetchMarketSnapshot(m.symbool, 'd1', { priority: 'background' })
+        deskDagkoers(m.symbool)
           .then(s => {
-            const echt = s.source !== 'synthetic' && Number.isFinite(s.last);
-            const slot = s.bars.slice(-30).map(b => b.c);
-            if (!weg) setKoersen(k => ({ ...k, [m.symbool]: echt ? { last: s.last, pct: s.changePct ?? null, slot } : 'geen' }));
+            const echt = s.ok && typeof s.last === 'number' && Number.isFinite(s.last);
+            const slot = (s.bars ?? []).slice(-30).map(b => b.c);
+            if (!weg) setKoersen(k => ({ ...k, [m.symbool]: echt ? { last: s.last as number, pct: s.changePct ?? null, slot } : 'geen' }));
           })
           .catch(() => { if (!weg) setKoersen(k => ({ ...k, [m.symbool]: 'geen' })); });
       }

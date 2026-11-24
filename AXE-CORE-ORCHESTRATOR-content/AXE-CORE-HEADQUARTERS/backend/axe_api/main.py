@@ -1877,6 +1877,35 @@ async def market_history(symbol: str, interval: str = "1h", outputsize: int = 30
     return result
 
 
+# NorthSea-desk: koper, Brent en DXY (24 nov). Zie markt_dag.py waarom niet via
+# fetchMarketSnapshot. 5 min cache: de desk ververst elke 5 min per open venster.
+import markt_dag as _markt_dag
+_MARKT_DAG_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+@app.get("/market/daily", dependencies=[AUTH])
+async def market_daily(symbol: str):
+    sym = symbol.upper().replace("/", "")
+    if sym not in _markt_dag.DESK_SYMBOLEN:
+        raise HTTPException(400, f"unknown desk symbol {symbol!r}; allowed: {sorted(_markt_dag.DESK_SYMBOLEN)}")
+    nu = time.monotonic()
+    hit = _MARKT_DAG_CACHE.get(sym)
+    if hit and nu - hit[0] < 300:
+        return hit[1]
+    yahoo = _markt_dag.DESK_SYMBOLEN[sym][0]
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo}",
+                                 params={"range": "3mo", "interval": "1d"},
+                                 headers={"User-Agent": "Mozilla/5.0 (AXE desk)"})
+        uit = _markt_dag.samenvatting(sym, _markt_dag.dag_balken(r.json()))
+    except (httpx.HTTPError, ValueError) as e:
+        uit = {"ok": False, "symbol": sym, "error": str(e)[:200]}
+    if uit.get("ok"):
+        _MARKT_DAG_CACHE[sym] = (nu, uit)
+    return uit
+
+
 @app.get("/market/news", dependencies=[AUTH])
 async def market_news(category: str = "forex", limit: int = 20):
     try:
