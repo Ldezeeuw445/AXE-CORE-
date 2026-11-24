@@ -22,6 +22,10 @@ MIL = {"ac": [
     {"hex": "ae04", "t": "F16", "alt_baro": "ground"},        # op de grond: weg
 ]}
 EIA = {"response": {"data": [{"period": "2026-10-31", "value": "421000"}]}}
+# Zoals intel-proxy marketTide op 24 nov antwoordde (Nasdaq-ketens, sessie van 20 nov).
+TIDE = {"timestamp": "2026-11-20T21:00:00Z", "netCallPremium": 882501839, "netPutPremium": 633579238,
+        "callPutRatio": 1.39, "bias": "bullish",
+        "method": "Call vs put premium traded in the latest session, SPY + QQQ options · Nasdaq, delayed"}
 
 
 class _Q:
@@ -50,7 +54,9 @@ class _Q:
         if self.tabel == "intel_sync_log":
             rij = self.db.sync.get(self.filters.get("feed_id"))
             return type("R", (), {"data": [rij] if rij else []})()
-        return type("R", (), {"data": []})()
+        rijen = [r for r in self.db.geschreven.get(self.tabel, [])
+                 if all(r.get(k) == v for k, v in self.filters.items())] if self.filters else []
+        return type("R", (), {"data": rijen})()
 
 
 class _Db:
@@ -140,8 +146,9 @@ def test_energie_zonder_key_eerlijk_en_met_key_een_keer_per_dag(monkeypatch):
 
 
 def test_geen_verzonnen_marktstroom():
-    """marketTide/unusualOptions/darkPool haalt deze module niet zelf op en slaat ze niet op:
-    alleen de gedeelde intel-proxy serveert ze (CBOE/FINRA), en run_proxy meet die alleen."""
+    """marketTide/unusualOptions/darkPool haalt deze module niet zelf op: alleen de gedeelde
+    intel-proxy serveert ze (Nasdaq/CBOE/FINRA). run_proxy meet ze, en bewaart alleen een
+    volledige echte tide-stand; een lijst of een halve stand bewaart hij niet."""
     feeds = {d["agent"] for d in w.diensten()}
     assert feeds == {"intel-wereld", "intel-lucht", "intel-proxy-peiling"}
     assert not hasattr(w, "run_market_tide")
@@ -199,8 +206,7 @@ def test_proxy_feeds_worden_gemeten_zoals_de_apps_ze_krijgen():
         "darkPoolPrints": (200, {"ok": True, "data": [{"symbol": "SPY"}] * 12, "source": "finra_reg_sho_daily"}),
         "unusualOptions": (200, {"ok": True, "data": [{"symbol": "NVDA"}] * 25, "source": "cboe_delayed"}),
         # Echte vorm: één stand, geen lijst (intel-proxy freeIntel.fetchMarketTide).
-        "marketTide": (200, {"ok": True, "data": {"bias": "neutral", "callPremium": 1.2e9, "putPremium": 1.1e9},
-                             "source": "cboe_delayed"}),
+        "marketTide": (200, {"ok": True, "data": TIDE, "source": "nasdaq_delayed"}),
         "cyberThreats": (200, {"ok": True, "data": [{"cveId": "CVE-1"}] * 25, "source": "cisa_kev"}),
         "vesselStream": (200, {"ok": True, "data": {"vessels": [{"mmsi": "1"}] * 3, "alerts": []},
                                "source": "digitraffic", "aisstream_note": "aisstream_no_messages: connect_timeout_8s"}),
@@ -212,9 +218,15 @@ def test_proxy_feeds_worden_gemeten_zoals_de_apps_ze_krijgen():
     assert db.sync["marketTide"]["rows_synced"] == 1
     assert db.sync["vesselTracking"]["rows_synced"] == 3
     assert uit["vesselTracking"]["let_op"].startswith("aisstream_no_messages")
-    # Niets opgeslagen: alleen de log.
-    assert db.geschreven == {}
+    # Alleen de echte tide-stand bewaard, voor het marktsignaal; verder alleen de log.
+    assert db.geschreven == {"intel_market_tide": [{
+        "net_call_premium": 882501839.0, "net_put_premium": 633579238.0, "call_put_ratio": 1.39,
+        "bias": "bullish", "snapshot_time": "2026-11-20T21:00:00Z"}]}
+    assert uit["marketTide"]["tide_bewaard"] == 1
     staande_diensten._geen_verboden(uit)
+    # Dezelfde sessie het volgende uur: geen tweede rij.
+    w.run_proxy(db, NU + timedelta(hours=1), post=post)
+    assert len(db.geschreven["intel_market_tide"]) == 1
 
 
 def test_proxy_fout_of_nul_rijen_laat_de_oude_stand_oud():
@@ -233,6 +245,29 @@ def test_proxy_fout_of_nul_rijen_laat_de_oude_stand_oud():
     assert "http_500" in uit["darkPool"]["fout"]
     assert uit["unusualOptions"]["fout"] == "intel-proxy gaf 0 rijen"
     assert uit["marketTide"]["fout"] == "intel-proxy gaf 0 rijen"
+
+
+def test_tide_alleen_een_volledige_echte_stand():
+    assert w.tide_rij(TIDE)["bias"] == "bullish"
+    # Geen putvolume: de proxy zegt 'unavailable' zonder ratio. Dat is geen bias.
+    assert w.tide_rij({**TIDE, "bias": "unavailable", "callPutRatio": None}) is None
+    assert w.tide_rij({**TIDE, "netPutPremium": None}) is None
+    assert w.tide_rij({**TIDE, "timestamp": ""}) is None
+    assert w.tide_rij([TIDE]) is None
+    assert w.tide_rij(None) is None
+
+
+def test_tide_bewaren_mislukt_laat_de_feed_vers():
+    class _Kapot(_Db):
+        def table(self, t):
+            if t == "intel_market_tide":
+                raise RuntimeError("tabel weg")
+            return super().table(t)
+    db = _Kapot()
+    uit = w.peil_proxy_feed(db, NU, "marketTide", "marketTide",
+                            lambda a, _x: (200, {"ok": True, "data": TIDE, "source": "nasdaq_delayed"}))
+    assert db.sync["marketTide"]["last_sync_at"] == NU.isoformat()
+    assert uit["tide_niet_bewaard"] == "tabel weg"
 
 
 def test_proxy_peiling_is_een_staande_dienst():
