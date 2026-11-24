@@ -36,6 +36,7 @@ import { homedir, hostname, tmpdir } from 'node:os';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { reportCodingSeats, noteerLimiet } from './codingSeats.mjs';
+import { vingerafdruk, codeVeranderd } from './zelfVernieuw.mjs';
 import { maakLeesWeigering, naarDezeMac } from './leesRegels.mjs';
 import { schakel as macSchakel } from './macSchakelaars.mjs';
 import { ruimWorktree, veegWorktrees, hoofdRepoVan, bewaarWerk } from './worktreeOpruim.mjs';
@@ -1035,8 +1036,16 @@ setInterval(veegronde, 60 * 60_000);
 veegronde();
 await heartbeat();
 
+const EIGEN_MAP = new URL('.', import.meta.url).pathname;
+const CODE_BIJ_START = vingerafdruk(EIGEN_MAP);
+
 while (!stopping) {
   try {
+    // Tussen twee taken: nieuwe code van autosync? Stop; launchd (KeepAlive) start de nieuwe.
+    if (codeVeranderd(EIGEN_MAP, CODE_BIJ_START)) {
+      console.log('nieuwe worker-code gevonden — stoppen zodat launchd hem opnieuw start');
+      break;
+    }
     const task = await nextTask();
     if (!task) { await new Promise(r => setTimeout(r, POLL_MS)); continue; }
     if (!(await claim(task.id))) continue;
