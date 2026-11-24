@@ -68,6 +68,7 @@ from provider_router import (
 # is already three. These are the numbers for a background task, not a chat
 # reply; the durable worker holds a lease and heartbeats, so a long run is fine.
 MAX_STEPS = 40
+MAX_ZONDER_ACTIE = 3
 WALL_CLOCK_SECONDS = 1800
 
 # Per-command ceiling. Long enough for an install or a build, short enough that
@@ -942,6 +943,37 @@ def _trim_contents(
 # Sleutel = de naam uit de attempts-lijst, waarde = monotone tijd waarop hij
 # weer meedoet.
 _AFKOELING: dict[str, float] = {}
+_STOEL_AFKOELING: dict[str, float] = {}
+STOEL_AFKOELING_S = 30 * 60
+
+_STOEL_LIMIET = re.compile(
+    r"hit your (session|weekly|daily|usage)? ?limit|session limit|weekly limit|usage limit|rate limit"
+    r"|not logged in|please run /login|failed to authenticate|oauth session expired",
+    re.I,
+)
+
+
+def stoel_limiet_of_fout(output: str) -> str | None:
+    """De reden als een stoel-run geen antwoord gaf maar een weigering van de CLI.
+
+    24 nov gemeten: 'You've hit your session limit · resets 2:30am' kwam als gewone
+    tekst terug; de lus zei 'You produced text but took no action' en startte een
+    nieuwe claude_code.run -- 436 in twee uur op de iMac."""
+    fout = device_actions.motor_fout(output)
+    if fout:
+        return fout
+    kop = (output or "").split("\n## Oplevering (Mac)")[0].strip()
+    # Alleen korte antwoorden: een echt antwoord dat het woord 'rate limit' noemt is geen weigering.
+    if len(kop) < 400 and _STOEL_LIMIET.search(kop):
+        return " ".join(kop.split())[:240]
+    try:
+        d = json.loads(kop)
+        res = str(d.get("result") or "") if isinstance(d, dict) else ""
+        if res and len(res) < 400 and _STOEL_LIMIET.search(res):
+            return " ".join(res.split())[:240]
+    except ValueError:
+        pass
+    return None
 _OPENROUTER_FREE_START = cycle((0, 1, 2))
 
 # Credits zijn niet aan een dag gebonden: die komen terug als Luka bijvult.
@@ -1538,6 +1570,11 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
     if mag_stoel(agent, alleen_gratis=gratis):
         rijen = lees_stoelen(db)
         familie = str((kaart_voor(agent).get("seat_family") or "") or "") or None
+        # 24 nov: een stoel die net "You've hit your session limit" gaf, niet meteen
+        # opnieuw: dat gaf op de iMac honderden claude_code.run's per uur (en een
+        # volle schijf). Hij komt terug na zijn afkoeling.
+        nu_mono = time.monotonic()
+        rijen = [r for r in rijen if _STOEL_AFKOELING.get(str(r.get("seat_id") or r.get("id") or ""), 0) <= nu_mono]
         stoel = kies_stoel(rijen, familie=familie)
         if stoel:
             try:
@@ -1549,7 +1586,14 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"seat/{stoel.get('seat_id')}: {str(exc)[:150]}")
                 raw = {"ok": False, "error": str(exc)}
-            if raw.get("ok") and raw.get("output"):
+            stoel_fout = stoel_limiet_of_fout(str(raw.get("output") or "")) if raw.get("ok") else None
+            if stoel_fout:
+                # Geen antwoord maar een weigering van de CLI zelf: nooit als modeltekst
+                # teruggeven (dan duwt de lus "took no action" en start hij hem opnieuw).
+                sleutel = str(stoel.get("seat_id") or stoel.get("id") or "")
+                _STOEL_AFKOELING[sleutel] = time.monotonic() + STOEL_AFKOELING_S
+                errors.append(f"seat/{stoel.get('seat_id')}: {stoel_fout[:150]}")
+            elif raw.get("ok") and raw.get("output"):
                 _LAATSTE_MOTOR.set(f"seat/{stoel.get('seat_id')}")
                 return parse_seat_antwoord(str(raw.get("output") or ""))
             errors.append(f"seat/{stoel.get('seat_id')}: {str(raw.get('error') or 'no output')[:150]}")
@@ -1662,6 +1706,7 @@ async def _lus(
     # die bepaalt mee of 'klaar' mag, en gaat mee in het resultaat (taakverslag, review).
     laatste_oplevering: dict[str, Any] | None = None
     coding_gevraagd = False
+    zonder_actie = 0
 
     for step in range(1, MAX_STEPS + 1):
         if time.monotonic() - started > WALL_CLOCK_SECONDS:
@@ -1683,6 +1728,13 @@ async def _lus(
             # failure -- talking instead of doing -- so push it back to work
             # rather than accepting the prose as a result.
             said = " ".join(texts).strip() or "(nothing)"
+            zonder_actie += 1
+            if zonder_actie >= MAX_ZONDER_ACTIE:
+                # 24 nov: zonder rem duwde dit tot 40 stappen door, elk een nieuwe run.
+                raise RuntimeError(
+                    f"the model answered {zonder_actie} times in a row without taking an action "
+                    f"(last: {said[:160]!r}). Stopped instead of retrying; the transcript is kept."
+                )
             await on_event("axe.progress", f"Step {step}: no action taken, prompting to continue.", {})
             contents.append({
                 "role": "user",
@@ -1696,6 +1748,7 @@ async def _lus(
             transcript.append({"step": step, "tool": None, "note": said[:400]})
             continue
 
+        zonder_actie = 0
         responses = []
         for call in calls:
             # Vóór elke tooluitvoering, niet alleen per stap: één stap kan
