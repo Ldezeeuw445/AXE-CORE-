@@ -374,10 +374,42 @@ def seat_prompt(contents: list[dict[str, Any]], agent: str | None = None) -> str
     return "\n\n".join(stukken)[:12000]
 
 
+def _klaar_uit_oplevering(raw: str) -> dict[str, Any] | None:
+    """Een stoel die het werk zelf AF deed, eindigt de taak met een echte finish.
+
+    24 nov live: claude2 op de Mac mini voegde de test toe, draaide hem en
+    committe (5ecbc9bc) -- maar het brein van de lus is dan Claude Code zelf, dat
+    geen tool aanroept. De lus zag alleen tekst ("no action taken") en startte
+    een nieuwe run van 8 minuten. Alleen bij een COMPLETE oplevering (branch,
+    commit, kopjes, niets open); het bewijs is de commit-sha zelf, en de gewone
+    klaar-regels (falen toegeven, lege bewijzen) gelden daarna nog steeds."""
+    if "## Oplevering (Mac)" not in raw:
+        return None
+    try:
+        from device_actions import oplevering
+        op = oplevering(raw)
+    except Exception:  # noqa: BLE001
+        return None
+    sha = (str(op.get("commits") or "").split() or [""])[0]
+    if not (op.get("compleet") and re.fullmatch(r"[0-9a-f]{7,40}", sha)):
+        return None
+    samenvatting = " ".join(str(op.get("samenvatting") or "").split())[:700]
+    tests = " ".join(str(op.get("tests") or "").split())[:300]
+    summary = (f"{samenvatting} Tests: {tests} Branch {op.get('branch')}, commit {sha}, "
+               "klaar voor review (niet gemerged).")
+    return {"parts": [{"functionCall": {"name": "finish", "args": {
+        "summary": summary,
+        "verify_command": f'echo "commit {sha} op {op.get("branch")}"',
+        "expect_in_output": sha,
+    }}}], "oplevering": op}
+
+
 def parse_seat_antwoord(tekst: str) -> dict[str, Any]:
     raw = (tekst or "").strip()
     if not raw:
         raise RuntimeError("seat returned empty output")
+    if (klaar := _klaar_uit_oplevering(raw)):
+        return klaar
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:

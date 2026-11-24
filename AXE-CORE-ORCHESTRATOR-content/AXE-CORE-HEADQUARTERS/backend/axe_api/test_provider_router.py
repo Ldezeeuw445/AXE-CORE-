@@ -558,3 +558,27 @@ def test_mislukte_stoel_met_andere_vrije_stoel_wacht_kort(monkeypatch):
             assert wacht.retry_after_s <= 60
     finally:
         agent_loop._HUIDIGE_AGENT_WS.reset(token)
+
+
+SEAT_KLAAR = ('{"type":"result","result":"## Samenvatting\\nTest toegevoegd die bewijst dat stuur_meldingen niet '
+              'dubbel verstuurt.\\n\\n## Tests\\npytest test_push_meldingen.py: 21 passed\\n\\n## Risico\'s\\n- geen"}'
+              '\n\n## Oplevering (Mac)\nbranch: axe/20261124-pkl3t0\nworktree: /x\ncommits:\n'
+              '5ecbc9bc test(push): tweede tik\nniet gecommit:\n(no output)\ndiff:\n x | 41 +\n')
+
+
+def test_stoel_die_het_werk_af_heeft_eindigt_met_finish():
+    uit = pr.parse_seat_antwoord(SEAT_KLAAR)
+    fc = uit["parts"][0]["functionCall"]
+    assert fc["name"] == "finish"
+    assert "5ecbc9bc" in fc["args"]["summary"] and "axe/20261124-pkl3t0" in fc["args"]["summary"]
+    assert fc["args"]["expect_in_output"] == "5ecbc9bc"
+    import klaar_regels
+    assert not klaar_regels.leeg_bewijs(fc["args"]["verify_command"], fc["args"]["expect_in_output"])
+    assert not klaar_regels.geeft_falen_toe(fc["args"]["summary"])
+
+
+def test_onvolledige_oplevering_blijft_tekst():
+    bewaard = SEAT_KLAAR.replace("worktree: /x", "worktree: /x\nbewaard: c6b4b53d (door de worker vastgelegd, niet getest)")
+    assert "text" in pr.parse_seat_antwoord(bewaard)["parts"][0]
+    zonder = SEAT_KLAAR.replace("5ecbc9bc test(push): tweede tik", "(no output)")
+    assert "text" in pr.parse_seat_antwoord(zonder)["parts"][0]
