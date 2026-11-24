@@ -162,24 +162,46 @@ def test_diensten_staan_in_de_catalogus():
         assert staande_diensten.catalogus_voor(agent)["job_key"].startswith("axe_core:staande-intel-")
 
 
-def test_jets_stoppen_bij_429_en_roteren_per_uur():
+def test_jets_herstelt_van_voorbijgaande_429_met_backoff():
+    """24 nov: adsb.lol gaf al bij 6 losse vragen 429 (9 nov was dat nog 87).
+    Een voorbijgaande 429 mag de ronde niet meer meteen afbreken: na oplopend
+    wachten (_staart_ophalen) herstelt de volgende poging zich vanzelf."""
+    pogingen = []
+
+    def get(url, _h=None):
+        if url.endswith(("/ladd", "/pia")):
+            return 200, json.dumps({"ac": []})
+        staart = url.rsplit("/", 1)[1]
+        pogingen.append(staart)
+        if staart == pogingen[0] and pogingen.count(staart) == 1:
+            return 429, ""  # alleen de allereerste poging geeft 429
+        return 200, json.dumps({"ac": [{"hex": "abc123", "r": staart}]})
+
+    rijen, info = w.haal_jets(get, 0, NU.replace(hour=0), backoff=0)
+    assert info.get("limiet") is not True
+    assert pogingen.count(pogingen[0]) >= 2  # na de 429 nog eens geprobeerd
+
+
+def test_jets_stoppen_bij_blijvende_429_na_backoff_en_roteren_per_uur():
     gevraagd = []
 
     def get(url, _h=None):
         if url.endswith("/ladd") or url.endswith("/pia"):
             return 200, json.dumps({"ac": []})
         gevraagd.append(url.rsplit("/", 1)[1])
-        if len(gevraagd) == 3:
+        if len(gevraagd) >= 3:
             return 429, ""
         return 200, json.dumps({"ac": []})
     import pytest
     with pytest.raises(RuntimeError, match="429"):
-        w.haal_jets(get, 0, NU.replace(hour=0))
-    assert len(gevraagd) == 3
+        w.haal_jets(get, 0, NU.replace(hour=0), backoff=0)
+    # Twee staarten gelukt; de derde blijft 429 geven over alle backoff-pogingen.
+    assert len(gevraagd) == 2 + w.ADSB_BACKOFF_POGINGEN
     eerste_uur = gevraagd[0]
     gevraagd.clear()
     w.haal_jets(lambda u, h=None: (200, json.dumps({"ac": []})) if u.endswith(("/ladd", "/pia"))
-                else (gevraagd.append(u.rsplit("/", 1)[1]) or (200, json.dumps({"ac": []}))), 0, NU.replace(hour=1))
+                else (gevraagd.append(u.rsplit("/", 1)[1]) or (200, json.dumps({"ac": []}))),
+                0, NU.replace(hour=1), backoff=0)
     assert gevraagd[0] != eerste_uur and len(gevraagd) == w.JETS_PER_RONDE
 
 

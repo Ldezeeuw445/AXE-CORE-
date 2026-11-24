@@ -57,7 +57,12 @@ USGS_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&limi
 ADSB = "https://api.adsb.lol/v2"
 NOODCODES = ("7700", "7600", "7500")  # nood, radio uit, kaping
 MIL_MAX = 100
-ADSB_PAUZE_S = 0.25
+# 24 nov: adsb.lol gaf al bij 6 losse vragen 429 (9 nov was dat nog 87 vragen).
+# Minder vragen per ronde, meer pauze ertussen, en bij 429 eerst oplopend
+# wachten (zie _staart_ophalen) in plaats van de ronde meteen afbreken.
+ADSB_PAUZE_S = 1.0
+ADSB_BACKOFF_BASIS_S = 2.0
+ADSB_BACKOFF_POGINGEN = 3
 
 EIA_SERIES = (
     ("PET.WCESTUS1.W", "US Crude Oil Inventories (Weekly)", "thousand barrels"),
@@ -266,14 +271,36 @@ def _register() -> list[dict[str, Any]]:
         return [r for r in json.load(f) if r.get("tail")]
 
 
-JETS_PER_RONDE = 10
+JETS_PER_RONDE = 5
 
 
-def haal_jets(get: Getter, pauze: float, nu: datetime | None = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _staart_ophalen(get: Getter, tail: str, backoff: float) -> tuple[list[dict[str, Any]], bool]:
+    """Eén staart opvragen; bij 429 oplopend wachten (backoff, 2x, 4x, ...) voor
+    opgeven. 24 nov: adsb.lol gaf al bij 6 losse vragen 429, dus niet meer meteen
+    de ronde afbreken maar eerst een paar keer teruggevallen wachten — de limiet
+    is vaak voorbijgaand. Blijft het na ADSB_BACKOFF_POGINGEN nog mis, dan geeft
+    deze staart het op en stopt de ronde (True), net als voorheen."""
+    wachten = backoff
+    for poging in range(ADSB_BACKOFF_POGINGEN):
+        try:
+            return _json(get, f"{ADSB}/registration/{tail}").get("ac") or [], False
+        except RuntimeError as exc:
+            if "429" not in str(exc):
+                raise
+            if poging == ADSB_BACKOFF_POGINGEN - 1:
+                return [], True
+            if wachten:
+                time.sleep(wachten)
+            wachten *= 2
+    return [], True
+
+
+def haal_jets(get: Getter, pauze: float, nu: datetime | None = None,
+              backoff: float = ADSB_BACKOFF_BASIS_S) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Twee bulkvragen (LADD en PIA: daar staan de meeste privéjets in) en per
-    ronde een klein, roterend groepje losse opvragingen. adsb.lol geeft 429 bij
-    87 losse vragen achter elkaar (gemeten 9 nov); bij een 429 stopt de ronde,
-    de volgende staarten komen het uur erna."""
+    ronde een klein, roterend groepje losse opvragingen. Blijft een staart na
+    de backoff in _staart_ophalen nog 429 geven, dan stopt de ronde; de
+    volgende staarten komen het uur erna."""
     register = _register()
     staarten = {r["tail"].upper() for r in register}
     per_staart: dict[str, dict[str, Any]] = {}
@@ -292,15 +319,13 @@ def haal_jets(get: Getter, pauze: float, nu: datetime | None = None) -> tuple[li
     for reg in groep:
         if reg["tail"].upper() in per_staart:
             continue
-        try:
-            ac = _json(get, f"{ADSB}/registration/{reg['tail']}").get("ac") or []
-            gevraagd += 1
-            if ac:
-                per_staart[reg["tail"].upper()] = ac[0]
-        except RuntimeError as exc:
-            if "429" in str(exc):
-                limiet = True
-                break
+        ac, geraakt = _staart_ophalen(get, reg["tail"], backoff)
+        if geraakt:
+            limiet = True
+            break
+        gevraagd += 1
+        if ac:
+            per_staart[reg["tail"].upper()] = ac[0]
         if pauze:
             time.sleep(pauze)
     if limiet and not per_staart:
@@ -475,7 +500,8 @@ def run_wereld(db: Any, nu: datetime, get: Getter = _http_get) -> dict[str, Any]
     return uit
 
 
-def run_lucht(db: Any, nu: datetime, get: Getter = _http_get, pauze: float = ADSB_PAUZE_S) -> dict[str, Any]:
+def run_lucht(db: Any, nu: datetime, get: Getter = _http_get, pauze: float = ADSB_PAUZE_S,
+              backoff: float = ADSB_BACKOFF_BASIS_S) -> dict[str, Any]:
     """Elk uur: militair verkeer, noodcodes en de gevolgde zakenjets."""
     uit: dict[str, Any] = {"job": "intel air feeds"}
     uit["militair"] = _feed(db, nu, "militaryRadar", "adsb_lol", "intel_military_radar",
@@ -491,7 +517,7 @@ def run_lucht(db: Any, nu: datetime, get: Getter = _http_get, pauze: float = ADS
     # Nul noodgevallen is de gewone, goede uitkomst.
     uit["nood"] = _feed(db, nu, "emergencyMonitor", "adsb_lol", "intel_emergency_monitor", nood, leeg_is_ok=True)
     uit["jets"] = _feed(db, nu, "corporateJets", "adsb_lol", "intel_corporate_jets",
-                        lambda: haal_jets(get, pauze, nu), leeg_is_ok=True)
+                        lambda: haal_jets(get, pauze, nu, backoff), leeg_is_ok=True)
     return uit
 
 
