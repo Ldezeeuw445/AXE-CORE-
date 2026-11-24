@@ -38,6 +38,7 @@ import { fileURLToPath } from 'node:url';
 import { reportCodingSeats } from './codingSeats.mjs';
 import { maakLeesWeigering, naarDezeMac } from './leesRegels.mjs';
 import { schakel as macSchakel } from './macSchakelaars.mjs';
+import { ruimWorktree, veegWorktrees, hoofdRepoVan } from './worktreeOpruim.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -656,6 +657,13 @@ async function runCodexWithFallback(prompt, root, seat, requestedModel) {
   return result.out;
 }
 const git = (root, ...a) => run('git', a, root);
+// Strikt: exitcode != 0 is een fout en lege uitvoer is '' (run() geeft dan '(no output)').
+const gitStreng = async (root, ...a) => {
+  const r = await runStatus('git', a, root);
+  if (r.code) throw new Error(r.out);
+  return r.out === '(no output)' ? '' : r.out;
+};
+const WORKTREE_MAP = join(homedir(), '.axe', 'worktrees');
 const startBuild = git(REPO, 'rev-parse', '--short', 'HEAD').then(s => s.trim()).catch(() => '');
 /** Moet gelijk zijn aan COMPUTER_PROTOCOL in src/domain/tools/computerProtocol.ts (een test houdt ze gelijk). */
 const WORKER_PROTOCOL = 1;
@@ -750,6 +758,7 @@ async function execute(payload) {
   const ws = WORKSPACES[workspace];
   if (!ws) throw new Error(`unknown workspace '${workspace}'`);
   let root = resolve(ws.root);
+  const hoofdRoot = root;
 
   // Third and last check on protected branches — see the header.
   let branch = (await git(root, 'branch', '--show-current')).trim();
@@ -918,7 +927,7 @@ async function execute(payload) {
       const argv = ['-p', prompt, '--output-format', 'json', '--permission-mode', 'acceptEdits'];
       const model = String(args.model ?? '').trim();
       if (model) argv.push('--model', model);
-      return metOplevering(root, branch, basis, await run(bin, argv, root, seatChildEnv(seat), AGENT_TIMEOUT_MS));
+      return metOplevering(root, branch, basis, hoofdRoot, await run(bin, argv, root, seatChildEnv(seat), AGENT_TIMEOUT_MS));
     }
 
     case 'codex.run': {
@@ -926,7 +935,7 @@ async function execute(payload) {
       if (!prompt) throw new Error('codex.run needs a prompt');
       const seat = String(args.seat ?? 'codex');
       const model = String(args.model ?? '').trim();
-      return metOplevering(root, branch, basis, await runCodexWithFallback(prompt, root, seat, model));
+      return metOplevering(root, branch, basis, hoofdRoot, await runCodexWithFallback(prompt, root, seat, model));
     }
 
     case 'cursor.run': {
@@ -936,7 +945,7 @@ async function execute(payload) {
       const argv = ['-p', prompt, '--output-format', 'json', '--force'];
       const model = String(args.model ?? '').trim();
       if (model) argv.push('--model', model);
-      return metOplevering(root, branch, basis, await run(bin, argv, root, seatChildEnv(String(args.seat ?? 'cursor')), AGENT_TIMEOUT_MS));
+      return metOplevering(root, branch, basis, hoofdRoot, await run(bin, argv, root, seatChildEnv(String(args.seat ?? 'cursor')), AGENT_TIMEOUT_MS));
     }
 
     default:
@@ -948,7 +957,7 @@ async function execute(payload) {
 
 /* Punt 3: de git-feiten onder het antwoord van de agent. De VPS leest dit
    blok (device_actions.oplevering) naast de drie kopjes van de agent zelf. */
-async function metOplevering(root, branch, basis, uit) {
+async function metOplevering(root, branch, basis, hoofdRoot, uit) {
   if (!basis) return uit;
   const veilig = async (...a) => { try { return (await git(root, ...a)).trim(); } catch { return ''; } };
   const commits = await veilig('log', '--oneline', `${basis}..HEAD`);
@@ -957,7 +966,26 @@ async function metOplevering(root, branch, basis, uit) {
   return `${uit}\n\n## Oplevering (Mac)\nbranch: ${branch}\nworktree: ${root}\n`
     + `commits:\n${commits || '(geen commits)'}\n`
     + (open ? `niet gecommit:\n${open}\n` : '')
-    + `diff:\n${diff || '(geen wijzigingen)'}\n`;
+    + `diff:\n${diff || '(geen wijzigingen)'}\n`
+    + await naRunOpruimen(root, hoofdRoot, basis);
+}
+
+/* 24 nov: een run zonder commits en zonder wijzigingen laat niets achter --
+   de worktree en zijn lege branch gaan meteen weg (38 GB op de iMac). */
+async function naRunOpruimen(root, hoofdRoot, basis) {
+  if (!root.startsWith(WORKTREE_MAP + sep) || root === hoofdRoot) return '';
+  try {
+    const r = await ruimWorktree(gitStreng, hoofdRoot, root, { basis, naRun: true });
+    return r.actie === 'weg_met_branch' ? 'worktree: opgeruimd (geen wijzigingen)\n' : '';
+  } catch { return ''; }
+}
+
+async function veegronde() {
+  try {
+    const uit = await veegWorktrees(gitStreng, WORKTREE_MAP, p => hoofdRepoVan(p, f => readFile(f, 'utf8')));
+    const weg = uit.filter(u => u.actie.startsWith('weg'));
+    if (weg.length) console.log(`worktrees opgeruimd: ${weg.length} (${uit.length - weg.length} blijven)`);
+  } catch (e) { console.log(`worktree-veegronde faalde: ${e?.message ?? e}`); }
 }
 
 /* ── loop ───────────────────────────────────────────────────────────────── */
@@ -969,6 +997,8 @@ console.log(`workspaces: ${Object.keys(WORKSPACES).join(', ')}`);
 console.log('polling core_tasks — Ctrl-C to stop\n');
 
 setInterval(heartbeat, 15_000);
+setInterval(veegronde, 60 * 60_000);
+veegronde();
 await heartbeat();
 
 while (!stopping) {
