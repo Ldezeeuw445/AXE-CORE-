@@ -525,3 +525,36 @@ class TestLoopKeten:
         assert "to anon;" not in sql.lower()
         assert "grant select, insert, update, delete on table public.core_task_attempts to service_role" in sql
         assert "VITE_" not in sql
+
+
+def test_mislukte_stoel_met_andere_vrije_stoel_wacht_kort(monkeypatch):
+    """24 nov live: cursor2 weigerde zijn sleutel; de taak wachtte 1,5 uur op de
+    vroegst vrijkomende volle stoel terwijl claude2 gewoon vrij was."""
+    import agent_loop
+
+    monkeypatch.setattr(agent_loop, "_AFKOELING", {})
+    monkeypatch.setattr(agent_loop, "_STOEL_AFKOELING", {})
+    for k in ("GROQ_API_KEY", "OPENAI_API_KEY", "CEREBRAS_API_KEY", "GEMINI_API_KEY", "XAI_API_KEY", "GROK_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+
+    async def ollama(_c):
+        raise RuntimeError("ollama down")
+
+    vol = stoel("claude3", remaining_week=0)
+    vol.update(rate_limited=True, rate_limit_until="2099-01-01T00:00:00+00:00")
+    rijen = [stoel("cursor2", remaining_week=90), stoel("claude2", remaining_week=40), vol]
+    monkeypatch.setattr(agent_loop, "_call_ollama_begrensd", ollama)
+    monkeypatch.setattr(agent_loop, "lees_stoelen", lambda _db=None: rijen)
+    monkeypatch.setattr(agent_loop, "_stoel_runner",
+                        lambda *_a, **_k: {"ok": True, "output": "⚠ Warning: The provided API key is invalid."})
+    monkeypatch.setattr(agent_loop, "_stoel_db", lambda: NepDB(core_notifications=[]))
+
+    token = agent_loop._HUIDIGE_AGENT_WS.set({"agent": "axemanager", "role": "baas"})
+    try:
+        try:
+            asyncio.run(agent_loop._call_model([{"role": "user", "parts": [{"text": "x"}]}], None))
+            raise AssertionError("had moeten wachten")
+        except pr.WaitingForCapacity as wacht:
+            assert wacht.retry_after_s <= 60
+    finally:
+        agent_loop._HUIDIGE_AGENT_WS.reset(token)

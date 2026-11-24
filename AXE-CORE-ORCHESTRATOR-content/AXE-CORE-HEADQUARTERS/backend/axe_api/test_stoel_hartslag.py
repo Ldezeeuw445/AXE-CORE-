@@ -77,3 +77,10 @@ def test_volle_stoelen_overleven_een_herstart(tmp_path, monkeypatch):
     da._laad_volle_stoelen()
     assert da.stoel_vol_tot("main-imac-luka", "claude3") > time.time()
     da._VOLLE_STOELEN.clear()
+
+
+def test_reset_tijd_in_de_genoemde_zone():
+    from agent_runner import parse_limiet_tot
+    t0 = datetime(2026, 11, 24, 6, 40, tzinfo=timezone.utc).timestamp()
+    t = parse_limiet_tot("You've hit your session limit · resets 8:20am (Europe/Amsterdam)", t0)
+    assert datetime.fromtimestamp(t, timezone.utc) == datetime(2026, 11, 24, 7, 20, tzinfo=timezone.utc)

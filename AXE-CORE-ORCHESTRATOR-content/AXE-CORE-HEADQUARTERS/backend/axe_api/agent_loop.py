@@ -61,6 +61,7 @@ from provider_router import (
     roep_stoel,
     seat_prompt,
     vroegste_stoel_vrij,
+    stoel_vrij,
 )
 
 # Budget. The old loop allowed 10 steps and 2 minutes, which is not enough to
@@ -1623,6 +1624,11 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
                 return parse_seat_antwoord(str(raw.get("output") or ""))
             errors.append(f"seat/{stoel.get('seat_id')}: {str(raw.get('error') or 'no output')[:150]}")
         wacht = vroegste_stoel_vrij(rijen)
+        # Nog een andere vrije stoel over? Dan niet wachten op de eerste die
+        # vrijkomt (24 nov: 1,5 uur geparkeerd terwijl de Mac mini er twee had).
+        mislukt = str((stoel or {}).get("id") or "")
+        if any(str(r.get("id") or "") != mislukt for r in rijen if stoel_vrij(r)):
+            wacht = min(wacht, 60)
         raise WaitingForCapacity(
             f"waiting for capacity — {samenvatting}",
             retry_after_s=wacht, errors=errors,

@@ -665,6 +665,20 @@ def parse_limiet_tot(tekst: str, nu: float | None = None) -> float | None:
         uur = 0
     if uur > 23 or minuut > 59:
         return nu + 3600
+    # "resets 8:20am (Europe/Amsterdam)": de klok van die zone, niet die van de
+    # machine. De VPS draait in UTC en las dit een uur te laat (24 nov).
+    zone = re.search(r"\(([A-Za-z_]+/[A-Za-z_]+)\)", tekst or "")
+    if zone:
+        try:
+            from datetime import datetime as _dt, timedelta as _td
+            from zoneinfo import ZoneInfo
+            tz = ZoneInfo(zone.group(1))
+            dan = _dt.fromtimestamp(nu, tz).replace(hour=uur, minute=minuut, second=0, microsecond=0)
+            if dan.timestamp() <= nu:
+                dan += _td(days=1)
+            return dan.timestamp()
+        except Exception:  # noqa: BLE001
+            pass
     lokale = time.localtime(nu)
     kandidaat = time.mktime((
         lokale.tm_year, lokale.tm_mon, lokale.tm_mday,
