@@ -212,7 +212,7 @@ blijft staan. Wat al ergens anders op de lijst stond, staat hier niet dubbel.
       de worker mag lezen. Nu: worker-actie `axe.focus_log` (alleen lezen) om
       dat log + de app vooraan vanaf de VPS te lezen. Volgende: lezen, oorzaak.
 - [~] **Notch helemaal tegen de bovenkant van het scherm.** (20 nov: het venster stond al op y=0 -- notch.log 243x `venster_top = scherm_top` op de iMac -- maar las als grijs hangend paneel. Nu: bovenrand massief zwart dat in het glas overloopt, en holle schoudertjes links/rechts zoals een MacBook-notch. Komt met de app-build. Mac mini: `axe.focus_log` stuurt nu ook notch.log mee om daar te meten.)
-- [ ] **Geen nieuwe witte AXE CORE naast de oude op de Mac mini** na een build.
+- [~] **Geen nieuwe witte AXE CORE naast de oude op de Mac mini** na een build. (24 nov gemeten: LaunchServices kende op de Mac mini 10+ apps met bundle-id com.axe.core -- verdwenen dmg-volumes, release-bundels van oude worktrees, 'AXE CORE PR304', een back-up; de verse bundle in de build-map telt tijdens de build ook mee. Iets dat AXE op bundle-id opent pakt dan een kopie naast de echte; na `rm -rf` van die bundle is hij wit. Nu: `axe-bijwerken.sh` meldt na de build en na de installatie elke andere com.axe.core af bij LaunchServices (`lsregister -u`, geen bestanden weg). Parser droog getest op de iMac. Nog te zien: de eerstvolgende build op de Mac mini.)
 - [~] **Beide Macs traag** (18 nov): oorzaak meten en weghalen. 20 nov gemeten
       op de iMac (8 GB, 8 kernen): AXE's eigen webview ~57% CPU continu (WebKit
       GPU 31% + WebContent 26%) plus WindowServer 34%, omdat de bol en de

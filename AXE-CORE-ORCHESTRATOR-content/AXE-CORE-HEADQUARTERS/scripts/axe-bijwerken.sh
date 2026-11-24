@@ -31,6 +31,29 @@ cd "$HIER"
 BUNDEL="src-tauri/target/release/bundle/macos"
 APP="$BUNDEL/AXE CORE.app"
 zeg() { printf '\n\033[36m▸ %s\033[0m\n' "$*"; }
+
+# ── LaunchServices: alleen de canonical AXE CORE ─────────────────────────────
+# 24 nov (BOUWLIJST: "geen nieuwe witte AXE CORE naast de oude op de Mac mini"):
+# LaunchServices kende op de Mac mini 10+ apps met bundle-id com.axe.core --
+# verdwenen dmg-volumes, release-bundels van oude worktrees, "AXE CORE PR304",
+# een back-up. Start iets AXE op bundle-id (melding, open -b, de worker) terwijl
+# de build-map net een nieuwe bundle heeft, dan opent die als TWEEDE AXE; daarna
+# gooit dit script die bundle weg en staat er een wit icoon. Afmelden verwijdert
+# geen bestanden: de kopieen blijven staan, ze tellen alleen niet meer als AXE.
+LSREG="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+alleen_canonieke_axe() {
+  [[ -x "$LSREG" ]] || return 0
+  local canon="/Applications/AXE CORE.app" pad n=0
+  while IFS= read -r pad; do
+    [[ -z "$pad" || "$pad" == "$canon" ]] && continue
+    "$LSREG" -u "$pad" 2>/dev/null && n=$((n + 1))
+  done < <("$LSREG" -dump 2>/dev/null | awk '
+      /^path:/ { sub(/^path:[ \t]*/, ""); sub(/ \(0x[0-9a-f]+\)$/, ""); p = $0 }
+      /^identifier:[ \t]*com\.axe\.core$/ { if (p ~ /\.app$/) print p }' | sort -u)
+  [[ -d "$canon" ]] && "$LSREG" -f "$canon" 2>/dev/null || true
+  [[ "$n" -gt 0 ]] && zeg "LaunchServices: $n andere AXE CORE-kopie(en) afgemeld; alleen $canon telt"
+  return 0
+}
 stop() { printf '\n\033[31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
 trap 'rc=$?; printf "\n\033[31m✖ AXE update stopte bij regel %s: %s (exit %s)\033[0m\n" "$LINENO" "$BASH_COMMAND" "$rc" >&2' ERR
 
@@ -167,6 +190,9 @@ zeg "Lokale AXE runtime voorbereiden"
 SETUP_ONLY=1 bash backend/axe_api/run-local.sh
 
 AXE_CANONICAL_BUILD=1 npm run tauri:build
+# De nieuwe bundle in de build-map meteen afmelden: tot hij in /Applications staat
+# mag niets hem als "de" AXE CORE openen.
+alleen_canonieke_axe
 
 [[ -d "$APP" ]] || stop "De bouw gaf geen $APP. Lees de uitvoer hierboven."
 
@@ -330,6 +356,7 @@ ditto "$APP" "$CANONICAL_APP"
 xattr -dr com.apple.quarantine "$CANONICAL_APP" 2>/dev/null || true
 codesign --verify --deep --strict "$CANONICAL_APP" || stop "Canonical AXE CORE signature-verificatie faalde."
 
+alleen_canonieke_axe
 APP_SHA="$(cat "$CANONICAL_APP/Contents/Resources/axe-build-stamp.txt" 2>/dev/null || true)"
 [[ -n "$APP_SHA" ]] || stop "Canonical app bevat geen deterministische build-stempel."
 [[ "$APP_SHA" == "$VERWACHT_SHA" ]] || stop "Canonical app is uit $APP_SHA gebouwd maar repo staat op $VERWACHT_SHA."
