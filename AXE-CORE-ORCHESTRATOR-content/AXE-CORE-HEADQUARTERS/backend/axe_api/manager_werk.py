@@ -191,6 +191,27 @@ def _json_uit(tekst: str) -> dict[str, Any] | None:
     return _mb.lees_model_json(tekst)
 
 
+_CODE = re.compile(
+    r"\b[\w./-]+\.(?:py|ts|tsx|js|mjs|rs|sh|sql)\b|\b(?:claude_code|codex|cursor)\.run\b|\bpytest\b|\bvitest\b"
+    r"|\bcommit\w*\b|\bbranch\b|\bpull.?request\b|\bPR\b", re.I)
+
+
+def bundel_codewerk(taken: list[str], opdracht: str) -> list[str]:
+    """Codewerk is één taak, met Luka's opdracht letterlijk erbij.
+
+    24 nov live: "voeg een test toe, draai pytest, commit" werd drie taken. Elke
+    taak krijgt een eigen worktree, dus de pytest-taak zag de nieuwe test nooit,
+    en "op de Mac mini" viel onderweg weg (de run ging naar de iMac)."""
+    if not taken or not (_CODE.search(opdracht or "") or any(_CODE.search(t) for t in taken)):
+        return taken
+    stappen = taken[0] if len(taken) == 1 else " Daarna: ".join(
+        f"({i}) {t.rstrip('.')}." for i, t in enumerate(taken, 1))
+    letterlijk = " ".join((opdracht or "").split())[:1500]
+    if letterlijk and letterlijk not in stappen:
+        stappen += f"\n\nLuka's opdracht letterlijk (apparaat, grenzen en 'klaar' komen hieruit): {letterlijk}"
+    return [stappen[:3500]]
+
+
 def lees_antwoord(tekst: str) -> tuple[str, list[str]]:
     """Model-uitvoer → (antwoord, taken). Geen JSON = de tekst zelf, geen taken."""
     d = _json_uit(tekst)
@@ -654,6 +675,7 @@ def _run(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[
         except Exception as e:  # noqa: BLE001
             uit["fouten"].append(f"{agent}: {e}"[:200])
             continue
+        taken = bundel_codewerk(taken, "\n".join(str(o.get("body") or "") for o in wacht))
         ruimte = max(0, MAX_TAKEN_PER_DAG - _taken_vandaag(db, agent, nu))
         gestart = [t for t in taken[:ruimte] if maak_taak(db, agent, t, nu, wacht[-1].get("id"))]
         if taken and not gestart:
