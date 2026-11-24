@@ -119,6 +119,7 @@ class _Q:
 
     def __init__(self, db, naam):
         self.db, self.naam, self.actie = db, naam, "select"
+        self.is_null_kolom = None
 
     def select(self, *_a):
         return self
@@ -127,7 +128,12 @@ class _Q:
         self.actie, self.rij = "insert", dict(rij)
         return self
 
-    def is_(self, *_a):
+    def is_(self, kolom, waarde):
+        # Zelfde contract als supabase-py: IS NULL komt binnen als de string
+        # "null", niet als None. Nodig om pushed_at-dedup (twee tikken na elkaar)
+        # echt te laten werken i.p.v. altijd dezelfde rij terug te geven.
+        if waarde in (None, "null"):
+            self.is_null_kolom = kolom
         return self
 
     def gte(self, *_a):
@@ -168,7 +174,10 @@ class _Q:
         elif self.actie == "delete":
             self.db.deletes.append((self.naam, getattr(self, "filter", None)))
         else:
-            return type("R", (), {"data": self.db.tabellen[self.naam]})()
+            rijen = self.db.tabellen[self.naam]
+            if self.is_null_kolom is not None:
+                rijen = [r for r in rijen if r.get(self.is_null_kolom) is None]
+            return type("R", (), {"data": rijen})()
         return type("R", (), {"data": []})()
 
 
@@ -334,3 +343,30 @@ def test_een_goede_en_een_dode_zet_wel_pushed_at(monkeypatch):
     assert uit["verstuurd"] == 1
     assert uit["opgeruimd"] == 1
     assert db.tabellen["core_notifications"][0].get("pushed_at")
+
+
+def test_tweede_tik_stuurt_dezelfde_melding_niet_opnieuw(monkeypatch):
+    verstuurd = []
+
+    def nep_webpush(subscription_info, data, **_k):
+        verstuurd.append(subscription_info["endpoint"])
+
+    nep = types.ModuleType("pywebpush")
+    nep.webpush = nep_webpush
+    nep.WebPushException = type("WebPushException", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "pywebpush", nep)
+    monkeypatch.setenv("VAPID_PRIVATE_KEY", "/nergens.pem")
+
+    db = _Db(
+        [{"id": "n-twee-tikken", "type": "warning", "message": "Test push: lock screen.",
+          "created_at": "2026-10-05T07:00:00+00:00"}],
+        [{"endpoint": "https://push/eenmalig", "p256dh": "x", "auth": "y", "verberg_inhoud": False}],
+    )
+
+    eerste = asyncio.run(stuur_meldingen(lambda: db, nu=datetime(2026, 10, 5, 7, 0, 30, tzinfo=timezone.utc)))
+    tweede = asyncio.run(stuur_meldingen(lambda: db, nu=datetime(2026, 10, 5, 7, 1, 0, tzinfo=timezone.utc)))
+
+    assert eerste["verstuurd"] == 1
+    assert tweede["verstuurd"] == 0
+    # pushed_at hield de rij tegen bij de tweede tik -- webpush is dus maar één keer geroepen.
+    assert verstuurd == ["https://push/eenmalig"]
