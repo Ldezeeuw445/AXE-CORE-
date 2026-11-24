@@ -1858,7 +1858,10 @@ async def _lus(
             # wijzigen" maar kon nooit finish roepen -- geen commit, dus geen oplevering. Heeft
             # de taak een MEETBARE acceptatie (feed: voor -> na) en is die nu echt gehaald, dan
             # is dat het bewijs: de meting, niet de tekst. Niet gehaald = gewoon doorgaan.
-            if said != "(nothing)" and not klaar_regels.geeft_falen_toe(said):
+            # Ook als de stoel zegt dat hij iets niet zelf kon nagaan (24 nov live: "ik kon de
+            # logs niet lezen ... als de feed al vers is, is er niets meer te doen"): de meting
+            # beslist, en de samenvatting zegt eerlijk dat de meting het bewijs is.
+            if said != "(nothing)":
                 import acceptatie as _acceptatie
                 acc_tekst = await asyncio.to_thread(
                     _acceptatie.na_meting_voor_taak, _db_voor_stoelen(), _HUIDIGE_TAAK.get())
@@ -1870,7 +1873,8 @@ async def _lus(
                     return {
                         "acceptatie": {k: v for k, v in acc_tekst.items() if k != "na"},
                         **motor_velden(),
-                        "summary": said[:1500],
+                        "summary": ("Acceptance measured and met: " + acc_tekst["regel"][:400]
+                                    + ". Agent note: " + said[:1100]),
                         "steps_used": step,
                         **({"oplevering": laatste_oplevering} if laatste_oplevering else {}),
                         "verification": {"passed": True, "checks": [{
