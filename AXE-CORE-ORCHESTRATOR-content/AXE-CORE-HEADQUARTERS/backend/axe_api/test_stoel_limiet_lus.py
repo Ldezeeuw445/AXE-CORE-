@@ -15,3 +15,11 @@ def test_een_echt_antwoord_blijft_een_antwoord():
     assert al.stoel_limiet_of_fout(json.dumps({"name": "read_file", "args": {"path": "a.py"}})) is None
     lang = "Ik heb de feed bekeken. " * 30 + "De rate limit van de provider is 60 per minuut."
     assert al.stoel_limiet_of_fout(lang) is None
+
+
+def test_ongeldige_cursor_sleutel_is_een_stoelfout():
+    """24 nov: na de Claude-afkoeling viel de lus op Cursor, die dit gaf; 7 echte
+    verzoeken van Luka faalden na 3 rondes in plaats van te wachten."""
+    uit = ("\x1b[33m⚠ Warning: The provided API key is invalid.\x1b[0m\n"
+           "The API key was loaded from the CURSOR_API_KEY environment variable.\nPlease check you have")
+    assert al.stoel_limiet_of_fout(uit)

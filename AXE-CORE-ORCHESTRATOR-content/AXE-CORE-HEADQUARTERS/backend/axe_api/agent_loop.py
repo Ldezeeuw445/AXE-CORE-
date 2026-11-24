@@ -948,7 +948,8 @@ STOEL_AFKOELING_S = 30 * 60
 
 _STOEL_LIMIET = re.compile(
     r"hit your (session|weekly|daily|usage)? ?limit|session limit|weekly limit|usage limit|rate limit"
-    r"|not logged in|please run /login|failed to authenticate|oauth session expired",
+    r"|not logged in|please run /login|failed to authenticate|oauth session expired"
+    r"|api key is invalid|invalid api key|provided api key",
     re.I,
 )
 
@@ -962,7 +963,8 @@ def stoel_limiet_of_fout(output: str) -> str | None:
     fout = device_actions.motor_fout(output)
     if fout:
         return fout
-    kop = (output or "").split("\n## Oplevering (Mac)")[0].strip()
+    # ANSI-kleurcodes eruit (Cursor: "\x1b[33m⚠ Warning: The provided API key is invalid").
+    kop = re.sub(r"\x1b\[[0-9;]*m", "", (output or "").split("\n## Oplevering (Mac)")[0]).strip()
     # Alleen korte antwoorden: een echt antwoord dat het woord 'rate limit' noemt is geen weigering.
     if len(kop) < 400 and _STOEL_LIMIET.search(kop):
         return " ".join(kop.split())[:240]
