@@ -71,8 +71,15 @@ def test_vrije_stoel_gaat_mee_naar_de_mac():
     assert db.inserts[0]["payload"]["args"]["seat"] == "claude2"
 
 
-def test_gevraagde_stoel_blijft_staan():
-    db = Db([stoel("claude2", "mac-mini-van-luka-6")])
+def test_gevraagde_volle_stoel_wordt_een_vrije():
+    db = Db([stoel("claude3", "mac-mini-van-luka-6", tot=VOL), stoel("claude2", "mac-mini-van-luka-6")])
+    da.run_on_device("mac-mini-van-luka-6", "claude_code.run", {"prompt": "x", "seat": "claude3"}, db=db,
+                     sleep=lambda s: None)
+    assert db.inserts[0]["payload"]["args"]["seat"] == "claude2"
+
+
+def test_gevraagde_vrije_stoel_blijft_staan():
+    db = Db([stoel("claude2", "mac-mini-van-luka-6"), stoel("claude", "mac-mini-van-luka-6")])
     da.run_on_device("mac-mini-van-luka-6", "claude_code.run", {"prompt": "x", "seat": "claude"}, db=db,
                      sleep=lambda s: None)
     assert db.inserts[0]["payload"]["args"]["seat"] == "claude"

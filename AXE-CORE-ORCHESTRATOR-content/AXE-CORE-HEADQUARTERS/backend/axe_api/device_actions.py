@@ -474,8 +474,12 @@ def run_on_device(
         # tempts the model to answer from memory.
         return {"error": f"{known[device]['label']} is offline (last heartbeat "
                          f"{known[device]['seconds_since_heartbeat']}s ago)."}
-    if tool in AGENT_RUNS and not args.get("seat"):
-        keuze = kies_stoel(tool, known[device].get("coding_seats_free"))
+    vrij_hier = known[device].get("coding_seats_free")
+    gevraagd = str(args.get("seat") or "")
+    # Een gevraagde stoel telt alleen als hij hier vrij is (24 nov: het model bleef
+    # claude3 vragen, die op zijn sessielimiet zat).
+    if tool in AGENT_RUNS and (not gevraagd or (vrij_hier is not None and gevraagd not in vrij_hier)):
+        keuze = kies_stoel(tool, vrij_hier)
         if keuze is False:
             andere = [d["label"] + " (" + d["device"] + ")" for d in apparaten
                       if d["online"] and d["device"] != device and kies_stoel(tool, d.get("coding_seats_free"))]
