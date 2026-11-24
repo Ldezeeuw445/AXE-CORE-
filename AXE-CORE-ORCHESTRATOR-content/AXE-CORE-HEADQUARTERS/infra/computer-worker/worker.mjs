@@ -949,7 +949,7 @@ async function execute(payload) {
       } catch (e) {
         throw await metBewaardWerk(e, root, hoofdRoot, basis, branch);
       }
-      noteerLimiet(seat, uit); // 24 nov: anders bleef een stoel op zijn sessielimiet "vrij"
+      noteerLimiet(seat, uit, { geslaagd: true }); // 24 nov: anders bleef een stoel op zijn sessielimiet "vrij"
       return metOplevering(root, branch, basis, hoofdRoot, uit);
     }
 
@@ -967,7 +967,7 @@ async function execute(payload) {
         noteerLimiet(seat, String(e?.message ?? e));
         throw await metBewaardWerk(e, root, hoofdRoot, basis, branch);
       }
-      noteerLimiet(seat, uit);
+      noteerLimiet(seat, uit, { geslaagd: true });
       return metOplevering(root, branch, basis, hoofdRoot, uit);
     }
 
@@ -985,7 +985,7 @@ async function execute(payload) {
       } catch (e) {
         throw await metBewaardWerk(e, root, hoofdRoot, basis, branch);
       }
-      noteerLimiet(seat, uit);
+      noteerLimiet(seat, uit, { geslaagd: true });
       return metOplevering(root, branch, basis, hoofdRoot, uit);
     }
 

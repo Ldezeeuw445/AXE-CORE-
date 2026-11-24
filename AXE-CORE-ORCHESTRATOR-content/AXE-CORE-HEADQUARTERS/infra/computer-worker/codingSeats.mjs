@@ -324,8 +324,23 @@ const LIMIETEN_BESTAND = (home) => join(home, '.axe', 'worker-seat-limits.json')
 
 /** Limiet die een worker-run zelf zag (claude_code.run enz.) onthouden.
  *  Eigen bestand: coding-seats.json schrijft de Mac-backend telkens opnieuw. */
-export function noteerLimiet(seatId, uitvoer, { home = homedir(), now = Date.now() } = {}) {
-  const tekst = String(uitvoer ?? '');
+// Zinnen die alleen de CLI zelf schrijft als een stoel echt op zijn limiet zit.
+export const CLI_LIMIET_RE = /hit your (?:session |weekly |usage )?limit|usage limit reached|weekly usage limit|session limit reached|you(?:'|’)ve reached your usage limit|quota exceeded|rate_limit_exceeded/i;
+
+/**
+ * Een run die SLAAGDE: alleen de laatste 600 tekens, en alleen een echte CLI-zin.
+ * 24 nov live: de corporateJets-taak ging over "adsb_lol limiet (429)"; die tekst stond
+ * in het herhaalde prompt en in het antwoord, en zette codex (tot morgen 09:20), claude
+ * en claude3 als 'rate limited' op slot -- de taak blokkeerde zijn eigen stoelen.
+ */
+export function limietNaGeslaagdeRun(uitvoer) {
+  const staart = String(uitvoer ?? '').slice(-600);
+  return staart.split(/\n|"/).find(r => CLI_LIMIET_RE.test(r)) || '';
+}
+
+export function noteerLimiet(seatId, uitvoer, { home = homedir(), now = Date.now(), geslaagd = false } = {}) {
+  let tekst = String(uitvoer ?? '');
+  if (geslaagd) tekst = limietNaGeslaagdeRun(tekst);
   if (!seatId || !isRealLimitMessage(tekst)) return null;
   // Eerst de leesbare zin ("hit your session limit · resets 8:20am"), dan pas een kale 429.
   const rond = (bron) => tekst.match(new RegExp(`[^\\n"]{0,90}(?:${bron})[^\\n"]{0,120}`, 'i'));

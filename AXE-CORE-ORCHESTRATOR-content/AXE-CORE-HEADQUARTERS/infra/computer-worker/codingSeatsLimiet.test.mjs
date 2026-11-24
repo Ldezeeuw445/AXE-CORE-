@@ -38,3 +38,24 @@ describe('sessielimiet van Claude Code', () => {
     expect(noteerLimiet('claude', '{"result":"Test toegevoegd"}', { home })).toBeNull();
   });
 });
+
+describe('limiet na een geslaagde run (24 nov: taak over "adsb_lol limiet (429)")', () => {
+  const ANTWOORD = 'workdir: x\nuser\nDe feed gaf adsb_lol limiet (429), rate limit van de bron.\n'
+    + '## Samenvatting\nDe 429-backoff staat al live; niets te wijzigen.';
+
+  it('tekst van de taak zelf zet de stoel niet op slot', () => {
+    const home = mkdtempSync(join(tmpdir(), 'axe-lim-'));
+    expect(noteerLimiet('codex', ANTWOORD, { home, geslaagd: true })).toBeNull();
+  });
+
+  it('de echte CLI-zin aan het eind telt wel', () => {
+    const home = mkdtempSync(join(tmpdir(), 'axe-lim-'));
+    const lim = noteerLimiet('claude', ANTWOORD + "\nYou've hit your session limit · resets 8:20am", { home, geslaagd: true });
+    expect(lim.limit_message).toMatch(/session limit/);
+  });
+
+  it('een mislukte run leest nog alles, zoals voorheen', () => {
+    const home = mkdtempSync(join(tmpdir(), 'axe-lim-'));
+    expect(noteerLimiet('codex2', 'error: 429 Too Many Requests', { home })).not.toBeNull();
+  });
+});
