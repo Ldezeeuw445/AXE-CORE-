@@ -202,7 +202,13 @@ def bundel_codewerk(taken: list[str], opdracht: str) -> list[str]:
     24 nov live: "voeg een test toe, draai pytest, commit" werd drie taken. Elke
     taak krijgt een eigen worktree, dus de pytest-taak zag de nieuwe test nooit,
     en "op de Mac mini" viel onderweg weg (de run ging naar de iMac)."""
-    if not taken or not (_CODE.search(opdracht or "") or any(_CODE.search(t) for t in taken)):
+    import acceptatie as _acc
+    # 24 nov live (corporateJets): ook een feed-reparatie werd drie taken ("logs bekijken",
+    # "config aanpassen", "herstarten en controleren"); alleen de laatste kreeg de meting.
+    # Alleen een reparatie van één genoemde feed (ids zijn camelCase: corporateJets, marketTide);
+    # "waarom is de feed oud?" met losse vervolgvragen blijven losse taken.
+    feed = _acc.soort(opdracht or "") == "feed" and bool(re.search(r"\b[a-z]+[A-Z][A-Za-z]+\b", opdracht or ""))
+    if not taken or not (feed or _CODE.search(opdracht or "") or any(_CODE.search(t) for t in taken)):
         return taken
     stappen = taken[0] if len(taken) == 1 else " Daarna: ".join(
         f"({i}) {t.rstrip('.')}." for i, t in enumerate(taken, 1))

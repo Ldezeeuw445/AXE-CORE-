@@ -37,3 +37,13 @@ def test_ronde_maakt_een_taak_van_codewerk():
     mw.run(db, nu, chat=lambda m: (antwoord, "test"))
     taken = [r for r in db.rijen.get("core_tasks", []) if r.get("capability") == "agentic"]
     assert len(taken) == 1 and "Mac mini" in str(taken[0].get("goal") or taken[0].get("payload"))
+
+
+def test_feed_reparatie_wordt_ook_een_taak_met_meting():
+    opdracht = "De corporateJets-feed ververst sinds 01:35 niet meer (adsb_lol limiet 429). Laat hem weer verversen."
+    taken = ["Bekijk de logs van de corporateJets-worker.", "Pas de worker-configuratie aan.",
+             "Herstart de worker en controleer of de feed weer synchroniseert."]
+    uit = mw.bundel_codewerk(taken, opdracht)
+    assert len(uit) == 1 and "(3) Herstart" in uit[0] and "corporateJets-feed" in uit[0]
+    import acceptatie
+    assert acceptatie.soort(uit[0]) == "feed"
