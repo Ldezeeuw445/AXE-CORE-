@@ -45,3 +45,52 @@ def test_overzicht_per_gesprek_met_laatste_drie_regels_en_weektelling():
 
 def test_jokers_in_de_zoekvraag_zijn_letterlijk():
     assert cz._like("50%_x") == "%50\\%\\_x%"
+
+
+def test_zoekwoorden_laten_stopwoorden_weg_langste_eerst():
+    assert cz.zoekwoorden("Wat zei de companion manager over de corporateJets feed?") == \
+        ["corporatejets", "companion", "manager", "feed", "zei"]
+
+
+def test_beantwoord_zoekt_per_woord_en_geeft_bronnen_met_nummer():
+    import asyncio
+    gezocht, gevraagd = [], {}
+
+    async def zoek(w):
+        gezocht.append(w)
+        return cz.treffers(AXE, MGR[:2], w)
+
+    async def model(systeem, inhoud):
+        gevraagd["inhoud"] = inhoud
+        return "De feed ververst weer [1].", "test-model"
+
+    uit = asyncio.run(cz.beantwoord("Ververst de corporateJets feed weer?", zoek, model))
+    assert "corporatejets" in gezocht
+    assert uit["antwoord"].endswith("[1].") and uit["model"] == "test-model"
+    assert [b["n"] for b in uit["bronnen"]] == [1, 2, 3, 4]       # dubbelen weg
+    assert "[1] AXE" in gevraagd["inhoud"]
+
+
+def test_zonder_model_toch_de_bronnen_en_een_eerlijke_fout():
+    import asyncio
+
+    async def zoek(w):
+        return cz.treffers(AXE, [], w)
+
+    async def model(systeem, inhoud):
+        return None, "no model available right now (gpt-oss 429)"
+
+    uit = asyncio.run(cz.beantwoord("corporateJets feed", zoek, model))
+    assert uit["antwoord"] is None and "429" in uit["fout"] and uit["bronnen"]
+
+
+def test_niets_gevonden_zegt_dat_zonder_model():
+    import asyncio
+
+    async def zoek(w):
+        return []
+
+    async def model(systeem, inhoud):
+        raise AssertionError("geen model nodig")
+
+    assert asyncio.run(cz.beantwoord("onbekend onderwerp", zoek, model))["bronnen"] == []
