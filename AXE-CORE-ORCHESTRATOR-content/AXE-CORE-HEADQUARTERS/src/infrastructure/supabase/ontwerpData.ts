@@ -139,6 +139,20 @@ const TABELLEN: Record<string, Rij[]> = {
       heartbeat_at: nu(),
     },
   ],
+  /* Trading-hub (25 nov): gesloten trades met een pnl, anders zie je de
+     curve, de staafjes en de lijsten nooit. Symbolen zijn herkenbaar nep. */
+  core_trading_trades: reeks(42, i => ({
+    id: `voorbeeld-trade-${i}`,
+    symbol: `EXAMPLE${['EUR', 'GBP', 'XAU', 'NAS'][i % 4]}`,
+    side: i % 3 ? 'buy' : 'sell',
+    status: i < 3 ? 'open' : 'closed',
+    venue: 'metaapi',
+    strategy: ['Example ICT', 'Example breakout', 'Example mean revert'][i % 3],
+    pnl: i < 3 ? null : Math.round((Math.sin(i * 1.7) * 140 + (i % 5) * 18 - 20) * 100) / 100,
+    opened_at: geleden((60 - i) * 60 * 20 + 90),
+    closed_at: i < 3 ? null : geleden((60 - i) * 60 * 20),
+    updated_at: nu(),
+  })),
   core_schedules: reeks(7, i => ({
     id: `voorbeeld-planning-${i}`,
     name: `Voorbeeldtaak ${i + 1}`,

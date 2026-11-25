@@ -1,0 +1,35 @@
+/* KPI-tegels (25 nov). Mat, kleur alleen in stip, getal-toon en lijn. */
+.axe-kpi-rij-raster { flex: 0 0 auto; display: grid; gap: var(--axe-dash-gat, 10px); min-width: 0; }
+.axe-kpi {
+  display: flex; flex-direction: column; justify-content: center; gap: 3px; min-width: 0; height: 66px; padding: 6px 12px;
+  border-radius: 12px; text-align: left; overflow: hidden;
+  background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn);
+  border-top-color: var(--axe-kaart-lijn-boven, var(--axe-kaart-lijn));
+}
+.axe-kpi--knop:hover { background: rgba(255, 255, 255, 0.05); }
+.axe-kpi-kop { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.axe-kpi-stip { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); }
+.axe-kpi-stip[data-toon='ok'] { background: var(--ok, var(--success)); }
+.axe-kpi-stip[data-toon='let-op'] { background: var(--warn, var(--warning)); }
+.axe-kpi-stip[data-toon='fout'] { background: var(--err, var(--error)); }
+.axe-kpi-label { font-size: 9.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-kpi-rij { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; min-width: 0; height: 20px; }
+.axe-kpi-waarde { font-size: 17px; font-weight: 600; line-height: 1; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.axe-kpi-waarde[data-toon='fout'] { color: var(--err, var(--error)); }
+.axe-kpi-regel { font-size: 9.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-kpi-spark { flex: 0 1 84px; min-width: 40px; height: 20px; overflow: visible; }
+.axe-kpi-spark-lijn { fill: none; stroke: var(--ok, var(--success)); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.axe-kpi-spark-vlak { fill: var(--ok, var(--success)); opacity: 0.12; }
+.axe-kpi-spark[data-toon='fout'] .axe-kpi-spark-lijn { stroke: var(--err, var(--error)); }
+.axe-kpi-spark[data-toon='fout'] .axe-kpi-spark-vlak { fill: var(--err, var(--error)); }
+.axe-kpi-spark[data-toon='let-op'] .axe-kpi-spark-lijn { stroke: var(--warn, var(--warning)); }
+.axe-kpi-spark[data-toon='let-op'] .axe-kpi-spark-vlak { fill: var(--warn, var(--warning)); }
+.axe-kpi-actie {
+  font-size: 10px; letter-spacing: 0.04em; color: var(--text-secondary); white-space: nowrap;
+  padding: 3px 10px; border-radius: 999px; border: 1px solid var(--axe-kaart-lijn); background: rgba(255, 255, 255, 0.02);
+}
+.axe-kpi-actie:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.06); }
+@media (max-height: 760px) {
+  .axe-kpi { height: 54px; }
+  .axe-kpi-regel { display: none; }
+}

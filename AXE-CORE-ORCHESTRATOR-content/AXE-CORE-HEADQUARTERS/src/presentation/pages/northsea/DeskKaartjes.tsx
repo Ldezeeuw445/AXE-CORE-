@@ -22,7 +22,8 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { deskDagkoers } from '@/infrastructure/gateways/axeCoreApiService';
 import type { DeskTellers } from '@/domain/northsea/desk';
 import { geld } from '@/domain/northsea/desk';
-import type { NorthseaOverzicht } from '@/domain/northsea/chase';
+import { tijdGeleden, type ChaseItem, type NorthseaOverzicht } from '@/domain/northsea/chase';
+import { activiteitPerDag } from '@/domain/northsea/deskKpi';
 
 interface Markt {
   symbool: string;
@@ -121,10 +122,56 @@ function MarktTegel({ markt, koers }: { markt: Markt; koers: Koers }) {
   );
 }
 
-export function DeskKaartjes({ data, tellers, routes, kies }: {
+/**
+ * "Do next" (25 nov): de drie bovenste punten uit AXE Chase als knoppen, plus
+ * hoeveel er de laatste 14 dagen bij kwam. Eén regel hoog, onder de tegels;
+ * de kaart blijft vrij. Leeg = "Nothing to chase", geen verzonnen taak.
+ */
+function DoeNu({ data, items, nu, kies, alles }: {
+  data: NorthseaOverzicht | null; items: readonly ChaseItem[]; nu: number; kies: (i: ChaseItem) => void; alles: () => void;
+}) {
+  const reeks = data ? activiteitPerDag([...data.acties, ...data.taken, ...data.concepten, ...data.bounces], nu) : [];
+  const som = reeks.reduce((a, b) => a + b, 0);
+  const kleur = (t: ChaseItem['toon']) => (t === 'rood' ? '#F87171' : t === 'amber' ? '#FBBF24' : '#34D399');
+  return (
+    <div className="ns-doenu mt-2.5 grid gap-2.5" style={{ gridTemplateColumns: 'repeat(8, minmax(0, 1fr))' }} data-axe-ns-doenu="">
+      <div className="col-span-6 flex h-[38px] min-w-0 items-center gap-2 rounded-[13px] px-3" style={TEGEL_STIJL}>
+        <span className="shrink-0 text-[9.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-secondary)' }}>Do next</span>
+        {!data && <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Loading…</span>}
+        {data && items.length === 0 && <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Nothing to chase.</span>}
+        {items.slice(0, 3).map(i => (
+          <button key={i.id} type="button" onClick={() => kies(i)} title={`${i.kop} — ${i.regel}`}
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1 text-left text-[11px] hover:bg-white/5">
+            <i className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: kleur(i.toon) }} aria-hidden />
+            <span className="truncate" style={{ color: 'var(--text-primary)' }}>{i.kop}</span>
+            <span className="shrink-0 text-[10px]" style={{ color: 'var(--text-muted)' }}>{i.stand} · {tijdGeleden(i.wanneer, nu)}</span>
+          </button>
+        ))}
+        {items.length > 0 && (
+          <button type="button" onClick={alles} className="ml-auto shrink-0 rounded-full px-2.5 py-0.5 text-[10px]"
+            style={{ color: 'var(--text-secondary)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            All {items.length}
+          </button>
+        )}
+      </div>
+      <div className="col-span-2 flex h-[38px] min-w-0 items-center justify-between gap-2 rounded-[13px] px-3" style={TEGEL_STIJL}
+        title="New actions, tasks, drafts and bounces per day, last 14 days">
+        <span className="min-w-0">
+          <span className="block truncate text-[9.5px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-secondary)' }}>Activity · 14d</span>
+          <span className="text-[13px] font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>{data ? som : '—'}</span>
+        </span>
+        {som > 0 ? <Lijntje punten={reeks} kleur="#22D3EE" /> : <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{data ? 'No new items' : ''}</span>}
+      </div>
+    </div>
+  );
+}
+
+export function DeskKaartjes({ data, tellers, routes, kies, volgende }: {
   data: NorthseaOverzicht | null;
   tellers: DeskTellers | null;
   routes: number | null;
+  /** AXE Chase-punten voor de "Do next"-regel; zonder dit geen regel. */
+  volgende?: { items: readonly ChaseItem[]; nu: number; kies: (i: ChaseItem) => void; alles: () => void };
   kies?: {
     actief?: () => void;
     akkoord?: () => void;
@@ -199,6 +246,11 @@ export function DeskKaartjes({ data, tellers, routes, kies }: {
           </>
         )}
       </div>
+      {volgende && !meer && (
+        <div className="pointer-events-auto">
+          <DoeNu data={data} items={volgende.items} nu={volgende.nu} kies={volgende.kies} alles={volgende.alles} />
+        </div>
+      )}
     </div>
   );
 }

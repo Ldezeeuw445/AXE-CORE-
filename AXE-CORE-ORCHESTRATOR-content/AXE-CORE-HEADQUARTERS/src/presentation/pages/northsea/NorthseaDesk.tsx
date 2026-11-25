@@ -209,6 +209,7 @@ export default function NorthseaDesk() {
             afgerond: () => setTab('deals'),
             tegenpartijen: () => setTab('tegenpartijen'),
           }}
+          volgende={{ items, nu, kies: kiesChase, alles: () => { setFilter('alle'); setTab('chase'); } }}
         />
       )}
       {/* De dealtabel ligt over de kaart heen; op de andere tabbladen zou hij de
