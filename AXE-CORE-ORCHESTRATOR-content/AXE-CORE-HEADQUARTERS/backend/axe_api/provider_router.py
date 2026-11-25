@@ -348,30 +348,58 @@ def lees_stoelen(db: Any) -> list[dict[str, Any]]:
         return []
 
 
-def seat_prompt(contents: list[dict[str, Any]], agent: str | None = None) -> str:
-    """Korte opdracht voor claude -p / codex exec uit de lus-transcriptie."""
+def _blok_tekst(blok: dict[str, Any]) -> str:
+    delen = []
+    for p in blok.get("parts") or []:
+        if p.get("text"):
+            delen.append(str(p["text"])[:2000])
+        elif p.get("functionCall"):
+            fc = p["functionCall"]
+            delen.append(f"tool {fc.get('name')} {json.dumps(fc.get('args') or {}, ensure_ascii=False)[:400]}")
+        elif p.get("functionResponse"):
+            fr = p["functionResponse"]
+            delen.append(f"result {fr.get('name')}: {json.dumps(fr.get('response') or {}, ensure_ascii=False)[:600]}")
+    return "\n".join(delen)
+
+
+def _tool_regel(d: dict[str, Any]) -> str:
+    props = ((d.get("parameters") or {}).get("properties") or {})
+    return f"- {d.get('name')}({', '.join(props)}): {' '.join(str(d.get('description') or '').split())[:160]}"
+
+
+def seat_prompt(contents: list[dict[str, Any]], agent: str | None = None,
+                tools: list[dict[str, Any]] | None = None) -> str:
+    """Denk-opdracht voor claude -p / codex exec: kies de VOLGENDE actie, doe hem niet zelf.
+
+    22-24 nov live: de stoel kreeg geen toollijst en het doel viel na 8 berichten weg;
+    met werkbon en eigen worktree eromheen ging Claude/Codex zelf aan het werk (minuten
+    per stap, ``reasoning effort: ultra``) en gaf tekst i.p.v. een actie -- 'no action
+    taken', stap na stap. Nu: doel altijd mee, de tools van de werkplek, en één JSON terug.
+    """
     stukken: list[str] = []
     if agent:
         stukken.append(f"You are the {agent} agent of AXE Core, working for Luka.")
     stukken.append(
-        "Continue this agent cycle. Answer with the next action or the final result. "
-        "Do not send email, flip NorthSea auto_send_*, place live orders, or move money or deals."
+        "You are ONLY the brain of an agent loop that runs on a server. Do NOT run commands, read "
+        "files or edit anything yourself here -- you are in an empty folder on purpose. The loop "
+        "executes your choice and shows you the result next turn.\n"
+        "Reply with exactly ONE JSON object and nothing else: "
+        '{"name": "<tool>", "args": {...}}. When the work is done and proven, use '
+        '{"name": "finish", "args": {"summary": "...", "verify_command": "...", "expect_in_output": "..."}}.\n'
+        "Never send email, flip NorthSea auto_send_*, place live orders, or move money or deals."
     )
-    for blok in contents[-8:]:
-        rol = str(blok.get("role") or "user")
-        delen = []
-        for p in blok.get("parts") or []:
-            if p.get("text"):
-                delen.append(str(p["text"])[:2000])
-            elif p.get("functionCall"):
-                fc = p["functionCall"]
-                delen.append(f"tool {fc.get('name')} {json.dumps(fc.get('args') or {}, ensure_ascii=False)[:400]}")
-            elif p.get("functionResponse"):
-                fr = p["functionResponse"]
-                delen.append(f"result {fr.get('name')}: {json.dumps(fr.get('response') or {}, ensure_ascii=False)[:400]}")
-        if delen:
-            stukken.append(f"{rol}: " + "\n".join(delen))
-    return "\n\n".join(stukken)[:12000]
+    if tools:
+        stukken.append("TOOLS:\n" + "\n".join(_tool_regel(d) for d in tools)[:3500])
+    eerste = contents[0] if contents else None
+    if eerste is not None:
+        stukken.append("GOAL:\n" + _blok_tekst(eerste)[:3000])
+    rest = contents[1:][-8:]
+    if rest:
+        verloop = "\n\n".join(f"{str(b.get('role') or 'user')}: {t}" for b in rest if (t := _blok_tekst(b)))
+        # Het nieuwste telt: inkorten aan de voorkant, instructies en doel blijven heel.
+        stukken.append("SO FAR:\n" + (verloop if len(verloop) <= 5000 else "...\n" + verloop[-5000:]))
+    stukken.append("Your ONE JSON action:")
+    return "\n\n".join(stukken)
 
 
 def _klaar_uit_oplevering(raw: str) -> dict[str, Any] | None:
@@ -427,6 +455,11 @@ def parse_seat_antwoord(tekst: str) -> dict[str, Any]:
             return {"parts": [{"functionCall": {"name": fc.get("name"), "args": fc.get("args") or {}}}]}
         inhoud = data.get("result") or data.get("text") or data.get("content")
         if inhoud:
+            # claude -p --output-format json: de actie zit als tekst in "result".
+            if isinstance(inhoud, str) and "{" in inhoud and inhoud.strip() != raw:
+                binnen = parse_seat_antwoord(inhoud)
+                if binnen["parts"] and "functionCall" in binnen["parts"][0]:
+                    return binnen
             return {"parts": [{"text": str(inhoud)}]}
     return {"parts": [{"text": raw[:8000]}]}
 
@@ -516,7 +549,8 @@ def roep_stoel(
     seat_id = str(stoel.get("seat_id") or stoel.get("id") or "")
     device = str(stoel.get("machine") or os.environ.get("AXE_SEAT_DEVICE", "mac-mini-van-luka-5"))
     tool = stoel_tool(seat_id)
-    args: dict[str, Any] = {"prompt": prompt, "seat": seat_id}
+    # denk: geen werkbon, geen worktree -- één antwoord uit een lege map (worker.mjs).
+    args: dict[str, Any] = {"prompt": prompt, "seat": seat_id, "denk": True}
     model = stoel_model(seat_id, tier)
     if model:
         args["model"] = model

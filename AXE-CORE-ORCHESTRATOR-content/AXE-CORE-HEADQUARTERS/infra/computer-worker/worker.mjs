@@ -30,12 +30,13 @@
  * Run:  node infra/axe-computer-worker/worker.mjs
  */
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, readdir, realpath, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { resolve, sep, join, dirname, relative } from 'node:path';
 import { homedir, hostname, tmpdir } from 'node:os';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { reportCodingSeats, noteerLimiet } from './codingSeats.mjs';
+import { denkArgv } from './denkRun.mjs';
 import { vingerafdruk, codeVeranderd } from './zelfVernieuw.mjs';
 import { maakLeesWeigering, naarDezeMac } from './leesRegels.mjs';
 import { schakel as macSchakel } from './macSchakelaars.mjs';
@@ -79,6 +80,8 @@ const STEP_TIMEOUT_MS = Number(env.AXE_COMPUTER_TIMEOUT_MS ?? 5 * 60_000);
 // 22 nov: een echte Codex-run (één test toevoegen + draaien) duurde langer dan 5 min en
 // werd afgekapt. Coding-agents krijgen 15 min; de VPS wacht 16 (device_actions).
 const AGENT_TIMEOUT_MS = Number(env.AXE_AGENT_TIMEOUT_MS ?? 15 * 60_000);
+// Eén denkstap is één antwoord, geen codeerklus: 3 minuten is ruim.
+const DENK_TIMEOUT_MS = Number(env.AXE_DENK_TIMEOUT_MS ?? 3 * 60_000);
 /**
  * The machine, and this process on it. DEVICE_ID is stable across restarts —
  * it is what the app addresses a task to. WORKER_ID identifies the process,
@@ -770,6 +773,11 @@ async function execute(payload) {
       .join('\n') || '(empty)';
   }
 
+  // Denk-aanroep van het lus-brein: geen worktree, geen werkbon, alleen lezen (denkRun.mjs).
+  if (args.denk === true && ['codex.run', 'claude_code.run', 'cursor.run'].includes(tool)) {
+    return denk(tool, args);
+  }
+
   const ws = WORKSPACES[workspace];
   if (!ws) throw new Error(`unknown workspace '${workspace}'`);
   let root = resolve(ws.root);
@@ -1029,6 +1037,25 @@ async function bewaarOpenWerk(root, hoofdRoot) {
    na 900 s af voor hij committe; de VPS zag alleen "timed out" en zijn werk lag los
    in de map. Een run die gooit (time-out, codex-fout) legt open werk nu vast op zijn
    EIGEN axe/-branch en zegt dat in de fout; een lege map gaat meteen weg. */
+async function denk(tool, args) {
+  const prompt = String(args.prompt ?? '').trim();
+  if (!prompt) throw new Error(`${tool} needs a prompt`);
+  const seat = String(args.seat ?? tool.split('_')[0].split('.')[0]);
+  const dir = await mkdtemp(join(tmpdir(), 'axe-denk-'));
+  try {
+    const [naam, argv, uitPad] = denkArgv(tool, prompt, dir, String(args.model ?? '').trim());
+    const envNaam = { codex: 'AXE_CODEX_BIN', claude: 'AXE_CLAUDE_BIN', 'cursor-agent': 'AXE_CURSOR_BIN' }[naam];
+    const r = await runStatus(vindBin(naam, envNaam), argv, dir, seatChildEnv(seat), DENK_TIMEOUT_MS);
+    let uit = r.out;
+    if (uitPad) uit = (await readFile(uitPad, 'utf8').catch(() => '')).trim() || r.out;
+    noteerLimiet(seat, uit, { geslaagd: r.code === 0 });
+    if (r.code !== 0) throw new Error(`${tool} (denk) exit ${r.code}: ${r.out.slice(-400)}`);
+    return uit;
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 async function metBewaardWerk(e, root, hoofdRoot, basis, branch) {
   const bewaard = await bewaarOpenWerk(root, hoofdRoot);
   if (!bewaard) await naRunOpruimen(root, hoofdRoot, basis);

@@ -558,7 +558,7 @@ def run_on_device(
         return {"error": fout}
     if (verzet := verzet_checkout(tool, args)):
         return {"error": verzet}
-    if tool in AGENT_RUNS:
+    if tool in AGENT_RUNS and not args.get("denk"):
         args = {**args, "prompt": werkbon(str(args.get("prompt") or ""))}
     if workspace not in WORKSPACES:
         return {"error": f"unknown workspace {workspace!r}. Use one of {', '.join(WORKSPACES)}."}

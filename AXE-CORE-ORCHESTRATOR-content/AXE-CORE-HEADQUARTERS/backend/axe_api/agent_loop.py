@@ -1614,7 +1614,7 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> di
         if stoel:
             try:
                 raw = await asyncio.to_thread(
-                    roep_stoel, stoel, seat_prompt(contents, agent),
+                    roep_stoel, stoel, seat_prompt(contents, agent, _tool_decls()),
                     tier=int(kaart_voor(agent).get("tier") or 2),
                     runner=_stoel_runner,
                 )
