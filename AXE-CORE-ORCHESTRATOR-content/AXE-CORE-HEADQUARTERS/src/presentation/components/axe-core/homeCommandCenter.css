@@ -401,4 +401,98 @@
   .axe-hcc-strip-snel .axe-hcc-snelknop:nth-child(n+5) { display: none; }
   .axe-hcc-strip-zoek { min-width: 170px; }
 }
+/* ── Statuskaarten (v6): connectors, accounts, mail, systeem ──
+   Alleen op een groot scherm; daar staan ze in twee extra kolommen naast de
+   core. Vier gelijke kaarten: elke kolom deelt zijn hoogte in tweeën. */
+.axe-hcc-extra { display: none; }
+.axe-hcc-links-apps { display: none; }
+.axe-hcc-onder-apps { display: contents; }
+.axe-hcc .axe-hcc-kaart--status .axe-dash-kaart-lijf { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+/* De vrije lijf geeft elk kind flex 1; de kop en de noot zijn zo hoog als hun tekst. */
+.axe-hcc .axe-hcc-kaart--status .axe-dash-kaart-lijf > .axe-hcc-statuskop,
+.axe-hcc .axe-hcc-kaart--status .axe-dash-kaart-lijf > .axe-hcc-statusnoot { flex: 0 0 auto; }
+.axe-hcc-statuskop {
+  flex: 0 0 auto; display: flex; justify-content: space-between; gap: 10px; padding: 7px 12px 3px;
+  font-size: 10.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden;
+}
+.axe-hcc-statuskop span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Hele regels; wat niet past loopt naar een kolom buiten beeld, nooit een halve regel. */
+.axe-hcc-statuslijst {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; flex-wrap: wrap; align-content: flex-start;
+  gap: 3px 20px; padding: 5px 8px 8px; overflow: hidden;
+}
+.axe-hcc-statuslijst > .axe-dash-leeg { width: 100%; padding: 4px; }
+.axe-hcc-statusrij {
+  flex: 0 0 26px; width: 100%; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 8px; border-radius: 8px; text-align: left;
+  background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.04); font-size: 11px;
+}
+.axe-hcc-statusrij:hover { background: rgba(255, 255, 255, 0.05); }
+.axe-hcc-statusrij-naam { flex: 0 1 auto; min-width: 0; max-width: 55%; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-hcc-statusrij-stand { flex: 1 1 0; min-width: 0; text-align: right; font-size: 10.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-hcc-statusrij[data-toon='fout'] .axe-hcc-statusrij-stand { color: var(--err); }
+.axe-hcc-statusrij[data-toon='let-op'] .axe-hcc-statusrij-stand { color: var(--warn); }
+.axe-hcc-statusrij[data-toon='uit'] { opacity: 0.6; }
+.axe-hcc-statusnoot { flex: 0 0 auto; margin: 0; padding: 4px 12px 9px; font-size: 10px; line-height: 1.35; color: var(--text-muted); }
+
+/* ── Groot en ultrabreed scherm (≥ 2000px): zes kolommen ──
+   links · statuskaarten · core (2) · statuskaarten · rechts. De bol blijft in
+   de twee middelste kolommen; de kerntegels worden zo hoog als hun inhoud;
+   Apps health schuift naar links, de onderste rij houdt vier kaarten. */
+@media (min-width: 2000px) {
+  :root {
+    --hcc-kol: calc((100vw - 2 * var(--hcc-inset) - 5 * var(--hcc-gat)) / 6);
+    --hcc-kern-rij: 68px;
+    --hcc-kpi-rij: 72px;
+  }
+  .axe-hcc {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-areas:
+      'strip strip strip strip strip strip'
+      'links extra-l kpi kpi extra-r rechts'
+      'links extra-l kern kern extra-r rechts'
+      'onder onder onder onder onder onder';
+  }
+  .axe-hcc-extra { display: flex; flex-direction: column; gap: var(--hcc-gat); min-height: 0; }
+  .axe-hcc-extra--l { grid-area: extra-l; }
+  .axe-hcc-extra--r { grid-area: extra-r; }
+  .axe-hcc-extra > .axe-hcc-kaart { flex: 1 1 0; min-height: 0; }
+
+  /* Links: diensten en Apps health op inhoud; de kerntegels krijgen de rest en
+     vullen die met hun eigen grafiek (24 uur), niet met lege tegel. */
+  .axe-hcc-links > .axe-hcc-kaart--kern { flex: 1 1 auto; }
+  .axe-hcc-kernlijst { grid-template-rows: repeat(3, minmax(var(--hcc-kern-rij), 1fr)); }
+  .axe-hcc-kernrij { justify-content: flex-start; padding: 8px 12px; }
+  .axe-hcc-kernrij-waarde { font-size: 15px; }
+  .axe-hcc-kernrij-onder { flex: 1 1 auto; height: auto; min-height: 24px; align-items: flex-end; }
+  .axe-hcc-kernrij-onder .axe-hcc-spark { max-width: none; height: 100%; min-height: 22px; }
+  .axe-hcc-links-apps { display: contents; }
+  .axe-hcc-onder-apps { display: none; }
+  .axe-hcc-links > .axe-hcc-kaart--apps { flex: 0 0 auto; }
+  .axe-hcc-links .axe-hcc-apps { grid-template-rows: repeat(5, 40px); height: auto; }
+  .axe-hcc-links > .axe-hcc-kaart--diensten { flex: 0 0 auto; }
+  .axe-hcc-dienstlijst { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 26px; max-height: calc(8 * 29px + 14px); }
+  .axe-hcc-dienst .axe-hcc-dienst-stand { display: inline; }
+
+  /* Rechts: de feed vult de kolom met hele regels; wachten en providers op inhoud. */
+  .axe-hcc-rechts > .axe-hcc-kaart--feed { flex: 1 1 0; min-height: 0; }
+  .axe-hcc-feed { height: 100%; flex-wrap: wrap; align-content: flex-start; column-gap: 20px; }
+  .axe-hcc-rechts > .axe-hcc-kaart:not(.axe-hcc-kaart--feed):not(.axe-hcc-kaart--ok) { flex: 0 0 auto; }
+  .axe-hcc-rechts .axe-hcc-providers { height: auto; max-height: calc(5 * 31px + 14px); }
+
+  .axe-hcc-onder { grid-template-columns: 1.25fr 1fr 1.1fr 1.15fr; }
+  /* De bol staat in de twee middelste van zes kolommen, niet in een lege zee. */
+  .axe-home-v3[data-axe-home-view='axe'] .axe-home-bolvak {
+    left: calc(var(--hcc-inset) + 2 * var(--hcc-kol) + 2 * var(--hcc-gat)) !important;
+    right: calc(var(--hcc-inset) + 2 * var(--hcc-kol) + 2 * var(--hcc-gat)) !important;
+  }
+}
+/* Hoog én breed (bv. 3840 × 1987): de onderste rij mag hoger. */
+@media (min-width: 2000px) and (min-height: 1300px) {
+  :root { --hcc-onder-hoog: 240px; --hcc-kern-rij: 84px; --hcc-kpi-rij: 84px; }
+  .axe-hcc-links .axe-hcc-apps { grid-template-rows: repeat(5, 46px); }
+}
+/* Heel hoog (3840 × 1987 en zo): de onderste rij krijgt meer, het midden minder. */
+@media (min-width: 2000px) and (min-height: 1700px) {
+  :root { --hcc-onder-hoog: 300px; }
+}
 @media (max-width: 900px) { .axe-hcc { display: none; } }

@@ -7,8 +7,8 @@ import { taakActieLabel, taakFoutVan, type TaakActie } from '@/domain/taken/taak
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import {
-  abonnementVerbruik, calendarJobs, codingSeatsHeartbeat, fixDurableTask, keysOverview, ledgerOverview, lockscreenSnapshot, retryDurableTask,
-  usageCreditsSnapshot, type LedgerEntry, type LedgerTotal, type LockscreenSnapshot,
+  abonnementVerbruik, buildStatus, calendarJobs, codingSeatsHeartbeat, fixDurableTask, keysOverview, ledgerOverview, lockscreenSnapshot, mcpHubLijst, mcpHubTest,
+  northseaOverzicht, retryDurableTask, usageCreditsSnapshot, type LedgerEntry, type LedgerTotal, type LockscreenSnapshot,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 import { groepeerAbonnementen, stoelSleutel, type CodingSeat } from '@/domain/codingSeats';
@@ -30,6 +30,11 @@ import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar'
 import { appVanRegel } from '@/domain/grootboek';
 import { appMeta } from '@/domain/apps';
 import { listTrades } from '@/infrastructure/persistence/tradingTradesService';
+import { leesAccountsZonderToken } from '@/infrastructure/persistence/tradingAccountsService';
+import { getCircuitBreakerState } from '@/infrastructure/persistence/tradingCircuitBreakerService';
+import {
+  accountRegels, connectorRegels, mailStand, sleutelTelling, type Breaker, type ConnectorTest, type StatusRegel,
+} from '@/domain/homeStatusCards';
 import {
   feedRegels, geledenTekst, kiesMachines, limietRegels, llmTelling, perUur, pnlLijn, providerTegels, recenteToestellen, ringToon, ringWaarde,
   tijdlijnVandaag, type FeedRegel, type Machine, type ProviderSleutel, type TijdJob, type Toon,
@@ -119,6 +124,22 @@ function FixKnop({ actie }: { actie: FixActie | null }) {
 /** Kaarttitel die naar de detailpagina gaat. */
 function Kop({ tekst, onKlik }: { tekst: string; onKlik: () => void }) {
   return <button type="button" className="axe-hcc-koplink" onClick={onKlik}>{tekst}</button>;
+}
+
+/** Statuskaart-lijst: één regel per ding, stip, naam, stand. Hele regels; wat niet past valt weg. */
+function StatusLijst({ regels, leeg, onKlik }: { regels: readonly StatusRegel[]; leeg: ReactNode; onKlik: (r: StatusRegel) => void }) {
+  if (!regels.length) return <div className="axe-hcc-statuslijst"><DashLeeg>{leeg}</DashLeeg></div>;
+  return (
+    <div className="axe-hcc-statuslijst" data-axe-hcc-statuslijst>
+      {regels.map((r) => (
+        <button type="button" key={r.id} className="axe-hcc-statusrij" data-toon={r.toon} title={`${r.naam}: ${r.regel}`} onClick={() => onKlik(r)}>
+          <Stip toon={r.toon} />
+          <span className="axe-hcc-statusrij-naam">{r.naam}</span>
+          <span className="axe-hcc-statusrij-stand">{r.regel}</span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /** Mini-grafiek van tonen: één segment per provider, groen tot rood. */
@@ -314,8 +335,7 @@ async function laadVandaagTijdlijn() {
 }
 
 /** Alle sleutelrijen met een provider, over alle apps heen; Home leest alleen status en laatste HTTP-code. */
-async function laadProviderSleutels(): Promise<ProviderSleutel[]> {
-  const r = await keysOverview();
+function naarProviderSleutels(r: Awaited<ReturnType<typeof keysOverview>>): ProviderSleutel[] {
   return (r.apps ?? []).flatMap((a) => a.keys.map((k) => ({
     provider: k.provider ?? null, status: k.status, usage: k.usage ? { last_status: k.usage.last_status } : null,
   })));
@@ -328,6 +348,19 @@ async function laadProviderSleutels(): Promise<ProviderSleutel[]> {
  * kapt; dan staat `afgekapt` aan en zegt Home dat erbij.
  */
 type RunTelling = { rijen: RunUur[]; bron: 'server' | 'rijen'; afgekapt: boolean };
+/** MCP-hub: welke servers staan klaar; of ze werken zegt pas een test. */
+async function laadMcp() {
+  const r = await mcpHubLijst();
+  return (r.servers ?? []).map((s) => ({ id: s.id, naam: s.naam, klaar: s.klaar, sleutel: s.sleutel, categorie: s.categorie }));
+}
+
+/** Trading-accounts, alleen lezen en zonder token, met per account de circuit breaker. */
+async function laadAccounts() {
+  const accounts = await leesAccountsZonderToken();
+  const br = await Promise.all(accounts.map((a) => getCircuitBreakerState(a.accountId).catch(() => null)));
+  return { accounts, breakers: Object.fromEntries(accounts.map((a, i) => [a.id, br[i] as Breaker])) };
+}
+
 async function laadRunsPerUur(): Promise<RunTelling> {
   const sb = getSupabase();
   if (!sb) throw new Error('no database connection');
@@ -417,7 +450,14 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
   const credits = usePoll(usageCreditsSnapshot, 300_000);
   const trades = usePoll(() => listTrades({ status: 'closed', limit: 200 }), 600_000);
   const tijdlijn = usePoll(laadVandaagTijdlijn, 300_000);
-  const sleutels = usePoll(laadProviderSleutels, 300_000);
+  const sleutelsRuw = usePoll(keysOverview, 300_000);
+  const sleutels = { data: sleutelsRuw.data ? naarProviderSleutels(sleutelsRuw.data) : null };
+  const mcp = usePoll(laadMcp, 300_000);
+  const accounts = usePoll(laadAccounts, 300_000);
+  const northsea = usePoll(() => northseaOverzicht(), 600_000);
+  const bouwVps = usePoll(buildStatus, 600_000);
+  const [mcpTests, setMcpTests] = useState<Record<string, ConnectorTest>>({});
+  const [mcpTestBezig, setMcpTestBezig] = useState(false);
   const runs24 = usePoll(laadRunsPerUur, 300_000);
   const schemas = usePoll(laadSchemas, 300_000);
   const geheugen24 = usePoll(laadGeheugen24u, 600_000);
@@ -452,7 +492,7 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
     meldingen: notifications.map((n) => ({ id: n.id, type: n.type, title: n.title, detail: n.detail, timestamp: n.timestamp, read: n.read })),
     fouten: fouten.data?.entries ?? [],
     recent: stand.recent,
-  }, 5).map((r) => ({ ...r, titel: eenRegel(r.titel), sub: eenRegel(r.sub) }));
+  }, 30).map((r) => ({ ...r, titel: eenRegel(r.titel), sub: eenRegel(r.sub) }));
   const recentOp = new Map(stand.recent.map((t) => [`taak:${t.id}`, t]));
 
   /* Agents: zes tegels, wie werkt of wacht eerst */
@@ -501,6 +541,49 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
     geheugen24u: geheugen24.data, geheugenTotaal: geheugen.data, nu: nu.getTime(),
   });
   const appsMis = apps.filter((a) => a.toon === 'fout' || a.toon === 'let-op').length;
+
+  /* Statuskaarten (groot scherm): connectors, accounts, mail, systeem */
+  const mcpDienst = diensten.find((d) => /mcp/i.test(d.name ?? '') || d.id === 'mcp');
+  const con = connectorRegels(mcp.data ?? [], mcpTests);
+  const acc = accountRegels(accounts.data?.accounts ?? [], accounts.data?.breakers ?? {});
+  const mail = mailStand({
+    concepten: northsea.data ? northsea.data.concepten.length : null,
+    bounces: northsea.data ? northsea.data.bounces.length : null,
+    comms7d: northsea.data?.tellers?.communicatie_7d ?? null,
+    wacht: okTal,
+  });
+  const sl = sleutelTelling(sleutelsRuw.data?.apps ?? []);
+  const bv = bouwVps.data;
+  const systeemRegels: StatusRegel[] = [
+    ...(sleutelsRuw.data ? [{ id: 'keys', naam: 'API keys', toon: (sl.kapot ? 'fout' : sl.ontbreekt ? 'let-op' : 'ok') as Toon,
+      regel: `${sl.werkt} work · ${sl.aanwezig} unchecked · ${sl.ontbreekt} missing · ${sl.kapot} broken` }] : []),
+    ...(bv ? [{ id: 'build', naam: 'VPS API build', toon: (!bv.applicable ? 'uit' : bv.stale_vs_latest_commit ? 'let-op' : 'ok') as Toon,
+      regel: !bv.applicable ? (bv.reason ?? 'not a git checkout') : `${bv.commit?.short_sha ?? '?'}${bv.stale_vs_latest_commit ? ' · behind latest commit' : ' · current'}${bv.uncommitted_files ? ` · ${bv.uncommitted_files} uncommitted` : ''}` }] : []),
+    ...(bouw ? [{ id: 'app', naam: 'This app', toon: (bouw.oud ? 'let-op' : 'ok') as Toon, regel: bouw.regel }] : []),
+    ...(stoelen.length ? [{ id: 'seats', naam: 'Coding seats', toon: (stoelenKlaar ? 'ok' : 'fout') as Toon,
+      regel: `${stoelenKlaar}/${stoelen.length} ready · ${stoelen.filter((x) => x.rate_limited).length} limited` }] : []),
+    { id: 'meldingen', naam: 'Notifications', toon: unreadCount ? 'let-op' : 'ok', regel: `${unreadCount} unread` },
+  ];
+  const testMcp = async () => {
+    setMcpTestBezig(true);
+    try {
+      for (const s of (mcp.data ?? []).filter((x) => x.klaar)) {
+        const t = await mcpHubTest(s.id).catch((e: unknown): ConnectorTest => ({ status: 'offline', fout: e instanceof Error ? e.message : String(e) }));
+        setMcpTests((m) => ({ ...m, [s.id]: t }));
+      }
+    } finally { setMcpTestBezig(false); }
+  };
+
+  const appsKaart = (
+    <DashKaart titel={<Kop tekst="Apps health" onKlik={() => navigate('/apps')} />} telling={appsMis || undefined}
+      className={`axe-hcc-kaart axe-hcc-kaart--apps${appsMis ? ' is-aandacht' : ''}`} vrij
+      actie={<button type="button" className="axe-hcc-kopknop" onClick={() => navigate('/cron-manager')}
+        title={runs?.afgekapt ? 'Server count not installed yet: counting the last 1,000 runs only' : undefined}>{runs?.afgekapt ? 'Cron · 1k' : 'Cron'}</button>}>
+      <div className="axe-hcc-apps" data-axe-hcc-apps>
+        {apps.map((a) => <AppRij key={a.id} app={a} nu={nu.getTime()} onKlik={() => navigate(a.route)} />)}
+      </div>
+    </DashKaart>
+  );
 
   return (
     <div className="axe-hcc" data-axe-hcc>
@@ -629,6 +712,44 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
             )}
           </div>
         </DashKaart>
+        <div className="axe-hcc-links-apps">{appsKaart}</div>
+      </div>
+
+      {/* ── Groot scherm: vier gelijke statuskaarten naast de core ── */}
+      <div className="axe-hcc-extra axe-hcc-extra--l" data-axe-hcc-extra>
+        <DashKaart titel={<Kop tekst="Connectors" onKlik={() => navigate('/mcp')} />} telling={con.totaal || undefined}
+          className={`axe-hcc-kaart axe-hcc-kaart--status${con.regels.some((r) => r.toon === 'fout') ? ' is-aandacht' : ''}`} vrij
+          actie={<button type="button" className="axe-hcc-kopknop" disabled={mcpTestBezig || !con.klaar} onClick={() => { void testMcp(); }}
+            title="Probe each ready MCP server once (read-only test call)">{mcpTestBezig ? 'Testing…' : con.getest ? `${con.werkt}/${con.klaar} work` : 'Test'}</button>}>
+          <div className="axe-hcc-statuskop">
+            <span><Stip toon={mcpDienst ? (mcpDienst.ok ? 'ok' : 'fout') : 'uit'} /> MCP hub {mcpDienst ? (mcpDienst.ok ? 'online' : 'down') : 'not reported'}</span>
+            <span>{con.klaar}/{con.totaal} ready{con.getest ? ` · ${con.werkt} work` : ' · not tested'}</span>
+          </div>
+          <StatusLijst regels={con.regels} onKlik={() => navigate('/mcp')}
+            leeg={mcp.fout ? 'MCP hub did not answer.' : mcp.data ? 'No MCP servers set up.' : 'Reading the MCP hub…'} />
+        </DashKaart>
+        <DashKaart titel={<Kop tekst="Trading accounts" onKlik={() => navigate('/trading')} />} telling={acc.regels.length || undefined}
+          className={`axe-hcc-kaart axe-hcc-kaart--status${acc.gestopt ? ' is-aandacht' : ''}`} vrij>
+          <div className="axe-hcc-statuskop">
+            <span>{acc.aan} on · {acc.regels.length - acc.aan} off</span>
+            <span>{acc.gestopt ? `${acc.gestopt} breaker tripped` : accounts.data ? 'no breaker tripped' : ''}</span>
+          </div>
+          <StatusLijst regels={acc.regels} onKlik={() => navigate('/trading')}
+            leeg={accounts.fout ? 'Accounts did not load.' : accounts.data ? 'No trading accounts saved.' : 'Reading accounts…'} />
+        </DashKaart>
+      </div>
+      <div className="axe-hcc-extra axe-hcc-extra--r" data-axe-hcc-extra>
+        <DashKaart titel={<Kop tekst="Mail" onKlik={() => navigate('/northsea')} />} telling={mail.regels.filter((r) => r.toon !== 'ok' && r.toon !== 'stil').length || undefined}
+          className={`axe-hcc-kaart axe-hcc-kaart--status${mail.toon === 'fout' ? ' is-aandacht' : ''}`} vrij>
+          <StatusLijst regels={mail.regels} onKlik={(r) => navigate(r.id === 'wacht' ? '/wacht' : '/northsea')}
+            leeg={northsea.fout ? 'NorthSea mail did not answer.' : 'Reading NorthSea mail…'} />
+          <p className="axe-hcc-statusnoot">No inbox is connected to AXE Core, so unread and needs-reply counts are not measured. These are NorthSea's mail queues.</p>
+        </DashKaart>
+        <DashKaart titel={<Kop tekst="System status" onKlik={() => navigate('/status')} />}
+          className={`axe-hcc-kaart axe-hcc-kaart--status${systeemRegels.some((r) => r.toon === 'fout') ? ' is-aandacht' : ''}`} vrij>
+          <StatusLijst regels={systeemRegels} onKlik={(r) => navigate(r.id === 'meldingen' ? '/notifications' : r.id === 'build' ? '/apps' : '/settings')}
+            leeg="Checking…" />
+        </DashKaart>
       </div>
 
       {/* ── Midden: ruimte voor de core (de bol zelf staat in Home) ── */}
@@ -692,14 +813,7 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
 
       {/* ── Onderaan: Apps health breed, dan agents, vandaag, limieten, monitor ── */}
       <div className="axe-hcc-onder">
-        <DashKaart titel={<Kop tekst="Apps health" onKlik={() => navigate('/apps')} />} telling={appsMis || undefined}
-          className={`axe-hcc-kaart axe-hcc-kaart--apps${appsMis ? ' is-aandacht' : ''}`} vrij
-          actie={<button type="button" className="axe-hcc-kopknop" onClick={() => navigate('/cron-manager')}
-            title={runs?.afgekapt ? 'Server count not installed yet: counting the last 1,000 runs only' : undefined}>{runs?.afgekapt ? 'Cron · 1k' : 'Cron'}</button>}>
-          <div className="axe-hcc-apps" data-axe-hcc-apps>
-            {apps.map((a) => <AppRij key={a.id} app={a} nu={nu.getTime()} onKlik={() => navigate(a.route)} />)}
-          </div>
-        </DashKaart>
+        <div className="axe-hcc-onder-apps">{appsKaart}</div>
         <DashKaart titel={<Kop tekst="Agents" onKlik={() => navigate('/managers')} />} telling={stand.werkend || undefined} className="axe-hcc-kaart" vrij
           actie={<button type="button" className="axe-hcc-kopknop" onClick={() => navigate('/managers')}>All</button>}>
           <div className="axe-hcc-agents" data-axe-hcc-agents>
