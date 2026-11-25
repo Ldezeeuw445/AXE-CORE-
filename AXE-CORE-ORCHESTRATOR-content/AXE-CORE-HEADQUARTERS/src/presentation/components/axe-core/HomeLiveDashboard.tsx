@@ -35,7 +35,7 @@ import {
   tijdlijnVandaag, type FeedRegel, type Machine, type ProviderSleutel, type TijdJob, type Toon,
 } from '@/domain/homeCommandCenter';
 import {
-  appsGezondheid, eenRegel, fixAlsNodig, type AppGezond, type FixActie, type JobRun, type Schema,
+  appsGezondheid, eenRegel, fixAlsNodig, runsNaarUren, uurReeks, type AppGezond, type FixActie, type JobRun, type RunUur, type Schema,
 } from '@/domain/homeAppsHealth';
 import './homeLive.css';
 import './homeCommandCenter.css';
@@ -166,16 +166,26 @@ function AppRij({ app, nu, onKlik }: { app: AppGezond; nu: number; onKlik: () =>
         <Stip toon={app.toon} />
         <span className="axe-hcc-app-naamtekst"><b>{app.naam}</b><small className="axe-hcc-app-stand">{app.stand}</small></span>
       </span>
-      <span className="axe-hcc-app-kpi" title={app.kpiUitleg}>
-        <b>{app.kpi}</b><small>{app.kpiSub}</small>
-      </span>
-      <span className="axe-hcc-app-grafiek" title={app.runs ? 'per hour, last 24h' : 'this app writes no runs'}>
-        {app.runs && app.runs.some((n) => n > 0)
-          ? <Spark waarden={app.runs} toon="ok" />
-          : <span className="axe-hcc-app-geen">no runs 24h</span>}
-        {fouten && <Spark waarden={fouten} toon="fout" />}
-      </span>
-      <span className="axe-hcc-app-tijd">{app.laatst ? geledenTekst(app.laatst, nu) : '–'}</span>
+      {app.kapot.length > 0 ? (
+        /* Mislukte schema's krijgen de hele middenbreedte, in woorden en in de
+           foutkleur: "Review Desk ×15 · Planner ×4", niet alleen een rode stip. */
+        <span className="axe-hcc-app-kapot" data-axe-hcc-kapot title={`${app.kpiUitleg}${app.laatst ? ` · last run ${geledenTekst(app.laatst, nu)}` : ''}`}>
+          {app.kapot.map((s) => `${s.naam}${s.keer > 1 ? ` ×${s.keer}` : ''}`).join(' · ')}
+        </span>
+      ) : (
+        <>
+          <span className="axe-hcc-app-kpi" title={app.kpiUitleg}>
+            <b>{app.kpi}</b><small>{app.kpiSub}</small>
+          </span>
+          <span className="axe-hcc-app-grafiek" title={app.runs ? 'per hour, last 24h' : 'this app writes no runs'}>
+            {app.runs && app.runs.some((n) => n > 0)
+              ? <Spark waarden={app.runs} toon="ok" />
+              : <span className="axe-hcc-app-geen">no runs 24h</span>}
+            {fouten && <Spark waarden={fouten} toon="fout" />}
+          </span>
+        </>
+      )}
+      {app.kapot.length === 0 && <span className="axe-hcc-app-tijd">{app.laatst ? geledenTekst(app.laatst, nu) : '–'}</span>}
       <span className="axe-hcc-app-fix"><FixKnop actie={app.fix} /></span>
     </button>
   );
@@ -311,14 +321,26 @@ async function laadProviderSleutels(): Promise<ProviderSleutel[]> {
   })));
 }
 
-/** Cron-runs van de laatste 24 uur (core_job_runs): app, status en tijd. */
-async function laadRuns24u(): Promise<JobRun[]> {
+/**
+ * Cron-runs per app per uur over 24 uur, op de server geteld
+ * (core_job_runs_per_uur, migratie 20261125230000). Zolang die functie nog
+ * niet is toegepast: de oude query op ruwe rijen, die de REST-API op 1.000
+ * kapt; dan staat `afgekapt` aan en zegt Home dat erbij.
+ */
+type RunTelling = { rijen: RunUur[]; bron: 'server' | 'rijen'; afgekapt: boolean };
+async function laadRunsPerUur(): Promise<RunTelling> {
   const sb = getSupabase();
   if (!sb) throw new Error('no database connection');
+  const rpc = await sb.rpc('core_job_runs_per_uur', { p_uren: 24 });
+  if (!rpc.error && Array.isArray(rpc.data)) {
+    return { rijen: (rpc.data as RunUur[]).map((r) => ({ app: r.app, uur: r.uur, ok: Number(r.ok) || 0, fout: Number(r.fout) || 0 })), bron: 'server', afgekapt: false };
+  }
   const sinds = new Date(Date.now() - 24 * 3600_000).toISOString();
-  const { data, error } = await sb.from('core_job_runs').select('app, status, created_at').gte('created_at', sinds).limit(6000);
+  const { data, error } = await sb.from('core_job_runs').select('app, status, created_at')
+    .gte('created_at', sinds).order('created_at', { ascending: false }).limit(1000);
   if (error) throw error;
-  return (data ?? []) as JobRun[];
+  const rijen = (data ?? []) as JobRun[];
+  return { rijen: runsNaarUren(rijen), bron: 'rijen', afgekapt: rijen.length >= 1000 };
 }
 
 /** Alle cron-schema's (core_schedules): alleen wat Apps health nodig heeft. */
@@ -396,7 +418,7 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
   const trades = usePoll(() => listTrades({ status: 'closed', limit: 200 }), 600_000);
   const tijdlijn = usePoll(laadVandaagTijdlijn, 300_000);
   const sleutels = usePoll(laadProviderSleutels, 300_000);
-  const runs24 = usePoll(laadRuns24u, 300_000);
+  const runs24 = usePoll(laadRunsPerUur, 300_000);
   const schemas = usePoll(laadSchemas, 300_000);
   const geheugen24 = usePoll(laadGeheugen24u, 600_000);
 
@@ -457,9 +479,13 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
 
   /* Kerntegels: grafiekjes uit de cron-runs, herinneringen en taken */
   const runs = runs24.data;
-  const runUren = runs ? perUur(runs.map((r) => r.created_at), nu.getTime()) : null;
-  const runFoutUren = runs ? perUur(runs.filter((r) => /^(fail|failed|error|timeout)$/i.test(r.status)).map((r) => r.created_at), nu.getTime()) : null;
+  const alleRuns = runs ? uurReeks(runs.rijen, nu.getTime()) : null;
+  const runFoutUren = alleRuns?.fout ?? null;
+  const runUren = alleRuns ? alleRuns.ok.map((n, i) => n + alleRuns.fout[i]) : null;
   const runFouten = som(runFoutUren) ?? 0;
+  const runTotaal = som(runUren) ?? 0;
+  /* Zonder de servertelling is het een steekproef van de laatste 1.000; dat staat erbij. */
+  const runBron = runs?.afgekapt ? ' · last 1,000 only' : '';
   const geheugenUren = geheugen24.data ? perUur(geheugen24.data, nu.getTime()) : null;
   const laatsteFout = stand.recent.find((t) => t.stand === 'failed' && t.taskId && recentActie(t) === 'retry');
   const agentToon: Toon = stand.goedkeuringen.length ? 'let-op' : laatsteFout ? 'let-op' : stand.werkend ? 'ok' : 'uit';
@@ -469,9 +495,9 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
   const systeemToon: Toon = !runs && !vandaag ? 'uit' : runFouten || vandaag?.mislukt ? 'let-op' : 'ok';
   const llmToon: Toon = !llm ? 'uit' : !llm.verbonden ? 'fout' : provTegels.some((p) => p.toon === 'fout') ? 'let-op' : 'ok';
 
-  /* Apps health: de vier apps */
+  /* Apps health: AXE Core en de vier apps */
   const apps = appsGezondheid({
-    runs: runs24.data, schemas: schemas.data, diensten, sessies: credits.data?.apps ?? [],
+    runs: runs?.rijen ?? null, schemas: schemas.data, diensten, sessies: credits.data?.apps ?? [],
     geheugen24u: geheugen24.data, geheugenTotaal: geheugen.data, nu: nu.getTime(),
   });
   const appsMis = apps.filter((a) => a.toon === 'fout' || a.toon === 'let-op').length;
@@ -563,9 +589,9 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
               grafiek={provTegels.length ? <TonenBalk tonen={provTegels.map((p) => p.toon)} /> : undefined}
               regel={llm ? `answering · ${llm.ingesteld} with a key` : 'No provider check yet'}
               fix={{ soort: 'open', route: '/settings', uitleg: 'Open Settings › keys and providers.' }} onKlik={() => navigate('/settings')} />
-            <KernTegel label="System" waarde={runs ? `${runs.length - runFouten}/${runs.length}` : vandaag?.klaar ?? '–'} toon={systeemToon}
+            <KernTegel label="System" waarde={runs ? (runTotaal ? `${(Math.floor(((runTotaal - runFouten) / runTotaal) * 1000) / 10).toFixed(1)}%` : '–') : vandaag?.klaar ?? '–'} toon={systeemToon}
               spark={runFouten ? runFoutUren : runUren} sparkToon={runFouten ? 'fout' : 'ok'}
-              regel={runs ? `cron runs ok · 24h · ${runFouten} failed` : vandaag?.mislukt == null ? 'Counting…' : `tasks done today · ${vandaag.mislukt} failed`}
+              regel={runs ? `${(runTotaal - runFouten).toLocaleString('en-GB')} of ${runTotaal.toLocaleString('en-GB')} cron runs ok · 24h · ${runFouten} failed${runBron}` : vandaag?.mislukt == null ? 'Counting…' : `tasks done today · ${vandaag.mislukt} failed`}
               fix={{ soort: 'open', route: '/ledger', uitleg: 'Open the ledger with the failed runs.' }} onKlik={() => navigate('/ledger')} />
           </div>
         </DashKaart>
@@ -668,7 +694,8 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
       <div className="axe-hcc-onder">
         <DashKaart titel={<Kop tekst="Apps health" onKlik={() => navigate('/apps')} />} telling={appsMis || undefined}
           className={`axe-hcc-kaart axe-hcc-kaart--apps${appsMis ? ' is-aandacht' : ''}`} vrij
-          actie={<button type="button" className="axe-hcc-kopknop" onClick={() => navigate('/cron-manager')}>Cron</button>}>
+          actie={<button type="button" className="axe-hcc-kopknop" onClick={() => navigate('/cron-manager')}
+            title={runs?.afgekapt ? 'Server count not installed yet: counting the last 1,000 runs only' : undefined}>{runs?.afgekapt ? 'Cron · 1k' : 'Cron'}</button>}>
           <div className="axe-hcc-apps" data-axe-hcc-apps>
             {apps.map((a) => <AppRij key={a.id} app={a} nu={nu.getTime()} onKlik={() => navigate(a.route)} />)}
           </div>

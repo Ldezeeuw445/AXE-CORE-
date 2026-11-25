@@ -155,14 +155,21 @@ const TABELLEN: Record<string, Rij[]> = {
   })),
   core_schedules: reeks(7, i => ({
     id: `voorbeeld-planning-${i}`,
-    name: `Voorbeeldtaak ${i + 1}`,
+    name: i === 1 ? 'Voorbeeld Review: bronnen lezen' : i === 4 ? 'Voorbeeld Planner: plannen' : `Voorbeeldtaak ${i + 1}`,
     cron: '*/15 * * * *',
     enabled: i % 3 !== 0,
-    last_status: i % 4 === 0 ? 'fail' : 'ok',
+    last_status: i === 1 || i === 4 ? 'fail' : 'ok',
     last_run_at: geleden(i * 18),
     app: i < 5 ? 'axe_core' : 'northsea',
-    consecutive_failures: i % 4 === 0 ? 1 : 0,
+    consecutive_failures: i === 1 ? 15 : i === 4 ? 4 : 0,
   })),
+  /* Servertelling per app per uur (core_job_runs_per_uur), alleen ontwerpmodus. */
+  'rpc:core_job_runs_per_uur': ['axe_core', 'northsea'].flatMap((app) => reeks(24, i => ({
+    app,
+    uur: new Date((Math.floor(Date.now() / 3600_000) - i) * 3600_000).toISOString(),
+    ok: app === 'axe_core' ? 150 + ((i * 37) % 60) : 5 + (i % 4),
+    fout: app === 'axe_core' && i % 7 === 3 ? 1 : 0,
+  }))),
   /* Cron-runs over 24 uur, voor de grafiekjes op Home (alleen ontwerpmodus). */
   core_job_runs: reeks(160, i => ({
     id: `voorbeeld-run-${i}`,
@@ -224,7 +231,7 @@ export function ontwerpClient(): unknown {
   return {
     ontwerp: ONTWERP_MARKERING,
     from: (tabel: string) => bouwer(tabel),
-    rpc: () => bouwer('rpc'),
+    rpc: (naam: string) => bouwer(`rpc:${naam}`),
     auth: {
       getSession: () => Promise.resolve({ data: { session: null }, error: null }),
       getUser: () => Promise.resolve({ data: { user: null }, error: null }),

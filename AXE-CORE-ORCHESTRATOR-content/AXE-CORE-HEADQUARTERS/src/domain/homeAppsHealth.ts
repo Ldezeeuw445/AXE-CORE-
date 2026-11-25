@@ -28,9 +28,11 @@ export function fixAlsNodig(toon: Toon, actie: FixActie | null): FixActie | null
 
 /* ── Apps health ───────────────────────────────────────────────────────── */
 
-export type HomeAppId = 'axe_companion' | 'trading_os' | 'axon_memory' | 'northsea';
+export type HomeAppId = 'axe_core' | 'axe_companion' | 'trading_os' | 'axon_memory' | 'northsea';
 
 export type JobRun = { app: string | null; status: string; created_at: string };
+/** Eén uurvak van één app, zoals core_job_runs_per_uur() het op de server telt. */
+export type RunUur = { app: string | null; uur: string; ok: number; fout: number };
 export type Schema = {
   id: string; name: string; app: string | null; enabled: boolean;
   last_status: string | null; last_run_at: string | null; consecutive_failures: number | null;
@@ -56,9 +58,14 @@ export type AppGezond = {
   runs: number[] | null;
   fouten: number[] | null;
   fix: FixActie | null;
+  /** Mislukte schema's van deze app, meeste fouten op rij eerst. */
+  kapot: Array<{ id: string; naam: string; keer: number }>;
 };
 
 const APPS: ReadonlyArray<{ id: HomeAppId; naam: string; route: string; dienst: RegExp | null }> = [
+  /* v5: AXE Core zelf, zodat zijn mislukte schema's (Review Desk, Planner) niet
+     alleen in de System-tegel en de ledger staan. */
+  { id: 'axe_core', naam: 'AXE Core', route: '/cron-manager', dienst: /workers/i },
   { id: 'axe_companion', naam: 'AXE Companion', route: '/devices', dienst: /axe api/i },
   { id: 'trading_os', naam: 'Trading OS', route: '/trading', dienst: /trading|metaapi/i },
   { id: 'axon_memory', naam: 'AXON Memory', route: '/memory', dienst: /database|supabase/i },
@@ -73,13 +80,55 @@ function tijd(t: string | null | undefined): number | null {
 }
 
 /**
+ * Terugval zolang de migratie niet is toegepast: ruwe rijen zelf per app en
+ * uur tellen. Die rijen zijn door de REST-limiet hooguit 1.000; de component
+ * zegt dat er dan bij.
+ */
+export function runsNaarUren(rijen: readonly JobRun[]): RunUur[] {
+  const vakken = new Map<string, RunUur>();
+  for (const r of rijen) {
+    const ms = tijd(r.created_at);
+    if (ms == null) continue;
+    const uur = new Date(Math.floor(ms / 3600_000) * 3600_000).toISOString();
+    const app = r.app ?? 'axe_core';
+    const k = `${app}|${uur}`;
+    const v = vakken.get(k) ?? { app, uur, ok: 0, fout: 0 };
+    if (FOUT.test(r.status)) v.fout += 1; else v.ok += 1;
+    vakken.set(k, v);
+  }
+  return [...vakken.values()];
+}
+
+/**
+ * 24 uurvakken (oudste eerst, het laatste is het lopende uur) voor één app, of
+ * voor alle apps samen als `app` ontbreekt. Null zonder data.
+ */
+export function uurReeks(rijen: readonly RunUur[] | null, nu: number, app?: string, uren = 24): { ok: number[]; fout: number[] } | null {
+  if (!rijen) return null;
+  const ok = new Array<number>(uren).fill(0);
+  const fout = new Array<number>(uren).fill(0);
+  const uurMs = 3600_000;
+  const eind = Math.floor(nu / uurMs) * uurMs + uurMs;
+  for (const r of rijen) {
+    if (app && (r.app ?? 'axe_core') !== app) continue;
+    const ms = tijd(r.uur);
+    if (ms == null || ms >= eind || ms < eind - uren * uurMs) continue;
+    const i = uren - 1 - Math.floor((eind - 1 - ms) / uurMs);
+    ok[i] += r.ok; fout[i] += r.fout;
+  }
+  return { ok, fout };
+}
+
+const som = (r: readonly number[] | null | undefined) => (r ? r.reduce((a, b) => a + b, 0) : 0);
+
+/**
  * Per app: status uit de VPS-dienst, de cron-schema's en de runs van 24 uur;
  * de KPI uit wat die app echt meet (sessies vandaag, herinneringen, runs).
  * Een mislukt schema of een dienst die down is geeft één Fix: de pagina
  * openen waar je het oplost. Home herstart of draait zelf niets.
  */
 export function appsGezondheid(in_: {
-  runs: readonly JobRun[] | null;
+  runs: readonly RunUur[] | null;
   schemas: readonly Schema[] | null;
   diensten: readonly Dienst[];
   sessies: readonly AppSessies[];
@@ -88,18 +137,23 @@ export function appsGezondheid(in_: {
   nu: number;
 }): AppGezond[] {
   return APPS.map((app) => {
-    const runs = in_.runs ? in_.runs.filter((r) => r.app === app.id) : null;
+    const reeks = uurReeks(in_.runs, in_.nu, app.id);
     const schemas = (in_.schemas ?? []).filter((s) => s.app === app.id && s.enabled);
     const dienst = app.dienst ? in_.diensten.find((d) => app.dienst!.test(d.name)) ?? null : null;
     const sessie = in_.sessies.find((s) => s.id.replace(/-/g, '_') === app.id) ?? null;
 
-    const okUren = runs && runs.length ? perUur(runs.filter((r) => !FOUT.test(r.status)).map((r) => r.created_at), in_.nu) : null;
-    const foutUren = runs && runs.length ? perUur(runs.filter((r) => FOUT.test(r.status)).map((r) => r.created_at), in_.nu) : null;
-    const nFout = foutUren ? foutUren.reduce((a, b) => a + b, 0) : 0;
-    const nRuns = runs ? runs.length : 0;
-    const kapot = schemas.filter((s) => FOUT.test(s.last_status ?? '') || (s.consecutive_failures ?? 0) > 0);
+    const nFout = som(reeks?.fout);
+    const nRuns = som(reeks?.ok) + nFout;
+    const okUren = nRuns ? reeks!.ok : null;
+    const foutUren = nRuns ? reeks!.fout : null;
+    const kapot = schemas
+      .filter((s) => FOUT.test(s.last_status ?? '') || (s.consecutive_failures ?? 0) > 0)
+      .sort((a, b) => (b.consecutive_failures ?? 0) - (a.consecutive_failures ?? 0));
 
-    const laatsteRun = runs && runs.length ? Math.max(...runs.map((r) => tijd(r.created_at) ?? 0)) : null;
+    /* Uit de uurtellers weten we alleen het uur; de schema's weten de minuut. */
+    const laatsteUur = (in_.runs ?? []).filter((r) => (r.app ?? 'axe_core') === app.id && r.ok + r.fout > 0)
+      .reduce<number | null>((m, r) => { const t = tijd(r.uur); return t != null && (m == null || t > m) ? t : m; }, null);
+    const laatsteRun = laatsteUur == null ? null : Math.min(in_.nu, laatsteUur + 3599_000);
     const laatsteSchema = schemas.reduce<number | null>((m, s) => {
       const t = tijd(s.last_run_at);
       return t != null && (m == null || t > m) ? t : m;
@@ -112,7 +166,10 @@ export function appsGezondheid(in_: {
       fix = { soort: 'open', route: '/apps', uitleg: `${dienst.name} is down. Open Apps; a restart there asks you first.` };
     } else if (kapot.length) {
       toon = 'fout'; stand = 'Failing';
-      fix = { soort: 'open', route: `/cron-manager?open=${encodeURIComponent(kapot[0].id)}`, uitleg: `${kapot[0].name} failed. Open it in Cron.` };
+      fix = {
+        soort: 'open', route: `/cron-manager?open=${encodeURIComponent(kapot[0].id)}`,
+        uitleg: `${schemaRegel(kapot)} failing. Open ${kortNaam(kapot[0].name)} in Cron Manager.`,
+      };
     } else if (nFout) {
       toon = 'let-op'; stand = 'Warning';
       fix = { soort: 'open', route: '/ledger', uitleg: `${nFout} failed ${nFout === 1 ? 'run' : 'runs'} in 24h. Open the ledger.` };
@@ -129,9 +186,9 @@ export function appsGezondheid(in_: {
       kpiSub = erbij == null ? 'memories' : `+${erbij} 24h`;
       kpiUitleg = erbij == null ? 'memories stored' : `memories stored · ${erbij} added in the last 24h`;
     } else if (nRuns) {
-      kpi = String(nRuns);
-      kpiSub = nFout ? `runs · ${nFout} failed` : 'runs';
-      kpiUitleg = `cron runs in the last 24h · ${nFout} failed`;
+      kpi = nRuns.toLocaleString('en-GB');
+      kpiSub = kapot.length ? `${schemaRegel(kapot)} failing` : nFout ? `runs · ${nFout} failed` : 'runs';
+      kpiUitleg = `cron runs in the last 24h · ${nFout} failed${kapot.length ? ` · failing: ${schemaRegel(kapot)}` : ''}`;
     } else if (sessie) {
       kpi = String(sessie.sessions_today);
       kpiSub = 'sessions';
@@ -146,8 +203,19 @@ export function appsGezondheid(in_: {
     return {
       id: app.id, naam: app.naam, route: app.route, toon, stand, kpi, kpiSub, kpiUitleg, laatst,
       runs: okUren ?? geheugenUren, fouten: foutUren, fix,
+      kapot: kapot.map((s) => ({ id: s.id, naam: kortNaam(s.name), keer: s.consecutive_failures ?? 0 })),
     };
   });
+}
+
+/** 'Review Desk: bronnen lezen (Gmail, …)' → 'Review Desk'. */
+function kortNaam(naam: string): string {
+  return naam.split(':')[0].trim() || naam;
+}
+
+/** 'Review Desk ×15, Planner ×4' */
+function schemaRegel(kapot: readonly Schema[]): string {
+  return kapot.map((s) => `${kortNaam(s.name)}${(s.consecutive_failures ?? 0) > 1 ? ` ×${s.consecutive_failures}` : ''}`).join(', ');
 }
 
 /* ── Feed: ruwe JSON wordt één zin ─────────────────────────────────────── */
