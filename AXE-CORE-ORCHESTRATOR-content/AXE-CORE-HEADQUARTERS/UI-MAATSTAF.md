@@ -73,6 +73,30 @@ inhoud te tonen.
   `axe-tab-group` (getinte kop + blok), voet met Device Manager, Lock Screen,
   Settings, Profile. Een lade zonder inhoud gaat niet open.
 
+## Dashboardschil (Luka, 25 nov 2026)
+
+*"Elke tab en alle andere pagina's echt één dashboard, niet meer scrollen,
+overal dezelfde strakke layout en stijl zoals de browser-tab."*
+
+Voor tabs die als dashboard werken is er nu één schil:
+`src/presentation/components/layout/dashboardSchil.tsx` met CSS in
+`src/design/axe-dashboard.css`.
+
+- `DashSchil` = `TabRuimte vullen` + `.axe-dash`. Zelfde plaatmaat als het
+  browservak (layoutregel 1), maar de pagina zelf schuift NOOIT.
+- `DashKop` = één kopstrook: titel links, echte kerncijfers midden, acties rechts.
+- `DashRaster kolommen rijen` = gelijke sporen in beide richtingen
+  (`minmax(0, 1fr)`); het raster vult de hoogte die er is.
+- `DashKaart kolom rij` = `.axe-kaart`, span in rastereenheden. Alleen het
+  kaartlijf mag schuiven. Te veel voor één vak: `tabs` in de kaartkop.
+- `DashVenster` = formulier of volledige lijst boven het raster, in plaats van
+  een blok dat de pagina langer maakt.
+
+Let op: dit wijkt bewust af van layoutregel 2 ("de ruimte is een maximum,
+niet rekken"). Binnen de schil vullen kaarten het vak, zodat er geen halve
+pagina leeg blijft. `.axe-kaart-raster` blijft voor tabs die nog niet om zijn.
+Meten: `e2e/home-live-layout/dashboard-audit.spec.ts` (ROUTES, SIZES, SHOTS).
+
 ---
 
 ## De overige regels (materiaal, kleur, meten)

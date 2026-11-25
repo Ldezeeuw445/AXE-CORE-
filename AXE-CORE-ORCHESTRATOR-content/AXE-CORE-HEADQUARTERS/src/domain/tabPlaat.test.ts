@@ -80,7 +80,7 @@ const TAB_BRONNEN: Array<{ route: string; files: string[] }> = [
 ];
 
 function heeftPlaat(bron: string): boolean {
-  return /axe-tabruimte|<TabRuimte\b|axe-browser-vak|axe-plaat/.test(bron);
+  return /axe-tabruimte|<TabRuimte\b|<DashSchil\b|axe-browser-vak|axe-plaat/.test(bron);
 }
 
 describe('één gedeelde plaat-maat', () => {

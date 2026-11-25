@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { isVoorLuka, zonderRuis } from '@/domain/taken/takenRuis';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { useSearchParams } from 'react-router';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { Plus, X, Zap, Clock } from 'lucide-react';
-import { TabRuimte, Kaart, SchuifBalk, SectieBlok } from '@/presentation/components/layout/tabMaatstaf';
+import { SchuifBalk, SectieBlok } from '@/presentation/components/layout/tabMaatstaf';
+import { DashSchil, DashKop, DashRaster, DashKaart, DashVenster } from '@/presentation/components/layout/dashboardSchil';
 import { AppTaken, AppCijfers, type AppTaak } from './taken/AppTaken';
 import { APPS, appMeta, appVan, metMetaApp, type AppId } from '@/domain/apps';
 import {
@@ -21,7 +22,6 @@ import PhoneTasks from '@/presentation/pages/phone/PhoneTasks';
 import { TasksDesk } from '@/presentation/components/tasks/TasksDesk';
 import { TakenSecties } from '@/presentation/components/tasks/TakenSecties';
 import { WiensBeurt } from '@/presentation/components/tasks/WiensBeurt';
-import { KpiRij } from '@/presentation/components/settings/StatusKaart';
 import { verdeelSecties, wieBezig } from '@/domain/takenOverzicht';
 import { STATUS_NL } from '@/domain/takenOverzicht';
 
@@ -411,8 +411,62 @@ export default function Tasks() {
 
   if (phone) return <PhoneTasks />;
 
+  const knoppen = (
+    <>
+      <button
+        onClick={() => { void autoRoute(); }}
+        disabled={routing || tasks.filter(t => t.assignee === 'AXE Core' && t.status === 'todo').length === 0}
+        className="inline-flex items-center justify-center gap-1.5 text-xs-custom px-3 py-2 rounded-lg transition-all"
+        style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)', opacity: routing ? 0.6 : 1 }}
+      >
+        {routing ? <span className="animate-spin inline-block w-3 h-3 border border-cyan-400 border-t-transparent rounded-full" /> : <Zap size={12} />}
+        {routing ? 'Routing...' : 'Auto-Route'}
+      </button>
+      <button
+        onClick={() => setAdding(v => !v)}
+        className="inline-flex items-center justify-center gap-1.5 text-xs-custom px-3 py-2 rounded-lg"
+        style={{ background: 'var(--accent-cyan)', color: '#000' }}
+      >
+        <Plus size={13} /> Nieuwe taak
+      </button>
+    </>
+  );
+
+  /* Per app zijn deadlines, en eronder zijn dagen. Vijf gelijke kolommen,
+     AXE Core links -- een taak is een taak, welke app hij ook raakt. De app
+     staat in metadata.app, precies zoals de cron-tab het doet. */
+  const perApp = (
+    <SectieBlok titel="TASKS">
+      <div className="axe-appvijf">
+        {APPS.map(a => (
+          <div key={a.id} className="axe-appkolom">
+            <AppCijfers taken={takenVan(a.id)} label={a.label} />
+            <AppTaken
+              label={a.label}
+              kleur={a.kleur}
+              blurb={a.blurb}
+              taken={takenVan(a.id)}
+              opNieuw={() => nieuwVoor(a.id)}
+              opKlaar={t => {
+                if (isNorthseaWerk(t.id)) { toast.info('This task lives on the NorthSea desk. Tick it off there, at the deal.'); return; }
+                void updateStatus(t.id, 'done');
+              }}
+              opWeg={t => {
+                if (isNorthseaWerk(t.id)) { toast.info('This task comes from AXE Commodities and is managed there.'); return; }
+                void removeTask(t.id);
+              }}
+            />
+          </div>
+        ))}
+      </div>
+    </SectieBlok>
+  );
+
   return (
-    /* Flexkolom: knoppen en cijfers vast, de takenlijst krijgt de rest. */
+    /* 25 nov (Luka): één dashboard, de pagina schuift niet. Kop met de vier
+       kerncijfers, daaronder een 3×2-raster: links de desk (2×2, met tabs voor
+       per-app en planner), rechts wiens beurt en het overzicht. Wat niet past
+       schuift binnen zijn eigen kaart. Zelfde bronnen als voorheen. */
     <motion.div className="flex min-h-0 flex-1 flex-col axe-tasks-page" data-axe-tasks="v3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <TabRail kant="links">
         <SchuifBalk
@@ -427,71 +481,54 @@ export default function Tasks() {
           }]}
         />
       </TabRail>
-      <TabRuimte>
-      {/* Eén schuif voor de hele tab. Eerst schoof alleen de lijst onderaan,
-          en die kreeg 0px zodra secties, desk en planner hun hoogte namen: de
-          projectkaarten waren onbereikbaar en de desk werd onder de planner
-          platgedrukt. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" data-axe-taken-schuif="">
-      {/* 23 nov (referentiemap): kop met kerncijfers, dan wie er aan zet is, dan de details. */}
-      <header className="axe-set-kop flex-none">
-        <div>
-          <h2>Tasks</h2>
-          <p>Who has the next move, what is running and what finished. Only things that need you count as waiting.</p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <button
-            onClick={() => { void autoRoute(); }}
-            disabled={routing || tasks.filter(t => t.assignee === 'AXE Core' && t.status === 'todo').length === 0}
-            className="inline-flex items-center justify-center gap-1.5 text-xs-custom px-3 py-2 rounded-lg transition-all"
-            style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)', opacity: routing ? 0.6 : 1 }}
-          >
-            {routing ? <span className="animate-spin inline-block w-3 h-3 border border-cyan-400 border-t-transparent rounded-full" /> : <Zap size={12} />}
-            {routing ? 'Routing...' : 'Auto-Route (AXE Core)'}
-          </button>
-          <button
-            onClick={() => setAdding(v => !v)}
-            className="inline-flex items-center justify-center gap-1.5 text-xs-custom px-3 py-2 rounded-lg"
-            style={{ background: 'var(--accent-cyan)', color: '#000' }}
-          >
-            <Plus size={13} /> Nieuwe taak
-          </button>
-        </div>
-      </header>
-      <KpiRij tegels={[
-        { label: 'Waiting on you', waarde: String(kp.wacht.length), toon: kp.wacht.length ? 'warn' : undefined,
-          sub: kp.wacht[0]?.title ?? 'nothing needs you' },
-        { label: 'Running', waarde: String(kp.bezig.length), sub: wieBezig(kp.bezig) || 'nothing running' },
-        { label: 'Planned for AI', waarde: String(kp.gepland.length), sub: 'no action needed from you' },
-        { label: 'Done today', waarde: String(kp.klaarVandaag.length), toon: kp.klaarVandaag.length ? 'ok' : undefined,
-          sub: kp.misluktAi.length ? `${kp.misluktAi.length} failed, AI retries` : 'no failures' },
-      ]} />
+      <DashSchil
+        tab="tasks"
+        kop={
+          <DashKop
+            titel="Tasks"
+            sub="Wie is aan zet, wat loopt, wat is klaar."
+            cijfers={[
+              { label: 'Waiting on you', waarde: kp.wacht.length, toon: kp.wacht.length ? 'warn' : undefined,
+                sub: kp.wacht[0]?.title ?? 'nothing needs you' },
+              { label: 'Running', waarde: kp.bezig.length, sub: wieBezig(kp.bezig) || 'nothing running' },
+              { label: 'Planned for AI', waarde: kp.gepland.length, sub: 'no action needed from you' },
+              { label: 'Done today', waarde: kp.klaarVandaag.length, toon: kp.klaarVandaag.length ? 'ok' : undefined,
+                sub: kp.misluktAi.length ? `${kp.misluktAi.length} failed, AI retries` : 'no failures' },
+            ]}
+            acties={knoppen}
+          />
+        }
+      >
+        <DashRaster kolommen={3} rijen={2}>
+          <DashKaart
+            kolom={2}
+            rij={2}
+            vrij
+            tabs={[
+              { id: 'desk', label: 'Inbox', telling: tasks.length, inhoud: (
+                <TasksDesk
+                  tasks={tasks}
+                  loading={loading}
+                  initialSelectedId={openId}
+                  onNew={() => setAdding(true)}
+                  onMarkDone={(id) => { void updateStatus(id, 'done'); }}
+                  onToggleDone={(id, done) => { void updateStatus(id, done ? 'done' : 'todo'); }}
+                />
+              ) },
+              { id: 'app', label: 'Per app', inhoud: <div className="axe-dash-kaart-lijf">{perApp}</div> },
+              { id: 'planner', label: 'Planner', inhoud: <div className="axe-dash-kaart-lijf"><PlannerTaken /></div> },
+            ]}
+          />
+          {/* 22 nov: wiens beurt -- de gedeelde stappen van elke AI (axe stap-nieuw / stap-af). */}
+          <DashKaart titel="Wiens beurt">
+            <WiensBeurt />
+          </DashKaart>
+          <DashKaart titel="Overzicht">
+            <TakenSecties taken={tasks} loading={loading} />
+          </DashKaart>
+        </DashRaster>
 
-      {/* 22 nov: wiens beurt -- de gedeelde stappen van elke AI (axe stap-nieuw / stap-af). */}
-      <WiensBeurt />
-
-      <TakenSecties taken={tasks} loading={loading} />
-
-      <TasksDesk
-        tasks={tasks}
-        loading={loading}
-        initialSelectedId={openId}
-        onNew={() => setAdding(true)}
-        onMarkDone={(id) => { void updateStatus(id, 'done'); }}
-        onToggleDone={(id, done) => { void updateStatus(id, done ? 'done' : 'todo'); }}
-      />
-
-      <PlannerTaken />
-
-      {/* De cijferrij die hier stond telde ALLE apps bij elkaar op. Dat getal
-          beantwoordt geen vraag die je hebt: "twelve to do" zegt niets als je
-          wil weten of Companion achterloopt. Hij staat nu per kaart, op dezelfde
-          plek in alle vijf. */}
-
-      <AnimatePresence>
-        {adding && (
-          <motion.div initial={{ opacity: 0, y: -8, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }} exit={{ opacity: 0, y: -8, height: 0 }} className="overflow-hidden mb-4">
-            <Kaart titel="Nieuwe taak">
+        <DashVenster open={adding} titel="Nieuwe taak" onSluit={() => setAdding(false)}>
               <div className="space-y-2.5">
                 <input
                   autoFocus
@@ -555,60 +592,8 @@ export default function Tasks() {
                   <button onClick={() => setAdding(false)} className="px-2 py-1.5 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}><X size={13} /></button>
                 </div>
               </div>
-            </Kaart>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* De lijst is de enige schuif, en hij vult wat er onder de cijfers over
-          is. De lege staat gebruikt diezelfde ruimte in plaats van als strookje
-          bovenin te blijven hangen met een halve pagina plaat eronder. */}
-      <div className="flex-none">
-      {/* Per app zijn deadlines, en eronder zijn dagen.
-        *
-        * Dit was één lange lijst met alle taken van alles door elkaar, met een
-        * statusfilter erbij. Dat werkt zolang je één ding bouwt. Met vijf apps
-        * is "wat ligt er bij Companion" de vraag die je stelt, en die kon je
-        * alleen beantwoorden door de hele lijst te lezen.
-        *
-        * De app staat in metadata.app, precies zoals de cron-tab het doet --
-        * geen migratie, en alles wat er al staat valt terug op AXE Core. */}
-      {/* Vijf naast elkaar, AXE Core links.
-        *
-        * De cron-tab zet AXE Core apart omdat hij daar iets ANDERS doet:
-        * lokaal draaien tegenover een webhook. Bij taken is dat verschil er
-        * niet -- een taak is een taak, welke app hij ook raakt. Dan zijn vijf
-        * gelijke kolommen eerlijker dan er één uitlichten. */}
-      <SectieBlok titel="TASKS">
-      <div className="axe-appvijf">
-        {APPS.map(a => (
-          /* Twee losse kaarten per kolom: de cijfers erboven, het paneel
-             eronder. Zie AppCijfers voor waarom ze niet in de kop zitten. */
-          <div key={a.id} className="axe-appkolom">
-            <AppCijfers taken={takenVan(a.id)} label={a.label} />
-            <AppTaken
-              label={a.label}
-              kleur={a.kleur}
-              blurb={a.blurb}
-              taken={takenVan(a.id)}
-              opNieuw={() => nieuwVoor(a.id)}
-              opKlaar={t => {
-                if (isNorthseaWerk(t.id)) { toast.info('This task lives on the NorthSea desk. Tick it off there, at the deal.'); return; }
-                void updateStatus(t.id, 'done');
-              }}
-              opWeg={t => {
-                if (isNorthseaWerk(t.id)) { toast.info('This task comes from AXE Commodities and is managed there.'); return; }
-                void removeTask(t.id);
-              }}
-            />
-          </div>
-        ))}
-      </div>
-      </SectieBlok>
-
-      </div>
-      </div>
-      </TabRuimte>
+        </DashVenster>
+      </DashSchil>
     </motion.div>
   );
 }

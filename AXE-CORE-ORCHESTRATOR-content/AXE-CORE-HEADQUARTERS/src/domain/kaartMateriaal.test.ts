@@ -109,11 +109,12 @@ describe('Settings en MCP gebruiken de primitieven', () => {
 });
 
 describe('Calendar, Cron, Tasks en de volgende tabs', () => {
-  it('Tasks heeft TabRuimte, SchuifBalk en sectieblokken', () => {
-    expect(tasks).toMatch(/<TabRuimte/);
+  it('Tasks is één dashboard: DashSchil (TabRuimte vullen), SchuifBalk en kaarten', () => {
+    // 25 nov: de dashboardschil zet zelf TabRuimte vullen neer.
+    expect(tasks).toMatch(/<DashSchil/);
+    expect(tasks).toMatch(/<DashKaart/);
     expect(tasks).toMatch(/<SchuifBalk/);
     expect(tasks).toMatch(/<SectieBlok/);
-    expect(tasks).toMatch(/<Kaart/);
   });
 
   it('Cron gebruikt Kaart en geen LIST_GRID', () => {
