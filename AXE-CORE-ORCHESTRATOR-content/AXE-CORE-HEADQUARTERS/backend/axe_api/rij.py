@@ -194,7 +194,11 @@ def waarom_niet_zelf(t: dict[str, Any]) -> str | None:
 def zelf_velden(t: dict[str, Any], actor: str = "luka") -> dict[str, Any]:
     """Pending -> queued bij AXE, met wie hem had en een doel dat zegt wat er van AXE verwacht wordt."""
     velden = start_velden(t)
-    doel = str(t.get("goal") or t.get("title") or "").strip()
+    # 25 nov live: een stap heeft goal = het waarom ("proef ..."); alleen dat meegeven gaf
+    # een agent zonder opdracht. De titel ís de opdracht, het waarom staat eronder.
+    titel = " ".join(str(t.get("title") or "").split())
+    waarom = " ".join(str(t.get("goal") or "").split())
+    doel = titel + (f"\nWhy: {waarom}" if waarom and waarom != titel else "")
     velden["assignee"] = "axe"
     velden["goal"] = f"{doel}\n\n{ZELF_DOEL}"[:2000]
     velden["metadata"] = {**_meta(t), "zelf_door": actor, "zelf_van": t.get("assignee") or "luka"}

@@ -94,12 +94,12 @@ def test_dubbel_beginnen_nummert_niet_opnieuw():
 # ── "Doe het zelf"-knop (25 nov) ──────────────────────────────────────────
 
 def test_doe_het_zelf_neemt_een_stap_van_luka_over():
-    db = DB([taak(1, assignee="luka", capability="stap", goal="Zoek drie Mac-mini-docks uit")])
+    db = DB([taak(1, assignee="luka", capability="stap", title="Zoek drie Mac-mini-docks uit", goal="voor het bureau")])
     uit = rij.doe_zelf(db, "t1")
-    assert uit == {"ok": True, "titel": "Stap 1"}
+    assert uit == {"ok": True, "titel": "Zoek drie Mac-mini-docks uit"}
     t = db.taken[0]
     assert t["status"] == "queued" and t["capability"] == "agentic" and t["assignee"] == "axe"
-    assert t["goal"].startswith("Zoek drie Mac-mini-docks uit") and "Do it for me" in t["goal"]
+    assert t["goal"].startswith("Zoek drie Mac-mini-docks uit\nWhy: voor het bureau") and "Do it for me" in t["goal"]
     assert t["metadata"]["zelf_door"] == "luka" and t["metadata"]["zelf_van"] == "luka"
     assert any("Doe het zelf" in str(r) for r in db.log)
 
