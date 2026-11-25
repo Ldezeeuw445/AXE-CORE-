@@ -63,6 +63,8 @@ export interface Kenmerk {
   policyChange?: boolean;
   internalHousekeeping?: boolean;
   generatedBy?: string | null;
+  /** Brief opent met Dear Sir or Madam / To whom it may concern. */
+  genericSalutation?: boolean;
 }
 
 export interface BeleidBesluit {
@@ -128,6 +130,9 @@ function tekst(k: Kenmerk): string {
 const PRIJS = /(?:\b\d[\d,.]{0,12}\s*(?:usd|eur|gbp|us\$|\$|€|£|%))|(?:(?:usd|eur|gbp|us\$|\$|€|£)\s*\d[\d,.]{0,12})|(?:\b\d[\d,.]{0,12}\s*(?:per\s*mt|\/\s*mt|pmt)\b)|(?:\bcommission\b|\bfee\b|\bmargin\b|\bdiscount\b)/i;
 const CONTRACT = /\b(ncnda|ncnnda|imfpa|spa\b|loi\b|fee agreement|mandate|legal-document|contract)\b/i;
 const COMMITMENT = /\b(\d[\d,.]{0,12}\s*mt\b|exclusiv(?:e|ity)|(?:we\s+)?can (?:ship|deliver|supply)|delivery guarante|lme registered|cif\s+[a-z]|fob\s+[a-z])/i;
+/** Hard verboden in uitgaande NorthSea-tekst, ook als classificeer iets anders ziet. */
+const VERBODEN_CLAIMS = /\b(lme[\s-]*registered|delivery\s+guarante\w*|guaranteed\s+(?:delivery|shipment)|(?:we|northsea)\s+(?:can|will|shall)\s+deliver|(?:we|northsea)\s+(?:can\s+|will\s+|shall\s+)?(?:offer|supply|ship|provide|deliver)\s+\d|(?:we|northsea)\b[\s\S]{0,40}\bcif\b|(?:offer|quote|price|indication).{0,30}\bcif\b)/i;
+const GENERIC_SALUTATION = /^\s*(?:dear\s+(?:sir(?:\s+or\s+madam)?|madam(?:\s+or\s+sir)?|sirs|sir\s*\/\s*madam|valued\s+\w+)|to\s+whom\s+it\s+may\s+concern)\b/im;
 const IDENTITEIT = /\b(introduce you to the (?:buyer|seller)|buyer identity|seller identity|counterparty identity|we will introduce)\b/i;
 const QUAL = /supply qualification/i;
 const ENGINE = /northsea-(?:mcp|engine)|northsea_mcp/i;
@@ -167,10 +172,21 @@ function regelVoor(regels: BeleidRegel[], managerId: string, category: ApprovalC
     ?? { managerId, category, mode: HARD_ESCALATIE.has(category) ? 'escalate' : 'escalate', axeMayApproveAll: false };
 }
 
+function heeftGeneriekeAanhef(k: Kenmerk): boolean {
+  return k.genericSalutation === true || GENERIC_SALUTATION.test(tekst(k));
+}
+
+function heeftVerbodenClaim(k: Kenmerk): boolean {
+  return VERBODEN_CLAIMS.test(tekst(k)) || COMMITMENT.test(tekst(k)) || PRIJS.test(tekst(k));
+}
+
 function drempelChase(k: Kenmerk): string | null {
   if (!k.hasThread) return 'Not an existing thread.';
-  if (PRIJS.test(tekst(k)) || COMMITMENT.test(tekst(k))) return 'Chase contains a price or commitment.';
-  if (!k.namedRecipient) return 'Recipient is not a named person.';
+  if (heeftGeneriekeAanhef(k)) {
+    return 'Generic salutation (Dear Sir or Madam / To whom it may concern).';
+  }
+  if (heeftVerbodenClaim(k)) return 'Chase contains a banned claim, price or commitment.';
+  if (!k.namedRecipient || k.isRoleMailbox) return 'Recipient is not a named person.';
   if (!k.addressVerified) return 'Address is not verified.';
   if ((k.chases14dForContact ?? 0) >= 2) return 'Already two chases to this contact in 14 days.';
   return null;
@@ -236,6 +252,22 @@ export function evalueer(
         const nee = drempelChase(k);
         if (nee) {
           return { ...basis, mode: 'escalate', actorType: 'human', needsLuka: true, reason: nee };
+        }
+      }
+      if (category === 'nonbinding') {
+        // Zelfde inhoudspoort als chase: een generieke aanhef of verboden claim
+        // mag niet via 'please share the COA' alsnog auto-approven.
+        if (heeftGeneriekeAanhef(k)) {
+          return {
+            ...basis, mode: 'escalate', actorType: 'human', needsLuka: true,
+            reason: 'Generic salutation (Dear Sir or Madam / To whom it may concern).',
+          };
+        }
+        if (heeftVerbodenClaim(k)) {
+          return {
+            ...basis, mode: 'escalate', actorType: 'human', needsLuka: true,
+            reason: 'Draft contains a banned claim, price or commitment.',
+          };
         }
       }
       if (category === 'cold_outreach') {

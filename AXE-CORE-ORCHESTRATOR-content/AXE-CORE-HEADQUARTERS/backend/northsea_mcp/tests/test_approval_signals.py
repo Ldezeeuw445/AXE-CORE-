@@ -22,3 +22,16 @@ def test_generieke_qualification_vlag():
          "generated_by": "northsea-mcp", "to_email": "sales@x.com"}
     uit = signals_for_draft(d, companies=[], contacts=[], communications=[], drafts=[d])
     assert uit["generic_template"] is True
+    assert uit["generic_salutation"] is True
+    assert uit["named_recipient"] is False
+    assert uit["is_role_mailbox"] is True
+
+
+def test_named_recipient_is_false_als_de_brief_generiek_opent():
+    data = seed()
+    d = dict(data["reply_drafts"][0], body="Dear Sir or Madam,\n\nFollowing up.",
+             to_email="chanda@mopani.com")
+    uit = signals_for_draft(d, companies=data["companies"], contacts=data["contacts"],
+                            communications=data["communications"], drafts=data["reply_drafts"])
+    assert uit["generic_salutation"] is True
+    assert uit["named_recipient"] is False

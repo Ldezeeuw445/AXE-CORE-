@@ -1322,8 +1322,18 @@ class NorthSeaService:
                      "accepted payment instrument, target shipment timing, and whether NorthSea Commodity Partners may coordinate the "
                      "qualification process on your behalf.")
         elif template == "follow_up":
+            from .engine_rules import person_first_name
+            first = person_first_name((primair or {}).get("full_name"))
+            bedrijf = " ".join(((company or {}).get("company_name") or "").split()) or None
+            if first:
+                aanhef = f"Dear {first},"
+            elif bedrijf:
+                aanhef = f"Dear colleagues at {bedrijf},"
+            else:
+                aanhef = "Dear colleagues,"
             onderwerp = f"Re: {product}"
-            tekst = f"Following up on our previous message regarding {product}."
+            wie = f" with {bedrijf}" if bedrijf else ""
+            tekst = f"{aanhef}\n\nI am following up{wie} on our previous message regarding {product}."
             if onbekend:
                 tekst += "\n\nTo move forward we still need: " + ", ".join(o.replace("_", " ") for o in onbekend) + "."
         elif template == "decline_not_executable":
@@ -1409,7 +1419,12 @@ class NorthSeaService:
                 # mag zonder hem, binnen de grenzen hieronder. Anders: pending, zoals altijd.
                 regel = None
                 if policy_allowed and eerste_contact and beleid not in ("review_required",):
-                    regel = await self._policy_ruimte(primair["email"])
+                    from .engine_rules import banned_outbound_claims
+                    # Zelfde inhoudspoort als de engine: verboden claims gaan nooit vanzelf.
+                    if banned_outbound_claims(tekst):
+                        regel = None
+                    else:
+                        regel = await self._policy_ruimte(primair["email"])
                 if regel and not regel.get("allowed"):
                     # Luka, 19 nov: "een overlopende emmer". Een eerste vrijblijvende
                     # mail die alleen op de daglimiet of de rust per adres wacht, is
@@ -1484,6 +1499,27 @@ class NorthSeaService:
         if (d.get("approval_status") != "not_required" or not regel.get("allowed") or d.get("sensitive_action")
                 or not (eerste or vervolg)):
             raise PolicyDenied("policy_send_not_allowed", "This draft is not a policy-allowed first qualification mail.")
+        if vervolg:
+            from .engine_rules import followup_autosend_block_reason
+            contact = None
+            company = None
+            if d.get("company_id"):
+                company = await self.repo.get_company(d["company_id"])
+                for c in await self.repo.list_contacts(d["company_id"]):
+                    if c.get("id") == d.get("contact_id"):
+                        contact = c
+                        break
+            inhoud_nee = followup_autosend_block_reason(
+                d.get("body"),
+                full_name=(contact or {}).get("full_name"),
+                email=d.get("to_email"),
+                company_name=(company or {}).get("company_name"),
+            )
+            if inhoud_nee:
+                raise PolicyDenied(
+                    "policy_send_not_allowed",
+                    "This follow-up is not personal enough to send without Luka.",
+                )
         res = await self.repo.send_approved_reply(d["id"], requested_by=caller.principal)
         if res.get("ok"):
             return SendResult(draft_id=d["id"], submitted=not res.get("duplicate"), duplicate=bool(res.get("duplicate")),

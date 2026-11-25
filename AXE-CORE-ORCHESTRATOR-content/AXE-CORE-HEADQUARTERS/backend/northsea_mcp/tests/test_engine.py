@@ -666,6 +666,9 @@ async def test_vervolgmail_gaat_zelf_alleen_met_de_noodknop_aan():
     d = next(x for x in repo.t["reply_drafts"] if x["id"] == fu["draft_id"])
     assert d["approval_status"] == "not_required" and d["policy_decision"]["allowed"] is True
     assert d["policy_decision"]["rule"] == "luka_followups_2026_11_18" and d["communication_id"] == anker
+    assert d["body"].startswith("Dear Chanda,")
+    assert "Mopani Copper Mines PLC" in d["body"]
+    assert "Dear Sir" not in d["body"]
     lus = await finish_engine_tick(NorthSeaService(repo, None, None), uit)
     assert lus["sent"] == 1 and len(repo.sends) == 1
     # Noodknop weer uit: een volgend policy-allowed vervolgconcept gaat niet meer weg.
@@ -708,6 +711,54 @@ async def test_vervolgmail_boven_daglimiet_wacht_tot_morgen_en_komt_niet_bij_luk
     assert repo.t.get("northsea_followups", []) == []
     assert not [d for d in repo.t["reply_drafts"] if d.get("approval_status") == "pending"]
     assert engine.VERVOLG_PER_DAG == 5
+
+
+async def test_vervolgmail_zonder_persoonsnaam_blijft_concept_en_gaat_niet_de_deur_uit():
+    """25 nov: Finolex/Paramount kregen 'Dear Sir or Madam' vanzelf. Zonder
+    genoemde contactpersoon (roladres of geen naam) is het een concept in /wacht."""
+    from northsea_mcp.crew_loop import finish_engine_tick
+    from northsea_mcp.service import NorthSeaService
+    repo = FakeRepo()
+    repo.t["deal_automation_policy"][0].update(auto_send_followups=True, auto_send_qualification=True, auto_reply_nonbinding=True)
+    oude_inbound(repo)
+    repo.t["reply_drafts"] = [d for d in repo.t["reply_drafts"] if d["approval_status"] != "pending"]
+    next(c for c in repo.t["contacts"] if c["id"] == CONTACT_S).update(
+        full_name="Sales desk", email="sales@mopani.com")
+    outbound(repo, h=-60)
+    uit = await eng(repo).tick()
+    fu = repo.t["northsea_followups"][0]
+    d = next(x for x in repo.t["reply_drafts"] if x["id"] == fu["draft_id"])
+    assert d["approval_status"] == "pending"
+    assert d["policy_decision"]["allowed"] is False
+    assert "no named contact" in " ".join(d["policy_decision"].get("reasons") or [])
+    assert "Dear Sir" not in d["body"]
+    lus = await finish_engine_tick(NorthSeaService(repo, None, None), uit)
+    assert lus["sent"] == 0 and repo.sends == []
+
+
+async def test_vervolgmail_met_generieke_aanhef_wordt_niet_verstuurd():
+    """Laatste poort: een policy-allowed concept dat tóch Sir/Madam opent, niet versturen."""
+    from northsea_mcp.policy import PolicyDenied
+    from northsea_mcp.service import NorthSeaService
+    repo = FakeRepo()
+    repo.t["deal_automation_policy"][0].update(auto_send_followups=True, auto_send_qualification=True, auto_reply_nonbinding=True)
+    d = {
+        "id": str(uuid.uuid4()), "communication_id": COMM, "company_id": SELLER_CO,
+        "contact_id": CONTACT_S, "opportunity_id": OPP, "to_email": "chanda@mopani.com",
+        "subject": "Re: Copper Cathode", "body": "Dear Sir or Madam,\n\nFollowing up with Mopani Copper Mines PLC.",
+        "purpose": "Follow-up 1 (engine)", "generated_by": "northsea-engine",
+        "approval_status": "not_required", "lifecycle_state": "policy_allowed",
+        "sensitive_action": False, "sent_at": None, "resend_email_id": None,
+        "policy_decision": {"allowed": True, "action": "followup_send", "rule": "luka_followups_2026_11_18"},
+    }
+    repo.t["reply_drafts"].append(d)
+    service = NorthSeaService(repo, None, None)
+    try:
+        await service.send_policy_allowed(type("C", (), {"principal": "engine", "is_human": False})(), draft_id=d["id"])
+        raise AssertionError("generic follow-up must not send")
+    except PolicyDenied as err:
+        assert err.code == "policy_send_not_allowed"
+    assert repo.sends == []
 
 
 async def test_vervolgmail_niet_binnen_14_dagen_naar_hetzelfde_adres():

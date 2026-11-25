@@ -302,11 +302,50 @@ def test_synthetic_outbound_never_followed_up():
 
 def test_draft_names_real_open_points_and_commits_nothing():
     d = e.followup_draft(blocker_code="seller_unqualified", role="supplier", missing=["seller authority (principal or mandate)", "origin/refinery"],
-                         product="Copper Cathode", attempt=1, original_subject="Copper Cathode — supply qualification")
+                         product="Copper Cathode", attempt=1, original_subject="Copper Cathode — supply qualification",
+                         contact_name="Chanda Mwale", company_name="Mopani Copper Mines PLC",
+                         original_date="19 November 2026", original_ask="whether you could confirm origin/refinery")
     assert d["subject"].startswith("Re: ") and "Seller authority" in d["body"] and "Origin/refinery" in d["body"]
+    assert d["body"].startswith("Dear Chanda,")
+    assert "Mopani Copper Mines PLC" in d["body"]
+    assert "19 November 2026" in d["body"]
+    assert "Copper Cathode — supply qualification" in d["body"]
+    assert "origin/refinery" in d["body"].lower()
+    assert "Dear Sir" not in d["body"] and "Madam" not in d["body"]
     assert "No counterparty introduction or binding commercial commitment" in d["body"]
-    for verboden in ("accept", "we agree", "confirmed price", "bank account"):
+    assert e.followup_autosend_block_reason(
+        d["body"], full_name="Chanda Mwale", email="chanda@mopani.com",
+        company_name="Mopani Copper Mines PLC") is None
+    for verboden in ("accept", "we agree", "confirmed price", "bank account", "lme registered"):
         assert verboden not in d["body"].lower()
+
+
+def test_draft_without_named_contact_is_not_sir_or_madam_and_cannot_autosend():
+    d = e.followup_draft(blocker_code="seller_unqualified", role="supplier", missing=["origin"],
+                         product="Copper Cathode", attempt=1, original_subject="Copper Cathode",
+                         company_name="Finolex")
+    assert "Dear colleagues at Finolex" in d["body"]
+    assert "Dear Sir" not in d["body"]
+    assert e.followup_autosend_block_reason(
+        d["body"], full_name=None, email="sales@finolex.example", company_name="Finolex") == "no named contact"
+    assert e.followup_autosend_block_reason(
+        d["body"], full_name="Sales desk", email="info@paramount.example",
+        company_name="Paramount") == "no named contact"
+
+
+def test_generic_salutation_and_banned_claims_block_autosend():
+    assert e.has_generic_salutation("Dear Sir or Madam,\n\nFollowing up.")
+    assert e.has_generic_salutation("To whom it may concern, please reply.")
+    assert not e.has_generic_salutation("Dear Chanda,\n\nFollowing up.")
+    generic = "Dear Sir or Madam,\n\nFollowing up with Mopani Copper Mines PLC on our earlier email."
+    assert e.followup_autosend_block_reason(
+        generic, full_name="Chanda Mwale", email="chanda@mopani.com",
+        company_name="Mopani Copper Mines PLC") == "generic salutation"
+    banned = "Dear Chanda,\n\nI am following up with Mopani Copper Mines PLC. We are LME registered and can deliver 500 MT CIF Rotterdam.\n"
+    assert "lme_registered" in e.banned_outbound_claims(banned)
+    assert e.followup_autosend_block_reason(
+        banned, full_name="Chanda Mwale", email="chanda@mopani.com",
+        company_name="Mopani Copper Mines PLC").startswith("banned claim")
 
 
 def test_draft_falls_back_to_blocker_questions():

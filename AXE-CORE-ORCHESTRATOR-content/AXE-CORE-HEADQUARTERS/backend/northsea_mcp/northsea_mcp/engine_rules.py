@@ -427,17 +427,165 @@ _BLOCKER_ASKS = {
     "reply_needed": [],
 }
 
+# Aanhef die nooit persoonlijk is. 25 nov: 18 vervolgmails gingen zo de deur uit
+# (Finolex, Paramount) omdat de gate naar contacts.full_name keek, niet naar de brief.
+_GENERIC_SALUTATION = re.compile(
+    r"^\s*(?:dear\s+(?:sir(?:\s+or\s+madam)?|madam(?:\s+or\s+sir)?|sirs|sir\s*/\s*madam|"
+    r"valued\s+\w+)|to\s+whom\s+it\s+may\s+concern)\b",
+    re.I | re.M,
+)
+_PERSONAL_DEAR = re.compile(r"^\s*Dear\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\-]{1,39})(?:\s+[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\-]{1,39})?\s*,", re.M)
+_TITELS = frozenset({"mr", "mrs", "ms", "miss", "dr", "sir", "madam", "prof"})
+_NIET_IEMAND = frozenset({
+    "sir", "madam", "sirs", "team", "colleagues", "colleague", "all", "whom", "valued",
+    "sales", "info", "contact", "enquiry", "enquiries", "inquiry", "inquiries", "office",
+    "hello", "procurement", "purchasing", "export", "import", "admin", "support",
+    "webmaster", "noreply", "desk", "department", "staff", "reception",
+})
+_ROLE_NAMEN = frozenset({
+    "sales", "sales desk", "info", "contact", "enquiry", "enquiries", "inquiry", "inquiries",
+    "office", "hello", "team", "procurement", "purchasing", "export", "import", "admin",
+    "support", "webmaster", "noreply", "no-reply", "customer service", "sales team",
+    "export desk", "import desk", "desk", "department", "staff", "reception",
+})
+ROLE_LOCALPARTS = frozenset({
+    "sales", "info", "contact", "enquiries", "enquiry", "inquiry", "inquiries", "office",
+    "hello", "export", "import", "admin", "support", "team", "procurement", "purchasing",
+    "webmaster", "noreply", "no-reply", "mail", "desk",
+})
+# Verboden in UITGAANDE NorthSea-tekst. Luka 25 nov: geen 'LME registered',
+# geen vast tonnage-aanbod, geen CIF-aanbod/prijs, geen levergarantie.
+_BANNED_CLAIMS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("lme_registered", re.compile(r"\blme[\s-]*registered\b", re.I)),
+    ("delivery_guarantee", re.compile(
+        r"\b(delivery\s+guarante\w*|guaranteed\s+(?:delivery|shipment)|(?:we|northsea)\s+(?:can|will|shall)\s+deliver)\b", re.I)),
+    ("cif_offer", re.compile(
+        r"\b(?:(?:we|northsea)\b.{0,40}\bcif\b|\bcif\s+[a-z][a-z .'-]{1,40}\s*(?:at|@|usd|eur|gbp|\$|€)|"
+        r"(?:offer|quote|price|indication).{0,30}\bcif\b)", re.I)),
+    ("fixed_tonnage_offer", re.compile(
+        r"\b(?:we|northsea)\s+(?:can\s+|will\s+|shall\s+)?(?:offer|supply|ship|provide|deliver)\s+\d", re.I)),
+)
 
-def followup_draft(*, blocker_code: str, role: str, missing: list[str], product: Optional[str], attempt: int, original_subject: Optional[str]) -> dict[str, str]:
-    """Een professioneel NorthSea-concept dat de ECHTE open punten noemt. Noemt nooit een tegenpartij, accepteert niets."""
+
+def person_first_name(full_name: Optional[str]) -> Optional[str]:
+    """Voornaam van een echt persoon, of None (rol, leeg, e-mail als naam)."""
+    naam = " ".join((full_name or "").split())
+    if not naam or "@" in naam:
+        return None
+    if naam.lower() in _ROLE_NAMEN:
+        return None
+    delen = [p for p in re.split(r"[\s,]+", naam) if p]
+    if delen and delen[0].lower().rstrip(".") in _TITELS:
+        delen = delen[1:]
+    if not delen:
+        return None
+    first = delen[0]
+    if not re.fullmatch(r"[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\-]{1,39}", first):
+        return None
+    if first.lower() in _NIET_IEMAND or first.lower() in _TITELS:
+        return None
+    return first[:1].upper() + first[1:]
+
+
+def is_role_mailbox(email: Optional[str]) -> bool:
+    local = (email or "").split("@", 1)[0].strip().lower().split("+", 1)[0]
+    return bool(local) and (local in ROLE_LOCALPARTS or local.endswith(".sales"))
+
+
+def is_named_contact(*, full_name: Optional[str] = None, email: Optional[str] = None) -> bool:
+    """True alleen bij een persoonsnaam én geen sales@/info@-roladres."""
+    if is_role_mailbox(email):
+        return False
+    return person_first_name(full_name) is not None
+
+
+def has_generic_salutation(text: Optional[str]) -> bool:
+    return bool(_GENERIC_SALUTATION.search(text or ""))
+
+
+def addresses_named_person(text: Optional[str]) -> bool:
+    m = _PERSONAL_DEAR.search(text or "")
+    if not m:
+        return False
+    return m.group(1).lower() not in _NIET_IEMAND
+
+
+def banned_outbound_claims(text: Optional[str]) -> list[str]:
+    """Welke verboden claims in deze UITGAANDE tekst staan. Leeg = schoon."""
+    t = text or ""
+    return [code for code, pat in _BANNED_CLAIMS if pat.search(t)]
+
+
+def followup_autosend_block_reason(
+    body: Optional[str],
+    *,
+    full_name: Optional[str] = None,
+    email: Optional[str] = None,
+    company_name: Optional[str] = None,
+) -> Optional[str]:
+    """Waarom deze vervolgmail niet vanzelf mag. None = de inhoudspoort is schoon.
+
+    Los van deal_automation_policy.auto_send_*: die vlaggen blijven wat ze zijn.
+    Deze poort was de ontbrekende helft: de oude named_recipient-vlag keek naar
+    het contactrecord, niet naar de brief, dus 'Dear Sir or Madam' ging door.
+    """
+    if not is_named_contact(full_name=full_name, email=email):
+        return "no named contact"
+    if has_generic_salutation(body):
+        return "generic salutation"
+    if not addresses_named_person(body):
+        return "body does not address a named person"
+    first = person_first_name(full_name)
+    if first and first.lower() not in (body or "").lower():
+        return "named contact not in body"
+    if company_name and company_name.strip() and company_name.strip().lower() not in (body or "").lower():
+        return "company name not in body"
+    claims = banned_outbound_claims(body)
+    if claims:
+        return f"banned claim: {claims[0]}"
+    return None
+
+
+def followup_draft(*, blocker_code: str, role: str, missing: list[str], product: Optional[str], attempt: int,
+                   original_subject: Optional[str], contact_name: Optional[str] = None,
+                   company_name: Optional[str] = None, original_date: Optional[str] = None,
+                   original_ask: Optional[str] = None) -> dict[str, str]:
+    """Persoonlijk NorthSea-vervolgconcept. Noemt nooit een tegenpartij, accepteert niets.
+
+    Zonder persoonsnaam blijft het een concept voor review (geen 'Dear Sir or Madam'):
+    de autosend-poort weigert dat. Met naam: Dear <voornaam>, bedrijf, en de eerdere mail.
+    """
     onderwerp = original_subject or (f"{product} — qualification" if product else "Qualification")
     if not onderwerp.lower().startswith("re:"):
         onderwerp = f"Re: {onderwerp}"
     punten = [m for m in missing if m] or _BLOCKER_ASKS.get(blocker_code) or (
         _BLOCKER_ASKS["seller_unqualified"] if role == "supplier" else _BLOCKER_ASKS["buyer_unqualified"])
-    opening = ("Following up on our previous message" if attempt == 1 else "A brief reminder regarding our earlier messages") + \
-              (f" about {product}." if product else ".")
-    tekst = (f"Dear Sir or Madam,\n\n{opening}\n\n"
+    first = person_first_name(contact_name)
+    bedrijf = " ".join((company_name or "").split()) or None
+    if first:
+        aanhef = f"Dear {first},"
+    elif bedrijf:
+        aanhef = f"Dear colleagues at {bedrijf},"
+    else:
+        aanhef = "Dear colleagues,"
+    eerder = "our previous email"
+    if original_date and original_subject:
+        eerder = f'our email of {original_date} ("{original_subject}")'
+    elif original_date:
+        eerder = f"our email of {original_date}"
+    elif original_subject:
+        eerder = f'our earlier email ("{original_subject}")'
+    wie = f" to {bedrijf}" if bedrijf else ""
+    if attempt == 1:
+        opening = f"I am following up{wie} on {eerder}"
+    else:
+        opening = f"A brief reminder{wie} regarding {eerder}"
+    if product:
+        opening += f" about {product}"
+    opening += "."
+    if original_ask:
+        opening += f" In that message we asked {original_ask.rstrip('.')}."
+    tekst = (f"{aanhef}\n\n{opening}\n\n"
              "To assess whether we can progress this without disclosing any counterparty at this stage, could you confirm:\n"
              + "\n".join(f"- {p[0].upper() + p[1:]}" for p in punten[:6]) +
              "\n\nIf this is no longer relevant for you, a short reply is appreciated and we will close the file.\n\n"
