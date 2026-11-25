@@ -88,6 +88,20 @@ export function antwoordHoortOpPodium(tekst: string): boolean {
   return true;
 }
 
+/** De voiceStore.response blijft staan na een beurt. Alleen meenemen als AXE
+ *  nu spreekt/denkt én het laatste axe-bericht bij déze vraag hoort. */
+export function streamVanDezeBeurt(invoer: {
+  voiceStatus: string;
+  laatsteAxeTs?: number | null;
+  laatsteUserTs?: number | null;
+}): boolean {
+  if (invoer.voiceStatus !== 'processing' && invoer.voiceStatus !== 'speaking') return false;
+  if (invoer.laatsteUserTs == null) return true;
+  /* Eerste beurt: AXE heeft nog geen bericht, de stream ís deze vraag. */
+  if (invoer.laatsteAxeTs == null) return true;
+  return invoer.laatsteAxeTs >= invoer.laatsteUserTs;
+}
+
 /** Alleen het antwoord van déze beurt: een nieuwe vraag veegt het oude van het toneel. */
 export function antwoordIsHuidig(invoer: {
   voiceStatus: string;
@@ -95,8 +109,7 @@ export function antwoordIsHuidig(invoer: {
   laatsteUserTs?: number | null;
   heeftStream?: boolean;
 }): boolean {
-  if (invoer.heeftStream) return true;
-  if (invoer.voiceStatus === 'processing' || invoer.voiceStatus === 'speaking') return true;
+  if (invoer.heeftStream && streamVanDezeBeurt(invoer)) return true;
   if (invoer.laatsteAxeTs == null) return false;
   if (invoer.laatsteUserTs == null) return true;
   return invoer.laatsteAxeTs >= invoer.laatsteUserTs;

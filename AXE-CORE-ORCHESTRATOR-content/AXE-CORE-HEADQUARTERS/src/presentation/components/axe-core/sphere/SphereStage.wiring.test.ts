@@ -9,6 +9,8 @@ describe('Home-podium is aangesloten op echte bronnen (25 nov)', () => {
     const stage = bron('SphereStage.tsx');
     expect(stage).toContain('podiumKaartenVan');
     expect(stage).toContain('antwoordIsHuidig');
+    expect(stage).toContain('streamVanDezeBeurt');
+    expect(stage).toContain('axe-podium-kaart-beweging');
     expect(stage).toContain('useSphereProjectionStore');
     expect(stage).toContain('useVoiceStore');
     expect(stage).toContain('agenten');
@@ -32,6 +34,12 @@ describe('Home-podium is aangesloten op echte bronnen (25 nov)', () => {
     const stage = bron('../../../pages/HomeStage.tsx');
     expect(stage).toContain('SphereStage');
     expect(stage).toContain('<AxeCoreSphere midden />');
+  });
+
+  it('compacte kaarten hebben een hoogte, anders is DocumentProjection een lege rand', () => {
+    const css = bron('axePodium.css');
+    expect(css).toMatch(/\.axe-podium-kaart--compact \{[^}]*min-height: 9\.5rem/);
+    expect(css).toContain('.axe-podium-kaart-beweging');
   });
 
   it('AxeCoreSphere midden is 0.5; telefoon en zwever blijven 0.36', () => {

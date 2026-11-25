@@ -3,6 +3,7 @@ import type { ProjectionPayload } from './projectionTypes';
 import {
   antwoordHoortOpPodium,
   antwoordIsHuidig,
+  streamVanDezeBeurt,
   heeftMarkdownTabel,
   heeftUrl,
   podiumDemoAan,
@@ -62,10 +63,19 @@ describe('antwoordHoortOpPodium', () => {
   });
 });
 
-describe('antwoordIsHuidig', () => {
-  it('houdt het vast tijdens spreken of terwijl de stream binnenkomt', () => {
-    expect(antwoordIsHuidig({ voiceStatus: 'speaking', laatsteAxeTs: 1, laatsteUserTs: 2 })).toBe(true);
-    expect(antwoordIsHuidig({ voiceStatus: 'idle', heeftStream: true })).toBe(true);
+describe('antwoordIsHuidig / streamVanDezeBeurt', () => {
+  it('houdt het vast terwijl AXE deze beurt spreekt', () => {
+    expect(antwoordIsHuidig({ voiceStatus: 'speaking', laatsteAxeTs: 20, laatsteUserTs: 10 })).toBe(true);
+    expect(streamVanDezeBeurt({ voiceStatus: 'speaking', laatsteAxeTs: 20, laatsteUserTs: 10 })).toBe(true);
+    expect(streamVanDezeBeurt({ voiceStatus: 'processing', laatsteAxeTs: null, laatsteUserTs: 10 })).toBe(true);
+  });
+
+  it('neemt een achtergebleven response niet mee bij een nieuwe vraag', () => {
+    expect(streamVanDezeBeurt({ voiceStatus: 'processing', laatsteAxeTs: 10, laatsteUserTs: 20 })).toBe(false);
+    expect(antwoordIsHuidig({
+      voiceStatus: 'processing', laatsteAxeTs: 10, laatsteUserTs: 20, heeftStream: true,
+    })).toBe(false);
+    expect(antwoordIsHuidig({ voiceStatus: 'idle', heeftStream: true, laatsteAxeTs: 10, laatsteUserTs: 20 })).toBe(false);
   });
 
   it('veegt het oude antwoord weg zodra er een nieuwere vraag is', () => {

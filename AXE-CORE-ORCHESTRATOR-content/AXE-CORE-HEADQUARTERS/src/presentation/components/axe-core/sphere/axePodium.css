@@ -110,9 +110,21 @@
   transform-origin: 50% 100%;
 }
 
+.axe-podium-kaart-beweging {
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  transform-style: preserve-3d;
+}
+
 .axe-podium-kaart--compact {
   width: min(420px, 78%);
   max-height: 48%;
+  /* DocumentProjection is absolute inset-0; zonder hoogte is de kaart een lege rand. */
+  min-height: 9.5rem;
+}
+.axe-podium-kaart--compact .axe-podium-kaart-lijf {
+  min-height: 8.5rem;
 }
 
 .axe-podium-kaart--medium {

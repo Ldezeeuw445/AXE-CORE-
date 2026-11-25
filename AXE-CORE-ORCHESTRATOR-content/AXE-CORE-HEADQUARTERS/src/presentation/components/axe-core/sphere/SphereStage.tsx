@@ -20,6 +20,7 @@ import {
   podiumDemoAan,
   podiumDemoKaarten,
   podiumKaartenVan,
+  streamVanDezeBeurt,
   type PodiumKaart,
 } from '@/domain/sphere/podium';
 import { podiumKrachtVan, webglBeschikbaar, type PodiumKracht } from '@/domain/sphere/podiumKracht';
@@ -94,7 +95,12 @@ export function SphereStage({
 
   const lastAxe = [...conversation].reverse().find(m => m.role === 'axe');
   const lastUser = [...conversation].reverse().find(m => m.role === 'user');
-  const stream = (response || '').trim();
+  const dezeBeurt = streamVanDezeBeurt({
+    voiceStatus,
+    laatsteAxeTs: lastAxe?.timestamp ?? null,
+    laatsteUserTs: lastUser?.timestamp ?? null,
+  });
+  const stream = dezeBeurt ? (response || '').trim() : '';
   const zelfdeBeurt = !!lastAxe && (!lastUser || lastAxe.timestamp >= lastUser.timestamp);
   const antwoord = (stream || (zelfdeBeurt ? lastAxe?.text : '') || '').trim();
   const antwoordHuidig = antwoordIsHuidig({
@@ -213,13 +219,16 @@ export function SphereStage({
               {hoofd && (
                 <motion.div
                   key={hoofd.id}
-                  className={`axe-podium-kaart axe-podium-kaart--${hoofd.maat}`}
-                  data-axe-podium-kaart={hoofd.soort}
-                  data-maat={hoofd.maat}
+                  className="axe-podium-kaart-beweging"
                   initial={{ opacity: 0, scale: 0.72, y: 18 }}
                   animate={{ opacity: phase === 'closing' ? 0 : 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.72, y: 12 }}
                   transition={{ duration: kracht === 'plat' ? 0.01 : 0.35, ease: EASE_EMERGE }}
+                >
+                <div
+                  className={`axe-podium-kaart axe-podium-kaart--${hoofd.maat}`}
+                  data-axe-podium-kaart={hoofd.soort}
+                  data-maat={hoofd.maat}
                   style={vrij && hoofd.maat === 'vol' ? { maxHeight: vrij.hoog } : undefined}
                 >
                   {hoofd.payloadId && payload ? (
@@ -250,6 +259,7 @@ export function SphereStage({
                   ) : (
                     <AntwoordKaart kaart={hoofd} />
                   )}
+                </div>
                 </motion.div>
               )}
             </AnimatePresence>
