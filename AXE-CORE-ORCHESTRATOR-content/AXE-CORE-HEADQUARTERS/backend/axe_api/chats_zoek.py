@@ -131,7 +131,7 @@ _MODELLEN = (
 )
 
 
-async def vraag_model(systeem: str, inhoud: str) -> tuple[str | None, str | None]:
+async def vraag_model(systeem: str, inhoud: str, max_tokens: int = 1500) -> tuple[str | None, str | None]:
     """(antwoord, model) of (None, reden). Licht en snel: geen agent-lus, geen Mac-stoel."""
     import httpx
     redenen = []
@@ -144,7 +144,7 @@ async def vraag_model(systeem: str, inhoud: str) -> tuple[str | None, str | None
                 vraag = {
                     # 25 nov live: met 600 tokens stopte het antwoord midden in een zin -- gpt-oss
                     # denkt eerst na en dat telt mee. Meer ruimte, en het nadenken op laag.
-                    "model": model, "max_tokens": 1500,
+                    "model": model, "max_tokens": max_tokens,
                     "messages": [{"role": "system", "content": systeem}, {"role": "user", "content": inhoud[:24000]}],
                 }
                 if "gpt-oss" in model:
@@ -241,21 +241,23 @@ def build_router(sb: Callable[[], Any]) -> Any:
         db = sb()
         if gesprek in ("AXE", "axe"):
             rijen = (db.table("axe_messages").select("role,content,created_at")
-                     .order("created_at", desc=True).limit(40).execute().data) or []
-            regels = [f"{'Luka' if r.get('role') == 'user' else 'AXE'}: {_schoon(r.get('content'))[:400]}" for r in reversed(rijen)]
+                     .order("created_at", desc=True).limit(25).execute().data) or []
+            regels = [f"{'Luka' if r.get('role') == 'user' else 'AXE'}: {_schoon(r.get('content'))[:250]}" for r in reversed(rijen)]
             wie = "AXE"
         else:
             if not re.fullmatch(r"[a-z0-9_-]{2,40}", gesprek or ""):
                 raise HTTPException(400, "unknown conversation")
             rijen = (db.table("core_manager_messages").select("from_agent,to_agent,body,created_at")
                      .or_(f"and(from_agent.eq.{LUKA},to_agent.eq.{gesprek}),and(from_agent.eq.{gesprek},to_agent.eq.{LUKA})")
-                     .order("created_at", desc=True).limit(40).execute().data) or []
+                     .order("created_at", desc=True).limit(25).execute().data) or []
             rijen = list(reversed(rijen))
-            regels = [f"{'Luka' if r.get('from_agent') == LUKA else gesprek}: {_schoon(r.get('body'))[:400]}" for r in rijen]
+            regels = [f"{'Luka' if r.get('from_agent') == LUKA else gesprek}: {_schoon(r.get('body'))[:250]}" for r in rijen]
             wie = gesprek
         if not regels:
             return {"gesprek": gesprek, "samenvatting": None, "fout": "no messages in this conversation"}
-        tekst, model = await vraag_model(SAMENVAT_PROMPT.format(wie=wie), "\n".join(regels))
+        # 25 nov live: 40 berichten x 400 tekens + 1500 tokens gaf op elke gratis route 429 (tokens per
+        # minuut); een vraag van dezelfde grootte als de bronnen lukte wel. Kleiner past.
+        tekst, model = await vraag_model(SAMENVAT_PROMPT.format(wie=wie), "\n".join(regels), max_tokens=500)
         return {"gesprek": gesprek, "samenvatting": tekst, "fout": None if tekst else model,
                 "model": model if tekst else None, "berichten": len(regels)}
 
