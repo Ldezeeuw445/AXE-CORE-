@@ -74,9 +74,17 @@ TWO_WORD = {
 BLOCKED_FLAGS = (
     "auto_send_qualification", "auto_reply_nonbinding", "auto_send_followups",
 )
-EMAIL_RE = re.compile(r"\b(send[-_ ]?email|email[-_ ]?send|verstuur|resend|outbound[-_ ]?message|smtp|mailgun|sendgrid)\b", re.I)
+# 25 nov gemeten: SETUP.md belooft dat "Stuur een mail naar de koper" geblokkeerd wordt,
+# maar alleen technische woorden (send_email, smtp) vielen eronder. Nu ook gewone taal.
+EMAIL_RE = re.compile(
+    r"\b(send[-_ ]?email|email[-_ ]?send|verstuur|resend|outbound[-_ ]?message|smtp|mailgun|sendgrid)\b"
+    r"|\b(stuur|zend|verzend|mail|e-?mail)\b[^.?!]{0,40}\b(mail|e-?mail|bericht|message)?\s*\b(naar|to)\b"
+    r"|\bsend\s+(an?\s+|the\s+)?(e-?mail|mail|message)\b"
+    r"|\b(stuur|zend)\b[^.?!]{0,20}\b(e-?mail|mail|bericht)\b",
+    re.I)
 DELETE_RE = re.compile(r"\b(delete|wissen|verwijder|drop table|truncate|rm -rf)\b", re.I)
-MERGE_RE = re.compile(r"\b(merge\s+to\s+orchestrator|merge\s+orchestrator|push\s+.*orchestrator|git\s+push\s+.*orchestrator|HEAD:orchestrator)\b", re.I)
+MERGE_RE = re.compile(r"\b(merge\s+to\s+orchestrator|merge\s+orchestrator|merge\b[^.]{0,40}\b(naar|into|in|op)\s+orchestrator"
+                      r"|push\s+.*orchestrator|git\s+push\s+.*orchestrator|HEAD:orchestrator)\b", re.I)
 FLAG_RE = re.compile(r"\b(" + "|".join(BLOCKED_FLAGS) + r")\b", re.I)
 SECRET_KEY = re.compile(r"(token|secret|password|passwd|api[_-]?key|apikey|credential|private[_-]?key|authorization|^key$|bearer|cookie|srk)", re.I)
 

@@ -80,3 +80,13 @@ class TestLaag(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_os3_testprompt_5_en_merge_in_gewone_taal_zijn_geblokkeerd():
+    """25 nov gemeten: 'stuur een mail naar de koper' en 'merge naar orchestrator' kwamen door."""
+    from axe_laag.laag import decide_guard
+    for tekst in ("stuur een mail naar de koper", "Send an email to the buyer", "mail de koper naar zijn adres",
+                  "verstuur het bericht", "merge naar orchestrator", "merge the branch into orchestrator"):
+        assert decide_guard("agent run", tekst, True)["kind"] == "blocked", tekst
+    for tekst in ("lees de mail van vandaag", "hoeveel mails kwamen binnen", "check the inbox", "merge-conflict uitleggen"):
+        assert decide_guard("agent run", tekst, True)["kind"] != "blocked", tekst
