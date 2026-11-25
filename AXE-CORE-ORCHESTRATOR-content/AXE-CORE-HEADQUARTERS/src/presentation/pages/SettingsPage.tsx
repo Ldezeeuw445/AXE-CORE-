@@ -512,7 +512,7 @@ function ProviderKeysSection() {
         saveConnections(next);
         return next;
       });
-      setTestErrors(e => { const n = { ...e }; if (exaOk) delete n[id]; else n[id] = exaErr ?? 'Exa test mislukt'; return n; });
+      setTestErrors(e => { const n = { ...e }; if (exaOk) delete n[id]; else n[id] = exaErr ?? 'Exa test failed'; return n; });
       return;
     }
 
@@ -522,7 +522,7 @@ function ProviderKeysSection() {
       const { testSmartThingsToken } = await import('@/infrastructure/gateways/smartThingsService');
       const { ok: stOk, error: stErr, count } = await testSmartThingsToken(conn.key ?? '');
       setTesting(t => ({ ...t, [id]: stOk ? 'ok' : 'fail' }));
-      const msg = stOk ? `${count ?? 0} apparaten gevonden` : (stErr ?? 'SmartThings test mislukt');
+      const msg = stOk ? `${count ?? 0} apparaten gevonden` : (stErr ?? 'SmartThings test failed');
       setKeys(prev => {
         const next = { ...prev, [id]: { ...prev[id], lastTest: stOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: stOk ? undefined : msg } };
         saveConnections(next);
@@ -558,7 +558,7 @@ function ProviderKeysSection() {
         saveConnections(next);
         return next;
       });
-      setTestErrors(e => { const n = { ...e }; if (caOk) delete n[id]; else n[id] = caErr ?? 'Cartesia test mislukt'; return n; });
+      setTestErrors(e => { const n = { ...e }; if (caOk) delete n[id]; else n[id] = caErr ?? 'Cartesia test failed'; return n; });
       return;
     }
 
@@ -573,7 +573,7 @@ function ProviderKeysSection() {
         saveConnections(next);
         return next;
       });
-      setTestErrors(e => { const n = { ...e }; if (elOk) delete n[id]; else n[id] = elErr ?? 'ElevenLabs test mislukt'; return n; });
+      setTestErrors(e => { const n = { ...e }; if (elOk) delete n[id]; else n[id] = elErr ?? 'ElevenLabs test failed'; return n; });
       return;
     }
 
@@ -588,7 +588,7 @@ function ProviderKeysSection() {
         saveConnections(next);
         return next;
       });
-      setTestErrors(e => { const n = { ...e }; if (tvOk) delete n[id]; else n[id] = tvErr ?? 'Tavily test mislukt'; return n; });
+      setTestErrors(e => { const n = { ...e }; if (tvOk) delete n[id]; else n[id] = tvErr ?? 'Tavily test failed'; return n; });
       return;
     }
 
@@ -603,7 +603,7 @@ function ProviderKeysSection() {
         saveConnections(next);
         return next;
       });
-      setTestErrors(e => { const n = { ...e }; if (axOk) delete n[id]; else n[id] = axErr ?? 'AXON test mislukt'; return n; });
+      setTestErrors(e => { const n = { ...e }; if (axOk) delete n[id]; else n[id] = axErr ?? 'AXON test failed'; return n; });
       return;
     }
 
@@ -615,7 +615,7 @@ function ProviderKeysSection() {
     if (id === 'google') {
       const { ok: gOk, latency } = await checkGeminiReal({ force: true, key: conn.key });
       setTesting(t => ({ ...t, [id]: gOk ? 'ok' : 'fail' }));
-      const msg = gOk ? undefined : 'Gemini test mislukt (mogelijk quota)';
+      const msg = gOk ? undefined : 'Gemini test failed (possibly quota)';
       setKeys(prev => {
         const next = { ...prev, [id]: { ...prev[id], lastTest: gOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: msg } };
         saveConnections(next);
@@ -649,7 +649,7 @@ function ProviderKeysSection() {
       const statusKey = VPS_STATUS_IDS[id];
       let bridgeOk = false;
       let latency = 0;
-      let msg: string | undefined = 'VPS status onbereikbaar';
+      let msg: string | undefined = 'VPS status unreachable';
       try {
         const result = await Promise.race([
           vpsAgentStatus(statusKey),
@@ -660,10 +660,10 @@ function ProviderKeysSection() {
         bridgeOk = result.ok;
         latency = result.latency;
         msg = bridgeOk ? undefined : (id === 'abonnement'
-          ? 'Abonnement-CLI niet bereikbaar op de agent-host'
+          ? 'Subscription CLI not reachable on the agent host'
           : id === 'hermes'
-            ? 'Hermes (hermes3:8b op Ollama) onbereikbaar'
-            : 'VPS bridge onbereikbaar');
+            ? 'Hermes (hermes3:8b on Ollama) unreachable'
+            : 'VPS bridge unreachable');
       } catch {
         bridgeOk = false;
         msg = 'VPS status timeout';
@@ -688,7 +688,7 @@ function ProviderKeysSection() {
     const ok = await voice.testSlot(slot);
     setTesting(t => ({ ...t, [id]: ok ? 'ok' : 'fail' }));
     if (!ok) {
-      const raw = useVoiceStore.getState().error ?? 'Test mislukt';
+      const raw = useVoiceStore.getState().error ?? 'Test failed';
       const retryMatch = raw.match(/retry[^\d]*(\d+(?:\.\d+)?)\s*s/i);
       const msg = retryMatch
         ? `Rate limit — probeer opnieuw over ${Math.ceil(Number(retryMatch[1]))}s`
@@ -813,7 +813,7 @@ function ProviderKeysSection() {
             <Key size={15} style={{ color: 'var(--accent-cyan)' }} /> Provider Keys
           </h2>
           <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-            LangGraph orchestrator kiest automatisch de juiste provider per taak — test elk model individueel.
+            The LangGraph orchestrator picks the right provider per task automatically — test each model individually.
           </p>
         </div>
         {/* flex-wrap: drie knoppen naast elkaar passen niet in de 338px die een
@@ -1253,7 +1253,7 @@ function OllamaModelsSection() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px]"
             style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }}>
             <RefreshCw size={11} className={syncing ? 'animate-spin' : ''} />
-            sync van VPS
+            sync from VPS
           </button>
         </div>
 
@@ -1274,11 +1274,11 @@ function OllamaModelsSection() {
           />
           <span className="min-w-0">
             <span className="text-xs-custom block" style={{ color: 'var(--text-primary)' }}>
-              Eigen model eerst
+              Own model first
             </span>
             <span className="text-[9px] block mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              Gebruik een bereikbaar eigen model vóór de cloud — je Mac Mini als je
-              thuis bent, anders de VPS. Kost niets en kan niet ingetrokken worden.
+              Use a reachable self-hosted model before the cloud — your Mac Mini when
+              you are home, otherwise the VPS. Costs nothing and cannot be revoked.
             </span>
           </span>
         </label>
@@ -1289,8 +1289,8 @@ function OllamaModelsSection() {
               color: syncState.ok ? 'var(--success)' : 'var(--error)',
             }}>
             {syncState.ok
-              ? `● Live — ${models.length} model(len) bevestigd op de VPS, ${new Date(syncState.at).toLocaleTimeString()}`
-              : `● Sync mislukt (${syncState.error}) — onderstaande lijst is gecached, niet bevestigd live op ${new Date(syncState.at).toLocaleTimeString()}`}
+              ? `● Live — ${models.length} model(s) confirmed on the VPS, ${new Date(syncState.at).toLocaleTimeString('en-GB')}`
+              : `● Sync failed (${syncState.error}) — the list below is cached, not confirmed live at ${new Date(syncState.at).toLocaleTimeString('en-GB')}`}
           </div>
         )}
         <KaartRaster>
@@ -1510,7 +1510,7 @@ const QUICK_PRESETS = [
   },
   {
     label: 'OpenRouter Free',
-    sublabel: 'Llama 3.1 · gratis tier',
+    sublabel: 'Llama 3.1 · free tier',
     icon: Router,
     accent: '#F59E0B',
     values: { provider: 'openrouter' as const, key: '', baseUrl: '', model: 'openrouter/free' },
@@ -1518,7 +1518,7 @@ const QUICK_PRESETS = [
   },
   {
     label: 'Gemini Flash',
-    sublabel: 'Google AI Studio · gratis',
+    sublabel: 'Google AI Studio · free',
     icon: Sparkles,
     accent: '#3B82F6',
     values: { provider: 'google' as const, key: '', baseUrl: '', model: 'gemini-2.5-flash' },
@@ -1799,8 +1799,8 @@ function GitHubReposSection() {
   return (
     <div>
       <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
-        Configureer de 3 repos waarop AXE CORE kan committen. Wanneer je zegt "verander X", kiest AXE CORE automatisch de juiste repo.
-        Gebruik één <strong style={{ color: 'var(--text-secondary)' }}>GitHub PAT</strong> (met <code style={{ fontSize: 10 }}>repo</code>-scope) voor alle repos.
+        Configure the 3 repos AXE CORE can commit to. When you say "change X", AXE CORE picks the right repo automatically.
+        Use one <strong style={{ color: 'var(--text-secondary)' }}>GitHub PAT</strong> (with <code style={{ fontSize: 10 }}>repo</code> scope) for all repos.
       </p>
       <div className="space-y-3">
         {repos.map(r => (
@@ -1879,7 +1879,7 @@ function GitHubReposSection() {
                 Test connection
               </button>
               <button type="button" onClick={() => reset(r.id)} className="flex items-center gap-1 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                <Trash2 size={8} /> reset naar default
+                <Trash2 size={8} /> reset to default
               </button>
             </div>
           </div>
@@ -1892,7 +1892,7 @@ function GitHubReposSection() {
           {saved ? <><Check size={12} /> Saved!</> : <><Save size={12} /> Save</>}
         </button>
         <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-          Tokens worden alleen lokaal opgeslagen (localStorage) — nooit verstuurd naar de server.
+          Tokens are stored locally only (localStorage) — never sent to the server.
         </p>
       </div>
     </div>
@@ -1905,20 +1905,20 @@ function GitHubReposSection() {
  * Every category starts off (matches the existing "always ask" behavior);
  * only Luka can flip it on — never AXE itself. */
 const TRUST_CATEGORIES: { id: ApprovalKind; label: string }[] = [
-  { id: 'exec', label: 'VPS-commando\'s uitvoeren' },
+  { id: 'exec', label: 'Run VPS commands' },
   { id: 'git_write', label: 'Commit files to GitHub' },
-  { id: 'git_pr_merge', label: 'Pull requests mergen' },
-  { id: 'db_sql', label: 'SQL draaien op Supabase' },
+  { id: 'git_pr_merge', label: 'Merge pull requests' },
+  { id: 'db_sql', label: 'Run SQL on Supabase' },
   { id: 'agent', label: 'Hand tasks to an external agent' },
   { id: 'smart_home', label: 'Smart home (SmartThings)' },
   // These two reach the worktree the running app is served from, so they
   // change what Luka is looking at rather than a copy elsewhere.
   { id: 'local_write', label: 'Change files on this Mac' },
-  { id: 'local_run', label: 'Build/git draaien op deze Mac' },
+  { id: 'local_run', label: 'Run build/git on this Mac' },
   // Leave this off unless you are watching the phone: an approved tap lands
   // on whatever is on screen at that moment, and the screen is not always
   // what the last dump showed.
-  { id: 'phone', label: 'De telefoon bedienen (tikken, typen, apps openen)' },
+  { id: 'phone', label: 'Operate the phone (tap, type, open apps)' },
 ];
 
 function TrustLevelsSection() {
@@ -1996,10 +1996,10 @@ function PreferencesV3Card() {
 
   return (
     <div className="axe-settings-v3-card">
-      <div className="axe-settings-v3-card-label">Voorkeuren</div>
+      <div className="axe-settings-v3-card-label">Preferences</div>
       <div className="axe-settings-v3-row">
         <div>
-          <div className="axe-settings-v3-row-title">Bottom nav altijd tonen</div>
+          <div className="axe-settings-v3-row-title">Always show bottom nav</div>
           <div className="axe-settings-v3-row-sub">Home · Managers · Calendar · Code · Tasks · Settings</div>
         </div>
         <button type="button" className={`axe-settings-v3-toggle${bottomNav ? '' : ' off'}`} aria-pressed={bottomNav}
@@ -2015,16 +2015,16 @@ function PreferencesV3Card() {
       </div>
       <div className="axe-settings-v3-row">
         <div>
-          <div className="axe-settings-v3-row-title">Voorbeelddata-banner</div>
-          <div className="axe-settings-v3-row-sub">Label op mock & demo cijfers</div>
+          <div className="axe-settings-v3-row-title">Sample-data banner</div>
+          <div className="axe-settings-v3-row-sub">Label on mock & demo numbers</div>
         </div>
         <button type="button" className={`axe-settings-v3-toggle${demoBanner ? '' : ' off'}`} aria-pressed={demoBanner}
           onClick={() => toggle('axe_pref_demo_banner', demoBanner, setDemoBanner)} />
       </div>
       <div className="axe-settings-v3-row">
         <div>
-          <div className="axe-settings-v3-row-title">Compacte topbar</div>
-          <div className="axe-settings-v3-row-sub">Meer ruimte voor content</div>
+          <div className="axe-settings-v3-row-title">Compact top bar</div>
+          <div className="axe-settings-v3-row-sub">More room for content</div>
         </div>
         <button type="button" className={`axe-settings-v3-toggle${compactTop ? '' : ' off'}`} aria-pressed={compactTop}
           onClick={() => toggle('axe_pref_compact_top', compactTop, setCompactTop)} />

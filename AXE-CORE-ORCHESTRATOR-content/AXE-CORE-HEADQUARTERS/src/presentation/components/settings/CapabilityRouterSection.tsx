@@ -164,7 +164,7 @@ export function CapabilityRouterSection() {
         <div>
           <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Capability Router</h3>
           <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            Read-only monitor. AXE Core beslist automatisch welke capability, provider en route gebruikt wordt.
+            Read-only monitor. AXE Core decides automatically which capability, provider and route is used.
           </p>
         </div>
         <RefreshCw size={13} style={{ color: 'var(--text-muted)' }} />

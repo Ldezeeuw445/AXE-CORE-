@@ -42,11 +42,11 @@ import { leesOverrides, zetOverride, type OverrideMap } from '@/infrastructure/p
 
 
 const WAARVOOR: Record<HoofdAgent, string> = {
-  wingman: 'Draait de gratis CrewAI-crew namens AXE, en helpt overal waar dat past.',
-  northsea: 'Bouwt en runt de NorthSea-desk, beweegt deals. Schrijftaken pas na jouw akkoord.',
-  trading: 'Alleen de eindbeslissing per cyclus. De elf desk-rollen blijven op sleutels.',
-  developer: 'Leest, schrijft, bouwt en deployt de codebase. Mag bestanden bewerken.',
-  thinktank: 'Score/rank ideeën → bouwplan → Build → bibliotheek → integratieplan.',
+  wingman: 'Runs the free CrewAI crew on behalf of AXE, and helps wherever it fits.',
+  northsea: 'Builds and runs the NorthSea desk and moves deals. Write tasks only after your OK.',
+  trading: 'Only the final decision per cycle. The eleven desk roles stay on API keys.',
+  developer: 'Reads, writes, builds and deploys the codebase. May edit files.',
+  thinktank: 'Scores and ranks ideas → build plan → Build → library → integration plan.',
 };
 
 export function AgentMotorenSection() {

@@ -74,19 +74,19 @@ export const AGENT_LABEL: Record<HoofdAgent, string> = {
 };
 
 export const MOTOR_LABEL: Record<HoofdMotor, string> = {
-  claude: 'Claude-abonnement',
-  claude2: 'Claude-abonnement 2',
-  claude3: 'Claude-abonnement 3',
-  claude4: 'Claude-abonnement 4',
-  codex2: 'ChatGPT-abonnement 2 (Codex)',
-  codex: 'ChatGPT-abonnement (Codex)',
-  codex3: 'ChatGPT-abonnement 3 (Codex)',
-  cursor: 'Cursor-abonnement',
-  cursor2: 'Cursor-abonnement 2',
+  claude: 'Claude subscription',
+  claude2: 'Claude subscription 2',
+  claude3: 'Claude subscription 3',
+  claude4: 'Claude subscription 4',
+  codex2: 'ChatGPT subscription 2 (Codex)',
+  codex: 'ChatGPT subscription (Codex)',
+  codex3: 'ChatGPT subscription 3 (Codex)',
+  cursor: 'Cursor subscription',
+  cursor2: 'Cursor subscription 2',
   opencode: 'OpenCode Free',
   kilo: 'Kilo Auto Free',
   agy: 'Google Antigravity',
-  sleutels: 'API-sleutels',
+  sleutels: 'API keys',
 };
 
 /** Wat elke agent überhaupt mag: sinds Cursor alleen-lezen kan, alles. */

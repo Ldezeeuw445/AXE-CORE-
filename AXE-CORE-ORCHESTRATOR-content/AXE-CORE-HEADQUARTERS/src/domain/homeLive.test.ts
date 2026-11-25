@@ -101,7 +101,7 @@ describe('homeLiveStand', () => {
       }],
     });
     const regels = seatsRegels(stand);
-    expect(regels.some((r) => r.tekst.includes('Claude-abonnement 4'))).toBe(true);
+    expect(regels.some((r) => r.tekst.includes('Claude subscription 4'))).toBe(true);
     expect(regels.some((r) => r.tekst.includes('Energy snapshot'))).toBe(true);
   });
 
@@ -115,7 +115,7 @@ describe('homeLiveStand', () => {
       ],
     });
     const regels = seatsRegels(stand);
-    const vier = regels.find((r) => r.tekst.includes('Claude-abonnement 4'));
+    const vier = regels.find((r) => r.tekst.includes('Claude subscription 4'));
     expect(vier?.tekst).toContain('Not in use');
     expect(vier?.kleur).not.toBe('var(--err)');
     expect(vier?.actie).toBeUndefined();
