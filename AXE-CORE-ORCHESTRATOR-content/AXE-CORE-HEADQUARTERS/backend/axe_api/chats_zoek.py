@@ -123,8 +123,11 @@ SAMENVAT_PROMPT = ("Summarise this conversation between Luka and {wie} in exactl
 _MODELLEN = (
     ("GROQ_AGENTS_API_KEY", "https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b"),
     ("GROQ_LIGHT_API_KEY", "https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-20b"),
+    ("GROQ_RESERVE_API_KEY", "https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-20b"),
     ("CEREBRAS_API_KEY", "https://api.cerebras.ai/v1/chat/completions", "gpt-oss-120b"),
     ("OPENROUTER3_API_KEY", "https://openrouter.ai/api/v1/chat/completions", "openrouter/free"),
+    ("OPENROUTER4_API_KEY", "https://openrouter.ai/api/v1/chat/completions", "openrouter/free"),
+    ("OPENROUTER5_API_KEY", "https://openrouter.ai/api/v1/chat/completions", "openrouter/free"),
 )
 
 
