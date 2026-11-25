@@ -201,17 +201,20 @@ export function DashVenster({
   titel,
   onSluit,
   children,
+  breed = false,
 }: {
   open: boolean;
   titel: ReactNode;
   onSluit: () => void;
   children: ReactNode;
+  /** Brede variant voor een hele sectie (Settings): bijna de volle tabruimte. */
+  breed?: boolean;
 }) {
   if (!open) return null;
   return (
     <div className="axe-dash-venster-laag" onClick={onSluit} role="presentation">
       <section
-        className="axe-kaart axe-dash-venster"
+        className={cn('axe-kaart axe-dash-venster', breed && 'axe-dash-venster--breed')}
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
@@ -219,7 +222,7 @@ export function DashVenster({
       >
         <header className="axe-dash-kaart-kop">
           <h3 className="axe-dash-kaart-titel">{titel}</h3>
-          <button type="button" className="axe-dash-sluit" onClick={onSluit} aria-label="Sluiten"><X size={14} /></button>
+          <button type="button" className="axe-dash-sluit" onClick={onSluit} aria-label="Close"><X size={14} /></button>
         </header>
         <div className="axe-dash-kaart-lijf">{children}</div>
       </section>

@@ -90,10 +90,13 @@ describe('Settings en MCP gebruiken de primitieven', () => {
     expect(primitieven).toMatch(/Profile/);
   });
 
-  it('Settings heeft TabRuimte, een sectierail en sectieblokken', () => {
-    expect(settings).toMatch(/<TabRuimte/);
-    // v3 (8de4bcd8) verving de SchuifBalk bewust door de linkerrail.
-    expect(settings).toMatch(/axe-settings-v3-nav/);
+  it('Settings is één dashboard: sectiekaarten in een raster, secties in een venster', () => {
+    // 25 nov: DashSchil zet TabRuimte vullen neer; de linkerrail werd een
+    // raster van sectiekaarten (axe-settings-v3-raster), elke sectie
+    // opent in een DashVenster. De sectieblokken zelf blijven.
+    expect(settings).toMatch(/<DashSchil/);
+    expect(settings).toMatch(/<DashVenster/);
+    expect(settings).toMatch(/axe-settings-v3-raster/);
     expect(settings).toMatch(/<SectieBlok/);
     expect(settings).not.toMatch(/STAT_ROW/);
   });

@@ -1,11 +1,10 @@
 import { RailDaxBots } from '@/presentation/components/layout/RightPanel';
-import { useDashModus } from '@/presentation/components/layout/useDashModus';
 import { loadLocalFirstEnabled, setLocalFirstEnabled } from '@/domain/providers';
 import { axeVoiceHealth } from '@/infrastructure/gateways/axeCoreApiService';
 import { OPENAI_STEMMEN, getOpenAiStem, setOpenAiStem, isOpenAiTtsConfigured, type OpenAiStem } from '@/infrastructure/gateways/openAiTtsService';
 import { BuildStampLine } from '@/presentation/components/axe-core/BuildStampLine';
 import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS, type RepoConfig as RepoConfigT } from '@/infrastructure/persistence/repoConfigService';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type CSSProperties } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { STEMMEN, STANDAARD_STEM, stemVan } from '@/domain/stemKeuzes';
@@ -21,8 +20,9 @@ import { LookSection } from '@/presentation/components/settings/LookSection';
 import { MeldingenSection } from '@/presentation/components/settings/MeldingenSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import {
-  Kaart, KaartRaster, SectieBlok, TabRuimte,
+  Kaart, KaartRaster, SectieBlok,
 } from '@/presentation/components/layout/tabMaatstaf';
+import { DashSchil, DashKop, DashKaart, DashVenster } from '@/presentation/components/layout/dashboardSchil';
 import { PROVIDER_KEY_CATALOGUE } from '@/domain/providerCatalogue';
 import { ABONNEMENT_MOTOREN } from '@/domain/abonnementChat';
 import { providerIcoon } from '@/presentation/components/settings/providerIcoon';
@@ -2034,17 +2034,18 @@ function PreferencesV3Card() {
 }
 
 export default function SettingsPage() {
-  // 25 nov (Luka: geen scroll): één sectie tegelijk; alleen het paneel schuift, compacte composer geeft ~150px.
-  useDashModus('settings');
   const voice = useVoiceStore();
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
   const [clapEnabled, setClapEnabled] = useState(false);
   const [wakeEnabled, setWakeEnabled] = useState(false);
   const [sectie, setSectie] = useState('agents');
-  // Eén sectie tegelijk, zoals de Browser: de lade kiest, het vak toont die
-  // ene sectie als dashboard in kaarten (25 sep).
+  // 25 nov (Luka: Settings als dashboard zonder scrollen): één raster van
+  // sectiekaarten. Een kaart opent zijn sectie in een venster; alleen dat
+  // venster schuift, de tab zelf nooit.
+  const [vensterOpen, setVensterOpen] = useState(false);
   const kiesSectie = (id: string) => {
     setSectie(id);
+    setVensterOpen(true);
   };
 
   useEffect(() => { voice.checkMicPermission(); }, []);
@@ -2083,17 +2084,19 @@ export default function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voice.micPermission]);
 
-  const SETTINGS_NAV: { id: string; label: string }[] = [
-    { id: 'agents', label: 'Agents' },
-    { id: 'accounts', label: 'Accounts' },
-    { id: 'keys', label: 'Keys per app' },
-    { id: 'usage', label: 'Usage & costs' },
-    { id: 'providers', label: 'Providers' },
-    { id: 'voice', label: 'Voice' },
-    { id: 'trust', label: 'Trust' },
-    { id: 'routing', label: 'Routing' },
-    { id: 'system', label: 'System' },
+  const SETTINGS_NAV: { id: string; label: string; wat: string; inhoud: string[] }[] = [
+    { id: 'agents', label: 'Agents', wat: 'What each agent runs on, whether it is online, and what it used.', inhoud: ['Engines', 'DAX bots'] },
+    { id: 'accounts', label: 'Accounts', wat: 'Coding seats and subscriptions, plus your preferences.', inhoud: ['Coding seats', 'Preferences'] },
+    { id: 'keys', label: 'Keys per app', wat: 'Which API key each app uses.', inhoud: ['Per-app keys'] },
+    { id: 'usage', label: 'Usage & costs', wat: 'Credits and spend per provider and seat.', inhoud: ['Credits', 'Spend'] },
+    { id: 'providers', label: 'Providers', wat: `Provider keys (${PROVIDER_KEY_CATALOGUE.length} in the catalogue) and Ollama models.`, inhoud: ['Provider keys', 'Ollama models'] },
+    { id: 'voice', label: 'Voice', wat: 'Microphone, clap, wake word, AXE voice and notifications.', inhoud: ['Microphone', 'Clap', 'Hey AXE', 'Voice', 'Notifications'] },
+    { id: 'trust', label: 'Trust', wat: 'Trust levels, look and tool calling.', inhoud: ['Mindset', 'Trust levels', 'Look', 'Tool calling'] },
+    { id: 'routing', label: 'Routing', wat: 'Where AXE sends a request and which capability answers.', inhoud: ['AXE routes', 'Capability router'] },
+    { id: 'system', label: 'System', wat: 'Remote terminal, service health and GitHub repos.', inhoud: ['Remote terminal', 'Service health', 'GitHub repos'] },
   ];
+  const huidig = SETTINGS_NAV.find((n) => n.id === sectie) ?? SETTINGS_NAV[0];
+  const micToon: 'ok' | 'warn' | 'fout' = voice.micPermission === 'granted' ? 'ok' : voice.micPermission === 'denied' ? 'fout' : 'warn';
 
   return (
     <motion.div
@@ -2102,30 +2105,39 @@ export default function SettingsPage() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
-      {/* Dezelfde buitenrand als elke andere tab (layoutregel 1): de v3-rail
-          en het paneel staan IN de plaat, niet van rand tot rand. */}
-      <TabRuimte vullen>
-      <div className="axe-settings-v3-wrap">
-        <nav className="axe-settings-v3-nav" aria-label="Settings sections">
-          <div className="axe-settings-v3-nav-label">Settings</div>
+      {/* Dezelfde buitenrand als elke andere tab (layoutregel 1): DashSchil zet
+          TabRuimte vullen neer. Raster 3×3: één kaart per sectie. */}
+      <DashSchil
+        tab="settings"
+        kop={
+          <DashKop
+            titel="Settings"
+            sub="One card per section · each opens in its own window"
+            cijfers={[
+              { label: 'Sections', waarde: SETTINGS_NAV.length, sub: 'one window each' },
+              { label: 'Microphone', waarde: voice.micPermission === 'granted' ? 'OK' : voice.micPermission === 'denied' ? 'Off' : '?', sub: String(voice.micPermission), toon: micToon },
+              { label: 'Hey AXE', waarde: wakeEnabled ? 'On' : 'Off', sub: 'wake word' },
+              { label: 'Clap', waarde: clapEnabled ? 'On' : 'Off', sub: 'to activate' },
+            ]}
+          />
+        }
+      >
+        <UnsyncedSettingsBanner />
+        <nav className="axe-settings-v3-raster axe-dash-raster" aria-label="Settings sections" style={{ '--dash-kolommen': 3, '--dash-rijen': 3 } as CSSProperties} data-axe-dash-raster="">
           {SETTINGS_NAV.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={sectie === item.id ? 'on' : undefined}
-              aria-current={sectie === item.id ? 'page' : undefined}
-              onClick={() => kiesSectie(item.id)}
-            >
-              {item.label}
-            </button>
+            <DashKaart key={item.id} titel={item.label} onKlik={() => kiesSectie(item.id)} className={sectie === item.id && vensterOpen ? 'on' : undefined}>
+              <p className="text-[12px] leading-snug" style={{ color: 'var(--text-secondary)' }}>{item.wat}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {item.inhoud.map((x) => (
+                  <span key={x} className="rounded-md px-2 py-0.5 text-[10.5px]" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}>{x}</span>
+                ))}
+              </div>
+            </DashKaart>
           ))}
         </nav>
+        <DashVenster breed open={vensterOpen} titel={huidig.label} onSluit={() => setVensterOpen(false)}>
         <div className="axe-settings-v3-panel axe-settings">
         <BuildStampLine />
-        {/* Says so when a save only reached this device. Without it, pasting an
-            API key while signed out looks identical to pasting one that worked,
-            and every background agent keeps using the old value. */}
-        <UnsyncedSettingsBanner />
 
         {sectie === 'agents' && (
         <SectieBlok id="agents" titel="AGENTS">
@@ -2247,10 +2259,9 @@ export default function SettingsPage() {
         </SectieBlok>
         )}
 
-
         </div>
-      </div>
-      </TabRuimte>
+        </DashVenster>
+      </DashSchil>
     </motion.div>
   );
 }
