@@ -2197,3 +2197,13 @@ export async function markeerManagerGelezen(agent: string): Promise<{ ok: boolea
 export async function northseaOpruimenOk(tekst: string): Promise<{ herkend: boolean; uitgevoerd?: string[]; tekst?: string }> {
   return call('POST', '/northsea/opruimen', { tekst });
 }
+
+/** Chats-pagina: treffers uit het AXE-gesprek en de managergesprekken (VPS /chats/search). */
+export async function searchChats(q: string): Promise<{ q: string; treffers: import('@/domain/chats').ChatTreffer[] }> {
+  return call('GET', `/chats/search?q=${encodeURIComponent(q)}`);
+}
+
+/** Chats-pagina: per gesprek laatst, aantal deze week, laatste drie regels (VPS /chats/overview). */
+export async function chatsOverview(): Promise<{ gesprekken: import('@/domain/chats').ChatGesprek[] }> {
+  return call('GET', '/chats/overview');
+}
