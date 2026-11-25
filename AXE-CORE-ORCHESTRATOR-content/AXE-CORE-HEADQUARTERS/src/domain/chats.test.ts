@@ -21,3 +21,13 @@ describe('chats', () => {
     expect(wanneer('2026-11-20T14:05:00', nu)).toMatch(/20 Nov 14:05/);
   });
 });
+
+describe('metBronnen', () => {
+  it('maakt van [n] een bron-deel en laat de tekst heel', async () => {
+    const { metBronnen } = await import('./chats');
+    expect(metBronnen('Feed werkt weer [2] [15].')).toEqual([
+      { tekst: 'Feed werkt weer ' }, { n: 2 }, { tekst: ' ' }, { n: 15 }, { tekst: '.' },
+    ]);
+    expect(metBronnen('geen bron')).toEqual([{ tekst: 'geen bron' }]);
+  });
+});

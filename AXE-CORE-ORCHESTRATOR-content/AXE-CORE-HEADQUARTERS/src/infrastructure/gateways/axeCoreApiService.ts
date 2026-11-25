@@ -2207,3 +2207,18 @@ export async function searchChats(q: string): Promise<{ q: string; treffers: imp
 export async function chatsOverview(): Promise<{ gesprekken: import('@/domain/chats').ChatGesprek[] }> {
   return call('GET', '/chats/overview');
 }
+
+/** Chats-pagina: een vraag aan alle gesprekken; antwoord met [n]-bronnen (VPS /chats/ask). */
+export async function askChats(vraag: string): Promise<{
+  vraag: string; antwoord: string | null; fout?: string | null; model: string | null;
+  bronnen: (import('@/domain/chats').ChatTreffer & { n: number })[];
+}> {
+  return call('POST', '/chats/ask', { vraag });
+}
+
+/** Chats-pagina: één gesprek in drie regels (VPS /chats/summary). */
+export async function chatSummary(gesprek: string): Promise<{
+  gesprek: string; samenvatting: string | null; fout?: string | null; model?: string | null; berichten?: number;
+}> {
+  return call('GET', `/chats/summary?gesprek=${encodeURIComponent(gesprek)}`);
+}

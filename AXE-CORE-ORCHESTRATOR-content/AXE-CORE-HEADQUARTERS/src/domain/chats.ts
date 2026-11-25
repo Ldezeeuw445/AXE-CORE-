@@ -71,3 +71,18 @@ export function markeer(tekst: string, q: string): { tekst: string; raak: boolea
   }
   return delen;
 }
+
+/** "De feed werkt weer [2] [5]." -> tekst- en bron-delen, zodat [n] klikbaar wordt. */
+export function metBronnen(antwoord: string): ({ tekst: string } | { n: number })[] {
+  const delen: ({ tekst: string } | { n: number })[] = [];
+  let rest = antwoord;
+  const re = /\[(\d{1,3})\]/;
+  for (;;) {
+    const m = re.exec(rest);
+    if (!m) { if (rest) delen.push({ tekst: rest }); break; }
+    if (m.index > 0) delen.push({ tekst: rest.slice(0, m.index) });
+    delen.push({ n: Number(m[1]) });
+    rest = rest.slice(m.index + m[0].length);
+  }
+  return delen;
+}
