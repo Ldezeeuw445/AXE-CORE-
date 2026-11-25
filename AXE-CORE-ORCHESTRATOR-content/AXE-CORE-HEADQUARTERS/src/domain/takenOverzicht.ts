@@ -12,19 +12,19 @@ export type TaakStand = 'todo' | 'in-progress' | 'done' | 'blocked';
 /** Status in gewoon Nederlands, één woordenlijst voor de hele tab. */
 export const STATUS_NL: Record<TaakStand, string> = {
   todo: 'Open',
-  'in-progress': 'Bezig',
-  done: 'Klaar',
-  blocked: 'Wacht op jou',
+  'in-progress': 'Running',
+  done: 'Done',
+  blocked: 'Waiting on you',
 };
 
 /** Planner/kernel-status (completed, running, …) naar gewone taal. */
 export function plannerStatusNL(status: string, goedkeuringNodig = false): string {
   switch (status) {
-    case 'completed': case 'done': return 'Klaar';
-    case 'running': case 'leased': case 'in_progress': return 'Bezig';
-    case 'failed': return 'Mislukt';
-    case 'cancelled': case 'rejected': return 'Afgewezen';
-    default: return goedkeuringNodig ? 'Wacht op jou' : 'Gepland';
+    case 'completed': case 'done': return 'Done';
+    case 'running': case 'leased': case 'in_progress': return 'Running';
+    case 'failed': return 'Failed';
+    case 'cancelled': case 'rejected': return 'Declined';
+    default: return goedkeuringNodig ? 'Waiting on you' : 'Planned';
   }
 }
 

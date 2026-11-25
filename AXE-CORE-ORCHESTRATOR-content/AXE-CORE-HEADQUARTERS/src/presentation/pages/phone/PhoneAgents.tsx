@@ -61,7 +61,7 @@ export default function PhoneAgents() {
             <button type="button" onClick={() => navigate('/wacht')}
               className="mt-2 w-full rounded-lg px-3 py-2 text-left text-[13px] font-medium"
               style={{ background: 'rgba(251,146,60,0.12)', border: '1px solid rgba(251,146,60,0.35)', color: 'rgb(251,146,60)' }}>
-              {elders} NorthSea-{elders === 1 ? 'ding wacht' : 'dingen wachten'} op jou · open "Wacht op jou"
+              {elders} NorthSea {elders === 1 ? 'item is' : 'items are'} waiting · open "Waiting on you"
             </button>
           ) : null}
         </PhoneKaart>

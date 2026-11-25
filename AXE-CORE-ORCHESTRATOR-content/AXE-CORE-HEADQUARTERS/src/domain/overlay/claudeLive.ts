@@ -72,7 +72,7 @@ export function claudeLive(stand: ClaudeStand, nuS: number, vorige?: string | nu
     sessieId: s.id,
     project: s.project ?? '',
     vraag: s.vraag ?? '',
-    nu: toestand === 'wacht' ? (s.melding || 'Wacht op jou') : toestand === 'klaar' ? 'Klaar · jouw beurt' : (laatste?.wat ?? 'Denkt na…'),
+    nu: toestand === 'wacht' ? (s.melding || 'Waiting on you') : toestand === 'klaar' ? 'Done · your turn' : (laatste?.wat ?? 'Thinking…'),
     vorige: toestand === 'klaar' ? (laatste?.wat ?? '') : (daarvoor?.wat ?? ''),
     soort: laatste?.soort ?? 'overig',
     toestand,

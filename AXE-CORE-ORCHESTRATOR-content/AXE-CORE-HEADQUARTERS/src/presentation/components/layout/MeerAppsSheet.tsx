@@ -30,7 +30,7 @@ export function MeerAppsSheet({ open, onClose }: { open: boolean; onClose: () =>
         }}
       >
         <div className="flex flex-none items-center justify-between px-5 pb-1 pt-4">
-          <span className="text-[15px] font-semibold" style={{ color: '#EEF3FA' }}>Meer</span>
+          <span className="text-[15px] font-semibold" style={{ color: '#EEF3FA' }}>More</span>
           <button
             type="button"
             onClick={onClose}

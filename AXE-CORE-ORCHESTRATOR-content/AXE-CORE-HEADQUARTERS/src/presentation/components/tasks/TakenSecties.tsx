@@ -48,12 +48,12 @@ export function TakenSecties<T extends OverzichtTaak>({ taken, loading }: Props<
     <div className="axe-taken-secties mb-4 flex-none" data-axe-taken-secties="">
       {/* 17 nov: één "Wacht op jou". Deze kaart toont de taken; de kop opent de
           volledige lijst (ook NorthSea-mails) waar je ja/nee en versturen doet. */}
-      <Sectie titel="Wacht op jou" taken={s.wacht} kleur="var(--warning)" onOpen={() => navigate('/wacht')}
-        leeg={loading ? 'Laden…' : 'Geen taken; kijk in Wacht op jou voor NorthSea.'} />
-      <Sectie titel={wie ? `Bezig (${wie})` : 'Bezig'} taken={s.bezig} kleur="var(--accent-cyan)"
-        leeg={loading ? 'Laden…' : 'Er loopt nu niets.'} />
-      <Sectie titel="Klaar vandaag" taken={s.klaarVandaag} kleur="var(--success)"
-        leeg={loading ? 'Laden…' : 'Vandaag nog niets afgerond.'} />
+      <Sectie titel="Waiting on you" taken={s.wacht} kleur="var(--warning)" onOpen={() => navigate('/wacht')}
+        leeg={loading ? 'Loading…' : 'No tasks; NorthSea items are in Waiting on you.'} />
+      <Sectie titel={wie ? `Running (${wie})` : 'Running'} taken={s.bezig} kleur="var(--accent-cyan)"
+        leeg={loading ? 'Loading…' : 'Nothing is running.'} />
+      <Sectie titel="Done today" taken={s.klaarVandaag} kleur="var(--success)"
+        leeg={loading ? 'Loading…' : 'Nothing finished today yet.'} />
       <Gepland aantal={s.gepland.length} misluktAi={s.misluktAi.length} />
     </div>
   );
@@ -67,28 +67,28 @@ export function TakenSecties<T extends OverzichtTaak>({ taken, loading }: Props<
 function Gepland({ aantal, misluktAi }: { aantal: number; misluktAi: number }) {
   const [stand, setStand] = useState<string | null>(null);
   const start = () => {
-    setStand('Bezig…');
+    setStand('Working…');
     void rijActieApi('begin')
-      .then((u) => setStand(u.toegevoegd ? `${u.toegevoegd} in de rij, één voor één` : 'Niets dat de AI zelf mag doen'))
-      .catch((e: unknown) => setStand(e instanceof Error ? e.message : 'Lukte niet'));
+      .then((u) => setStand(u.toegevoegd ? `${u.toegevoegd} queued, one at a time` : 'Nothing the AI may do on its own'))
+      .catch((e: unknown) => setStand(e instanceof Error ? e.message : 'Did not work'));
   };
   return (
     <section className="axe-taken-sectie" data-axe-sectie="Gepland">
       <header className="flex items-baseline gap-2">
-        <h3 className="text-[11px] font-semibold tracking-wide" style={{ color: 'var(--text-secondary)' }}>Gepland voor de AI</h3>
+        <h3 className="text-[11px] font-semibold tracking-wide" style={{ color: 'var(--text-secondary)' }}>Planned for the AI</h3>
         <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>{aantal}</span>
       </header>
       <p className="mt-2 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
         {aantal
-          ? 'Hier hoef je niets mee. Ze starten niet vanzelf; de rij werkt ze één voor één af.'
-          : 'Niets gepland.'}
-        {misluktAi ? ` ${misluktAi} mislukt, maar daar pakt de AI het zelf op.` : ''}
+          ? 'Nothing for you here. They do not start on their own; the queue runs them one at a time.'
+          : 'Nothing planned.'}
+        {misluktAi ? ` ${misluktAi} failed, and the AI picks those up itself.` : ''}
       </p>
       {aantal > 0 && (
-        <button type="button" onClick={start} disabled={stand === 'Bezig…'}
+        <button type="button" onClick={start} disabled={stand === 'Working…'}
           className="mt-2 inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-semibold"
           style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-primary)' }}>
-          {stand ?? 'Start de rij'}
+          {stand ?? 'Start the queue'}
         </button>
       )}
     </section>

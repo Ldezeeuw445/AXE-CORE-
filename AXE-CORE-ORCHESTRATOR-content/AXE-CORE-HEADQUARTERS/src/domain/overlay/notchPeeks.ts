@@ -56,10 +56,10 @@ export function nieuwePeeks(vorig: NotchMoment | null, nu: NotchMoment): Peek[] 
   const oud = new Set(vorig.goedkeuringen.map((g) => g.id));
   const nieuw = nu.goedkeuringen.filter((g) => !oud.has(g.id));
   if (nieuw.length === 1) {
-    uit.push({ id: `g-${nieuw[0].id}`, soort: 'goedkeuring', titel: 'Wacht op jou', tekst: kort(nieuw[0].titel), tab: 'approvals' });
+    uit.push({ id: `g-${nieuw[0].id}`, soort: 'goedkeuring', titel: 'Waiting on you', tekst: kort(nieuw[0].titel), tab: 'approvals' });
   } else if (nieuw.length > 1) {
-    uit.push({ id: `g-${nieuw.map((g) => g.id).join('-')}`, soort: 'goedkeuring', titel: 'Wacht op jou',
-      tekst: `${nieuw.length} nieuwe goedkeuringen`, tab: 'approvals' });
+    uit.push({ id: `g-${nieuw.map((g) => g.id).join('-')}`, soort: 'goedkeuring', titel: 'Waiting on you',
+      tekst: `${nieuw.length} new approvals`, tab: 'approvals' });
   }
 
   const vc = vorig.claude;
@@ -127,10 +127,10 @@ export function homeStand(nu: Date, m: NotchMoment, volgende: { naam: string; at
   const n = m.goedkeuringen.length;
   // Geen verbinding: "niets wacht" zou een leugen kunnen zijn (zelfde regel als de bol).
   regels.push(!bereikbaar && !n
-    ? { sleutel: 'wacht', label: 'Wacht op jou', tekst: 'Onbekend — geen verbinding met AXE', rustig: false }
+    ? { sleutel: 'wacht', label: 'Waiting on you', tekst: 'Unknown — no connection to AXE', rustig: false }
     : n
-    ? { sleutel: 'wacht', label: 'Wacht op jou', tekst: n === 1 ? kort(m.goedkeuringen[0].titel, 60) : `${n} goedkeuringen`, rustig: false, tab: 'approvals' }
-    : { sleutel: 'wacht', label: 'Wacht op jou', tekst: 'Niets — alles loopt', rustig: true });
+    ? { sleutel: 'wacht', label: 'Waiting on you', tekst: n === 1 ? kort(m.goedkeuringen[0].titel, 60) : `${n} approvals`, rustig: false, tab: 'approvals' }
+    : { sleutel: 'wacht', label: 'Waiting on you', tekst: 'Nothing — all running', rustig: true });
   regels.push(m.claude
     ? { sleutel: 'claude', label: 'Claude', tekst: kort(`${m.claude.nu}${m.claude.project ? ` · ${m.claude.project}` : ''}`, 60),
         rustig: m.claude.toestand === 'klaar', tab: 'claude' }
@@ -197,7 +197,7 @@ export function kiesOkStrook(
   const g = goedkeuringen[0]; // dezelfde volgorde als de Approvals-tab
   return {
     id: g.id,
-    titel: g.gevaarlijk ? 'Open in AXE CORE' : 'Wacht op jou',
+    titel: g.gevaarlijk ? 'Open in AXE CORE' : 'Waiting on you',
     tekst: kort(g.detail ? `${g.titel} · ${g.detail}` : g.titel, 70),
     meer: goedkeuringen.length - 1,
     gevaarlijk: g.gevaarlijk,

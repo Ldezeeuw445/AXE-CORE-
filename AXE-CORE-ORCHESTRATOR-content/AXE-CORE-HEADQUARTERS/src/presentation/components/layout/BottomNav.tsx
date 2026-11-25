@@ -25,13 +25,13 @@ const leftItems: NavItem[] = [
 ];
 
 const rightItems: NavItem[] = [
-  { icon: ListTodo, label: 'Taken', path: '/tasks' },
+  { icon: ListTodo, label: 'Tasks', path: '/tasks' },
   { icon: Code2, label: 'Code', path: '/code-editor' },
   { icon: CalendarDays, label: 'Calendar', path: '/calendar' },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
-const MEER_ITEM: NavItem = { icon: LayoutGrid, label: 'Meer', path: '__meer__' };
+const MEER_ITEM: NavItem = { icon: LayoutGrid, label: 'More', path: '__meer__' };
 
 /** Keep PRIMARY_NAV_PATHS and BottomNav in lockstep (tested). */
 void PRIMARY_NAV_PATHS;

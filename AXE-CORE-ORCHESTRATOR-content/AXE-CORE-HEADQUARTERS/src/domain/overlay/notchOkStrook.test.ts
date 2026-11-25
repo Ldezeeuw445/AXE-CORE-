@@ -6,7 +6,7 @@ const g = (id: string, gevaarlijk = false) => ({ id, titel: `Run ${id}`, detail:
 describe('kiesOkStrook', () => {
   it('toont de bovenste goedkeuring als de notch dicht is', () => {
     const s = kiesOkStrook([g('a'), g('b'), g('c')], false, false);
-    expect(s).toMatchObject({ id: 'a', titel: 'Wacht op jou', meer: 2, gevaarlijk: false });
+    expect(s).toMatchObject({ id: 'a', titel: 'Waiting on you', meer: 2, gevaarlijk: false });
     expect(s?.tekst).toContain('claude_code.run');
   });
   it('niets als open, als een peek loopt, of als er niets wacht', () => {

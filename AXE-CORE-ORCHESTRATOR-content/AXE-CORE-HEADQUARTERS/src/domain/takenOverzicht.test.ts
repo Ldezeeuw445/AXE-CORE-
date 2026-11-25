@@ -58,12 +58,12 @@ describe('groepeerPlanner', () => {
 
 describe('Nederlands', () => {
   it('statussen in gewone woorden', () => {
-    expect(Object.values(STATUS_NL)).toEqual(['Open', 'Bezig', 'Klaar', 'Wacht op jou']);
-    expect(plannerStatusNL('completed')).toBe('Klaar');
-    expect(plannerStatusNL('running')).toBe('Bezig');
-    expect(plannerStatusNL('failed')).toBe('Mislukt');
-    expect(plannerStatusNL('pending', true)).toBe('Wacht op jou');
-    expect(plannerStatusNL('pending')).toBe('Gepland');
+    expect(Object.values(STATUS_NL)).toEqual(['Open', 'Running', 'Done', 'Waiting on you']);
+    expect(plannerStatusNL('completed')).toBe('Done');
+    expect(plannerStatusNL('running')).toBe('Running');
+    expect(plannerStatusNL('failed')).toBe('Failed');
+    expect(plannerStatusNL('pending', true)).toBe('Waiting on you');
+    expect(plannerStatusNL('pending')).toBe('Planned');
   });
 });
 

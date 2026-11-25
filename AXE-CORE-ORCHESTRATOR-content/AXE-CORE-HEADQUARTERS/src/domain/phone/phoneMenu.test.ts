@@ -6,7 +6,7 @@ import {
 describe('phoneMenu', () => {
   it('heeft precies de zes primaire deuren (fase 1)', () => {
     expect(PHONE_MENU.map((i) => i.label)).toEqual([
-      'Home', 'Managers', 'NorthSea', 'Trading', 'Bouwen', 'Systeem',
+      'Home', 'Managers', 'NorthSea', 'Trading', 'Build', 'System',
     ]);
     expect(PHONE_MENU.map((i) => i.path)).not.toContain('/apps');
     expect(PHONE_MENU.map((i) => i.path)).not.toContain('/settings');
@@ -34,6 +34,6 @@ describe('phoneMenu', () => {
   it('zet Demo only en Never send als balk-actie', () => {
     expect(phoneAppBarTitel('/trading')).toEqual({ title: 'Trading', extra: 'Demo only' });
     expect(phoneAppBarTitel('/northsea')).toEqual({ title: 'NorthSea', extra: 'Never send' });
-    expect(phoneAppBarTitel('/bouwen').title).toBe('Bouwen');
+    expect(phoneAppBarTitel('/bouwen').title).toBe('Build');
   });
 });

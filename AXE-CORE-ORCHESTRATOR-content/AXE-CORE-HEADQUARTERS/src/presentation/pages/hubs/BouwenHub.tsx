@@ -4,7 +4,7 @@ export default function BouwenHub() {
   return (
     <HubV3
       tab="bouwen"
-      title="Bouwen"
+      title="Build"
       sub="Build · ship · projects"
       tiles={[
         { id: 'repos', label: 'Repos', note: 'GitHub repos', badge: 'stage', badgeTone: 'stage', path: '/developer' },

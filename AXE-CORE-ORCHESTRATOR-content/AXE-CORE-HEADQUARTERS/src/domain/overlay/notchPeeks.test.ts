@@ -12,10 +12,10 @@ describe('peeks in de notch (18 nov)', () => {
 
   it('nieuwe goedkeuring → één peek naar de goedkeuringen; meer tegelijk → één samengevatte', () => {
     const een = nieuwePeeks(leeg, { ...leeg, goedkeuringen: [{ id: 'a', titel: 'Mail aan Shell' }] });
-    expect(een).toEqual([{ id: 'g-a', soort: 'goedkeuring', titel: 'Wacht op jou', tekst: 'Mail aan Shell', tab: 'approvals' }]);
+    expect(een).toEqual([{ id: 'g-a', soort: 'goedkeuring', titel: 'Waiting on you', tekst: 'Mail aan Shell', tab: 'approvals' }]);
     const twee = nieuwePeeks(leeg, { ...leeg, goedkeuringen: [{ id: 'a', titel: 'x' }, { id: 'b', titel: 'y' }] });
     expect(twee).toHaveLength(1);
-    expect(twee[0].tekst).toBe('2 nieuwe goedkeuringen');
+    expect(twee[0].tekst).toBe('2 new approvals');
   });
 
   it('Claude van bezig naar klaar → peek; toestemmingsvraag niet (die opent de notch al)', () => {
@@ -61,7 +61,7 @@ describe('Home in de notch', () => {
   });
 
   it('zonder verbinding zegt Home niet dat alles loopt', () => {
-    expect(homeStand(new Date(), leeg, null, false).regels[0].tekst).toBe('Onbekend — geen verbinding met AXE');
+    expect(homeStand(new Date(), leeg, null, false).regels[0].tekst).toBe('Unknown — no connection to AXE');
   });
 
   it('eerstvolgende slaat het verleden over', () => {
