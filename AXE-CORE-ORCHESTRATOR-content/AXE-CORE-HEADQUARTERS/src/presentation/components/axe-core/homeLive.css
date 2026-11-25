@@ -24,13 +24,21 @@
   --axe-home-live-hoog: clamp(168px, 18vh, 216px);
   --axe-home-live-cluster-breed: var(--axe-home-rail-breed);
   --axe-home-live-lijnen: 4;
+  /* 25 nov, command center: de kopstrook met kerncijfers, rand tot rand
+     tussen dezelfde marges als de rails. Rails en core staan eronder. */
+  --axe-home-kpi-hoog: 58px;
+  /* Afstand van de onderste kaartrij tot de composer. Met de compacte
+     composer (data-axe-dash) staan de ronde dok-knoppen naast het vak hoger
+     dan het vak zelf; 32px houdt de kaarten daarvan vrij. */
+  --axe-home-live-lucht: 8px;
+  --axe-home-kpi-onder: calc(var(--axe-home-rail-top) + var(--axe-home-kpi-hoog));
 }
 
 .axe-home-rail {
   position: fixed;
-  top: var(--axe-home-rail-top);
+  top: calc(var(--axe-home-kpi-onder) + var(--axe-home-stack-gap));
   bottom: calc(
-    var(--axe-composer-onder, 104px) + var(--axe-composer-hoog, 90px) + 8px +
+    var(--axe-composer-onder, 104px) + var(--axe-composer-hoog, 90px) + var(--axe-home-live-lucht) +
       var(--axe-home-live-hoog) + var(--axe-home-stack-gap)
   );
   width: var(--axe-home-rail-breed);
@@ -359,7 +367,7 @@
   position: fixed;
   left: var(--axe-home-rail-inset);
   right: var(--axe-home-rail-inset);
-  bottom: calc(var(--axe-composer-onder, 104px) + var(--axe-composer-hoog, 90px) + 8px);
+  bottom: calc(var(--axe-composer-onder, 104px) + var(--axe-composer-hoog, 90px) + var(--axe-home-live-lucht));
   width: auto;
   height: var(--axe-home-live-hoog);
   max-height: var(--axe-home-live-hoog);
@@ -787,33 +795,39 @@
 /* ═══ Kerncijfers boven de orb (Luka 22 nov, referentiemap KPI-tegels) ═══ */
 .axe-home-kpis {
   position: fixed;
-  top: 96px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(720px, calc(100vw - 2 * (var(--axe-home-rail-inset) + var(--axe-home-rail-breed) + 20px)));
+  top: var(--axe-home-rail-top);
+  left: var(--axe-home-rail-inset);
+  right: var(--axe-home-rail-inset);
+  height: var(--axe-home-kpi-hoog);
   display: grid;
-  --axe-kpi-kolommen: 4;
+  --axe-kpi-kolommen: 6;
   grid-template-columns: repeat(var(--axe-kpi-kolommen), minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--axe-home-stack-gap);
   z-index: 15;
 }
 .axe-home-kpi {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  align-content: center;
+  align-items: center;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 8px 14px;
   border-radius: 14px;
-  background: rgba(14, 17, 21, 0.78);
-  border: 1px solid var(--tint-line, rgba(255, 255, 255, 0.07));
-  backdrop-filter: blur(10px);
+  /* Het ene kaartmateriaal (UI-MAATSTAF regel 3), geen eigen vlak. */
+  background: var(--axe-kaart-vlak, var(--axe-card-bg));
+  border: 1px solid var(--axe-kaart-lijn, rgba(255, 255, 255, 0.07));
+  box-shadow: var(--axe-kaart-schaduw, none);
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: outline-color 0.15s ease;
+  outline: 1px solid transparent;
 }
-.axe-home-kpi:hover { border-color: rgba(34, 211, 238, 0.35); background: rgba(18, 22, 27, 0.9); }
+.axe-home-kpi:hover { outline-color: var(--tint-line, rgba(34, 211, 238, 0.35)); }
 .axe-home-kpi-label {
+  grid-column: 2;
+  grid-row: 1;
   font-size: 10.5px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -824,6 +838,8 @@
   max-width: 100%;
 }
 .axe-home-kpi-waarde {
+  grid-column: 1;
+  grid-row: 1 / span 2;
   font-size: 22px;
   font-weight: 700;
   line-height: 1.15;
@@ -831,6 +847,8 @@
   font-variant-numeric: tabular-nums;
 }
 .axe-home-kpi-sub {
+  grid-column: 2;
+  grid-row: 2;
   font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
@@ -843,7 +861,7 @@
 .axe-home-kpi.is-fout .axe-home-kpi-waarde { color: #f87171; }
 /* Te smal tussen de rails: twee tegels per rij, en op kleine schermen weg. */
 @media (max-width: 1180px) {
-  .axe-home-kpis { --axe-kpi-kolommen: 2; width: min(380px, 40vw); }
+  .axe-home-kpis { --axe-kpi-kolommen: 3; --axe-home-kpi-hoog: 96px; }
 }
 @media (max-width: 900px) { .axe-home-kpis { display: none; } }
 
@@ -884,3 +902,27 @@
 .axe-home-pillen.is-slank .axe-home-pill-knop { padding: 5px 10px; }
 .axe-home-pillen.is-slank .axe-home-pill-sub { display: none; }
 .axe-home-pillen.is-slank .axe-home-pill-cta { height: 22px; padding: 0 10px; }
+
+/* ═══ Command center (Luka 25 nov) ════════════════════════════════════
+   De core staat in het vak tussen de kopstrook en de onderste kaartrij, en
+   tussen de rails. Zo ligt er niets meer over de bol heen en staat alles in
+   één symmetrisch raster: strook / rail · core · rail / drie gelijke kaarten. */
+@media (min-width: 768px) {
+  .axe-home-bolvak {
+    position: fixed !important;
+    top: calc(var(--axe-home-kpi-onder) + var(--axe-home-stack-gap)) !important;
+    bottom: calc(
+      var(--axe-composer-onder, 104px) + var(--axe-composer-hoog, 90px) + var(--axe-home-live-lucht) +
+        var(--axe-home-live-hoog) + var(--axe-home-stack-gap)
+    ) !important;
+    left: calc(var(--axe-home-rail-inset) + var(--axe-home-rail-breed) + var(--axe-home-stack-gap)) !important;
+    right: calc(var(--axe-home-rail-inset) + var(--axe-home-rail-breed) + var(--axe-home-stack-gap)) !important;
+    height: auto !important;
+  }
+}
+:root[data-axe-dash] { --axe-home-live-lucht: 32px; }
+/* De middelste kaart (Waiting on you) is even breed als links en rechts. */
+.axe-home-live-midden.axe-home-live-cluster {
+  pointer-events: auto;
+  flex: 0 1 var(--axe-home-live-cluster-breed);
+}

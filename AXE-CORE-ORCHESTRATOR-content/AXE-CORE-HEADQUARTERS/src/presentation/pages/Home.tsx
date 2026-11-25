@@ -118,6 +118,20 @@ export default function Home() {
      Hoger is hier niet "anders dan de demo" maar het punt van de demo -- dat je
      het materiaal ziet. */
 
+  /* 25 nov: de core-stand als tegel in de kopstrook van Home (desktop). Zelfde
+     afleiding als het hoekbadge, dat op de telefoon blijft staan. */
+  const kern = (() => {
+    const lastMsg = voice.conversation[voice.conversation.length - 1];
+    const hasError = lastMsg?.role === 'axe' && lastMsg?.provider === 'error';
+    const druk: Partial<Record<CoreStatus, string>> = {
+      'awaiting-approval': 'Approval', listening: 'Listening', thinking: 'Thinking', speaking: 'Speaking',
+    };
+    const label = druk[coreStatus]
+      ?? (hasError || coreOnline === false ? 'Offline' : coreOnline === true ? 'Online' : 'Checking');
+    const kleur = hasError || coreOnline === false ? 'var(--error)' : 'var(--text-primary)';
+    return { label, kleur };
+  })();
+
   return (
     /* Volle breedte, niet de tabruimte.
        Elke andere pagina staat ingesprongen zoals het browservak. Home niet:
@@ -138,7 +152,9 @@ export default function Home() {
             </div>
           )}
 
-          <div className="axe-home-status absolute top-4 left-4 flex items-center gap-2 z-20 over-canvas-group">
+          {/* 25 nov: op desktop staan core-stand en bouw als tegels in de
+              kopstrook (HomeLiveDashboard); dit hoekbadge alleen nog op mobiel. */}
+          {isMobile && <div className="axe-home-status absolute top-4 left-4 flex items-center gap-2 z-20 over-canvas-group">
             {(() => {
               const lastMsg = voice.conversation[voice.conversation.length - 1];
               const hasError = lastMsg?.role === 'axe' && lastMsg?.provider === 'error';
@@ -176,7 +192,7 @@ export default function Home() {
                 <span className="text-xs-custom font-mono-data" style={{ color }}>{label}</span>
               </>);
             })()}
-          </div>
+          </div>}
 
           {/* Hier stond een debug-pil ("map · New York") op top-12, achter de
               kopbalk: het blauwe knopje dat Luka zag maar niet kon lezen (9 okt).
@@ -198,15 +214,7 @@ export default function Home() {
        * dat is precies te zwak om een commit uit te lezen. Wordt de bouw oud
        * terwijl je aan het bouwen bent, dan kleurt de TEKST (wet 10: kleur zit
        * in de letters, nooit in een vlak). */}
-          {!isMobile && (
-            <div
-              className="absolute top-[74px] left-1/2 -translate-x-1/2 text-[9px] font-mono-data z-20 pointer-events-none"
-              title="De commit en het tijdstip waarop deze app gebouwd is"
-              style={{ color: bouwOud ? 'var(--m-budget)' : 'rgba(255,255,255,0.34)' }}
-            >
-              {bouwRegel}
-            </div>
-          )}
+          {/* 25 nov: de bouwregel staat nu als tegel "Build" in de kopstrook. */}
 
           {/* SphereStage ALWAYS mounted on Home — never unmount on view switch
               De hoogte is --axe-bol-vak: de afstand tot de chatplaat zoals die
@@ -215,7 +223,7 @@ export default function Home() {
               op zijn plek te blijven; alleen de plaat eronder beweegt.
               Terugval op 100% voor het eerste frame, vóór de eerste meting. */}
           <div
-            className="absolute top-0 left-0 right-0"
+            className="axe-home-bolvak absolute top-0 left-0 right-0"
             style={{ height: 'var(--axe-bol-vak, calc(100% - var(--axe-chat-onder, 280px)))' }}
           >
             <div
@@ -236,7 +244,7 @@ export default function Home() {
               <SphereStage status={coreStatus} bol={opPlaat ? <AxeCoreSphere /> : undefined} />
               {/* Wie AXE nu aan het werk heeft, in gewone taal, rond de core. */}
               <AgentVensters />
-              {!isMobile && <HomeLiveDashboard />}
+              {!isMobile && <HomeLiveDashboard kern={kern} bouw={{ commit: bouw?.commit ?? null, regel: bouwRegel, oud: bouwOud }} />}
             </div>
           {/* De drie weergaven vullen het HELE vak, niet alleen het stuk boven
               de chatplaat.

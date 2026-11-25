@@ -20,27 +20,27 @@ export default function TradingDemoHub() {
   const live = snap.isReal;
   const posities = live ? snap.positions : [];
   const openPnl = live ? posities.reduce((s, p) => s + (p.profit ?? 0), 0) : null;
-  const geenKoppeling = snap.loading ? 'laden…' : 'geen MT5-demo gekoppeld';
+  const geenKoppeling = snap.loading ? 'loading…' : 'no MT5 demo linked';
 
   return (
     <HubV3
       tab="trading"
       title="Trading"
-      sub="Demo hub · geen live orders"
+      sub="Demo hub · no live orders"
       cijfers={[
-        { label: 'Account', waarde: live ? 'MT5' : '—', sub: live ? 'demo gekoppeld' : geenKoppeling, toon: live ? 'ok' : undefined },
+        { label: 'Account', waarde: live ? 'MT5' : '—', sub: live ? 'demo linked' : geenKoppeling, toon: live ? 'ok' : undefined },
         { label: 'Equity', waarde: live ? geld(snap.equity, snap.currency) : '—', sub: live ? 'MetaAPI' : geenKoppeling },
-        { label: 'Open posities', waarde: live ? posities.length : '—', sub: live ? (posities[0]?.symbol ?? 'geen open posities') : geenKoppeling },
-        { label: 'Open P&L', waarde: openPnl == null ? '—' : geld(openPnl, snap.currency),
-          toon: openPnl == null ? undefined : openPnl >= 0 ? 'ok' : 'fout', sub: live ? 'som van open posities' : geenKoppeling },
+        { label: 'Positions', waarde: live ? posities.length : '—', sub: live ? (posities[0]?.symbol ?? 'none open') : geenKoppeling },
+        { label: 'P&L', waarde: openPnl == null ? '—' : geld(openPnl, snap.currency),
+          toon: openPnl == null ? undefined : openPnl >= 0 ? 'ok' : 'fout', sub: live ? 'open positions' : geenKoppeling },
       ]}
       kaartVakken={1}
       kaarten={
-        <DashKaart titel="Posities" telling={live ? posities.length : undefined}>
+        <DashKaart titel="Positions" telling={live ? posities.length : undefined}>
           {!live ? (
-            <DashLeeg>Geen MT5-demo gekoppeld. Koppel een nieuw demo-account in de Desk; dan staan de posities hier.</DashLeeg>
+            <DashLeeg>No MT5 demo linked. Link a new demo account in the Desk and its positions show up here.</DashLeeg>
           ) : posities.length === 0 ? (
-            <DashLeeg>Geen open posities.</DashLeeg>
+            <DashLeeg>No open positions.</DashLeeg>
           ) : (
             posities.map((p, i) => (
               <div key={`${p.symbol}-${i}`} className="axe-dash-regel">
@@ -58,11 +58,11 @@ export default function TradingDemoHub() {
          naam. Nu staat er wat erachter zit, en een label dat je kunt lezen.
          25 nov: 'Risk' (ging ook naar de Desk) is de live Posities-kaart geworden. */
       tiles={[
-        { id: 'desk', label: 'Desk', note: 'Trading Desk · posities, risico en demo-orders', badge: 'demo', badgeTone: 'ex', path: '/trading-desk' },
-        { id: 'intel', label: 'Intel', note: 'Trading Intel · markt, signalen, nieuws', badge: 'demo', badgeTone: 'ex', path: '/trading-intel' },
-        { id: 'memory', label: 'Memory', note: 'Trading Memory · lessen en notities', badge: 'notities', badgeTone: 'docs', path: '/memory/trading' },
-        { id: 'pnl', label: 'PnL', note: 'Winst en verlies · demo-account', badge: 'demo', badgeTone: 'ex', path: '/trading-intel' },
-        { id: 'watch', label: 'Watch', note: 'Watchlist · in Intel', badge: 'in opbouw', badgeTone: 'stage', path: '/trading-intel' },
+        { id: 'desk', label: 'Desk', note: 'Trading Desk · positions, risk and demo orders', badge: 'demo', badgeTone: 'ex', path: '/trading-desk' },
+        { id: 'intel', label: 'Intel', note: 'Trading Intel · market, signals, news', badge: 'demo', badgeTone: 'ex', path: '/trading-intel' },
+        { id: 'memory', label: 'Memory', note: 'Trading Memory · lessons and notes', badge: 'notes', badgeTone: 'docs', path: '/memory/trading' },
+        { id: 'pnl', label: 'PnL', note: 'Profit and loss · demo account', badge: 'demo', badgeTone: 'ex', path: '/trading-intel' },
+        { id: 'watch', label: 'Watch', note: 'Watchlist · in Intel', badge: 'in progress', badgeTone: 'stage', path: '/trading-intel' },
       ]}
     />
   );

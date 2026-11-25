@@ -73,6 +73,27 @@ describe('Home live dashboard is aangesloten', () => {
     expect(dash).not.toContain('useLayoutEffect');
   });
 
+  it('command center (25 nov): kopstrook, core in het midden, drie gelijke kaarten', () => {
+    const css = bron('homeLive.css');
+    const dash = bron('HomeLiveDashboard.tsx');
+    const home = bron('../../pages/Home.tsx');
+    // Kopstrook rand tot rand tussen dezelfde marges als de rails, zes gelijke tegels.
+    expect(css).toMatch(/\.axe-home-kpis \{[^}]*left: var\(--axe-home-rail-inset\)[^}]*right: var\(--axe-home-rail-inset\)/);
+    expect(css).toMatch(/--axe-kpi-kolommen: 6/);
+    expect(css).toMatch(/grid-template-columns: repeat\(var\(--axe-kpi-kolommen\), minmax\(0, 1fr\)\)/);
+    // Niets over de bol: rails en core beginnen onder de kopstrook.
+    expect(css).toMatch(/\.axe-home-rail \{[^}]*top: calc\(var\(--axe-home-kpi-onder\)/);
+    expect(css).toMatch(/\.axe-home-bolvak \{[^}]*top: calc\(var\(--axe-home-kpi-onder\)/);
+    expect(home).toMatch(/axe-home-bolvak/);
+    // Drie kaarten op één rij, de middelste even breed als de buitenste.
+    expect(dash).toMatch(/data-axe-home-live-cluster="midden"/);
+    expect(css).toMatch(/\.axe-home-live-midden\.axe-home-live-cluster \{[^}]*flex: 0 1 var\(--axe-home-live-cluster-breed\)/);
+    // Core en bouw staan als tegel in de strook, niet meer los in de hoeken.
+    expect(dash).toMatch(/label="Core"/);
+    expect(dash).toMatch(/label="Build"/);
+    expect(home).toMatch(/\{isMobile && <div className="axe-home-status/);
+  });
+
   it('RECENT biedt Fix voor lint/project-check, niet alleen Retry', () => {
     const dash = bron('HomeLiveDashboard.tsx');
     expect(dash).toMatch(/fixDurableTask/);

@@ -107,7 +107,7 @@ describe('één gedeelde plaat-maat', () => {
     }
   });
 
-  it('TabRuimte is de container; de plaat is een maximum, geen doel', () => {
+  it('TabRuimte is de container; niet-omgezette tabs centreren, dashboards vullen via DashSchil', () => {
     expect(primitieven).toMatch(/vullen = false/);
     expect(primitieven).toMatch(/axe-inhoud/);
     expect(css).toMatch(/\.axe-kaart-raster\s*\{[^}]*auto-fit/s);
