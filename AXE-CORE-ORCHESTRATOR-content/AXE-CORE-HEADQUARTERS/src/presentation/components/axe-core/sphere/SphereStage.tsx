@@ -1,6 +1,10 @@
 /**
- * SphereStage — Living Display on Home.
- * Maps: large square interactive portal (Google 2D or MapLibre).
+ * SphereStage — Living Display on Home, nu als 3D-podium.
+ *
+ * De bol blijft de bestaande AxeCoreSphere (plaat) of HolographicSphere.
+ * Wat AXE zegt of toont landt als matzwarte kaarten in het midden van dat
+ * vak: tekst, beeld, grafiek, kaart, tabel, html, en "N agents working".
+ * Geen mock in dit pad — de kaarten komen uit podiumKaartenVan().
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,51 +12,71 @@ import { X } from 'lucide-react';
 import { HolographicSphere, type CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { ProjectionBody } from '@/presentation/components/axe-core/sphere/ProjectionBody';
+import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { subscribeAxeEvent } from '@/infrastructure/events/eventBus';
-import { moodForMode, type ProjectionMode, type ProjectionPayload } from '@/domain/sphere/projectionTypes';
-
-const MODE_BORDER: Record<ProjectionMode, string> = {
-  none: 'rgba(34,211,238,0.45)',
-  document: 'rgba(34,211,238,0.5)',
-  code: 'rgba(34,211,238,0.55)',
-  image: 'rgba(165,243,252,0.5)',
-  media: 'rgba(165,243,252,0.5)',
-  chart: 'rgba(212,252,52,0.55)',
-  map: 'rgba(167,139,250,0.65)',
-  html: 'rgba(34,211,238,0.55)',
-};
-
-const MODE_GLOW: Record<ProjectionMode, string> = {
-  none: 'rgba(34,211,238,0.2)',
-  document: 'rgba(34,211,238,0.22)',
-  code: 'rgba(34,211,238,0.25)',
-  image: 'rgba(165,243,252,0.2)',
-  media: 'rgba(165,243,252,0.2)',
-  chart: 'rgba(212,252,52,0.25)',
-  map: 'rgba(167,139,250,0.3)',
-  html: 'rgba(34,211,238,0.25)',
-};
-
-const MODE_MORPH: Record<ProjectionMode, string> = {
-  none: 'sphere',
-  document: 'scatter',
-  code: 'scatter',
-  image: 'scatter',
-  media: 'scatter',
-  chart: 'scatter',
-  map: 'scatter',
-  html: 'scatter',
-};
+import { moodForMode, type ProjectionPayload } from '@/domain/sphere/projectionTypes';
+import {
+  antwoordIsHuidig,
+  podiumDemoAan,
+  podiumDemoKaarten,
+  podiumKaartenVan,
+  type PodiumKaart,
+} from '@/domain/sphere/podium';
+import { podiumKrachtVan, webglBeschikbaar, type PodiumKracht } from '@/domain/sphere/podiumKracht';
+import { useVoiceStore } from '@/presentation/store/voiceStore';
+import './axePodium.css';
 
 const EASE_EMERGE = [0.16, 1, 0.3, 1] as const;
+
+function meetKracht(): PodiumKracht {
+  const reduced = typeof matchMedia === 'function'
+    && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const webgl = (() => {
+    try {
+      const c = document.createElement('canvas');
+      return webglBeschikbaar(c.getContext.bind(c) as (type: string) => unknown);
+    } catch {
+      return false;
+    }
+  })();
+  const nav = typeof navigator === 'undefined' ? undefined : navigator as Navigator & { deviceMemory?: number };
+  return podiumKrachtVan({
+    reducedMotion: reduced,
+    webgl,
+    cores: nav?.hardwareConcurrency,
+    geheugenGb: nav?.deviceMemory,
+  });
+}
+
+function demoVlag(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem('axe_podium_demo');
+  } catch {
+    return null;
+  }
+}
 
 /**
  * `bol`: welke sphere er onder de projectie staat. Op de plaat (Tauri-glas) is dat
  * AxeCoreSphere, daarbuiten de Three-versie. Tot 9 okt 2026 tekende Home op de
  * plaat alleen AxeCoreSphere, en dan was dit hele podium er niet: "laat New York
  * zien" maakte een projectie die nergens werd getoond, op de Mac mini en de iMac.
+ *
+ * `agenten` / `goedkeuringen`: dezelfde telling als de Home-tegels, zodat het
+ * podium niet een tweede "N agents" verzint.
  */
-export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNode }) {
+export function SphereStage({
+  status,
+  bol,
+  agenten = 0,
+  goedkeuringen = 0,
+}: {
+  status: CoreStatus;
+  bol?: ReactNode;
+  agenten?: number;
+  goedkeuringen?: number;
+}) {
   const phase = useSphereProjectionStore(s => s.phase);
   const payload = useSphereProjectionStore(s => s.payload);
   const queue = useSphereProjectionStore(s => s.queue);
@@ -61,6 +85,43 @@ export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNo
   const focus = useSphereProjectionStore(s => s.focus);
   const project = useSphereProjectionStore(s => s.project);
   const markProjecting = useSphereProjectionStore(s => s.markProjecting);
+
+  const voiceStatus = useVoiceStore(s => s.voiceStatus);
+  const response = useVoiceStore(s => s.response);
+  const conversation = useVoiceStore(s => s.conversation);
+
+  const [kracht] = useState(meetKracht);
+
+  const lastAxe = [...conversation].reverse().find(m => m.role === 'axe');
+  const lastUser = [...conversation].reverse().find(m => m.role === 'user');
+  const stream = (response || '').trim();
+  const zelfdeBeurt = !!lastAxe && (!lastUser || lastAxe.timestamp >= lastUser.timestamp);
+  const antwoord = (stream || (zelfdeBeurt ? lastAxe?.text : '') || '').trim();
+  const antwoordHuidig = antwoordIsHuidig({
+    voiceStatus,
+    laatsteAxeTs: lastAxe?.timestamp ?? null,
+    laatsteUserTs: lastUser?.timestamp ?? null,
+    heeftStream: !!stream,
+  });
+
+  const liveKaarten = useMemo(
+    () => podiumKaartenVan({
+      phase,
+      payload,
+      antwoord,
+      vraag: lastUser?.text,
+      voiceStatus,
+      antwoordHuidig,
+      agenten,
+      goedkeuringen,
+    }),
+    [phase, payload, antwoord, lastUser?.text, voiceStatus, antwoordHuidig, agenten, goedkeuringen],
+  );
+
+  const demo = podiumDemoAan(demoVlag(), import.meta.env.DEV);
+  const kaarten = liveKaarten.length || !demo ? liveKaarten : podiumDemoKaarten();
+  const hoofd = kaarten.find(k => k.soort !== 'agenten') ?? null;
+  const agentKaart = kaarten.find(k => k.soort === 'agenten') ?? null;
 
   const projecting = phase === 'opening' || phase === 'projecting' || phase === 'closing';
   const mode = payload?.mode ?? 'none';
@@ -99,27 +160,14 @@ export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNo
     }
     if (!payload) return;
     window.dispatchEvent(
-      new CustomEvent('axe-sphere-morph', { detail: { key: MODE_MORPH[mode] || 'sphere' } }),
+      new CustomEvent('axe-sphere-morph', { detail: { key: 'scatter' } }),
     );
   }, [payload?.id, mode, phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sphereOpacity =
-    phase === 'opening' || phase === 'projecting' ? 0.2
-      : phase === 'closing' ? 0.7
-        : 1;
+  const heeftInhoud = !!hoofd;
+  const sphereOpacity = heeftInhoud ? (projecting ? 0.22 : 0.45) : 1;
+  const sphereScale = heeftInhoud ? 1.02 : 1;
 
-  const sphereScale =
-    phase === 'opening' || phase === 'projecting' ? 1.03
-      : phase === 'closing' ? 1.02
-        : 1;
-
-  const showPortal = !!payload && (phase === 'opening' || phase === 'projecting' || phase === 'closing');
-
-  /* Hoeveel ruimte er BOVEN de composer is. Het podium loopt op de plaat door tot
-     onder de composer (Home geeft het de hele hoogte als --axe-bol-vak nog niet
-     gemeten is), dus een kaart van 94vmin viel er half onder (Luka, 9 okt: "de
-     map valt onder de composer door"). Gemeten tegen --axe-chat-top, de
-     bovenkant van de composer die AxeShellChrome bijhoudt. */
   const podium = useRef<HTMLDivElement | null>(null);
   const [vrij, setVrij] = useState<{ hoog: number; top: number } | null>(null);
   useEffect(() => {
@@ -129,181 +177,135 @@ export function SphereStage({ status, bol }: { status: CoreStatus; bol?: ReactNo
       const r = el.getBoundingClientRect();
       const chatTop = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--axe-chat-top'));
       const onder = Number.isFinite(chatTop) && chatTop > r.top ? Math.min(r.bottom, chatTop - 14) : r.bottom;
-      // Boven: vrij van de kopbalk (tabs en knoppen, ~64px).
       const boven = Math.max(r.top, 64);
       setVrij({ hoog: Math.max(220, Math.round(onder - boven)), top: Math.round(boven - r.top) });
     };
     meet();
     window.addEventListener('resize', meet);
-    const t = window.setInterval(meet, 1500); // composer groeit mee met tekst
+    const t = window.setInterval(meet, 1500);
     return () => { window.removeEventListener('resize', meet); window.clearInterval(t); };
-  }, [showPortal]);
-
-  // Document, voorbeeld, code en grafiek: een leesvlak in plaats van een cirkel.
-  const breed = mode === 'document' || mode === 'html' || mode === 'code' || mode === 'chart';
-  // Ruimte voor het onderschrift onder de kaart (~34px).
-  const ONDERSCHRIFT = 34;
-  const mapSide = vrij
-    ? `min(${vrij.hoog - ONDERSCHRIFT}px, 94vw, 920px)`
-    : 'min(94vmin, 920px)';
+  }, [heeftInhoud]);
 
   return (
-    <div ref={podium} className="absolute inset-0 overflow-hidden">
-      <motion.div
-        className="absolute inset-0"
-        animate={{
-          opacity: sphereOpacity,
-          scale: sphereScale,
-          filter:
-            phase === 'opening' || phase === 'projecting'
-              ? 'brightness(1.1) saturate(1.1)'
-              : 'none',
-        }}
-        transition={{ duration: 0.45, ease: EASE_EMERGE }}
-      >
-        {bol ?? <HolographicSphere status={status} />}
-      </motion.div>
+    <div
+      ref={podium}
+      className="axe-podium"
+      data-axe-podium
+      data-kracht={kracht}
+      data-axe-podium-inhoud={hoofd?.soort ?? 'leeg'}
+    >
+      <div className="axe-podium-ruimte">
+        <div className="axe-podium-toneel">
+          <div className="axe-podium-vloer" aria-hidden />
+          <div className="axe-podium-horizon" aria-hidden />
+          <div className="axe-podium-gloed" aria-hidden />
 
-      <AnimatePresence>
-        {(phase === 'opening' || phase === 'projecting') && mode === 'map' && (
           <motion.div
-            key="bloom"
-            className="absolute inset-0 pointer-events-none z-[5]"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.55 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
+            className="axe-podium-bol"
+            animate={{ opacity: sphereOpacity, scale: sphereScale }}
+            transition={{ duration: 0.45, ease: EASE_EMERGE }}
           >
-            <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-              style={{
-                width: mapSide,
-                height: mapSide,
-                borderRadius: 20,
-                background: `radial-gradient(circle, ${MODE_GLOW[mode]} 0%, transparent 70%)`,
-                boxShadow: `0 0 100px ${MODE_GLOW[mode]}`,
-              }}
-            />
+            {bol ?? <HolographicSphere status={status} />}
           </motion.div>
-        )}
-      </AnimatePresence>
 
-      <AnimatePresence mode="sync">
-        {showPortal && payload && (
-          <motion.div
-            key={payload.id}
-            className="absolute left-0 right-0 z-20 flex items-center justify-center pointer-events-none"
-            style={vrij ? { top: vrij.top, height: vrij.hoog } : { top: 0, bottom: 0 }}
-            initial={{ opacity: 0, scale: 0.55 }}
-            animate={{ opacity: phase === 'closing' ? 0 : 1, scale: phase === 'closing' ? 0.55 : 1 }}
-            exit={{ opacity: 0, scale: 0.5 }}
-            transition={{ duration: 0.35, ease: EASE_EMERGE }}
-          >
-            <div className="relative pointer-events-auto flex flex-col items-center max-w-full max-h-full">
-              <div
-                className="relative overflow-hidden flex flex-col"
-                style={mode === 'map' ? {
-                  width: mapSide,
-                  height: mapSide,
-                  maxWidth: '96vw',
-                  maxHeight: '88vh',
-                  borderRadius: 18,
-                  background: '#05050c',
-                  border: `2px solid ${MODE_BORDER[mode]}`,
-                  boxShadow: `0 0 0 4px rgba(0,0,0,0.4), 0 0 50px ${MODE_GLOW[mode]}`,
-                  // Ensure browser doesn't steal touch/scroll for page
-                  touchAction: 'none',
-                } : breed ? {
-                  /* Lezen en kijken: een liggend vlak, zo hoog als er boven de composer
-                     ruimte is. Een document of voorbeeld in een cirkel van 560px was
-                     onleesbaar (10px mono, de hoeken weg). */
-                  width: 'min(920px, 72vw)',
-                  height: vrij ? `min(${vrij.hoog - ONDERSCHRIFT}px, 720px)` : 'min(72vh, 720px)',
-                  borderRadius: 18,
-                  background: 'rgba(8,10,16,0.94)',
-                  border: `1.5px solid ${MODE_BORDER[mode]}`,
-                  boxShadow: `0 0 0 4px rgba(0,0,0,0.35), 0 0 50px ${MODE_GLOW[mode]}`,
-                } : {
-                  width: vrij ? `min(${vrij.hoog - ONDERSCHRIFT}px, 72vmin, 560px)` : 'min(72vmin, 560px)',
-                  height: vrij ? `min(${vrij.hoog - ONDERSCHRIFT}px, 72vmin, 560px)` : 'min(72vmin, 560px)',
-                  borderRadius: '50%',
-                  background: 'rgba(5,5,12,0.92)',
-                  border: `2px solid ${MODE_BORDER[mode]}`,
-                  boxShadow: `0 0 0 4px rgba(0,0,0,0.35), 0 0 60px ${MODE_GLOW[mode]}`,
-                }}
-                onWheel={(e) => {
-                  if (mode === 'map' || breed) e.stopPropagation();
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => dismiss()}
-                  className="absolute top-3 right-3 z-30 rounded-full p-1.5"
-                  style={{
-                    background: 'rgba(0,0,0,0.75)',
-                    color: 'rgba(255,255,255,0.85)',
-                    border: '1px solid rgba(255,255,255,0.18)',
-                  }}
-                  title="Esc"
+          <div className="axe-podium-kaarten">
+            <AnimatePresence mode="sync">
+              {hoofd && (
+                <motion.div
+                  key={hoofd.id}
+                  className={`axe-podium-kaart axe-podium-kaart--${hoofd.maat}`}
+                  data-axe-podium-kaart={hoofd.soort}
+                  data-maat={hoofd.maat}
+                  initial={{ opacity: 0, scale: 0.72, y: 18 }}
+                  animate={{ opacity: phase === 'closing' ? 0 : 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.72, y: 12 }}
+                  transition={{ duration: kracht === 'plat' ? 0.01 : 0.35, ease: EASE_EMERGE }}
+                  style={vrij && hoofd.maat === 'vol' ? { maxHeight: vrij.hoog } : undefined}
                 >
-                  <X size={15} />
-                </button>
+                  {hoofd.payloadId && payload ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => dismiss()}
+                        className="absolute top-3 right-3 z-30 rounded-full p-1.5"
+                        style={{
+                          background: 'rgba(0,0,0,0.75)',
+                          color: 'rgba(255,255,255,0.85)',
+                          border: '1px solid rgba(255,255,255,0.18)',
+                        }}
+                        title="Esc"
+                      >
+                        <X size={15} />
+                      </button>
+                      <div
+                        className="axe-podium-kaart-lijf"
+                        style={{ minHeight: hoofd.soort === 'kaart' ? 320 : undefined }}
+                        onWheel={(e) => {
+                          if (hoofd.soort === 'kaart' || hoofd.maat === 'vol') e.stopPropagation();
+                        }}
+                      >
+                        <ProjectionBody payload={payload} />
+                      </div>
+                    </>
+                  ) : (
+                    <AntwoordKaart kaart={hoofd} />
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
-                <div
-                  className="relative flex-1 min-h-0 z-[1]"
-                  style={{
-                    minHeight: mode === 'map' ? 320 : undefined,
-                    height: mode === 'map' || breed ? '100%' : undefined,
-                  }}
-                >
-                  <ProjectionBody payload={payload} />
-                </div>
-              </div>
-
-              {/* Onderschrift en, als er meer dan één ding op Home staat, de andere
-                  als kleine knoppen ernaast. Die stonden bovenaan (top-12), onder de
-                  kopbalk en achter de kaart: het "blauwe knopje dat je niet kon lezen"
-                  (Luka, 9 okt). */}
-              <div className="mt-2.5 flex max-w-full flex-wrap items-center justify-center gap-1.5">
-              <div
-                className="px-4 py-1.5 rounded-full text-[10px] font-medium tracking-wide"
-                style={{
-                  color: '#e9d5ff',
-                  background: 'rgba(0,0,0,0.8)',
-                  border: `1px solid ${MODE_BORDER[mode]}`,
-                }}
-              >
-                {payload.mode === 'map'
-                  ? `MAP · ${payload.title} · sleep · scroll zoom · Esc`
-                  : `${payload.mode.toUpperCase()} · ${payload.title}`}
-              </div>
-                {queue.length > 1 && queue.filter(q => q.id !== payload.id).map(q => (
-                  <button
-                    key={q.id}
-                    type="button"
-                    onClick={() => focus(q.id)}
-                    className="rounded-full px-2.5 py-1 text-[10px] font-medium truncate max-w-[140px]"
-                    style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.7)' }}
-                    title={`${q.mode} · ${q.title}`}
-                  >
-                    {q.mode} · {q.title}
-                  </button>
-                ))}
-                {queue.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => dismissAll()}
-                    className="rounded-full px-2 py-1 text-[10px]"
-                    style={{ background: 'rgba(0,0,0,0.6)', color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.1)' }}
-                  >
-                    clear
-                  </button>
-                )}
-              </div>
+          {agentKaart && (
+            <div className="axe-podium-agenten" data-axe-podium-kaart="agenten">
+              {agentKaart.titel}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+
+          {hoofd?.payloadId && payload && (
+            <div className="axe-podium-onderschrift">
+              <div className="axe-podium-chip">
+                <b>{payload.mode.toUpperCase()}</b>
+                {' · '}
+                {payload.title}
+              </div>
+              {queue.length > 1 && queue.filter(q => q.id !== payload.id).map(q => (
+                <button
+                  key={q.id}
+                  type="button"
+                  onClick={() => focus(q.id)}
+                  className="axe-podium-chip truncate max-w-[140px]"
+                  title={`${q.mode} · ${q.title}`}
+                >
+                  {q.mode} · {q.title}
+                </button>
+              ))}
+              {queue.length > 1 && (
+                <button type="button" onClick={() => dismissAll()} className="axe-podium-chip">
+                  clear
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AntwoordKaart({ kaart }: { kaart: PodiumKaart }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col px-6 pb-4 pt-5">
+      <div className="mb-3 flex-shrink-0 pr-2">
+        <div className="truncate text-[15px] font-semibold tracking-tight" style={{ color: 'var(--text-primary, #F5F0E6)' }}>
+          {kaart.titel}
+        </div>
+      </div>
+      <div
+        className="min-h-0 flex-1 overflow-y-auto pr-1 text-[13px] leading-relaxed"
+        style={{ scrollbarWidth: 'thin', color: 'var(--text-secondary, rgba(235,240,245,0.92))' }}
+      >
+        <MarkdownMessage text={kaart.tekst || '—'} />
+      </div>
     </div>
   );
 }

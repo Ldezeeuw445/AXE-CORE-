@@ -30,6 +30,7 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { BrainCircuit, Mountain, Network, Layers, Square } from 'lucide-react';
 import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
+import { SphereStage } from '@/presentation/components/axe-core/sphere/SphereStage';
 import { AgentVensters } from '@/presentation/components/axe-core/AgentVensters';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
@@ -97,11 +98,9 @@ export default function HomeStage() {
             zIndex: view === 'axe' ? 10 : 0,
           }}
         >
-          {/* Onze sphere uit demo/plaat, niet de Three-versie: die stapelt
-              bloom en additieve halo's, wat op een lichte plaat dichtslaat en
-              de vorm in de gloed laat verdwijnen. SphereStage blijft bestaan,
-              dus terug is één import. */}
-          <AxeCoreSphere />
+          {/* Zelfde podium als Home: bol in het midden, kaarten erbovenop.
+              Zonder SphereStage beoordeel je hier een andere core dan in de app. */}
+          <SphereStage status="idle" bol={<AxeCoreSphere midden />} />
           {/* Dezelfde managerkolom als op Home: links naast de sphere, alle
               vijf, zwevend. Hij hoort hier omdat je anders alleen de sphere
               beoordeelt terwijl de kolom er in de app naast staat. */}

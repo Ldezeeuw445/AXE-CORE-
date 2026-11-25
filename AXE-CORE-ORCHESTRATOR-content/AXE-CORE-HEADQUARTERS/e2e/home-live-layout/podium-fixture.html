@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en" data-look="black">
+<head>
+  <meta charset="utf-8" />
+  <title>AXE Home podium fixture</title>
+  <link rel="stylesheet" href="../../src/presentation/components/axe-core/sphere/axePodium.css" />
+  <style>
+    :root {
+      --axe-kaart-vlak: rgba(12,12,15,.92);
+      --axe-kaart-lijn: rgba(255,255,255,.08);
+      --axe-kaart-lijn-boven: rgba(255,255,255,.14);
+      --axe-kaart-schaduw: 0 18px 40px rgba(0,0,0,.45);
+      --text-primary: #f4f4f5;
+      --text-secondary: #c4c4cc;
+      --text-muted: #71717a;
+      --accent-cyan: #22d3ee;
+    }
+    html, body { margin: 0; height: 100%; background: #05070c; color: var(--text-primary); font: 13px/1.4 ui-sans-serif, system-ui; }
+    .schil {
+      position: relative; width: 100%; height: 100%;
+      /* Zelfde gat als de command-center-kern op 1440×900. */
+      padding: 72px 280px 180px;
+      box-sizing: border-box;
+    }
+    .kern {
+      position: relative; width: 100%; height: 100%;
+      border-radius: 18px;
+    }
+    .orb {
+      position: absolute; left: 50%; top: 50%;
+      width: min(38%, 220px); height: min(38%, 220px);
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 42%, #9adcf5 0%, #16324a 38%, #071018 72%);
+      box-shadow: 0 0 48px rgba(255,255,255,.08);
+    }
+    .markdown-message table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .markdown-message th, .markdown-message td {
+      border: 1px solid var(--axe-kaart-lijn); padding: 6px 8px; text-align: left;
+    }
+    .chart {
+      display: flex; align-items: flex-end; gap: 10px; height: 140px; padding: 8px 4px 0;
+    }
+    .chart i {
+      flex: 1; border-radius: 4px 4px 0 0;
+      background: rgba(255,255,255,.16);
+    }
+    .beeld {
+      width: 100%; height: 160px; border-radius: 12px;
+      background:
+        radial-gradient(ellipse at 30% 40%, rgba(255,255,255,.16), transparent 42%),
+        linear-gradient(180deg, #1a2430 0%, #0c1016 100%);
+    }
+  </style>
+</head>
+<body>
+  <div class="schil">
+    <div class="kern axe-podium" data-axe-podium data-kracht="vol" data-axe-podium-inhoud="leeg" id="podium">
+      <div class="axe-podium-ruimte">
+        <div class="axe-podium-toneel">
+          <div class="axe-podium-vloer" aria-hidden></div>
+          <div class="axe-podium-horizon" aria-hidden></div>
+          <div class="axe-podium-gloed" aria-hidden></div>
+          <div class="axe-podium-bol"><div class="orb" data-orb></div></div>
+          <div class="axe-podium-kaarten" id="kaarten"></div>
+          <div class="axe-podium-agenten" id="agenten" hidden></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const podium = document.getElementById('podium');
+    const kaarten = document.getElementById('kaarten');
+    const agenten = document.getElementById('agenten');
+    const stand = new URLSearchParams(location.search).get('stand') || 'leeg';
+
+    function kaart(soort, maat, html) {
+      const el = document.createElement('div');
+      el.className = `axe-podium-kaart axe-podium-kaart--${maat}`;
+      el.dataset.axePodiumKaart = soort;
+      el.dataset.maat = maat;
+      el.innerHTML = html;
+      kaarten.appendChild(el);
+    }
+
+    if (stand === 'antwoord') {
+      podium.dataset.axePodiumInhoud = 'antwoord';
+      kaart('antwoord', 'compact', `
+        <div style="padding:20px 24px 18px">
+          <div style="font-size:15px;font-weight:600;margin-bottom:10px">How is Rotterdam freight?</div>
+          <p style="margin:0;color:var(--text-secondary)">North Sea rates into Rotterdam are holding. Spot is quiet; the next window worth watching is next week’s grain stems.</p>
+        </div>`);
+    } else if (stand === 'tabel') {
+      podium.dataset.axePodiumInhoud = 'tabel';
+      kaart('tabel', 'vol', `
+        <div style="padding:20px 24px 18px" class="markdown-message">
+          <div style="font-size:15px;font-weight:600;margin-bottom:10px">Port rates</div>
+          <table>
+            <thead><tr><th>Port</th><th>Rate</th><th>Δ</th></tr></thead>
+            <tbody>
+              <tr><td>Rotterdam</td><td>12.4</td><td style="color:var(--accent-cyan)">+0.2</td></tr>
+              <tr><td>Hamburg</td><td>11.1</td><td>+0.0</td></tr>
+              <tr><td>Antwerp</td><td>11.8</td><td style="color:var(--accent-cyan)">+0.4</td></tr>
+            </tbody>
+          </table>
+          <div class="chart" style="margin-top:16px" aria-label="chart">
+            <i style="height:48%"></i><i style="height:62%"></i><i style="height:55%"></i>
+            <i style="height:78%"></i><i style="height:70%"></i><i style="height:88%"></i><i style="height:80%"></i>
+          </div>
+          <div class="beeld" style="margin-top:12px" aria-label="image"></div>
+        </div>`);
+    } else if (stand === 'agenten') {
+      podium.dataset.axePodiumInhoud = 'antwoord';
+      kaart('antwoord', 'compact', `
+        <div style="padding:20px 24px 18px">
+          <div style="font-size:15px;font-weight:600;margin-bottom:10px">Status</div>
+          <p style="margin:0;color:var(--text-secondary)">Developer is patching the stage. Trading is watching BTC. I will report when they finish.</p>
+        </div>`);
+      agenten.hidden = false;
+      agenten.textContent = '2 agents working · 1 needs your OK';
+    } else {
+      podium.dataset.axePodiumInhoud = 'leeg';
+    }
+  </script>
+</body>
+</html>
