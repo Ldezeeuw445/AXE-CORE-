@@ -160,6 +160,15 @@ const TABELLEN: Record<string, Rij[]> = {
     enabled: i % 3 !== 0,
     last_status: i % 4 === 0 ? 'fail' : 'ok',
     last_run_at: geleden(i * 18),
+    app: i < 5 ? 'axe_core' : 'northsea',
+    consecutive_failures: i % 4 === 0 ? 1 : 0,
+  })),
+  /* Cron-runs over 24 uur, voor de grafiekjes op Home (alleen ontwerpmodus). */
+  core_job_runs: reeks(160, i => ({
+    id: `voorbeeld-run-${i}`,
+    app: i % 5 === 0 ? 'northsea' : 'axe_core',
+    status: i % 37 === 0 ? 'fail' : 'ok',
+    created_at: geleden(i * 9 + (i % 4) * 2),
   })),
 };
 

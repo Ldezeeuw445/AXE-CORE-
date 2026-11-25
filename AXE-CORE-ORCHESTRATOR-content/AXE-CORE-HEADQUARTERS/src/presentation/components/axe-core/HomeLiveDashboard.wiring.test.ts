@@ -30,19 +30,27 @@ describe('Home command center is aangesloten (25 nov v2)', () => {
     expect(css).toMatch(/:root\[data-axe-dash\] \{ --hcc-lucht: 30px; \}/);
     // De core staat in het middenvak, alleen in de AXE-weergave.
     expect(css).toMatch(/\.axe-home-v3\[data-axe-home-view='axe'\] \.axe-home-bolvak \{[^}]*left: calc\(var\(--hcc-inset\) \+ var\(--hcc-kol\) \+ var\(--hcc-gat\)\)/);
-    // Lijsten lopen door naar een verborgen kolom: geen halve regels, geen schuifbalk.
-    expect(css).toMatch(/\.axe-hcc-feed \{[^}]*flex-wrap: wrap/);
+    // v4: de feed heeft een vaste hoogte van N ingeklapte regels; geen halve regels, geen schuifbalk.
+    expect(css).toMatch(/\.axe-hcc-feed \{[^}]*overflow: hidden;[^}]*height: calc\(var\(--hcc-feed-rijen\) \* var\(--hcc-feed-rij\)/);
+    // Providers lopen door naar een verborgen kolom.
+    expect(css).toMatch(/\.axe-hcc-providers \{[^}]*flex-wrap: wrap/);
+    // Diensten: een dicht raster van drie kolommen; de kerntegels krijgen de rest.
+    expect(css).toMatch(/\.axe-hcc-dienstlijst \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+    expect(css).toMatch(/\.axe-hcc-links > \.axe-hcc-kaart--diensten \{ flex: 0 0 auto; \}/);
     // Het oude losse command-center blok (rails-breedte) is weg.
     expect(bron('homeLive.css')).not.toMatch(/\.axe-home-kpis \{/);
   });
 
   it('alle kaarten uit het referentiedashboard staan erin', () => {
     const dash = bron('HomeLiveDashboard.tsx');
-    for (const titel of ['Core overview', 'Services & devices', 'Live feed', 'Needs you', 'Quick commands', 'Agents', 'Today', 'AI limits', 'System monitor', 'LLM providers']) {
-      expect(dash).toContain(`titel="${titel}"`);
+    // v4: elke kaarttitel is een link naar de detailpagina.
+    for (const titel of ['Core overview', 'Services & devices', 'Live feed', 'Needs you', 'Apps health', 'Agents', 'Today', 'AI limits', 'System monitor', 'LLM providers']) {
+      expect(dash).toContain(`<Kop tekst="${titel}" onKlik={() => navigate(`);
     }
+    // Snelle commando's staan nu in de kopstrook.
+    expect(dash).toContain('aria-label="Quick commands"');
     for (const kern of ['AI core', 'Memory', 'Voice', 'Agents', 'LLMs', 'System']) {
-      expect(dash).toContain(`<KernRij label="${kern}"`);
+      expect(dash).toContain(`<KernTegel label="${kern}"`);
     }
     expect(dash).toContain('Executive briefing');
     expect(dash).toMatch(/setPalette\(true\)/);
@@ -90,5 +98,33 @@ describe('Home command center is aangesloten (25 nov v2)', () => {
     expect(dash).toMatch(/fixDurableTask/);
     expect(dash).toMatch(/actie === 'fix'/);
     expect(dash).toMatch(/taakActieLabel/);
+  });
+});
+
+describe('Home v4 (25 nov, t70u): KPI-tegels, Apps health, veilige Fix', () => {
+  it('Apps health leest echte cron-runs, schema\'s en de VPS-diensten', () => {
+    const dash = bron('HomeLiveDashboard.tsx');
+    expect(dash).toContain("from('core_job_runs').select('app, status, created_at')");
+    expect(dash).toContain("from('core_schedules')");
+    expect(dash).toContain('appsGezondheid({');
+    expect(dash).toMatch(/runs: runs24\.data, schemas: schemas\.data, diensten/);
+    expect(dash).toContain('<AppRij key={a.id}');
+  });
+
+  it('Fix doet alleen veilige, bestaande acties; wat een OK nodig heeft gaat naar Waiting on you', () => {
+    const dash = bron('HomeLiveDashboard.tsx');
+    const fix = dash.slice(dash.indexOf('function FixKnop'), dash.indexOf('function Kop('));
+    expect(fix).toContain('retryDurableTask(actie.taskId)');
+    expect(fix).toContain('nav(actie.route)');
+    expect(fix).not.toMatch(/fetch\(|call\(|vpsServiceRestart|cronRunNow|order|deploy|send|pay/i);
+    expect(dash).not.toMatch(/vpsServiceRestart|cronRunNow|placeOrder|sendEmail|createDurableTask/);
+    expect(dash).toContain("soort: 'wacht', route: '/wacht'");
+    // De knop staat er alleen bij let-op of fout.
+    expect(dash).toContain('fixAlsNodig(toon, fix ?? null)');
+  });
+
+  it('feedregels zijn één zin: ruwe JSON wordt leesbaar', () => {
+    const dash = bron('HomeLiveDashboard.tsx');
+    expect(dash).toMatch(/titel: eenRegel\(r\.titel\), sub: eenRegel\(r\.sub\)/);
   });
 });
