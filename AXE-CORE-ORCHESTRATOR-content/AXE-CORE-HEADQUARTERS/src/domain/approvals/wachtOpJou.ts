@@ -71,6 +71,7 @@ export interface NorthseaVraag {
   is_role_mailbox?: boolean | null;
   personalized?: boolean | null;
   generic_template?: boolean | null;
+  generic_salutation?: boolean | null;
   dnc?: boolean | null;
   bounced?: boolean | null;
   risk_counterparty?: boolean | null;
@@ -158,6 +159,7 @@ export function kenmerkVanNorthsea(r: NorthseaVraag): Kenmerk {
     isRoleMailbox: r.is_role_mailbox === true,
     personalized: r.personalized === true,
     genericTemplate: r.generic_template === true,
+    genericSalutation: r.generic_salutation === true || /^\s*(?:dear\s+(?:sir(?:\s+or\s+madam)?|madam(?:\s+or\s+sir)?|sirs|sir\s*\/\s*madam)|to\s+whom\s+it\s+may\s+concern)\b/im.test(`${r.subject ?? ''}\n${r.body ?? ''}`),
     dnc: r.dnc === true,
     contactedWithinDays: r.contacted_within_days ?? null,
     chases14dForContact: r.chases_14d ?? 0,

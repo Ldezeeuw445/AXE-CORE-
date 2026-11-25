@@ -65,6 +65,23 @@ describe('classificeer: ernstige dingen eerst, daarna routine', () => {
     }))).toBe('generic_qualification');
   });
 
+  it('engine-vervolg in een thread is chase, geen auto-reject als generic_qualification', () => {
+    const kenmerk = k({
+      hasThread: true,
+      generatedBy: 'northsea-engine',
+      genericTemplate: true,
+      namedRecipient: false,
+      isRoleMailbox: true,
+      addressVerified: true,
+      subject: 'Re: Copper Cathode — supply qualification',
+      body: 'Dear colleagues at Finolex,\n\nI am following up on our earlier email.',
+    });
+    expect(classificeer(kenmerk)).toBe('chase');
+    const uit = evalueer(kenmerk);
+    expect(uit.mode).toBe('escalate');
+    expect(uit.needsLuka).toBe(true);
+  });
+
   it('chase: follow-up in bestaande thread, geen prijs', () => {
     expect(classificeer(k({
       hasThread: true,
@@ -114,6 +131,56 @@ describe('evalueer: conservatieve NorthSea-defaults', () => {
     expect(uit.actorType).toBe('axe_policy');
     expect(uit.needsLuka).toBe(false);
     expect(uit.reason).toMatch(/chase/i);
+  });
+
+  it('persoonlijke follow-up die de vorige mail noemt mag auto-approve', () => {
+    const uit = evalueer(k({
+      hasThread: true,
+      namedRecipient: true,
+      addressVerified: true,
+      chases14dForContact: 0,
+      body: 'Dear Chanda,\n\nI am following up with Mopani Copper Mines PLC on our email of 19 November ("Copper Cathode — supply qualification"), in which we asked whether you could confirm origin and the documents package.\n\nKind regards',
+    }));
+    expect(uit.mode).toBe('auto_approve');
+    expect(uit.category).toBe('chase');
+    expect(uit.needsLuka).toBe(false);
+  });
+
+  it('generieke aanhef faalt auto-approve, ook met namedRecipient uit het contactrecord', () => {
+    const uit = evalueer(k({
+      hasThread: true,
+      namedRecipient: true,
+      addressVerified: true,
+      chases14dForContact: 0,
+      body: 'Dear Sir or Madam,\n\nFollowing up on our previous message about copper cathode.',
+    }));
+    expect(uit.mode).toBe('escalate');
+    expect(uit.needsLuka).toBe(true);
+    expect(uit.reason).toMatch(/generic salutation/i);
+  });
+
+  it('follow-up zonder persoonsnaam (alleen rol/bedrijf) gaat naar review, niet auto', () => {
+    const uit = evalueer(k({
+      hasThread: true,
+      namedRecipient: false,
+      isRoleMailbox: true,
+      addressVerified: true,
+      body: 'Dear colleagues at Finolex,\n\nI am following up on our earlier email.',
+    }));
+    expect(uit.mode).toBe('escalate');
+    expect(uit.needsLuka).toBe(true);
+    expect(uit.reason).toMatch(/named person/i);
+  });
+
+  it('verboden claims in een chase (LME registered, CIF-aanbod, levergarantie) escaleren', () => {
+    const uit = evalueer(k({
+      hasThread: true,
+      namedRecipient: true,
+      addressVerified: true,
+      body: 'Dear Chanda,\n\nWe are LME registered and can deliver next week CIF Rotterdam.',
+    }));
+    expect(uit.mode).toBe('escalate');
+    expect(uit.needsLuka).toBe(true);
   });
 
   it('derde chase in 14 dagen escaleert', () => {

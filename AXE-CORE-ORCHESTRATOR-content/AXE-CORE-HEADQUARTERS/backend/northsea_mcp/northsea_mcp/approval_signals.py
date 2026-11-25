@@ -10,6 +10,13 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from .engine_rules import (
+    banned_outbound_claims,
+    has_generic_salutation,
+    is_named_contact,
+    is_role_mailbox,
+)
+
 PRIJS = re.compile(
     r"(?:\b\d[\d,.]{0,12}\s*(?:usd|eur|gbp|us\$|\$|€|£|%))"
     r"|(?:(?:usd|eur|gbp|us\$|\$|€|£)\s*\d[\d,.]{0,12})"
@@ -62,14 +69,17 @@ def signals_for_draft(
     inbound = [c for c in communications if c.get("id") == comm_id and c.get("direction") == "inbound"]
     inbound_offer = bool(inbound) and bool(PRIJS.search(str(inbound[0].get("body") or "")) or COMMITMENT.search(str(inbound[0].get("body") or "")))
     geverifieerd = ((contact or {}).get("verification_status") == "verified") or ((company or {}).get("verification_status") == "verified")
-    named = bool(contact and (contact.get("full_name") or "").strip())
-    role_box = local in ROLE_LOCAL
+    # 25 nov: full_name op het record was niet genoeg — de brief opende met
+    # 'Dear Sir or Madam' en ging toch door de named-recipient-poort.
+    named = is_named_contact(full_name=(contact or {}).get("full_name"), email=to)
+    role_box = local in ROLE_LOCAL or is_role_mailbox(to)
     dnc = ((company or {}).get("contact_policy") == "do_not_contact") or ((contact or {}).get("contact_policy") == "do_not_contact")
     bounced = ((contact or {}).get("email_status") in ("bounced", "complained")) or ((d.get("to_email_status") == "bounced"))
     risk = any(n in (naam or "").lower() for n in RISK_NAAM)
     subject = d.get("subject") or ""
     generated = d.get("generated_by") or ""
-    generic = "supply qualification" in subject.lower() and ("northsea" in generated.lower() or d.get("generic_template") is True)
+    generic = (not has_thread and "supply qualification" in subject.lower()
+               and ("northsea" in generated.lower() or d.get("generic_template") is True))
 
     chases = 0
     first_today = 0
@@ -93,14 +103,18 @@ def signals_for_draft(
             first_today += 1
 
     personalized = bool(naam) and naam.lower() in body.lower() and len(body.strip()) > 80
+    generic_salutation = has_generic_salutation(body)
+    claims = banned_outbound_claims(body)
 
     return {
         "has_thread": has_thread,
         "address_verified": bool(geverifieerd),
-        "named_recipient": bool(named),
+        "named_recipient": bool(named) and not generic_salutation,
         "is_role_mailbox": bool(role_box),
         "personalized": personalized,
         "generic_template": generic,
+        "generic_salutation": generic_salutation,
+        "banned_claim": bool(claims),
         "generated_by": generated or None,
         "dnc": bool(dnc),
         "bounced": bool(bounced),

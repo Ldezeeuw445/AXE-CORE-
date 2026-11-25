@@ -51,6 +51,33 @@ describe('wacht op jou', () => {
     expect(filterItems(alle, { bron: 'axe' })).toHaveLength(1);
   });
 
+  it('engine-vervolg zonder naam blijft pending, niet auto-reject als supply-qualification', () => {
+    const ns = vanNorthsea([{
+      approval_id: 'd1', kind: 'reply_draft',
+      subject: 'Re: Copper Cathode — supply qualification',
+      created_at: '2026-11-01T10:00:00Z',
+      has_thread: true, named_recipient: false, is_role_mailbox: true,
+      address_verified: true, generated_by: 'northsea-engine', generic_template: true,
+      body: 'Dear colleagues at Finolex,\n\nI am following up on our earlier email.',
+    }]);
+    const { pending, auto } = splitsOpBeleid(ns);
+    expect(auto).toEqual([]);
+    expect(pending[0].beleid?.mode).toBe('escalate');
+    expect(pending[0].category).toBe('chase');
+  });
+
+  it('generieke Sir-or-Madam-follow-up blijft pending, ook met named_recipient-vlag', () => {
+    const ns = vanNorthsea([{
+      approval_id: 'd1', kind: 'reply_draft', subject: 'Follow up', created_at: '2026-11-01T10:00:00Z',
+      has_thread: true, named_recipient: true, address_verified: true,
+      body: 'Dear Sir or Madam,\n\nFollowing up on our previous message.',
+    }]);
+    const { pending, auto } = splitsOpBeleid(ns);
+    expect(auto).toEqual([]);
+    expect(pending[0].beleid?.mode).toBe('escalate');
+    expect(pending[0].beleid?.reason).toMatch(/generic salutation/i);
+  });
+
   it('haalt routine NorthSea-mails uit pending via het beleid, zonder human', () => {
     const ns = vanNorthsea([{
       approval_id: 'd1', kind: 'reply_draft', subject: 'COA', created_at: '2026-11-01T10:00:00Z',

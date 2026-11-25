@@ -362,9 +362,17 @@ class EngineService:
             missing = next((i.get("engine_missing") or i.get("missing_information") for i in reversed(laatste_intel) if i), []) or []
             rol = co.get("company_type") if co.get("company_type") in ("buyer", "supplier") else "supplier"
             product = (off.get(opp.get("supplier_offer_id")) or req.get(opp.get("buyer_requirement_id")) or {}).get("product")
-            concept = rules.followup_draft(blocker_code=opp.get("engine_blocker_code") or ("seller_unqualified" if rol == "supplier" else "buyer_unqualified"),
-                                           role=rol, missing=list(missing) if isinstance(missing, list) else [], product=product,
-                                           attempt=f.attempt, original_subject=anker.get("subject"))
+            anker_ts = _ts(anker.get("occurred_at"))
+            anker_datum = f"{anker_ts.day} {anker_ts.strftime('%B %Y')}" if anker_ts else None
+            missing_lijst = list(missing) if isinstance(missing, list) else []
+            original_ask = None
+            if missing_lijst:
+                original_ask = "whether you could confirm " + "; ".join(str(x) for x in missing_lijst[:3] if x)
+            concept = rules.followup_draft(
+                blocker_code=opp.get("engine_blocker_code") or ("seller_unqualified" if rol == "supplier" else "buyer_unqualified"),
+                role=rol, missing=missing_lijst, product=product, attempt=f.attempt,
+                original_subject=anker.get("subject"), contact_name=ct.get("full_name"),
+                company_name=co.get("company_name"), original_date=anker_datum, original_ask=original_ask)
             item = {"anchor": f.anchor_communication_id, "attempt": f.attempt, "opportunity_id": f.opportunity_id, "to": bool(adres), "reasons": f.reasons}
             plan["followups"].append(item)
             if dry_run:
@@ -383,14 +391,25 @@ class EngineService:
                     item["result"] = "blocked_no_recipient"
                     continue
                 try:
-                    zelf = vervolg_zelf and vervolg_vandaag < VERVOLG_PER_DAG
-                    beslissing = ({"allowed": True, "action": "followup_send", "rule": VERVOLG_REGEL,
-                                   "reason": "follow-up on our own earlier mail, fixed template, within daily limit",
-                                   "limit_per_day": VERVOLG_PER_DAG, "decided_at": nu.isoformat(), "engine_version": rules.ENGINE_VERSION}
-                                  if zelf else
-                                  {"allowed": False, "action": "followup_send",
-                                   "reasons": ["human approval required" if not vervolg_zelf else f"daily limit of {VERVOLG_PER_DAG} automatic follow-ups reached"],
-                                   "engine_version": rules.ENGINE_VERSION})
+                    inhoud_nee = rules.followup_autosend_block_reason(
+                        concept["body"], full_name=ct.get("full_name"), email=adres,
+                        company_name=co.get("company_name"))
+                    # auto_send_* blijft wat hij is; zonder persoonsnaam of met
+                    # verboden claim/generieke aanhef wordt het een concept in /wacht.
+                    zelf = vervolg_zelf and vervolg_vandaag < VERVOLG_PER_DAG and not inhoud_nee
+                    if zelf:
+                        beslissing = {"allowed": True, "action": "followup_send", "rule": VERVOLG_REGEL,
+                                      "reason": "follow-up on our own earlier mail, named contact, personal body, within daily limit",
+                                      "limit_per_day": VERVOLG_PER_DAG, "decided_at": nu.isoformat(),
+                                      "engine_version": rules.ENGINE_VERSION}
+                    else:
+                        waarom = ([inhoud_nee] if inhoud_nee else
+                                  ["human approval required"] if not vervolg_zelf else
+                                  [f"daily limit of {VERVOLG_PER_DAG} automatic follow-ups reached"])
+                        beslissing = {"allowed": False, "action": "followup_send",
+                                      "reasons": waarom, "engine_version": rules.ENGINE_VERSION}
+                    if inhoud_nee:
+                        item["content_gate"] = inhoud_nee
                     dr = await self.repo.engine_insert("reply_drafts", {
                         "communication_id": f.anchor_communication_id, "company_id": f.company_id, "contact_id": f.contact_id, "opportunity_id": f.opportunity_id,
                         "to_email": adres, "subject": concept["subject"], "body": concept["body"], "purpose": f"Follow-up {f.attempt} (engine)",
