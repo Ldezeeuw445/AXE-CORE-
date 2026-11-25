@@ -18,6 +18,9 @@ import re
 
 _MISLUKT = re.compile(
     r"\b(kan|kon|konden|kunnen)\b[^.]{0,80}\bniet\b|\bniet\s+(aanwezig|gevonden|mogelijk|gelukt|lukken)\b|"
+    # 25 nov live: "Ik kon in de workspace geen feedconfiguratie vinden OM een overzicht te maken"
+    # heette klaar. Alleen met 'om': "ik kon geen fouten vinden" is juist een goed resultaat.
+    r"\b(kan|kon|konden|kunnen)\b[^.]{0,80}\bgeen\b[^.]{0,80}\bvinden\s+om\b|"
     r"\blukt(e)?\s+(me\s+|mij\s+|ons\s+)?niet\b|\bzonder\s+(deze|die)\s+bestanden\b|"
     r"\b(cannot|can't|could not|couldn't|unable to|was not able|not possible|not found|failed to)\b",
     re.I,

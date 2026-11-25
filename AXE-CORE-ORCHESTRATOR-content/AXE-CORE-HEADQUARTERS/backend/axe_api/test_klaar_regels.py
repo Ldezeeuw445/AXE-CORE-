@@ -69,3 +69,10 @@ def test_managertaak_mag_schrijven():
     db = DB()
     mw.maak_taak(db, "axemanager", "Voeg een test toe", NU, "b")
     assert db.rijen["core_tasks"][0]["execution_mode"] == "execute"
+
+
+def test_kon_geen_x_vinden_om_het_te_doen_is_falen_maar_geen_fouten_vinden_niet():
+    import klaar_regels as k
+    assert k.geeft_falen_toe("Ik kon in de huidige workspace geen intel-proxy feedconfiguratie vinden "
+                             "om een overzicht te maken.")
+    assert not k.geeft_falen_toe("De logs zijn gecontroleerd; ik kon geen fouten over git vinden.")
