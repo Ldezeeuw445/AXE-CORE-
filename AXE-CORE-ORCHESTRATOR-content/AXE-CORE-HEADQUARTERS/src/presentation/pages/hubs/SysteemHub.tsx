@@ -4,7 +4,7 @@ export default function SysteemHub() {
   return (
     <HubV3
       tab="systeem"
-      title="Systeem"
+      title="System"
       sub="Infra · MCP · terminals · control"
       tiles={[
         { id: 'infra', label: 'Infra', note: 'Stack status', badge: 'docs', badgeTone: 'docs', path: '/infrastructure' },

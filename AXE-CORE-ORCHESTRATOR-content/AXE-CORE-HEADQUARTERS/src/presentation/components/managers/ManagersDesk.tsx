@@ -61,12 +61,12 @@ import { amsterdamKlok } from '@/domain/tijd';
 import { daxRegel, daxWerkLabel, type ServerAgent } from '@/domain/agents/serverStatus';
 
 const SUBTITELS: Partial<Record<AxeAgentId, string>> = {
-  axe: 'Boss · jouw hoofdassistent',
+  axe: 'Boss · your main assistant',
   axemanager: 'Owns AXE Core HQ · branch/PR only',
   northseamgr: 'Deal desk · commodities',
-  tradingos: 'Demo only · geen live orders',
-  projectsmgr: 'Orchestrator · alle managers',
-  companionmgr: 'Product twin · UX stem',
+  tradingos: 'Demo only · no live orders',
+  projectsmgr: 'Orchestrator · all managers',
+  companionmgr: 'Product twin · UX voice',
   axon: 'Memory twin · long-term',
 };
 
@@ -486,8 +486,8 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
                 type="search"
                 value={zoek}
                 onChange={(e) => setZoek(e.target.value)}
-                placeholder="Zoek manager…"
-                aria-label="Zoek manager"
+                placeholder="Search managers…"
+                aria-label="Search managers"
               />
             </label>
           </div>
@@ -500,11 +500,11 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
             type="button"
             className="axe-managers-room-daxlink"
             onClick={() => navigate('/wacht')}
-            title="Alles wat op jouw ja of nee wacht, uit alle managers en apps"
+            title="Everything waiting on your yes or no, from all managers and apps"
             data-axe-wacht-knop=""
             style={wachtAantal ? { color: 'rgb(251,146,60)' } : undefined}
           >
-            Wacht op jou{wachtAantal != null ? ` · ${wachtAantal}` : ''}
+            Waiting on you{wachtAantal != null ? ` · ${wachtAantal}` : ''}
           </button>
           <button
             type="button"

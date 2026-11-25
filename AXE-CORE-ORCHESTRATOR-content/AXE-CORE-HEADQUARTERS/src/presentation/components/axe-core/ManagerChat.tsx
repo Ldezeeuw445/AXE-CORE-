@@ -516,7 +516,7 @@ export function ManagerChat({
                 <p className="axe-manager-pro-naam">{agent.name}</p>
                 <p className="axe-manager-pro-rol">
                   {agent.id === 'axe'
-                    ? 'Jouw assistent · praat zelf, zet door wat bij een manager hoort'
+                    ? 'Your assistant · answers itself, hands off what belongs to a manager'
                     : agent.id === 'projectsmgr'
                       ? 'Orchestrator · verdeelt werk over de managers'
                       : (agent.role || 'Manager')}

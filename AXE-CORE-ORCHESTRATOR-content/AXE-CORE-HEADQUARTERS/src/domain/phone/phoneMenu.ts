@@ -12,8 +12,8 @@ export const PHONE_MENU: readonly PhoneMenuItem[] = [
   { path: '/managers', label: 'Managers' },
   { path: '/northsea', label: 'NorthSea' },
   { path: '/trading', label: 'Trading' },
-  { path: '/bouwen', label: 'Bouwen' },
-  { path: '/systeem', label: 'Systeem' },
+  { path: '/bouwen', label: 'Build' },
+  { path: '/systeem', label: 'System' },
 ];
 
 export function phoneMenuActief(pathname: string, path: string): boolean {
@@ -43,7 +43,7 @@ export function phoneAppBarTitel(path: string): { title: string; extra?: string 
   const hit = PHONE_MENU.find((i) => phoneMenuActief(path, i.path));
   if (path === '/trading' || path.startsWith('/trading')) return { title: 'Trading', extra: 'Demo only' };
   if (path === '/northsea' || path === '/maps-3d') return { title: 'NorthSea', extra: 'Never send' };
-  if (path === '/bouwen' || path === '/code-editor') return { title: hit?.label ?? 'Bouwen' };
+  if (path === '/bouwen' || path === '/code-editor') return { title: hit?.label ?? 'Build' };
   if (hit) return { title: hit.label };
   const stuk = path.split('/').filter(Boolean)[0] ?? 'AXE';
   return { title: stuk.replace(/-/g, ' ') };
