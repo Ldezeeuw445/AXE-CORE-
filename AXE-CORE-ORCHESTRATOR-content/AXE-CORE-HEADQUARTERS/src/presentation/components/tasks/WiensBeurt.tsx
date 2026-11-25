@@ -3,9 +3,13 @@
  * drie kolommen -- Jouw beurt · AI's beurt · Samen -- met per stap waarom.
  * Dezelfde lijst die Claude Code, Codex en Cursor met `axe stap-nieuw` vullen
  * en met `axe stap-af` sluiten; hier sluit Luka zijn eigen stappen met "Af".
+ *
+ * 25 nov: "Do it for me" op een stap van Luka of samen -- AXE neemt hem over en
+ * werkt hem op de achtergrond af (POST /stappen/{id}/zelf, rij.doe_zelf). Geld,
+ * trading, akkoorden en wissen weigert de VPS; de reden staat dan onder de stap.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { gedeeldeStappen, stapAf, type GedeeldeStap } from '@/infrastructure/gateways/axeCoreApiService';
+import { gedeeldeStappen, stapAf, stapZelf, type GedeeldeStap } from '@/infrastructure/gateways/axeCoreApiService';
 import { AXE_AGENTS } from '@/domain/agents/roster';
 import { isMacStap } from '@/domain/taken/takenRuis';
 
@@ -17,8 +21,15 @@ function wieNaam(wie: string | null | undefined): string {
   return a ? (a.kort || a.name) : (id || 'AXE');
 }
 
-function Kolom({ titel, kleur, stappen, leeg, onAf }: {
+/** "AXE API 409: reden" -> "reden" (de VPS zegt waarom AXE het niet overneemt). */
+export function zelfReden(e: unknown): string {
+  const t = e instanceof Error ? e.message : String(e ?? '');
+  return t.replace(/^AXE API \d+:\s*/, '') || 'AXE could not take this over.';
+}
+
+function Kolom({ titel, kleur, stappen, leeg, onAf, onZelf, melding }: {
   titel: string; kleur: string; stappen: GedeeldeStap[]; leeg: string; onAf?: (s: GedeeldeStap) => void;
+  onZelf?: (s: GedeeldeStap) => void; melding?: Record<string, string>;
 }) {
   return (
     <section className="axe-taken-sectie" data-axe-beurt={titel}>
@@ -35,8 +46,15 @@ function Kolom({ titel, kleur, stappen, leeg, onAf }: {
                 <div className="min-w-0 flex-1">
                   <div className="truncate" style={{ color: 'var(--text-primary)' }}>{s.titel}</div>
                   {s.waarom ? <div className="truncate text-[10.5px]" style={{ color: 'var(--text-muted)' }}>{s.waarom}</div> : null}
+                  {s.id && melding?.[s.id] ? <div className="text-[10.5px]" data-axe-zelf-melding="" style={{ color: 'var(--accent-cyan)' }}>{melding[s.id]}</div> : null}
                 </div>
                 <span className="shrink-0 text-[10px]" style={{ color: 'var(--text-muted)' }}>{wieNaam(s.wie)}</span>
+                {onZelf && s.id && s.status === 'pending' ? (
+                  <button type="button" className="shrink-0 rounded px-1.5 text-[10px]" data-axe-doe-zelf=""
+                    title="AXE takes this step over and works it in the background"
+                    style={{ border: '1px solid var(--tint-line)', color: 'var(--text-secondary)' }}
+                    onClick={() => onZelf(s)}>Do it for me</button>
+                ) : null}
                 {onAf && s.is_stap && s.id ? (
                   <button type="button" className="shrink-0 rounded px-1.5 text-[10px]"
                     style={{ border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}
@@ -52,6 +70,7 @@ function Kolom({ titel, kleur, stappen, leeg, onAf }: {
 }
 
 export function WiensBeurt() {
+  const [melding, setMelding] = useState<Record<string, string>>({});
   const [st, setSt] = useState<{ jouw_beurt: GedeeldeStap[]; ai_beurt: GedeeldeStap[]; samen: GedeeldeStap[] } | null>(null);
   const laad = useCallback(() => {
     void gedeeldeStappen().then(setSt).catch(() => setSt(null));
@@ -66,15 +85,23 @@ export function WiensBeurt() {
   if (!st) return <p className="axe-dash-leeg" data-axe-wiens-beurt="leeg">No shared steps loaded.</p>;
   // Mac-stappen (claude_code.run · AXE Core · imac-3) horen bij hun taak, niet als eigen beurt.
   const aiBeurt = st.ai_beurt.filter((s) => !isMacStap(s.titel ?? ""));
+  const zelf = (s: GedeeldeStap) => {
+    const id = s.id;
+    if (!id) return;
+    setMelding((m) => ({ ...m, [id]: 'Handing to AXE…' }));
+    void stapZelf(id)
+      .then(() => { setMelding((m) => ({ ...m, [id]: 'AXE is on it; you will see it under AI\'s turn.' })); laad(); })
+      .catch((e) => setMelding((m) => ({ ...m, [id]: zelfReden(e) })));
+  };
   const af = (s: GedeeldeStap) => {
     if (!s.id) return;
     void stapAf(s.id, 'done by Luka in the Tasks tab').then(laad).catch(laad);
   };
   return (
     <div className="axe-taken-secties mb-4 flex-none" data-axe-wiens-beurt="">
-      <Kolom titel="Your turn" kleur="var(--warning)" stappen={st.jouw_beurt} leeg="Nothing waits on you." onAf={af} />
+      <Kolom titel="Your turn" kleur="var(--warning)" stappen={st.jouw_beurt} leeg="Nothing waits on you." onAf={af} onZelf={zelf} melding={melding} />
       <Kolom titel="AI's turn" kleur="var(--accent-cyan)" stappen={aiBeurt} leeg="No AI has an open step." onAf={af} />
-      <Kolom titel="Together" kleur="var(--success)" stappen={st.samen} leeg="No shared steps." onAf={af} />
+      <Kolom titel="Together" kleur="var(--success)" stappen={st.samen} leeg="No shared steps." onAf={af} onZelf={zelf} melding={melding} />
     </div>
   );
 }

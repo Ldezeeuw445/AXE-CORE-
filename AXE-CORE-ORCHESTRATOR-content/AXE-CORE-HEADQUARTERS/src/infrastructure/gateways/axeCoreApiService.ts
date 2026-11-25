@@ -751,6 +751,11 @@ export async function stapAf(id: string, uitkomst: string, actor = 'luka'): Prom
   await call('POST', `/stappen/${encodeURIComponent(id)}/af`, { uitkomst, actor });
 }
 
+/** 'Do it for me' (rij.doe_zelf): AXE werkt één stap zelf af. Gooit met de reden als het niet mag. */
+export async function stapZelf(id: string, actor = 'luka'): Promise<{ ok: boolean; titel?: string }> {
+  return call('POST', `/stappen/${encodeURIComponent(id)}/zelf`, { actor });
+}
+
 /** 'Doe de rij' (backend/axe_api/rij.py): de open AI-stappen één voor één. */
 export async function rijActieApi(actie: 'begin' | 'stop', actor = 'luka'): Promise<import('@/domain/chat/rijOpdracht').RijUitslag> {
   return call('POST', '/stappen/rij', { actie, actor });

@@ -3887,6 +3887,26 @@ async def rij_actie(body: RijActie):
     return await asyncio.to_thread(_rij.begin, sb(), body.actor)
 
 
+class ZelfActie(BaseModel):
+    actor: str = "luka"
+
+
+@app.post("/stappen/{stap_id}/zelf", dependencies=[AUTH])
+async def stap_zelf(stap_id: str, body: ZelfActie):
+    """'Do it for me': AXE neemt één open stap over en werkt hem op de achtergrond af (rij.doe_zelf).
+    Geen geld, trading, akkoorden of wissen: dan 409 met de reden."""
+    import rij as _rij
+    import uuid as _uuid
+    try:
+        _uuid.UUID(stap_id)
+    except ValueError:
+        raise HTTPException(422, "geen geldige stap-id")
+    uit = await asyncio.to_thread(_rij.doe_zelf, sb(), stap_id, body.actor)
+    if not uit.get("ok"):
+        raise HTTPException(404 if uit.get("reden") == "Step not found." else 409, uit.get("reden"))
+    return uit
+
+
 @app.post("/stappen/{stap_id}/af", dependencies=[AUTH])
 async def stap_af(stap_id: str, body: StapAf):
     """`axe stap-af`: een stap dicht met de uitkomst, plus één regel in het log."""

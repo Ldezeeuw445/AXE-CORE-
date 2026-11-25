@@ -89,3 +89,30 @@ def test_dubbel_beginnen_nummert_niet_opnieuw():
     db = DB([taak(1), taak(2)])
     rij.begin(db)
     assert rij.begin(db)["toegevoegd"] == 0
+
+
+# ── "Doe het zelf"-knop (25 nov) ──────────────────────────────────────────
+
+def test_doe_het_zelf_neemt_een_stap_van_luka_over():
+    db = DB([taak(1, assignee="luka", capability="stap", goal="Zoek drie Mac-mini-docks uit")])
+    uit = rij.doe_zelf(db, "t1")
+    assert uit == {"ok": True, "titel": "Stap 1"}
+    t = db.taken[0]
+    assert t["status"] == "queued" and t["capability"] == "agentic" and t["assignee"] == "axe"
+    assert t["goal"].startswith("Zoek drie Mac-mini-docks uit") and "Do it for me" in t["goal"]
+    assert t["metadata"]["zelf_door"] == "luka" and t["metadata"]["zelf_van"] == "luka"
+    assert any("Doe het zelf" in str(r) for r in db.log)
+
+
+def test_doe_het_zelf_blijft_van_geld_trading_akkoord_en_wissen_af():
+    for kw in ({"status": "waiting_approval"}, {"capability": "trading"}, {"capability": "northsea_desk"},
+               {"title": "Betaal de factuur van Hetzner"}, {"title": "Verwijder oude backups"},
+               {"title": "Continue: Yes needed: Copper Cathode"}, {"status": "running"}):
+        db = DB([taak(1, assignee="luka", **kw)])
+        uit = rij.doe_zelf(db, "t1")
+        assert uit["ok"] is False and uit["reden"], kw
+        assert db.taken[0]["assignee"] == "luka" and not db.log
+
+
+def test_doe_het_zelf_onbekende_stap():
+    assert rij.doe_zelf(DB([]), "x") == {"ok": False, "reden": "Step not found."}

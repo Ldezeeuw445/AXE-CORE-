@@ -167,4 +167,54 @@ def stand(db: Any) -> dict[str, Any]:
     }
 
 
-__all__ = ["begin", "tik", "stop", "stand", "kies_rij", "volgende", "waarom_niet", "start_velden"]
+# ── "Doe het zelf"-knop (25 nov, BOUWLIJST) ───────────────────────────────
+# Eén stap van Luka (of samen) laat AXE meteen zelf afwerken op de achtergrond.
+# Dezelfde grens als de rij: geen trading, NorthSea-akkoorden, geld of wissen;
+# een stap die op Luka's ja wacht blijft een vraag, die neemt AXE niet over.
+
+ZELF_DOEL = ("Luka pressed 'Do it for me' on this step: finish it yourself in the background. "
+             "If part of it truly needs Luka (an account, money, a yes), do everything else and "
+             "end with exactly what he still has to do.")
+
+
+def waarom_niet_zelf(t: dict[str, Any]) -> str | None:
+    """None = AXE mag deze stap zelf afwerken. Anders de reden in het Engels (voor de knop)."""
+    status = str(t.get("status") or "")
+    if status == "waiting_approval":
+        return "This waits on your yes; AXE won't decide it for you."
+    if status != "pending":
+        return "This step is already running or closed."
+    if str(t.get("capability") or "") in NOOIT_CAPABILITY:
+        return "Trading and NorthSea decisions stay with you."
+    if NOOIT_TITEL.search(f"{t.get('title') or ''} {t.get('goal') or ''}"):
+        return "Money, trading, approvals or deleting stay with you."
+    return None
+
+
+def zelf_velden(t: dict[str, Any], actor: str = "luka") -> dict[str, Any]:
+    """Pending -> queued bij AXE, met wie hem had en een doel dat zegt wat er van AXE verwacht wordt."""
+    velden = start_velden(t)
+    doel = str(t.get("goal") or t.get("title") or "").strip()
+    velden["assignee"] = "axe"
+    velden["goal"] = f"{doel}\n\n{ZELF_DOEL}"[:2000]
+    velden["metadata"] = {**_meta(t), "zelf_door": actor, "zelf_van": t.get("assignee") or "luka"}
+    return velden
+
+
+def doe_zelf(db: Any, stap_id: str, actor: str = "luka") -> dict[str, Any]:
+    """De knop: neem één stap over. {'ok': bool, 'reden'?: str, 'titel'?: str}."""
+    rijen = (db.table("core_tasks").select(_KOLOMMEN).eq("id", stap_id).limit(1).execute().data or [])
+    if not rijen:
+        return {"ok": False, "reden": "Step not found."}
+    t = rijen[0]
+    reden = waarom_niet_zelf(t)
+    if reden:
+        return {"ok": False, "reden": reden, "titel": t.get("title")}
+    if not _zet(db, t, zelf_velden(t, actor)):
+        return {"ok": False, "reden": "The step just changed; try again.", "titel": t.get("title")}
+    gl.schrijf(db, ACTOR, f"Doe het zelf: ik pak op -- {t.get('title')}")
+    return {"ok": True, "titel": t.get("title")}
+
+
+__all__ = ["begin", "tik", "stop", "stand", "kies_rij", "volgende", "waarom_niet", "start_velden",
+           "doe_zelf", "waarom_niet_zelf", "zelf_velden"]
