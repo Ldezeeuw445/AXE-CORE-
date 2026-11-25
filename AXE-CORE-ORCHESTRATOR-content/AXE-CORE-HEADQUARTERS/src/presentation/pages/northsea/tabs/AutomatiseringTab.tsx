@@ -70,7 +70,7 @@ export function AutomatiseringTab() {
     let weg = false;
     void ledgerList({ app: 'northsea', source: 'schedule', hours: 72, limit: 60 })
       .then(runs => { if (!weg) setPlanner({ runs }); })
-      .catch(e => { if (!weg) setPlanner({ runs: [], fout: e instanceof Error ? e.message : 'ledger onbereikbaar' }); });
+      .catch(e => { if (!weg) setPlanner({ runs: [], fout: e instanceof Error ? e.message : 'ledger unreachable' }); });
     return () => { weg = true; };
   }, [data]);
   /* Live operations (northsea_get_live_operations) en het gedeelde Perplexity-dagbudget komen via
@@ -81,7 +81,7 @@ export function AutomatiseringTab() {
     let weg = false;
     void northseaLiveOperations()
       .then(d => { if (!weg) setOps({ data: d }); })
-      .catch(e => { if (!weg) setOps({ data: null, fout: e instanceof Error ? e.message : 'live operations onbereikbaar' }); });
+      .catch(e => { if (!weg) setOps({ data: null, fout: e instanceof Error ? e.message : 'live operations unreachable' }); });
     return () => { weg = true; };
   }, [data]);
   const [budget, setBudget] = useState<{ waarde: PerplexityBudget | null; fout?: string }>({ waarde: null });

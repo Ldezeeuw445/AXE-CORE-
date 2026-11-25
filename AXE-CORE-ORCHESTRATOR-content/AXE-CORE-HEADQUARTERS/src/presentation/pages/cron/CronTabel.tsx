@@ -100,7 +100,7 @@ export function CronTabel({
                   <td className="axe-cron-naam" title={s.name}>{s.name}</td>
                   <td className="axe-cron-expr" title={tekst.menselijk(s.cron_expr)}>{s.cron_expr}</td>
                   {!compact && <td className="axe-cron-r axe-cron-zacht">{tekst.tijd(s.last_run_at)}</td>}
-                  <td className="axe-cron-r axe-cron-zacht">{s.enabled ? tekst.tijd(s.next_run_at) : 'uit'}</td>
+                  <td className="axe-cron-r axe-cron-zacht">{s.enabled ? tekst.tijd(s.next_run_at) : 'off'}</td>
                   <td>
                     <span className="axe-cron-stand" data-stand={stand(s)}>
                       <i className="axe-cron-stip" />
@@ -112,13 +112,13 @@ export function CronTabel({
                   )}
                   <td className="axe-cron-knoppen">
                     <button onClick={() => acties.toggle(s)} disabled={acties.bezig(s.id)}
-                      title={s.enabled ? 'Uitzetten' : 'Aanzetten'}>
+                      title={s.enabled ? 'Turn off' : 'Turn on'}>
                       <Power size={12} />
                     </button>
                     <button onClick={() => acties.runNow(s)} disabled={acties.bezig(s.id)} title="Run now">
                       {acties.bezig(s.id) ? <RefreshCw size={12} className="animate-spin" /> : <Play size={12} />}
                     </button>
-                    <button onClick={() => acties.remove(s)} disabled={acties.bezig(s.id)} title="Weghalen">
+                    <button onClick={() => acties.remove(s)} disabled={acties.bezig(s.id)} title="Remove">
                       <Trash2 size={12} />
                     </button>
                   </td>
@@ -149,9 +149,9 @@ function stand(s: CronSchedule): 'uit' | 'stuk' | 'goed' | 'nieuw' {
 
 function standTekst(s: CronSchedule): string {
   switch (stand(s)) {
-    case 'uit': return 'Uit';
-    case 'stuk': return 'Mislukt';
-    case 'goed': return 'Gelukt';
-    default: return 'Wacht';
+    case 'uit': return 'Off';
+    case 'stuk': return 'Failed';
+    case 'goed': return 'OK';
+    default: return 'Waiting';
   }
 }

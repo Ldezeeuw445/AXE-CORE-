@@ -85,7 +85,7 @@ export function MiniMaand({
       <div className="axe-minimaand-vandaag">
         <div className="axe-minimaand-label">Today <em>{eigen.length}</em></div>
         {eigen.length === 0 ? (
-          <p>Geen eigen afspraken vandaag.</p>
+          <p>No own appointments today.</p>
         ) : (
           <ul>
             {eigen.map(i => (
