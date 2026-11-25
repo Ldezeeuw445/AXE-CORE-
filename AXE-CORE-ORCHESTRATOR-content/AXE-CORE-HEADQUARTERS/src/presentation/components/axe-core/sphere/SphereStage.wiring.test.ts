@@ -39,7 +39,8 @@ describe('Home-podium is aangesloten op echte bronnen (25 nov)', () => {
   it('compacte kaarten hebben een hoogte, anders is DocumentProjection een lege rand', () => {
     const css = bron('axePodium.css');
     expect(css).toMatch(/\.axe-podium-kaart--compact \{[^}]*min-height: 9\.5rem/);
-    expect(css).toContain('.axe-podium-kaart-beweging');
+    expect(css).toMatch(/\.axe-podium-kaart-beweging \{[^}]*width: 100%/);
+    expect(css).toMatch(/\.axe-podium-kaart-beweging \{[^}]*height: 100%/);
   });
 
   it('AxeCoreSphere midden is 0.5; telefoon en zwever blijven 0.36', () => {
