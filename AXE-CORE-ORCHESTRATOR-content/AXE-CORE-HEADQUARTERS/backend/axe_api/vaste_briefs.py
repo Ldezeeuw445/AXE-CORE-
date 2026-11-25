@@ -22,6 +22,7 @@ from typing import Any
 log = logging.getLogger("vaste_briefs")
 
 AGENT = "axemanager"
+_STUK = {"fail", "failed", "error", "timeout"}
 MAX_REGELS = 6
 
 
@@ -139,20 +140,26 @@ def verzamel(db: Any, nu: datetime) -> dict[str, list[dict[str, Any]]]:
         except Exception as exc:  # noqa: BLE001
             log.warning("vaste_briefs: %s onleesbaar (%s)", tabel, exc)
             return []
+    # 25 nov droge proef: zonder volgorde en filter waren 1000 van de taken vooral losse
+    # Mac-stapjes (files.read · AXE Core): "1 af, 0 mislukt" terwijl er veel meer gebeurde.
+    kol = "id,title,status,assignee,capability,metadata,error,created_at,updated_at,completed_at"
     try:
-        taken = (db.table("core_tasks").select("id,title,status,assignee,metadata,error,created_at,updated_at,completed_at")
-                 .gte("updated_at", sinds).limit(2000).execute().data) or []
+        taken = (db.table("core_tasks").select(kol).gte("updated_at", sinds).neq("capability", "computer_use")
+                 .order("updated_at", desc=True).limit(3000).execute().data) or []
     except Exception as exc:  # noqa: BLE001
         log.warning("vaste_briefs: taken onleesbaar (%s)", exc)
         taken = []
     # Open voorstellen die al lang stil liggen vallen buiten het venster van 45 dagen.
-    taken += [r for r in rij("core_tasks", "id,title,status,assignee,metadata,error,created_at,updated_at,completed_at",
-                             status="pending") if r.get("id") not in {t.get("id") for t in taken}]
+    al = {t.get("id") for t in taken}
+    taken += [r for r in rij("core_tasks", kol, status="pending")
+              if r.get("id") not in al and r.get("capability") != "computer_use"]
     return {
         "taken": taken,
         "approvals": rij("core_approvals", "id,title,status,created_at", status="pending"),
         "feeds": rij("intel_sync_log", "feed_id,last_sync_at,last_error"),
-        "roosters": rij("core_schedules", "name,enabled,consecutive_failures,last_status", enabled=True),
+        # 'skipped' (bv. Review Desk wacht op Luka's ok) is geen storing.
+        "roosters": [r for r in rij("core_schedules", "name,enabled,consecutive_failures,last_status", enabled=True)
+                     if str(r.get("last_status") or "").lower() in _STUK],
     }
 
 

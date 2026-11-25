@@ -65,3 +65,31 @@ def test_de_vier_briefs_staan_als_vaste_dienst_in_de_catalogus():
                         ("opruimlijst", "30 16 * * 5"), ("weekreview", "0 18 * * 0")):
         d = staande_diensten.catalogus_voor(f"brief-{soort}")
         assert d and d["cron_expr"] == cron and d["job_key"] == f"axe_core:staande-brief-{soort}"
+
+
+def test_verzamel_laat_mac_stapjes_en_overgeslagen_jobs_weg():
+    class Q:
+        def __init__(self, rijen): self.rijen, self.f = rijen, []
+        def select(self, *_): return self
+        def gte(self, *_): return self
+        def order(self, *_, **__): return self
+        def limit(self, *_): return self
+        def neq(self, k, v): self.f.append(lambda r: r.get(k) != v); return self
+        def eq(self, k, v): self.f.append(lambda r: r.get(k) == v); return self
+        def execute(self):
+            class R: pass
+            r = R(); r.data = [x for x in self.rijen if all(f(x) for f in self.f)]; return r
+
+    tabellen = {
+        "core_tasks": [{"id": "m", "capability": "computer_use", "status": "completed"},
+                       {"id": "t", "capability": "agentic", "status": "completed"}],
+        "core_approvals": [], "intel_sync_log": [],
+        "core_schedules": [{"name": "Review Desk", "enabled": True, "consecutive_failures": 15, "last_status": "skipped"},
+                           {"name": "Planner", "enabled": True, "consecutive_failures": 3, "last_status": "fail"}],
+    }
+
+    class Db:
+        def table(self, n): return Q(tabellen[n])
+    d = vb.verzamel(Db(), NU)
+    assert [t["id"] for t in d["taken"]] == ["t"]
+    assert [r["name"] for r in d["roosters"]] == ["Planner"]
