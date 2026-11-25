@@ -7,6 +7,7 @@
  * live at /memory/explore.
  */
 import { useState, useEffect, useCallback } from 'react';
+import { useDashModus } from '@/presentation/components/layout/useDashModus';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
@@ -31,6 +32,8 @@ const TAB_SETTING_KEY = 'memoryHub.lens';
 
 export default function MemoryHub() {
   const phone = usePhoneApp();
+  // 25 nov (Luka: geen scroll): 3D-terrein vult al; compacte composer geeft het ~150px meer.
+  useDashModus('memory');
   const [tab, setTab] = useState<HubTab>('terrain');
   const navigate = useNavigate();
 

@@ -321,4 +321,8 @@
     font-size: 14px;
   }
   :root[data-look][data-axe-dash] .axe-vakcomposer .axe-vak-invoer:focus { height: auto; }
+  /* De ronde menuknoppen links en rechts van het dok steken ~20px boven de
+     composer uit; in compacte stand zou het raster er anders tegenaan lopen.
+     Zelfde lucht als Home (--axe-home-live-lucht). */
+  :root[data-look][data-axe-dash] .axe-dash { padding-bottom: 28px; }
 }

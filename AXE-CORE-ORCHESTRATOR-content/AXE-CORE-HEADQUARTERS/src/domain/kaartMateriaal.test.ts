@@ -136,12 +136,14 @@ describe('Calendar, Cron, Tasks en de volgende tabs', () => {
     expect(finance).not.toMatch(/STAT_ROW/);
   });
 
-  it('ControlPlane en CrewAI gebruiken StatRij', () => {
+  it('ControlPlane gebruikt StatRij; CrewAI is een dashboard (cijfers in de kop)', () => {
     expect(control).toMatch(/<TabRuimte/);
     expect(control).toMatch(/<StatRij/);
     expect(control).not.toMatch(/STAT_ROW/);
-    expect(crew).toMatch(/<TabRuimte/);
-    expect(crew).toMatch(/<StatRij/);
+    // 25 nov: CrewAI staat in DashSchil (TabRuimte vullen); de stats zijn
+    // kopcijfers (DashKop) in plaats van een StatRij -- nog steeds niet gerekt.
+    expect(crew).toMatch(/<DashSchil/);
+    expect(crew).toMatch(/<DashKop/);
     expect(crew).not.toMatch(/STAT_ROW/);
   });
 });
