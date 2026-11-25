@@ -141,10 +141,15 @@ async def vraag_model(systeem: str, inhoud: str) -> tuple[str | None, str | None
             continue
         try:
             async with httpx.AsyncClient(timeout=40) as c:
-                r = await c.post(url, headers={"Authorization": f"Bearer {sleutel}"}, json={
-                    "model": model, "max_tokens": 600,
+                vraag = {
+                    # 25 nov live: met 600 tokens stopte het antwoord midden in een zin -- gpt-oss
+                    # denkt eerst na en dat telt mee. Meer ruimte, en het nadenken op laag.
+                    "model": model, "max_tokens": 1500,
                     "messages": [{"role": "system", "content": systeem}, {"role": "user", "content": inhoud[:24000]}],
-                })
+                }
+                if "gpt-oss" in model:
+                    vraag["reasoning_effort"] = "low"
+                r = await c.post(url, headers={"Authorization": f"Bearer {sleutel}"}, json=vraag)
             try:
                 import sleutel_teller
                 sleutel_teller.tel(env, r.status_code, tekst=None if r.is_success else r.text[:400])
