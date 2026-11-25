@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { appsGezondheid, eenRegel, fixAlsNodig } from '@/domain/homeAppsHealth';
+import { appsGezondheid, eenRegel, fixAlsNodig, runsNaarUren, uurReeks } from '@/domain/homeAppsHealth';
 
 const NU = Date.parse('2026-11-25T20:00:00Z');
 const uurTerug = (h: number) => new Date(NU - h * 3600_000).toISOString();
 
 describe('appsGezondheid', () => {
-  it('geeft de vier apps, in vaste volgorde', () => {
+  it('geeft AXE Core en de vier apps, in vaste volgorde', () => {
     const a = appsGezondheid({ runs: [], schemas: [], diensten: [], sessies: [], nu: NU });
-    expect(a.map((x) => x.naam)).toEqual(['AXE Companion', 'Trading OS', 'AXON Memory', 'NorthSea Desk']);
+    expect(a.map((x) => x.naam)).toEqual(['AXE Core', 'AXE Companion', 'Trading OS', 'AXON Memory', 'NorthSea Desk']);
     // Niets gemeten = eerlijk "No checks", geen groen.
     expect(a.every((x) => x.toon === 'stil' && x.stand === 'No checks' && x.fix === null)).toBe(true);
   });
@@ -19,7 +19,7 @@ describe('appsGezondheid', () => {
       { app: 'northsea', status: 'fail', created_at: uurTerug(3) },
       { app: 'axe_core', status: 'fail', created_at: uurTerug(1) },
     ];
-    const ns = appsGezondheid({ runs, schemas: [], diensten: [], sessies: [], nu: NU }).find((x) => x.id === 'northsea')!;
+    const ns = appsGezondheid({ runs: runsNaarUren(runs), schemas: [], diensten: [], sessies: [], nu: NU }).find((x) => x.id === 'northsea')!;
     expect(ns.kpi).toBe('3');
     expect(ns.runs?.reduce((s, n) => s + n, 0)).toBe(2);
     expect(ns.fouten?.reduce((s, n) => s + n, 0)).toBe(1);
@@ -82,5 +82,64 @@ describe('eenRegel', () => {
     expect(eenRegel('Import positions: done')).toBe('Import positions: done');
     expect(eenRegel('{}')).toBe('Event (no readable details)');
     expect(eenRegel('Batch [1,2,3]')).toBe('Batch · items 3');
+  });
+});
+
+describe('servertelling per uur (v5)', () => {
+  const uur = (h: number) => new Date(Math.floor(NU / 3600_000) * 3600_000 - h * 3600_000).toISOString();
+
+  it('uurReeks zet de servertellers in 24 vakken, het lopende uur achteraan', () => {
+    const rijen = [
+      { app: 'axe_core', uur: uur(0), ok: 199, fout: 0 },
+      { app: 'axe_core', uur: uur(1), ok: 446, fout: 1 },
+      { app: 'northsea', uur: uur(1), ok: 6, fout: 0 },
+      { app: 'axe_core', uur: uur(30), ok: 999, fout: 9 },
+    ];
+    const kern = uurReeks(rijen, NU, 'axe_core')!;
+    expect(kern.ok).toHaveLength(24);
+    expect(kern.ok[23]).toBe(199);
+    expect(kern.ok[22]).toBe(446);
+    expect(kern.fout[22]).toBe(1);
+    // Buiten het venster telt niet mee; zonder app = alles samen.
+    expect(kern.ok.reduce((a, b) => a + b, 0)).toBe(645);
+    expect(uurReeks(rijen, NU)!.ok[22]).toBe(452);
+    expect(uurReeks(null, NU)).toBeNull();
+  });
+
+  it('telt meer dan 1.000 runs zonder ze als rijen op te halen', () => {
+    const rijen = Array.from({ length: 24 }, (_, h) => ({ app: 'axe_core', uur: uur(h), ok: 170, fout: h === 2 ? 1 : 0 }));
+    const kern = appsGezondheid({ runs: rijen, schemas: [], diensten: [], sessies: [], nu: NU }).find((x) => x.id === 'axe_core')!;
+    expect(kern.kpi).toBe('4,081');
+    expect(kern.kpiSub).toBe('runs · 1 failed');
+  });
+
+  it('runsNaarUren telt ruwe rijen (terugval) per app en uur', () => {
+    const u = runsNaarUren([
+      { app: 'northsea', status: 'ok', created_at: uurTerug(0.1) },
+      { app: 'northsea', status: 'timeout', created_at: uurTerug(0.2) },
+      { app: null, status: 'ok', created_at: uurTerug(0.2) },
+    ]);
+    expect(u.find((r) => r.app === 'northsea')).toMatchObject({ ok: 1, fout: 1 });
+    expect(u.find((r) => r.app === 'axe_core')).toMatchObject({ ok: 1, fout: 0 });
+  });
+});
+
+describe('AXE Core: mislukte schema\'s duidelijk in Apps health (v5)', () => {
+  it('toont Review Desk ×15 en Planner ×4, met een Fix naar Cron Manager', () => {
+    const kern = appsGezondheid({
+      runs: [{ app: 'axe_core', uur: new Date(NU - 600_000).toISOString(), ok: 200, fout: 0 }],
+      diensten: [{ id: 'w', name: 'Workers', ok: true }], sessies: [], nu: NU,
+      schemas: [
+        { id: 'p', name: 'Planner: agents plannen hun werk', app: 'axe_core', enabled: true, last_status: 'fail', last_run_at: uurTerug(1), consecutive_failures: 4 },
+        { id: 'r', name: 'Review Desk: bronnen lezen (Gmail, Sites, Stripe, Metricool)', app: 'axe_core', enabled: true, last_status: 'fail', last_run_at: uurTerug(1), consecutive_failures: 15 },
+        { id: 'o', name: 'Ok-job', app: 'axe_core', enabled: true, last_status: 'ok', last_run_at: uurTerug(1), consecutive_failures: 0 },
+        { id: 'x', name: 'Uit: oud', app: 'axe_core', enabled: false, last_status: 'fail', last_run_at: uurTerug(1), consecutive_failures: 9 },
+      ],
+    }).find((x) => x.id === 'axe_core')!;
+    expect(kern.stand).toBe('Failing');
+    expect(kern.toon).toBe('fout');
+    expect(kern.kapot).toEqual([{ id: 'r', naam: 'Review Desk', keer: 15 }, { id: 'p', naam: 'Planner', keer: 4 }]);
+    expect(kern.kpiSub).toBe('Review Desk ×15, Planner ×4 failing');
+    expect(kern.fix).toEqual({ soort: 'open', route: '/cron-manager?open=r', uitleg: 'Review Desk ×15, Planner ×4 failing. Open Review Desk in Cron Manager.' });
   });
 });

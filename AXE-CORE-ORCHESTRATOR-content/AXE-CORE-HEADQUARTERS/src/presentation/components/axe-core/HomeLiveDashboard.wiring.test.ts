@@ -107,7 +107,11 @@ describe('Home v4 (25 nov, t70u): KPI-tegels, Apps health, veilige Fix', () => {
     expect(dash).toContain("from('core_job_runs').select('app, status, created_at')");
     expect(dash).toContain("from('core_schedules')");
     expect(dash).toContain('appsGezondheid({');
-    expect(dash).toMatch(/runs: runs24\.data, schemas: schemas\.data, diensten/);
+    expect(dash).toMatch(/runs: runs\?\.rijen \?\? null, schemas: schemas\.data, diensten/);
+    // v5: de runs komen per app per uur van de server; ruwe rijen alleen als terugval, gekapt en gemeld.
+    expect(dash).toContain("sb.rpc('core_job_runs_per_uur', { p_uren: 24 })");
+    expect(dash).toContain("afgekapt: rijen.length >= 1000");
+    expect(dash).not.toContain('.limit(6000)');
     expect(dash).toContain('<AppRij key={a.id}');
   });
 
@@ -126,5 +130,16 @@ describe('Home v4 (25 nov, t70u): KPI-tegels, Apps health, veilige Fix', () => {
   it('feedregels zijn één zin: ruwe JSON wordt leesbaar', () => {
     const dash = bron('HomeLiveDashboard.tsx');
     expect(dash).toMatch(/titel: eenRegel\(r\.titel\), sub: eenRegel\(r\.sub\)/);
+  });
+});
+
+describe('Home v5: migratie voor de servertelling', () => {
+  it('staat in de HQ-migraties, security invoker, niet voor anon', () => {
+    const sql = readFileSync(join(__dirname, '../../../../supabase/migrations/20261125230000_job_runs_per_uur.sql'), 'utf8');
+    expect(sql).toMatch(/create or replace function public\.core_job_runs_per_uur\(p_uren integer default 24\)/);
+    expect(sql).toMatch(/security invoker/);
+    expect(sql).toMatch(/revoke all on function public\.core_job_runs_per_uur\(integer\) from public, anon/);
+    expect(sql).toMatch(/grant execute on function public\.core_job_runs_per_uur\(integer\) to authenticated, service_role/);
+    expect(sql).toMatch(/NIET automatisch toegepast/);
   });
 });

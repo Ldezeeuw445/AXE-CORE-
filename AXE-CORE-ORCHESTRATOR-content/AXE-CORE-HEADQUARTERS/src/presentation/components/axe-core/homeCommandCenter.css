@@ -272,7 +272,7 @@
 
 /* Apps health: vier rijen, één per app: naam · stand · KPI · runs/fouten per
    uur · laatste check · Fix. Klik op de rij = die app. */
-.axe-hcc-apps { display: grid; grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 6px 10px 8px; height: 100%; }
+.axe-hcc-apps { display: grid; grid-template-rows: repeat(5, minmax(0, 1fr)); gap: 3px; padding: 6px 10px 8px; height: 100%; }
 .axe-hcc-app {
   display: grid; grid-template-columns: minmax(104px, 1.1fr) minmax(0, 1.2fr) minmax(56px, 1fr) 30px 40px;
   align-items: center; gap: 8px; min-width: 0; min-height: 0; padding: 0 8px; border-radius: 8px; text-align: left; font-size: 11px;
@@ -289,6 +289,12 @@
 .axe-hcc-app-kpi { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; }
 .axe-hcc-app-kpi b { font-size: 13px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .axe-hcc-app-kpi small { font-size: 9.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
+/* Mislukte schema's in woorden, in de foutkleur, over de KPI- en grafiekkolom. */
+.axe-hcc-app-kapot {
+  grid-column: span 3; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  color: var(--err); font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.axe-hcc-app-kapot b { font-variant-numeric: tabular-nums; }
 .axe-hcc-app-grafiek { position: relative; display: flex; align-items: center; height: 18px; min-width: 0; }
 .axe-hcc-app-grafiek .axe-hcc-spark { flex: 1 1 auto; max-width: none; height: 18px; }
 .axe-hcc-app-grafiek .axe-hcc-spark + .axe-hcc-spark { position: absolute; inset: 0; width: 100%; }
