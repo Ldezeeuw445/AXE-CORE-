@@ -290,3 +290,35 @@
   background: var(--axe-kaart-vlak);
 }
 :root[data-look] .axe-dash .axe-hub-v3-tile:hover { background: var(--axe-kaart-vlak); }
+
+/* ── Compacte composer op dashboardtabs (Luka, 25 nov) ────────────────
+ * `data-axe-dash` staat op <html> zolang een dashboard open is (useDashModus).
+ * Het vak wordt één rij: koprij | invoer (één regel) | knoppen. De
+ * snelactie-chips en de agentsbalk boven het vak vallen weg; wat daar stond
+ * staat op het dashboard zelf (kopstrook, kaarten). Alleen op desktop; de
+ * telefoon heeft zijn eigen composer. De tabruimte groeit vanzelf mee, want
+ * AxeShellChrome meet de composer opnieuw. */
+@media (min-width: 768px) {
+  :root[data-look][data-axe-dash] .axe-vakcomposer .axe-home-pillen,
+  :root[data-look][data-axe-dash] .axe-vakcomposer .axe-snelacties {
+    display: none;
+  }
+  :root[data-look][data-axe-dash] .axe-vakcomposer .axe-vak {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 14px;
+    row-gap: 0;
+    padding: 8px 12px 8px 16px;
+  }
+  :root[data-look][data-axe-dash] .axe-vakcomposer .axe-vak-kop { grid-column: 1; grid-row: 1; min-height: 0; gap: 8px; }
+  :root[data-look][data-axe-dash] .axe-vakcomposer .axe-vak-boven { grid-column: 2; grid-row: 1; align-items: center; }
+  :root[data-look][data-axe-dash] .axe-vakcomposer .axe-vak-rij { grid-column: 3; grid-row: 1; }
+  :root[data-look][data-axe-dash] .axe-vakcomposer .axe-vak-invoer {
+    min-height: 1.5em;
+    height: 1.5em;
+    max-height: 6em;
+    font-size: 14px;
+  }
+  :root[data-look][data-axe-dash] .axe-vakcomposer .axe-vak-invoer:focus { height: auto; }
+}

@@ -12,6 +12,7 @@ import { groepeerAbonnementen, stoelSleutel, type CodingSeat } from '@/domain/co
 import { haalWachtOpJou } from '@/application/approvals/wachtOpJou';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { AxeGezicht } from './AxeGezicht';
+import { useDashModus } from '@/presentation/components/layout/useDashModus';
 import './homeLive.css';
 
 function Regel({ kleur, children }: { kleur?: string; children: ReactNode }) {
@@ -70,7 +71,7 @@ function LiveLijst<T>({ items, render, leeg }: {
  * hebben"). De keuze blijft per Mac bewaard; zonder keuze wint wat er speelt.
  */
 function TabKaart({ kant, tabs, standaard }: {
-  kant: 'links' | 'rechts';
+  kant: 'links' | 'midden' | 'rechts';
   tabs: Array<{ id: HomeTab; titel: string; aantal?: number; lijf: ReactNode; aandacht?: boolean }>;
   standaard: HomeTab;
 }) {
@@ -87,7 +88,7 @@ function TabKaart({ kant, tabs, standaard }: {
   return (
     <div className="axe-home-live-kaart-vak axe-home-tabkaart" data-axe-home-kaart={kant}>
       <div className="axe-kaart axe-home-live-kaart">
-        <div className="axe-home-tabs" role="tablist" aria-label={kant === 'links' ? 'Activity' : 'Attention'}>
+        <div className="axe-home-tabs" role="tablist" aria-label={kant === 'links' ? 'Activity' : kant === 'midden' ? 'Waiting on you' : 'Systems'}>
           {tabs.map((t) => (
             <button key={t.id} type="button" role="tab" aria-selected={t.id === actief}
               className={`axe-home-tab${t.id === actief ? ' is-actief' : ''}${t.aandacht ? ' is-aandacht' : ''}`}
@@ -151,7 +152,13 @@ function recentRegel(t: LiveTaak): { tekst: string; actie?: TaakActie } {
   return { tekst: `${t.voortgang} ${t.agent} · ${t.titel} — ${fout.regel}`, actie: fout.actie };
 }
 
-export function HomeLiveDashboard() {
+/** Wat Home over de core en de bouw weet; Home rekent het uit, de strook toont het. */
+export type HomeKern = { label: string; kleur: string };
+export type HomeBouw = { commit: string | null; regel: string; oud: boolean };
+
+export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: HomeBouw } = {}) {
+  // Home is ook een dashboard: compacte composer, zodat de core ruimte houdt.
+  useDashModus('home');
   const navigate = useNavigate();
   const server = useServerAgents();
   const jobs = useAxeJobStore((s) => s.jobs);
@@ -271,12 +278,12 @@ export function HomeLiveDashboard() {
   const lijfOk = (
     <div data-axe-home-ok>
         {stand.goedkeuringen.length === 0 && !elders && (
-          <Regel kleur="var(--text-muted)">Niets wacht op jou.</Regel>
+          <Regel kleur="var(--text-muted)">Nothing is waiting on you.</Regel>
         )}
         {elders > 0 && (
           <button type="button" className="axe-home-live-actie" data-axe-home-wacht
             style={{ color: 'rgb(251,146,60)', textAlign: 'left' }} onClick={() => navigate('/wacht')}>
-            {elders} NorthSea-{elders === 1 ? 'ding wacht' : 'dingen wachten'} · open Wacht op jou
+            {elders} NorthSea {elders === 1 ? 'item is' : 'items are'} waiting · open Waiting on you
           </button>
         )}
         <GoedkeuringActie
@@ -310,19 +317,25 @@ export function HomeLiveDashboard() {
   return (
     <>
     <div className="axe-home-kpis" data-axe-home-kpis>
-      <Kpi label="Waiting on you" waarde={okTal} toon={okTal ? 'let-op' : undefined}
+      <Kpi label="Waiting" waarde={okTal} toon={okTal ? 'let-op' : undefined}
         sub={okTal ? `${stand.goedkeuringen.length} AXE · ${elders} NorthSea` : 'Nothing to approve'}
         onClick={() => navigate('/wacht')} />
-      <Kpi label="Working now" waarde={stand.werkend}
+      <Kpi label="Working" waarde={stand.werkend}
         sub={stand.namen.length ? stand.namen.slice(0, 3).join(', ') : 'Agents on standby'}
         onClick={() => navigate('/managers')} />
       <Kpi label="Done today" waarde={vandaag.klaar ?? '–'} toon={vandaag.mislukt ? undefined : 'goed'}
         sub={vandaag.mislukt == null ? 'Counting…' : `${vandaag.mislukt} failed today`}
         onClick={() => navigate('/tasks')} />
-      <Kpi label="Model seats" waarde={stoelen.length ? `${stoelenKlaar}/${stoelen.length}` : '–'}
+      <Kpi label="Seats" waarde={stoelen.length ? `${stoelenKlaar}/${stoelen.length}` : '–'}
         toon={stoelen.length && !stoelenKlaar ? 'fout' : undefined}
         sub={stoelenVol ? `${stoelenVol} at their limit` : stoelen.length ? 'Ready to code' : 'No heartbeat yet'}
         onClick={() => navigate('/settings')} />
+      {/* 25 nov: de core-stand en de bouw stonden los in de hoeken, over de
+          scene heen. Nu twee gewone tegels in dezelfde strook. */}
+      <Kpi label="Core" waarde={kern?.label ?? '–'} toon={kern?.kleur === 'var(--error)' ? 'fout' : undefined}
+        sub="Backend" onClick={() => navigate('/status')} />
+      <Kpi label="Build" waarde={bouw?.commit ? bouw.commit.slice(0, 7) : '–'} toon={bouw?.oud ? 'let-op' : undefined}
+        sub={bouw?.regel.replace(/^build \S+( · )?/, '') || 'No build stamp'} onClick={() => navigate('/status')} />
     </div>
     <div className="axe-home-live" data-axe-home-live>
       <div className="axe-home-live-cluster" data-axe-home-live-cluster="links">
@@ -332,10 +345,16 @@ export function HomeLiveDashboard() {
             aandacht: stand.recent.some((t) => t.stand === 'failed') },
         ]} />
       </div>
-      <div className="axe-home-live-midden" aria-hidden="true" />
+      {/* 25 nov (Luka: Home als command center): het midden was een leeg gat
+          onder de core. Nu de inbox van alles wat op jou wacht, even groot als
+          de kaarten links en rechts -- drie gelijke kaarten op één rij. */}
+      <div className="axe-home-live-cluster axe-home-live-midden" data-axe-home-live-cluster="midden">
+        <TabKaart kant="midden" standaard="ok" tabs={[
+          { id: 'ok', titel: 'Waiting on you', aantal: okTal, lijf: lijfOk, aandacht: okTal > 0 },
+        ]} />
+      </div>
       <div className="axe-home-live-cluster" data-axe-home-live-cluster="rechts">
-        <TabKaart kant="rechts" standaard={okTal ? 'ok' : 'seats'} tabs={[
-          { id: 'ok', titel: 'Needs your OK', aantal: okTal, lijf: lijfOk, aandacht: okTal > 0 },
+        <TabKaart kant="rechts" standaard="seats" tabs={[
           { id: 'seats', titel: 'Seats · DAX · Cron', aantal: seatsSlecht, lijf: lijfSeats, aandacht: seatsSlecht > 0 },
         ]} />
       </div>

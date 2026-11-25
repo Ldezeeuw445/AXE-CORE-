@@ -21,19 +21,24 @@ gebruikt precies dat vak, zonder plaat. Dezelfde marges tot de schilranden,
 de composer en het dock, op elke tab. Alleen via `TabRuimte` / `.axe-tabruimte`
 — dezelfde som als `.axe-browser-vak`. Geen tweede maat per pagina.
 
-**2. Die ruimte is een MAXIMUM, geen doel.**
-Inhoud bepaalt de maat. Kaarten groeien met hun inhoud; kaarten van hetzelfde
-type zijn even groot op één raster (`.axe-kaart-raster`: vaste kolombreedte,
-geen `1fr`). Nooit een kleine kaart oprekken tot de rij vol is, nooit een
-informatie-zware kaart platdrukken om te passen. Wat de ruimte niet vult,
-blijft gecentreerd met lucht — zoals Browser-home (drie composers boven het
-snelkoppelingenraster). Alleen wat het écht nodig heeft vult het hele vak:
-een website, de NorthSea-kaart, de agenda, grote tabellen (`vullen` op
-`TabRuimte`).
+**2. Kaarten vullen het raster (Luka, 25 nov 2026; vervangt "maximum, geen doel").**
+Elke tab is één dashboard dat niet schuift: de tabruimte wordt verdeeld in
+gelijke sporen (`DashRaster`), en kaarten vullen hun vak. Kaarten van
+hetzelfde type zijn even groot; een kaart is 1 of meer rastereenheden breed
+of hoog, nooit een losse maat. Lege plaat naast een rij kaarten is géén
+ademruimte meer maar een gat: maak het raster kleiner (minder kolommen of
+rijen) of geef een kaart een span. Past de inhoud niet, dan schuift alleen
+het lijf van die kaart, of hij krijgt tabs in de kaartkop, of hij gaat in
+een `DashVenster`. Een website, de NorthSea-kaart en de agenda vullen het
+hele vak zoals altijd (`vullen` op `TabRuimte`).
 
-De oude `.STAT_ROW` met `auto-fit … 1fr` rekt drie cijfers uit tot
-volle-breedte-balken. Dat is het tegenvoorbeeld. Compacte cijfers horen in
-`.axe-stat-rij`.
+Home volgt dezelfde regel met zijn eigen raster om de core (kopstrook /
+rail · core · rail / drie gelijke kaarten), omdat de 3D-scene tot het glas
+doorloopt en dus niet in de ingesprongen tabruimte past.
+
+De oude `.STAT_ROW` met `auto-fit … 1fr` blijft het tegenvoorbeeld: die rekte
+drie cijfers op tot balken in een pagina die wél schoof. Compacte cijfers
+horen in de kopstrook (`DashKop cijfers`).
 
 **3. Elke kaart is matzwart.**
 Zelfde materiaal als de kaarten op Browser-home. `Kaart` / `.axe-kaart`,
@@ -92,9 +97,12 @@ Voor tabs die als dashboard werken is er nu één schil:
 - `DashVenster` = formulier of volledige lijst boven het raster, in plaats van
   een blok dat de pagina langer maakt.
 
-Let op: dit wijkt bewust af van layoutregel 2 ("de ruimte is een maximum,
-niet rekken"). Binnen de schil vullen kaarten het vak, zodat er geen halve
-pagina leeg blijft. `.axe-kaart-raster` blijft voor tabs die nog niet om zijn.
+Layoutregel 2 is hierop aangepast (25 nov): kaarten vullen het raster.
+`.axe-kaart-raster` blijft alleen voor tabs die nog niet om zijn.
+
+Op dashboardtabs (en Home) wordt de composer één rij: `useDashModus` zet
+`data-axe-dash` op `<html>`; de agentsbalk en de snelactie-chips vallen dan
+weg (~150px hoogte erbij voor het raster).
 Meten: `e2e/home-live-layout/dashboard-audit.spec.ts` (ROUTES, SIZES, SHOTS).
 
 ---
@@ -139,7 +147,7 @@ gekleurde rand — dat is een knop uit een andere app. Zelfde regel als
 `domain/meaning.ts`: tint mag variëren voor leesbaarheid, hue nooit voor
 nadruk.
 
-**6. Ademruimte is geen fout; scheef uitlijnen wel.**
+**6. Scheef uitlijnen is fout.** (25 nov: op dashboardtabs is lege plaat naast kaarten óók fout, zie layoutregel 2.)
 Inhoud die het vak niet vult blijft gecentreerd (layoutregel 2). Wat wél fout
 is: alles tegen één rand, of kleine kaarten oprekken tot de rij vol is. De
 ruimte naast de band (`.axe-naast-band`) is gereserveerd en heeft een bewoner.

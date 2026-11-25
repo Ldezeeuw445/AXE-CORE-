@@ -14,6 +14,7 @@
  * de bron). Faalt het ophalen, dan staat dat er -- nooit een lijst die er echt
  * uitziet maar het niet is.
  */
+import { useDashModus } from '@/presentation/components/layout/useDashModus';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import {
@@ -59,6 +60,8 @@ const VERVERS_MS = 60_000;
 const CHASE_ZICHTBAAR = 7;
 
 export default function NorthseaDesk() {
+  // 25 nov: NorthSea is een dashboard -- compacte composer, meer kaart en deals.
+  useDashModus('northsea');
   const phone = usePhoneApp();
   const [data, setData] = useState<NorthseaOverzicht | null>(null);
   const [fout, setFout] = useState<string | null>(null);

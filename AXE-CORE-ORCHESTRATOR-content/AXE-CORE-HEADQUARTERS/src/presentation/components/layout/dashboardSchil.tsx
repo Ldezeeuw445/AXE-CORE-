@@ -11,6 +11,7 @@
  * eigen echte bronnen mee. Zie UI-MAATSTAF.md, "Dashboardschil".
  */
 import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useDashModus } from './useDashModus';
 import { X } from 'lucide-react';
 import { cn } from '@/shared/utils';
 import { TabRuimte } from './tabMaatstaf';
@@ -29,6 +30,7 @@ export function DashSchil({
   children: ReactNode;
   className?: string;
 }) {
+  useDashModus(tab);
   return (
     <TabRuimte vullen>
       <div className={cn('axe-dash', className)} data-axe-dash={tab}>

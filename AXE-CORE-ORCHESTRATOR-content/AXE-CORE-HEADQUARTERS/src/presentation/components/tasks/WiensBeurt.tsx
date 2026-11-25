@@ -63,7 +63,7 @@ export function WiensBeurt() {
   }, [laad]);
   /* 25 nov: in het Tasks-dashboard staat dit in een eigen kaart; een lege
      kaart zonder uitleg las als kapot. Geen data = dat zeggen, niets verzinnen. */
-  if (!st) return <p className="axe-dash-leeg" data-axe-wiens-beurt="leeg">Geen gedeelde stappen opgehaald.</p>;
+  if (!st) return <p className="axe-dash-leeg" data-axe-wiens-beurt="leeg">No shared steps loaded.</p>;
   // Mac-stappen (claude_code.run · AXE Core · imac-3) horen bij hun taak, niet als eigen beurt.
   const aiBeurt = st.ai_beurt.filter((s) => !isMacStap(s.titel ?? ""));
   const af = (s: GedeeldeStap) => {

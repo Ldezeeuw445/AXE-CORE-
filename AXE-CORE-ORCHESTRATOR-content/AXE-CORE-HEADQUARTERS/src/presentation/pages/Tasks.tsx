@@ -427,7 +427,7 @@ export default function Tasks() {
         className="inline-flex items-center justify-center gap-1.5 text-xs-custom px-3 py-2 rounded-lg"
         style={{ background: 'var(--accent-cyan)', color: '#000' }}
       >
-        <Plus size={13} /> Nieuwe taak
+        <Plus size={13} /> New task
       </button>
     </>
   );
@@ -486,14 +486,14 @@ export default function Tasks() {
         kop={
           <DashKop
             titel="Tasks"
-            sub="Wie is aan zet, wat loopt, wat is klaar."
+            sub="Who's up, what's running, what's done."
             cijfers={[
-              { label: 'Waiting on you', waarde: kp.wacht.length, toon: kp.wacht.length ? 'warn' : undefined,
+              { label: 'Waiting', waarde: kp.wacht.length, toon: kp.wacht.length ? 'warn' : undefined,
                 sub: kp.wacht[0]?.title ?? 'nothing needs you' },
               { label: 'Running', waarde: kp.bezig.length, sub: wieBezig(kp.bezig) || 'nothing running' },
-              { label: 'Planned for AI', waarde: kp.gepland.length, sub: 'no action needed from you' },
-              { label: 'Done today', waarde: kp.klaarVandaag.length, toon: kp.klaarVandaag.length ? 'ok' : undefined,
-                sub: kp.misluktAi.length ? `${kp.misluktAi.length} failed, AI retries` : 'no failures' },
+              { label: 'Planned', waarde: kp.gepland.length, sub: 'for the AI, nothing for you' },
+              { label: 'Done', waarde: kp.klaarVandaag.length, toon: kp.klaarVandaag.length ? 'ok' : undefined,
+                sub: kp.misluktAi.length ? `today · ${kp.misluktAi.length} failed` : 'today · no failures' },
             ]}
             acties={knoppen}
           />
@@ -520,15 +520,15 @@ export default function Tasks() {
             ]}
           />
           {/* 22 nov: wiens beurt -- de gedeelde stappen van elke AI (axe stap-nieuw / stap-af). */}
-          <DashKaart titel="Wiens beurt">
+          <DashKaart titel="Whose turn">
             <WiensBeurt />
           </DashKaart>
-          <DashKaart titel="Overzicht">
+          <DashKaart titel="Overview">
             <TakenSecties taken={tasks} loading={loading} />
           </DashKaart>
         </DashRaster>
 
-        <DashVenster open={adding} titel="Nieuwe taak" onSluit={() => setAdding(false)}>
+        <DashVenster open={adding} titel="New task" onSluit={() => setAdding(false)}>
               <div className="space-y-2.5">
                 <input
                   autoFocus
