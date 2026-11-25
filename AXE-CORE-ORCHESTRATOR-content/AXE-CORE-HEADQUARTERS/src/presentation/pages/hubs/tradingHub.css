@@ -1,0 +1,42 @@
+/* Trading-hub (25 nov): KPI-rij, dan een raster dat de rest vult zonder te schuiven.
+   Boven: de curve (twee kolommen) en open posities. Onder: per dag, recent, per strategie. */
+.axe-th-raster {
+  flex: 1 1 auto; min-height: 0; display: grid; gap: var(--axe-dash-gat, 10px);
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1.15fr) minmax(0, 1fr);
+}
+.axe-th-kaart--curve { grid-column: span 2; }
+.axe-th-kaart .axe-dash-kaart-lijf { overflow: hidden !important; }
+.axe-th-curve { position: relative; height: 100%; padding: 14px 16px 18px 56px; }
+.axe-th-curve svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.axe-th-lijn { fill: none; stroke: var(--ok, var(--success)); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.axe-th-vlak { fill: var(--ok, var(--success)); opacity: 0.1; }
+.axe-th-curve svg[data-toon='fout'] .axe-th-lijn { stroke: var(--err, var(--error)); }
+.axe-th-curve svg[data-toon='fout'] .axe-th-vlak { fill: var(--err, var(--error)); }
+.axe-th-nul { stroke: rgba(255, 255, 255, 0.14); stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
+.axe-th-as { position: absolute; font-size: 9.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.axe-th-as--max { left: 10px; top: 12px; }
+.axe-th-as--min { left: 10px; bottom: 16px; }
+.axe-th-as--van { left: 56px; bottom: 2px; }
+.axe-th-as--tot { right: 16px; bottom: 2px; }
+.axe-th-lijst { display: flex; flex-direction: column; flex-wrap: wrap; align-content: flex-start; column-gap: 60px; height: 100%; padding: 6px 14px 8px; overflow: hidden; }
+.axe-th-lijst > .axe-dash-leeg { padding: 4px 0; }
+.axe-th-regel {
+  flex: 0 0 26px; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
+  font-size: 11px; color: var(--text-secondary); border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.axe-th-regel b { font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-th-regel > span { white-space: nowrap; font-size: 10.5px; color: var(--text-muted); }
+.axe-th-getal { font-variant-numeric: tabular-nums; color: var(--text-primary) !important; min-width: 52px; text-align: right; }
+.axe-th-getal[data-toon='ok'] { color: var(--ok, var(--success)) !important; }
+.axe-th-getal[data-toon='fout'] { color: var(--err, var(--error)) !important; }
+.axe-th-sub { font-size: 10px; }
+.axe-th-noot { flex: 0 0 auto; width: 100%; margin: 6px 0 0; font-size: 9.5px; color: var(--text-muted); }
+.axe-th-dagen { display: flex; flex-direction: column; height: 100%; padding: 10px 14px 8px; gap: 6px; }
+.axe-th-staven { flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; gap: 4px; }
+.axe-th-staaf { flex: 1 1 0; display: flex; flex-direction: column; min-width: 0; }
+.axe-th-staaf-boven, .axe-th-staaf-onder { flex: 1 1 0; display: flex; }
+.axe-th-staaf-boven { align-items: flex-end; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+.axe-th-staaf-onder { align-items: flex-start; }
+.axe-th-staaf i { display: block; width: 100%; border-radius: 2px; background: var(--ok, var(--success)); opacity: 0.85; }
+.axe-th-staaf-onder i { background: var(--err, var(--error)); }
