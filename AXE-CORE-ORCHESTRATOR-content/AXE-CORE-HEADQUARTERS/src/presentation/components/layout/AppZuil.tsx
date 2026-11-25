@@ -17,7 +17,7 @@ const ICOON: Record<AppId, typeof Cpu> = {
 };
 
 const APP_ZUIL: ZuilItem[] = [
-  { id: 'alle', label: 'Alle apps', kleur: 'var(--text-primary)', icoon: <Layers size={17} /> },
+  { id: 'alle', label: 'All apps', kleur: 'var(--text-primary)', icoon: <Layers size={17} /> },
   ...APPS.map(a => {
     const Icoon = ICOON[a.id];
     return { id: a.id, label: a.label, kleur: a.kleur, icoon: <Icoon size={17} /> };

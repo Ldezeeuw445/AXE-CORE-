@@ -173,12 +173,12 @@ export default function TerminalsPage() {
           {/* Wat er open MOET blijven staan. Sinds AXE CORE de diensten zelf
               start is dat op deze Mac niets meer -- en dan hoort die regel er
               ook niet te staan alsof er nog werk voor je ligt. */}
-          blijft draaien: {blijvendDraaiend('mac-api').map(a => a.label).join(' · ') || 'niets — AXE CORE doet het zelf'}
+          keeps running: {blijvendDraaiend('mac-api').map(a => a.label).join(' · ') || 'nothing — AXE CORE does it itself'}
         </span>
         <button
           onClick={() => setToevoegen(v => !v)}
           className="ml-auto text-[10px] flex items-center gap-1 opacity-70 hover:opacity-100"
-          title="Nog een machine toevoegen"
+          title="Add another machine"
         >
           {toevoegen ? <X size={11} /> : <Plus size={11} />} machine
         </button>
@@ -305,7 +305,7 @@ function DienstenStrip() {
           {/* Wie hem draait staat erbij, want dat bepaalt of je hem hier kunt
               stoppen. Zonder dat verschil is een geweigerde stop een raadsel. */}
           <span className="axe-dienst-door">
-            {d.luistert ? (d.van_ons ? 'door de app' : 'eigen venster') : 'uit'}
+            {d.luistert ? (d.van_ons ? 'by the app' : 'own window') : 'off'}
           </span>
           {d.luistert
             ? <button onClick={() => doe(dienstStop, d.id)} disabled={!d.van_ons}>stop</button>
@@ -313,7 +313,7 @@ function DienstenStrip() {
         </div>
       ))}
       {bericht && (
-        <span className="axe-dienst-bericht" onClick={() => setBericht(null)} title="Klik om te sluiten">
+        <span className="axe-dienst-bericht" onClick={() => setBericht(null)} title="Click to close">
           {bericht}
         </span>
       )}
@@ -365,21 +365,21 @@ function MachinePaneel({
             className="axe-term-lamp axe-term-lamp--rood"
             onClick={opWeg}
             disabled={!opWeg}
-            title={opWeg ? `${host.naam} weghalen` : 'Een ingebouwde machine blijft staan'}
-            aria-label={opWeg ? `${host.naam} weghalen` : 'Vast'}
+            title={opWeg ? `Remove ${host.naam}` : 'A built-in machine stays'}
+            aria-label={opWeg ? `Remove ${host.naam}` : 'Built in'}
           />
           <button
             className="axe-term-lamp axe-term-lamp--geel"
             onClick={() => termRef.current?.reconnect()}
             disabled={!klaar}
-            title="Nieuwe shell"
-            aria-label="Nieuwe shell"
+            title="New shell"
+            aria-label="New shell"
           />
           <button
             className="axe-term-lamp axe-term-lamp--groen"
             onClick={() => setVol(v => !v)}
-            title={vol ? 'Terug in het raster' : 'Vol beeld'}
-            aria-label={vol ? 'Terug in het raster' : 'Vol beeld'}
+            title={vol ? 'Back to the grid' : 'Full screen'}
+            aria-label={vol ? 'Back to the grid' : 'Full screen'}
           />
         </div>
 
@@ -391,7 +391,7 @@ function MachinePaneel({
           <span
             className="axe-term-stip"
             data-stand={klaar ? (verbonden ? 'aan' : 'stuk') : 'leeg'}
-            aria-label={klaar ? (verbonden ? 'verbonden' : 'geen verbinding') : 'nog niet ingesteld'}
+            aria-label={klaar ? (verbonden ? 'connected' : 'not connected') : 'not set up yet'}
           />
           {host.naam} <span className="axe-term-titel-dun">— {host.waarvoor}</span>
         </div>
@@ -435,12 +435,12 @@ function MachinePaneel({
             className="axe-term-greep"
             onClick={() => setHulpOpen(v => !v)}
             aria-expanded={hulpOpen}
-            title={hulpOpen ? 'Commando\u2019s verbergen' : 'Commando\u2019s tonen'}
+            title={hulpOpen ? 'Hide commands' : 'Show commands'}
           >
             <span className="axe-term-greep-streep" aria-hidden="true" />
             <span className="axe-term-greep-tekst">
               {hulpOpen ? <ChevronDown size={11} /> : <ChevronUp size={11} />}
-              commando&rsquo;s
+              commands
             </span>
           </button>
 
@@ -470,7 +470,7 @@ function MachinePaneel({
                     {/* Een rondje bij een commando dat het venster bezet houdt.
                         Anders klik je hem aan, komt de prompt niet terug, en
                         lijkt het alsof er iets vastloopt. */}
-                    {a.blijftDraaien && <span className="axe-term-blijft" aria-label="blijft draaien" />}
+                    {a.blijftDraaien && <span className="axe-term-blijft" aria-label="keeps running" />}
                   </button>
                 ))}
               </div>
@@ -479,7 +479,7 @@ function MachinePaneel({
                   <div style={{ color: 'var(--text-secondary)' }}>{uitgelicht.uitleg}</div>
                   {uitgelicht.blijftDraaien && (
                     <div style={{ color: 'var(--m-budget)' }}>
-                      Blijft draaien — dit venster blijft daarna bezet. Sluit je het, dan stopt de dienst.
+                      Keeps running — this window stays busy afterwards. Close it and the service stops.
                     </div>
                   )}
                   <code className="block truncate" style={{ color: 'var(--text-muted)' }}>
@@ -504,7 +504,7 @@ function MachinePaneel({
  */
 function LeegVak({ onKlik }: { onKlik: () => void }) {
   return (
-    <button className="axe-term axe-term--leeg" onClick={onKlik} title="Machine toevoegen">
+    <button className="axe-term axe-term--leeg" onClick={onKlik} title="Add machine">
       <Plus size={16} />
       <span>machine</span>
     </button>
@@ -521,7 +521,7 @@ function AdresInvullen({ host, opAdres }: { host: TerminalHost; opAdres: (url: s
   return (
     <div className="flex-1 flex flex-col items-start justify-center gap-2 p-3">
       <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
-        Nog geen adres. Vervang <code>ADRES</code> door het IP of de hostnaam.
+        No address yet. Replace <code>ADRES</code> with the IP or host name.
       </div>
       <div className="flex gap-1.5 w-full">
         <input
@@ -536,12 +536,12 @@ function AdresInvullen({ host, opAdres }: { host: TerminalHost; opAdres: (url: s
         />
         <button disabled={!kan} onClick={() => opAdres(url.trim())}
           className="axe-chip !text-[9.5px] disabled:opacity-40"
-          title={kan ? 'Bewaren' : 'Vul een echt adres in'}>
+          title={kan ? 'Save' : 'Fill in a real address'}>
           <Check size={10} />
         </button>
       </div>
       <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-        Op die machine moet <code>terminal-server.cjs</code> draaien.
+        <code>terminal-server.cjs</code> must run on that machine.
       </div>
     </div>
   );
@@ -556,10 +556,10 @@ function MachineToevoegen({ onKlaar }: { onKlaar: (h: TerminalHost) => void }) {
   return (
     <div className="px-4 py-2 flex gap-2 flex-wrap items-center flex-shrink-0"
       style={{ borderBottom: '1px solid var(--tint-line)', background: 'rgba(255,255,255,0.02)' }}>
-      <input value={naam} onChange={e => setNaam(e.target.value)} placeholder="naam"
+      <input value={naam} onChange={e => setNaam(e.target.value)} placeholder="name"
         className="bg-transparent outline-none rounded-card px-2 py-1 text-[10px]"
         style={{ border: '1px solid var(--border-default)', color: 'var(--text-primary)', width: 130 }} />
-      <input value={waarvoor} onChange={e => setWaarvoor(e.target.value)} placeholder="waarvoor gebruik je hem"
+      <input value={waarvoor} onChange={e => setWaarvoor(e.target.value)} placeholder="what do you use it for"
         className="bg-transparent outline-none rounded-card px-2 py-1 text-[10px] flex-1"
         style={{ border: '1px solid var(--border-default)', color: 'var(--text-primary)', minWidth: 160 }} />
       <input value={url} onChange={e => setUrl(e.target.value)}

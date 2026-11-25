@@ -20,14 +20,14 @@ describe('wat blijft draaien', () => {
     // `tail -f` en run-local.sh komen niet terug. Dat is geen storing, maar je
     // moet het weten vóór je klikt.
     const labels = blijvendDraaiend('mac-api').map(a => a.label).sort();
-    expect(labels).toEqual(['Logs volgen', 'Zelf starten']);
+    expect(labels).toEqual(['Follow logs', 'Start it yourself']);
   });
 
   it('markeert op een VPS alleen de agents-sessie, want de diensten draaien onder systemd', () => {
     // `systemctl restart` komt terug; de dienst draait daarna zonder dit
     // venster. Alleen tmux houdt het venster vast (en de agents erin lopen door
     // als je het sluit).
-    expect(blijvendDraaiend('vps-strato').map(a => a.label)).toEqual(['Agents-sessie']);
+    expect(blijvendDraaiend('vps-strato').map(a => a.label)).toEqual(['Agents session']);
   });
 
   it('geeft nooit een blijvende dienst door als leesactie', () => {
@@ -91,7 +91,7 @@ describe('elk account onder zijn eigen machine', () => {
 
   it('verdeelt de accounts zoals afgesproken', () => {
     expect(logins('vps-strato')).toEqual(['Claude login 1', 'Codex login 1', 'Cursor login 1', 'OpenCode login', 'OpenCode Free', 'Kilo Auto Free']);
-    expect(logins('mac-agents')).toEqual(['Claude login 2', 'Cursor 2', 'Antigravity installeren', 'Google Antigravity']);
+    expect(logins('mac-agents')).toEqual(['Claude login 2', 'Cursor 2', 'Install Antigravity', 'Google Antigravity']);
     expect(logins('imac')).toEqual(['Claude login 3', 'Codex login 2']);
     for (const id of ['deze-mac', 'mac-api', 'mac-git']) expect(logins(id), id).toEqual([]);
   });
@@ -99,7 +99,7 @@ describe('elk account onder zijn eigen machine', () => {
   it('laat een Mac-knop op de verkeerde Mac niets doen', () => {
     // De "Mac · ..."-vakken zijn de Mac waarop de app draait; op de iMac is dat de iMac.
     for (const a of snelactiesVoor('mac-agents').filter(a => /login \d|Cursor 2|Antigravity/.test(a.label))) {
-      expect(a.cmd, a.label).toMatch(/^if hostname \| grep -qi imac; then echo "Dit is de iMac/);
+      expect(a.cmd, a.label).toMatch(/^if hostname \| grep -qi imac; then echo "This is the iMac/);
     }
     for (const a of snelactiesVoor('imac').filter(a => /login \d/.test(a.label))) {
       expect(a.cmd, a.label).toMatch(/^if hostname \| grep -qi imac; then (?!echo)/);

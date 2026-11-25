@@ -38,7 +38,7 @@ describe('Home command center is aangesloten (25 nov v2)', () => {
 
   it('alle kaarten uit het referentiedashboard staan erin', () => {
     const dash = bron('HomeLiveDashboard.tsx');
-    for (const titel of ['Core overview', 'Services & devices', 'Live feed', 'Needs you', 'Quick commands', 'Agents', 'Today', 'System monitor', 'LLM providers']) {
+    for (const titel of ['Core overview', 'Services & devices', 'Live feed', 'Needs you', 'Quick commands', 'Agents', 'Today', 'AI limits', 'System monitor', 'LLM providers']) {
       expect(dash).toContain(`titel="${titel}"`);
     }
     for (const kern of ['AI core', 'Memory', 'Voice', 'Agents', 'LLMs', 'System']) {
@@ -59,6 +59,15 @@ describe('Home command center is aangesloten (25 nov v2)', () => {
     expect(dash).toContain('laadDevices');
     expect(dash).toContain('useNotifications');
     expect(dash).toMatch(/useCoreStatusStore\(\(s\) => s\.status\?\.providers/);
+    // De probe kent alleen de eerste die antwoordt; de volle lijst komt uit de sleutels.
+    expect(dash).toContain('keysOverview');
+    expect(dash).toMatch(/providerTegels\(providers, sleutels\.data/);
+    expect(dash).toContain('recenteToestellen(');
+    expect(dash).toContain('tijdlijnVandaag(');
+    // KPI's en limieten komen uit bestaande bronnen, niet uit verzonnen getallen.
+    for (const bron of ['usageCreditsSnapshot', 'abonnementVerbruik', 'listTrades', "from('core_tasks').select('status, updated_at')"]) expect(dash).toContain(bron);
+    for (const kpi of ['Tasks · 24h', 'Failures · 24h', 'AI sessions today', 'App budgets', 'Tightest AI limit', 'Trading P&L']) expect(dash).toContain(`label="${kpi}"`);
+    expect(dash).toContain('No closed trades yet, so no curve');
     expect(dash).toContain('No live metrics: the VPS snapshot did not answer.');
     expect(dash).toContain('No provider check yet.');
     expect(dash).not.toMatch(/Math\.random/);

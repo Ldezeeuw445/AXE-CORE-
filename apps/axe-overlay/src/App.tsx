@@ -248,8 +248,8 @@ export default function App() {
         if (cmd === "approvals" || cmd === "approve-top" || cmd === "northsea-brief" || cmd === "daily-brief" || cmd === "focus-on" || cmd === "focus-off" || cmd.startsWith("manager-")) {
           setExpanded(true);
           void resize(true);
-          if (cmd === "daily-brief") setInput("Geef een korte daily brief: approvals, NorthSea, app status.");
-          if (cmd === "northsea-brief") setInput("Geef een kort NorthSea brief: deal-replies en next actions.");
+          if (cmd === "daily-brief") setInput("Give a short daily brief: approvals, NorthSea, app status.");
+          if (cmd === "northsea-brief") setInput("Give a short NorthSea brief: deal replies and next actions.");
         }
       });
     })();
@@ -274,7 +274,7 @@ export default function App() {
     } catch (e) {
       setMessages((m) => [
         ...m,
-        { role: "assistant", content: `Fout: ${(e as Error).message}`, at: Date.now() },
+        { role: "assistant", content: `Error: ${(e as Error).message}`, at: Date.now() },
       ]);
       setOnline(false);
     } finally {
@@ -289,7 +289,7 @@ export default function App() {
         name: f.name,
         size: f.size,
         kind: fileKind(f.name),
-        note: `Dropped on AXE notch — klaar voor computer/browser use context (${Math.round(f.size / 1024)} KB)`,
+        note: `Dropped on AXE notch — ready as computer/browser use context (${Math.round(f.size / 1024)} KB)`,
       });
     }
     setPendingFiles((p) => [...p, ...next].slice(0, 12));
@@ -324,7 +324,7 @@ export default function App() {
         ...m,
         {
           role: "assistant",
-          content: "Spraakherkenning niet beschikbaar in deze runtime.",
+          content: "Speech recognition is not available in this runtime.",
           at: Date.now(),
         },
       ]);
@@ -365,7 +365,7 @@ export default function App() {
     } catch (e) {
       setMessages((m) => [
         ...m,
-        { role: "assistant", content: `Shell openen mislukt: ${(e as Error).message}`, at: Date.now() },
+        { role: "assistant", content: `Could not open the shell: ${(e as Error).message}`, at: Date.now() },
       ]);
     }
   };
@@ -444,7 +444,7 @@ export default function App() {
               void toggle();
             }}
             aria-label={shellRunning ? "Open AXE CORE HQ" : "AXE CORE starten"}
-            title="Klik → HQ · rechtsklik → chat"
+            title="Click → HQ · right-click → chat"
           >
             <AxeMascot state={mascotState} size={30} />
             <span className={`pulse-ring ${mascotState}`} />
@@ -483,7 +483,7 @@ export default function App() {
             void toggle();
           }}
           aria-label={expanded ? "AXE inklappen" : shellRunning ? "Open AXE CORE shell" : "AXE CORE starten"}
-          title={expanded ? "Inklappen" : "Klik → shell · rechtsklik → chat"}
+          title={expanded ? "Collapse" : "Click → shell · right-click → chat"}
         >
           <AxeMascot state={mascotState} size={expanded ? 40 : 32} />
           <span className="pill-meta">
@@ -516,7 +516,7 @@ export default function App() {
               <button type="button" className="ghost" onClick={() => void openShell()} title="Open Tauri / HQ shell">
                 Open shell
               </button>
-              <button type="button" className="ghost" onClick={() => void toggle()} aria-label="Sluiten">
+              <button type="button" className="ghost" onClick={() => void toggle()} aria-label="Close">
                 ✕
               </button>
             </div>
@@ -548,7 +548,7 @@ export default function App() {
           {activeTab === "meldingen" && (
             <div className="tab-body">
               {approvals.length === 0 ? (
-                <p className="empty">Geen openstaande goedkeuringen.</p>
+                <p className="empty">No open approvals.</p>
               ) : (
                 approvals.map((a) => (
                   <div key={a.id} className="live-chip appr">
@@ -558,14 +558,14 @@ export default function App() {
                   </div>
                 ))
               )}
-              <button type="button" className="ghost" onClick={() => void openShell()}>Goedkeuren in de shell</button>
+              <button type="button" className="ghost" onClick={() => void openShell()}>Approve in the shell</button>
             </div>
           )}
 
           {activeTab === "agents" && (
             <div className="tab-body">
               {tasks.length === 0 ? (
-                <p className="empty">Geen live taken.</p>
+                <p className="empty">No live tasks.</p>
               ) : (
                 tasks.map((t) => (
                   <div key={t.id} className="live-chip">
@@ -601,7 +601,7 @@ export default function App() {
           <div className="messages" ref={listRef}>
             {messages.length === 0 && (
               <p className="empty">
-                AXE always on your side — notch alleen als de shell geminimaliseerd is. Vraag iets, sleep bestanden, of PTT. Rechtsklik op de notch voor chat.
+                AXE always on your side — the notch only shows when the shell is minimised. Ask something, drop files, or use PTT. Right-click the notch for chat.
               </p>
             )}
             {messages.map((m, i) => (
@@ -612,7 +612,7 @@ export default function App() {
             {busy && (
               <div className="msg assistant thinking">
                 <AxeMascot state="thinking" size={22} />
-                <span>bezig…</span>
+                <span>working…</span>
               </div>
             )}
           </div>
@@ -625,7 +625,7 @@ export default function App() {
                   <span className="fn">{f.name}</span>
                   <button
                     type="button"
-                    aria-label="Verwijder"
+                    aria-label="Remove"
                     onClick={() => setPendingFiles((p) => p.filter((_, j) => j !== i))}
                   >
                     ×
@@ -641,7 +641,7 @@ export default function App() {
               ref={inputRef}
               rows={2}
               value={input}
-              placeholder="Bericht aan AXE…"
+              placeholder="Message AXE…"
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -659,7 +659,7 @@ export default function App() {
               >
                 {listening ? "● Luisteren" : "🎙 PTT"}
               </button>
-              <label className="file-btn" title="Bestanden">
+              <label className="file-btn" title="Files">
                 📎
                 <input
                   type="file"

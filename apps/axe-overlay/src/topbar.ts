@@ -25,11 +25,11 @@ export const TOPBAR_BUTTONS: readonly {
   title: string;
 }[] = [
   { id: "hq", label: "HQ", icon: "⌂", title: "Open AXE Core HQ" },
-  { id: "chat", label: "Chat", icon: "+", title: "Nieuwe chat" },
+  { id: "chat", label: "Chat", icon: "+", title: "New chat" },
   { id: "ptt", label: "PTT", icon: "🎙", title: "Push-to-talk" },
-  { id: "approvals", label: "OK", icon: "✓", title: "Goedkeuringen" },
-  { id: "agents", label: "Agents", icon: "◉", title: "Agents-status" },
-  { id: "settings", label: "Set", icon: "⚙", title: "Instellingen" },
+  { id: "approvals", label: "OK", icon: "✓", title: "Approvals" },
+  { id: "agents", label: "Agents", icon: "◉", title: "Agent status" },
+  { id: "settings", label: "Set", icon: "⚙", title: "Settings" },
 ];
 
 export function topbarActie(id: TopbarId): TopbarActie {

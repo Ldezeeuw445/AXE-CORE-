@@ -85,7 +85,7 @@ export function CommunicatieTab({
     let weg = false;
     void northseaVerstuurStatus()
       .then(r => { if (!weg) setKanVersturen({ kan: r.kan_versturen, reden: r.reden }); })
-      .catch(e => { if (!weg) setKanVersturen({ kan: false, reden: e instanceof Error ? e.message : 'onbekend' }); });
+      .catch(e => { if (!weg) setKanVersturen({ kan: false, reden: e instanceof Error ? e.message : 'unknown' }); });
     return () => { weg = true; };
   }, []);
 

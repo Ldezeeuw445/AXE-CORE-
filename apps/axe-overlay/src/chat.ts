@@ -38,9 +38,9 @@ export async function sendOverlayChat(
           .join("\n")}`;
 
   const system =
-    "Je bent AXE Core in de notch-overlay. Kort, Nederlands, actiegericht. " +
-    "Computer use en browser use zijn always-on. " +
-    "Nooit secrets, trades, payments of mail-credentials tonen of uitvoeren." +
+    "You are AXE Core in the notch overlay. Short, in English, action-oriented. " +
+    "Computer use and browser use are always on. " +
+    "Never show or execute secrets, trades, payments or mail credentials." +
     (systemExtra ? ` ${systemExtra}` : "");
 
   const messages = [
@@ -82,6 +82,6 @@ export async function sendOverlayChat(
     data.message ||
     data.content ||
     data.choices?.[0]?.message?.content ||
-    "(geen antwoord)"
+    "(no answer)"
   );
 }

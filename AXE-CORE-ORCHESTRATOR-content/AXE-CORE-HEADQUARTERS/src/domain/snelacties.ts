@@ -40,31 +40,31 @@ export interface Snelactie {
 export const SNELACTIES: readonly Snelactie[] = [
   {
     id: 'verhelder',
-    label: 'Verhelder de vraag',
+    label: 'Clarify the ask',
     icoon: 'brein',
     accent: '#8B7CF6',
-    prompt: 'Stel me eerst de vragen die je nodig hebt voordat je hieraan begint: ',
+    prompt: 'First ask me the questions you need before you start on this: ',
   },
   {
     id: 'context',
-    label: 'Geef context',
+    label: 'Give context',
     icoon: 'context',
     accent: '#F5A524',
-    prompt: 'Dit is de context die je moet kennen: ',
+    prompt: 'Here is the context you need to know: ',
   },
   {
     id: 'levering',
-    label: 'Kies wat je oplevert',
+    label: 'Pick the deliverable',
     icoon: 'levering',
     accent: '#EF4444',
-    prompt: 'Wat lever je precies op, en in welke vorm? ',
+    prompt: 'What exactly will you deliver, and in what form? ',
   },
   {
     id: 'scherpen',
-    label: 'Scherp het aan',
+    label: 'Sharpen it',
     icoon: 'scherpen',
     accent: '#2DD4BF',
-    prompt: 'Maak deze opdracht scherper en noem wat er nog mist: ',
+    prompt: 'Make this task sharper and name what is still missing: ',
   },
 ] as const;
 

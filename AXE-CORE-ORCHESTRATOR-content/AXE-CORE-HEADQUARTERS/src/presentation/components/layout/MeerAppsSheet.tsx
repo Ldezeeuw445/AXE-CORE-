@@ -19,7 +19,7 @@ export function MeerAppsSheet({ open, onClose }: { open: boolean; onClose: () =>
       <div className="absolute inset-0 bg-black/55" onClick={onClose} aria-hidden />
       <div
         role="dialog"
-        aria-label="Alle apps"
+        aria-label="All apps"
         className="absolute inset-x-0 bottom-0 flex max-h-[72%] flex-col"
         style={{
           background: 'linear-gradient(180deg, rgba(24,24,29,.98), rgba(10,12,16,.99))',

@@ -18,7 +18,7 @@ describe('grootboek', () => {
         aantal: 1, herhaling: null, bron: 'schedule' },
     ]);
     expect(items[0].kleur).toBe(appMeta('axe_companion').kleur);
-    expect(items[0].titel).toContain('elke 10 min (144×)');
+    expect(items[0].titel).toContain('every 10 min (144×)');
     expect(items[0].soort).toBe('Supabase cron');
     expect(items[1].app).toBe('axe_core');
     expect(items[1].soort).toBe('job on the Mac');

@@ -155,13 +155,22 @@ export function standUitTotalen(totalen: readonly GrootboekTotaal[]): AppStand[]
 }
 
 /** De geplande jobs als agenda-items, in de kleur van hun app. */
+/** De herhaling zoals de backend hem stuurt ("elke 5 min"), in het Engels. */
+function herhalingTekst(h: string | null | undefined): string {
+  if (!h) return '';
+  const m = /^elke\s+(\d+)\s*min$/i.exec(h.trim());
+  if (m) return m[1] === '1' ? 'every minute' : `every ${m[1]} min`;
+  if (/^elk uur$/i.test(h.trim())) return 'every hour';
+  return h;
+}
+
 export function agendaVanJobs(items: readonly AgendaJob[]): RoosterItem[] {
   const uit: RoosterItem[] = [];
   for (const i of items) {
     const d = new Date(i.at);
     if (Number.isNaN(d.getTime())) continue;
     const app = appVanRegel(i.app);
-    const herhaling = i.herhaling ? ` · ${i.herhaling} (${i.aantal}×)` : '';
+    const herhaling = i.herhaling ? ` · ${herhalingTekst(i.herhaling)} (${i.aantal}×)` : '';
     uit.push({
       id: `job:${i.key}`,
       titel: `Cron · ${i.naam}${herhaling}`,

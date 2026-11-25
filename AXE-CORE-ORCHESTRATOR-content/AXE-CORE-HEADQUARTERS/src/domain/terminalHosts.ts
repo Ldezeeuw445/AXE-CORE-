@@ -66,7 +66,7 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
   {
     id: 'deze-mac',
     naam: 'Mac · repo',
-    waarvoor: 'Bouwen en bijwerken — npm run bijwerken, welke, tests',
+    waarvoor: 'Build and update — npm run bijwerken, welke, tests',
     // Zonder tls: het verkeer verlaat de machine niet. Een certificaat voor
     // 127.0.0.1 bestaat niet zinnig en zou alleen een waarschuwing opleveren.
     wsUrl: `ws://127.0.0.1:${TERMINAL_POORT}/terminal`,
@@ -75,21 +75,21 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
   {
     id: 'mac-api',
     naam: 'Mac · API',
-    waarvoor: 'De lokale API en zijn logs — poort 8001',
+    waarvoor: 'The local API and its logs — port 8001',
     wsUrl: `ws://127.0.0.1:${TERMINAL_POORT}/terminal`,
     ingebouwd: true,
   },
   {
     id: 'mac-agents',
     naam: 'Mac · agents',
-    waarvoor: 'Claude, Codex en Cursor — inloggen en draaien',
+    waarvoor: 'Claude, Codex and Cursor — sign in and run',
     wsUrl: `ws://127.0.0.1:${TERMINAL_POORT}/terminal`,
     ingebouwd: true,
   },
   {
     id: 'mac-git',
     naam: 'Mac · git',
-    waarvoor: 'Status, commits, pushen — zonder je bouw te onderbreken',
+    waarvoor: 'Status, commits, push — without interrupting your build',
     wsUrl: `ws://127.0.0.1:${TERMINAL_POORT}/terminal`,
     ingebouwd: true,
   },
@@ -99,7 +99,7 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
     // STRATO-machine van 16 GB; die heet hieronder 'VPS Strato 16GB'.
     id: 'vps-strato',
     naam: 'VPS API',
-    waarvoor: 'axe-core-api, de task-worker, de missielus, de cron — de hoofdserver',
+    waarvoor: 'axe-core-api, the task worker, the mission loop, the cron — the main server',
     wsUrl: 'wss://api.axecompanion.com/terminal',
     ingebouwd: true,
   },
@@ -110,7 +110,7 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
     // van de agents (infra/dax, docs/MISSIES-EN-DAX.md).
     id: 'vps-hetzner',
     naam: 'VPS Strato 16GB',
-    waarvoor: 'Ollama en de DAX-computers van de agents',
+    waarvoor: 'Ollama and the agents’ DAX computers',
     // Gemeten 13 september: tot die dag stond hier een Docker-container van
     // 10 juli op publieke poort 4022 die elk token accepteerde. Nu draait de
     // huidige terminal-server als systemd-dienst op 127.0.0.1, met Supabase-
@@ -121,7 +121,7 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
   {
     id: 'imac',
     naam: 'iMac',
-    waarvoor: 'Computer use, browser, camera — de uitvoerder',
+    waarvoor: 'Computer use, browser, camera — the executor',
     // Tailscale Serve op de iMac, niet het thuisnetwerk. Zonder dit adres in
     // de bundel is vak 7 na een herstart van de Mac-mini-app weer leeg, omdat
     // localStorage daar niet overleeft wat hier wel ingevuld was.
@@ -130,8 +130,8 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
   },
   {
     id: 'vrij',
-    naam: 'Vrij',
-    waarvoor: 'Nog een machine — vul het adres in',
+    naam: 'Free',
+    waarvoor: 'Another machine — fill in the address',
     wsUrl: '',
     ingebouwd: true,
   },
@@ -218,7 +218,7 @@ export function waaromGeenVerbinding(soort: HostSoort, bereikbaar: boolean): str
   }
   switch (soort) {
     case 'lokaal':
-      return 'AXE CORE starts this shell server itself. If it says uit at the top, click start — the reason is in .axe-logs/terminal.log.';
+      return 'AXE CORE starts this shell server itself. If it says off at the top, click start — the reason is in .axe-logs/terminal.log.';
     case 'tailnet':
       return 'This Mac sits behind Tailscale. Check that Tailscale is on, on this device and on that Mac.';
     case 'vps':
@@ -310,7 +310,7 @@ export function maakHost(naam: string, waarvoor: string, wsUrl: string): Termina
     // je niet uit elkaar houdt.
     id: n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `host-${Date.now()}`,
     naam: n,
-    waarvoor: (waarvoor || '').trim() || 'Geen omschrijving',
+    waarvoor: (waarvoor || '').trim() || 'No description',
     wsUrl: w,
   };
 }
@@ -377,7 +377,7 @@ export function hostVanDeEditor(apiBasis: string): TerminalHost {
       return {
         id: `api-${u.hostname}`,
         naam: u.hostname,
-        waarvoor: 'Dezelfde machine als de bestanden en de code-agent',
+        waarvoor: 'The same machine as the files and the code agent',
         // wss en niet ws: een absolute API-host is niet deze machine, dus het
         // verkeer verlaat het apparaat en hoort versleuteld te zijn.
         wsUrl: `wss://${u.host}/terminal`,
