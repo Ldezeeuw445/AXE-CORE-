@@ -1203,6 +1203,8 @@ extra executor via dezelfde `cli/axe`.
       nog geen `~/.config/axe/config.json` (sleutel = Luka's stap, uit SLEUTELS.md).
 - [x] **7.6** `cli_laag.py` op de box (`vps_sync.py check` na deploy). 25 nov: IN SYNC,
       `/cli/status` bestaat op de VPS (401 zonder sleutel, ok met sleutel).
+- [~] **Agents lezen nooit sleutels** (25 nov): een agent ('Zelf oplossen: Vaste jobs worden niet opgepakt') gokte een tiental plekken voor een API-sleutel af -- `cat /root/.axe_token`, `/etc/axe/companion_api_key`, `.../companionmgr/.env`; wat hij leest gaat als context naar het model. Nu geweigerd via shell en read_file: .env, *_token/api_key-bestanden, ~/.ssh, /etc/axe, .pem/id_rsa/credentials.json, printenv/env en /proc/*/environ; code over tokens lezen kan gewoon (72220aff, 19 tests). Bewezen als een live poging 'Refused' krijgt.
+- [~] **Werkplek Trading OS op de Mac mini** (25 nov): de SSD hangt er niet aan, dus 'Trading OS' bestond niet ('unknown workspace') en drie managertaken eindigden op 'trading-os-app is niet beschikbaar'. Nu valt hij terug op ~/trading-os-app (de levende repo; ~/TRADING-OS is een oude kopie uit mei) (4951be7f). Bewezen als de Mac mini hem na de autosync aanbiedt.
 - [~] **Een agent zette de worker uit** (25 nov 16:17): taak 'Stop de lopende taak ...' vroeg
       een ok voor `systemctl stop axe-task-worker`, kreeg hem (een van de 14 ok-vragen), en zette
       zo de worker uit waarin hij zelf draaide -- 50 min liep er niets, niemand startte hem. Worker
