@@ -403,7 +403,8 @@ def _open_taken(db: Any) -> list[dict[str, Any]]:
     """Alleen de open rijen. Zonder filter las de manager 200 willekeurige van
     ruim 2.200 taken (vooral oude afgeronde) en telde daarop."""
     try:
-        return (db.table("core_tasks").select("id,status,assignee,title,capability,created_at,updated_at,metadata")
+        return (db.table("core_tasks").select("id,status,assignee,title,capability,created_at,updated_at,metadata,"
+                                              "attempt,max_attempts")
                 .in_("status", list(OPEN_TAAK)).limit(1000).execute().data) or []
     except Exception as exc:  # noqa: BLE001
         log.warning("grok: open taken onleesbaar (%s)", exc)
@@ -701,6 +702,32 @@ def _faal_vastgelopen_taken(db: Any, rijen: list[dict[str, Any]], nu: datetime) 
     return gedaan
 
 
+def _geef_poging_terug(db: Any, rijen: list[dict[str, Any]], nu: datetime) -> list[dict[str, Any]]:
+    """Wachtrij-taken zonder pogingen krijgen er één terug, zodat de worker ze weer pakt."""
+    import projecten_bewaker as pb
+    gedaan = []
+    for r in pb.zonder_pogingen(rijen)[:25]:
+        meta = r.get("metadata") if isinstance(r.get("metadata"), dict) else {}
+        maxi = int(r.get("max_attempts") or 3)
+        try:
+            rij = db.table("core_tasks").update({
+                "attempt": max(0, maxi - 1),
+                "next_attempt_at": nu.isoformat(),
+                "metadata": {**meta, "poging_terug": {"door": "projectsmgr", "op": nu.isoformat(),
+                                                      "was": int(r.get("attempt") or 0)}},
+            }).eq("id", r["id"]).eq("status", r["status"]).eq("attempt", r.get("attempt")).execute().data
+            if rij:
+                gedaan.append(r)
+                db.table("core_task_events").insert({
+                    "task_id": r["id"], "event_type": "task.unstuck", "actor_type": "system",
+                    "actor_id": "projectsmgr",
+                    "message": "In the queue with no attempts left; gave one back so a worker picks it up.",
+                }).execute()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("projectsmgr: kon poging niet teruggeven aan %s (%s)", r.get("id"), exc)
+    return gedaan
+
+
 def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
     """Eigenaar van de takenlijst: ziet wat stilstaat, ruimt dubbels op, roept
     Luka alleen voor wat hij zelf niet kan oplossen."""
@@ -712,6 +739,7 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
     gearchiveerd = _archiveer_verouderde_voorstellen(db, rijen, nu)
     wees = _sluit_wees_wachters(db, rijen, nu)
     vastgelopen = _faal_vastgelopen_taken(db, rijen, nu)
+    terug = _geef_poging_terug(db, rijen, nu)
     weg = {r.get("id") for r in gearchiveerd} | {r.get("id") for r in wees} | {r.get("id") for r in vastgelopen}
     rijen = [r for r in rijen if r.get("id") not in weg]
 
@@ -735,7 +763,9 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
             [f"{len(wees)} taken gesloten die op jouw ja wachtten zonder dat er een kaart was (je kon ze nergens goedkeuren): "
              + "; ".join(str(r.get('title'))[:60] for r in wees[:3])] if wees else []) + (
             [f"{len(vastgelopen)} vastgelopen taken force-failed (geen beweging, terug te zetten op queued): "
-             + "; ".join(str(r.get('title'))[:60] for r in vastgelopen[:3])] if vastgelopen else []), app="AXE Core",
+             + "; ".join(str(r.get('title'))[:60] for r in vastgelopen[:3])] if vastgelopen else []) + (
+            [f"{len(terug)} taken in de wachtrij hadden geen poging meer (pakte niemand op); één teruggegeven: "
+             + "; ".join(str(r.get('title'))[:60] for r in terug[:3])] if terug else []), app="AXE Core",
         rustig="Op de takenlijst staat niets stil.")
     return {
         "job": "projects and tasks",
@@ -746,6 +776,7 @@ def run_projectsmgr(db: Any, nu: datetime) -> dict[str, Any]:
         "gearchiveerd": len(gearchiveerd),
         "wees_gesloten": len(wees),
         "vastgelopen_gefaald": len(vastgelopen),
+        "poging_terug": len(terug),
         "chat": chat,
         "dagoverzicht": overzicht,
         "gerapporteerd": gerapporteerd,

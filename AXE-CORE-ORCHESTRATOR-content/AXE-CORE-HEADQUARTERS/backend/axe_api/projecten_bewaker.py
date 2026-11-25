@@ -119,6 +119,23 @@ def vastgelopen_actieve_taken(rijen: list[dict[str, Any]], nu: datetime) -> list
                   key=lambda r: _leeftijd(r, nu), reverse=True)
 
 
+def zonder_pogingen(rijen: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """In de wachtrij, maar alle pogingen op: claim_next_core_task pakt alleen
+    attempt < max_attempts, dus deze liggen er voor altijd.
+
+    25 nov gevonden: 17 taken stonden sinds 24 nov 01:35 zo -- met de hand terug op
+    'queued' gezet zonder de teller terug te zetten; nooit meer opgepakt. Een taak
+    in de rij hoort altijd nog een poging te hebben.
+    """
+    def n(v: Any) -> int:
+        try:
+            return int(v or 0)
+        except (TypeError, ValueError):
+            return 0
+    return [r for r in rijen if r.get("status") in WACHTRIJ and n(r.get("max_attempts"))
+            and n(r.get("attempt")) >= n(r.get("max_attempts"))]
+
+
 def dubbele_voorstellen(rijen: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """De `pending`-rijen die een nieuwere tweeling hebben. Nieuwste blijft."""
     groepen: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)

@@ -226,3 +226,22 @@ def test_nog_geen_zes_uur_blijft_bij_bestaande_actief_vast_pad():
     assert rij["status"] == "running"
     assert "actief_vast" in uit["bevindingen"]
     assert "Zelf oplossen: Taken hangen halverwege" in [r.get("title") for r in db.rows("core_tasks")]
+
+
+def test_wachtrij_zonder_pogingen_krijgt_er_een_terug():
+    """25 nov: 17 taken stonden sinds 24 nov 01:35 op queued met attempt 3/3; de worker
+    pakt alleen attempt < max_attempts, dus niemand pakte ze ooit nog op."""
+    db = FakeDb()
+    db.db["core_tasks"] = [
+        {"id": "z1", "status": "queued", "title": "Zet marketTide op de feed", "assignee": "tradingos",
+         "attempt": 3, "max_attempts": 3, "updated_at": NU.isoformat(), "metadata": {}},
+        {"id": "z2", "status": "queued", "title": "Gewoon in de rij", "assignee": "tradingos",
+         "attempt": 1, "max_attempts": 3, "updated_at": NU.isoformat(), "metadata": {}},
+    ]
+    uit = gm.run_projectsmgr(db, NU)
+    assert uit["poging_terug"] == 1
+    z1 = next(r for r in db.rows("core_tasks") if r["id"] == "z1")
+    z2 = next(r for r in db.rows("core_tasks") if r["id"] == "z2")
+    assert z1["attempt"] == 2 and z1["metadata"]["poging_terug"]["was"] == 3
+    assert z2["attempt"] == 1
+    assert any(e.get("event_type") == "task.unstuck" for e in db.rows("core_task_events"))
