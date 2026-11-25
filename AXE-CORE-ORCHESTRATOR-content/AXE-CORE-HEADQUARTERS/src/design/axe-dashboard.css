@@ -1,0 +1,292 @@
+/* ── Dashboardschil (Luka, 25 nov 2026) ─────────────────────────────────
+ *
+ * "Elke tab één dashboard, niet meer scrollen, dezelfde strakke layout als de
+ * browser-tab." De schil vult de tabruimte (`TabRuimte vullen`) en schuift
+ * zelf NOOIT: kopstrook vast, raster krijgt de rest in gelijke sporen.
+ * Alleen een kaartlijf mag schuiven, en alleen als het echt moet.
+ *
+ * Maten zijn tokens, zodat elke tab dezelfde ritmes deelt. Het materiaal is
+ * `.axe-kaart` (tokens --axe-kaart-*); hier staat geen tweede kaartkleur.
+ * Component: src/presentation/components/layout/dashboardSchil.tsx. */
+:root[data-look] {
+  --axe-dash-gat: 12px;
+  --axe-dash-kop-hoog: 52px;
+  --axe-dash-kaart-kop-hoog: 36px;
+  --axe-dash-binnen: 14px;
+}
+
+:root[data-look] .axe-dash {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--axe-dash-gat);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 12px;
+}
+
+/* Kopstrook — titel | cijfers | acties, één regel, vaste hoogte. */
+:root[data-look] .axe-dash-kop {
+  flex: 0 0 var(--axe-dash-kop-hoog);
+  display: grid;
+  grid-template-columns: minmax(160px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+:root[data-look] .axe-dash-kop-titel { min-width: 0; }
+:root[data-look] .axe-dash-kop-titel h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+:root[data-look] .axe-dash-kop-titel p {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:root[data-look] .axe-dash-cijfers {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  height: 100%;
+}
+:root[data-look] .axe-dash-cijfer {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 7px 12px;
+  border-radius: 12px;
+  background: var(--axe-kaart-vlak);
+  border: 1px solid var(--axe-kaart-lijn);
+  box-shadow: var(--axe-kaart-schaduw);
+}
+:root[data-look] .axe-dash-cijfer-label {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:root[data-look] .axe-dash-cijfer-waarde {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+:root[data-look] .axe-dash-cijfer-sub {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:root[data-look] .axe-dash-cijfer[data-toon='ok'] .axe-dash-cijfer-waarde { color: var(--success); }
+:root[data-look] .axe-dash-cijfer[data-toon='warn'] .axe-dash-cijfer-waarde { color: var(--warning); }
+:root[data-look] .axe-dash-cijfer[data-toon='fout'] .axe-dash-cijfer-waarde { color: var(--error); }
+:root[data-look] .axe-dash-acties { display: flex; align-items: center; gap: 8px; }
+
+/* Raster — gelijke sporen in BEIDE richtingen. Dat is het verschil met
+   .axe-kaart-raster: daar bepaalt inhoud de hoogte en mag de pagina schuiven;
+   hier is de hoogte gegeven en verdeelt het raster hem eerlijk. */
+:root[data-look] .axe-dash-raster {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--dash-kolommen, 3), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--dash-rijen, 2), minmax(0, 1fr));
+  gap: var(--axe-dash-gat);
+}
+
+:root[data-look] .axe-dash-kaart {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--axe-kaart-hoek, 18px);
+  text-align: left;
+  color: inherit;
+}
+:root[data-look] .axe-dash-kaart--knop { cursor: pointer; }
+:root[data-look] .axe-dash-kaart--knop:focus-visible { outline: 1px solid var(--accent-cyan); outline-offset: 2px; }
+:root[data-look] .axe-dash-kaart-kop {
+  flex: 0 0 var(--axe-dash-kaart-kop-hoog);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 var(--axe-dash-binnen);
+  border-bottom: var(--axe-kaart-scheiding);
+  min-width: 0;
+}
+:root[data-look] .axe-dash-kaart-titel {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:root[data-look] .axe-dash-telling {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  letter-spacing: 0;
+}
+/* Tabs in de kaartkop: kleur in de letters, actief = dunne onderlijn. */
+:root[data-look] .axe-dash-tabs { display: flex; align-items: stretch; gap: 14px; height: 100%; min-width: 0; overflow: hidden; }
+:root[data-look] .axe-dash-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  white-space: nowrap;
+  cursor: pointer;
+}
+:root[data-look] .axe-dash-tab[data-actief] { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
+:root[data-look] .axe-dash-kaart-lijf {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px var(--axe-dash-binnen) var(--axe-dash-binnen);
+  overscroll-behavior: contain;
+}
+:root[data-look] .axe-dash-kaart-lijf--vrij { padding: 0; display: flex; flex-direction: column; }
+:root[data-look] .axe-dash-kaart-lijf--vrij > * { flex: 1 1 auto; min-height: 0; }
+:root[data-look] .axe-dash-leeg { margin: 0; font-size: 12px; color: var(--text-muted); }
+
+/* Venster — formulier of volledige lijst boven het raster, binnen de schil. */
+:root[data-look] .axe-dash-venster-laag {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 64px;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(2px);
+}
+:root[data-look] .axe-dash-venster {
+  width: min(640px, 100%);
+  max-height: calc(100% - 80px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--axe-kaart-hoek, 18px);
+}
+:root[data-look] .axe-dash-sluit { color: var(--text-muted); background: none; border: 0; cursor: pointer; padding: 4px; }
+
+/* Lage schermen (1280×800 en kleiner): kop en gaten iets krapper. */
+@media (max-height: 820px) {
+  :root[data-look] { --axe-dash-gat: 10px; --axe-dash-kop-hoog: 46px; --axe-dash-kaart-kop-hoog: 32px; --axe-dash-binnen: 12px; }
+  :root[data-look] .axe-dash-cijfer-waarde { font-size: 17px; }
+}
+/* Telefoon: geen vaste hoogte, wel dezelfde kaarten onder elkaar. */
+@media (max-width: 767px) {
+  :root[data-look] .axe-dash { overflow-y: auto; height: auto; }
+  :root[data-look] .axe-dash-kop { grid-template-columns: 1fr; height: auto; flex-basis: auto; }
+  :root[data-look] .axe-dash-cijfers { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :root[data-look] .axe-dash-raster { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-rows: minmax(220px, auto); }
+  :root[data-look] .axe-dash-kaart { grid-column: auto !important; grid-row: auto !important; }
+}
+
+/* ── Tasks in de schil ───────────────────────────────────────────────── */
+/* De desk brengt drie eigen panelen mee; in de kaart worden dat vlakken
+   zonder tweede kaartrand, en de vaste min-hoogte valt weg. */
+:root[data-look] .axe-dash .axe-tasks-v3 {
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  grid-template-columns: 168px minmax(0, 1fr) 240px;
+  gap: 0;
+}
+:root[data-look] .axe-dash .axe-tasks-v3 > * {
+  min-height: 0;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-look] .axe-dash .axe-tasks-v3 > * + * { border-left: var(--axe-kaart-scheiding); }
+:root[data-look] .axe-dash .axe-taken-secties {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+:root[data-look] .axe-dash .axe-taken-secties > .axe-taken-sectie {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  min-height: 0;
+}
+:root[data-look] .axe-dash [data-axe-doel='planner'] { margin: 0; }
+:root[data-look] .axe-dash .axe-appvijf { margin: 0; }
+
+/* ── Hubs (Trading, Bouwen, Systeem) in de schil ─────────────────────── */
+:root[data-look] .axe-dash-tegel-kop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+:root[data-look] .axe-dash-tegel-note { margin: 8px 0 0; font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--text-primary); }
+:root[data-look] .axe-dash-kaart--knop:hover { outline: 1px solid var(--tint-line, rgba(34, 211, 238, 0.35)); }
+:root[data-look] .axe-dash-regel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 12px;
+  border-bottom: var(--axe-kaart-scheiding);
+  color: var(--text-secondary);
+}
+:root[data-look] .axe-dash-regel:last-child { border-bottom: 0; }
+:root[data-look] .axe-dash-regel b { color: var(--text-primary); font-weight: 600; }
+:root[data-look] .axe-dash-regel .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+/* De oude hub-tegel bracht eigen padding, rand en hover-vlak mee; in de
+   schil is hij gewoon een .axe-kaart. */
+:root[data-look] .axe-dash .axe-hub-v3-tile {
+  padding: 0;
+  min-height: 0;
+  gap: 0;
+  border-radius: var(--axe-kaart-hoek, 18px);
+  border: 1px solid var(--axe-kaart-lijn);
+  background: var(--axe-kaart-vlak);
+}
+:root[data-look] .axe-dash .axe-hub-v3-tile:hover { background: var(--axe-kaart-vlak); }

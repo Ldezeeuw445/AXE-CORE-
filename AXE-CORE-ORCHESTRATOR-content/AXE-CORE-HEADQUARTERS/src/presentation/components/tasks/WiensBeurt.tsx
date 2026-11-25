@@ -61,7 +61,9 @@ export function WiensBeurt() {
     const t = window.setInterval(laad, 60_000);
     return () => window.clearInterval(t);
   }, [laad]);
-  if (!st) return null;
+  /* 25 nov: in het Tasks-dashboard staat dit in een eigen kaart; een lege
+     kaart zonder uitleg las als kapot. Geen data = dat zeggen, niets verzinnen. */
+  if (!st) return <p className="axe-dash-leeg" data-axe-wiens-beurt="leeg">Geen gedeelde stappen opgehaald.</p>;
   // Mac-stappen (claude_code.run · AXE Core · imac-3) horen bij hun taak, niet als eigen beurt.
   const aiBeurt = st.ai_beurt.filter((s) => !isMacStap(s.titel ?? ""));
   const af = (s: GedeeldeStap) => {
