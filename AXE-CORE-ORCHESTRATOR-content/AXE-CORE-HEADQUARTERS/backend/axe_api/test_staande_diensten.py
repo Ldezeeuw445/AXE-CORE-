@@ -89,9 +89,11 @@ def test_catalogus_dekt_de_slapende_home_agents():
     assert grok <= sd.STAANDE_AGENTS
     # 28 okt: de bouwende developer-DAX (dax_bouw.py) staat ernaast; 9 nov de
     # intel-feeds voor Trading OS (intel_feeds.py); 18 nov de peiling van de
-    # gedeelde intel-proxy (intel_wereld.run_proxy); 20 nov managers aan het werk.
+    # gedeelde intel-proxy (intel_wereld.run_proxy); 20 nov managers aan het werk;
+    # 25 nov de vaste briefs (vaste_briefs.py).
     assert sd.STAANDE_AGENTS == oorspronkelijk | grok | {
         "managerwerk", "dax-bouw", "intel-feeds", "intel-wereld", "intel-lucht", "intel-proxy-peiling",
+        "brief-ochtendbrief", "brief-roadmap", "brief-opruimlijst", "brief-weekreview",
     }
     for agent in sd.STAANDE_AGENTS:
         d = sd.catalogus_voor(agent)
