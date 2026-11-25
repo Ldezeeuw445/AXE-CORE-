@@ -47,15 +47,15 @@ export function ToolCallingSection() {
             Native tool calling
           </p>
           <p className="mt-1 text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            AXE vraagt tools op via de API in plaats van markers in tekst te
-            schrijven die er daarna uitgeregexed worden. Meerdere tools per
-            beurt, gevalideerde argumenten, en een mislukte tool komt terug als
-            mislukking in plaats van als leeg resultaat.
+            AXE requests tools through the API instead of writing markers in
+            text that get regexed out afterwards. Several tools per turn,
+            validated arguments, and a failed tool comes back as a failure
+            instead of an empty result.
           </p>
           <p className="mt-2 text-[12px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-            Werkt met Anthropic, OpenAI, Gemini, Groq en OpenRouter. Ollama en de
-            VPS-agents vallen terug op de marker-route. Goedkeuringen blijven
-            hetzelfde: dezelfde kaart, dezelfde risico-niveaus.
+            Works with Anthropic, OpenAI, Gemini, Groq and OpenRouter. Ollama and
+            the VPS agents fall back to the marker route. Approvals stay the
+            same: the same card, the same risk levels.
           </p>
         </div>
         <Switch checked={on} onCheckedChange={toggle} aria-label="Native tool calling" />

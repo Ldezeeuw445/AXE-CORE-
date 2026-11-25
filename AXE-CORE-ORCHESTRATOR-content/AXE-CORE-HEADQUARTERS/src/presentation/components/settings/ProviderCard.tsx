@@ -25,15 +25,15 @@ function foutRegel(f: unknown): string {
 export function usageTekst(snapshot?: ProviderUsageSnapshot | null): { kop: string; regel: string; detail: string } {
   if (!snapshot) return {
     kop: 'USAGE',
-    regel: 'Nog geen echte meting',
-    detail: 'Wordt gevuld door echte calls of Refresh usage.',
+    regel: 'No real measurement yet',
+    detail: 'Filled by real calls or Refresh usage.',
   };
 
   const b = snapshot.balance;
   if (b?.supported && b.kind === 'balance') {
     if ((b.provider === 'openrouter' || b.provider === 'openrouter2') && typeof b.limit_remaining === 'number') {
       const windowText = b.limit_reset ? ` · reset ${b.limit_reset}` : '';
-      const week = typeof b.usage_weekly === 'number' ? ` · week gebruikt ${b.usage_weekly.toFixed(2)}` : '';
+      const week = typeof b.usage_weekly === 'number' ? ` · used this week ${b.usage_weekly.toFixed(2)}` : '';
       return {
         kop: 'BALANCE',
         regel: `${b.limit_remaining.toFixed(2)} credits resterend`,
@@ -45,15 +45,15 @@ export function usageTekst(snapshot?: ProviderUsageSnapshot | null): { kop: stri
       return {
         kop: 'BALANCE',
         regel: `${b.remaining.toLocaleString()} credits resterend`,
-        detail: `${(b.used ?? 0).toLocaleString()} / ${(b.limit ?? 0).toLocaleString()} gebruikt · reset ${reset}${b.tier ? ` · ${b.tier}` : ''}`,
+        detail: `${(b.used ?? 0).toLocaleString()} / ${(b.limit ?? 0).toLocaleString()} used · reset ${reset}${b.tier ? ` · ${b.tier}` : ''}`,
       };
     }
     if (b.provider === 'deepseek' && b.balances?.length) {
       const first = b.balances[0];
       return {
         kop: 'BALANCE',
-        regel: `${first.total_balance ?? '—'} ${first.currency ?? ''} beschikbaar`.trim(),
-        detail: `gekocht ${first.topped_up_balance ?? '—'} · grant ${first.granted_balance ?? '—'}`,
+        regel: `${first.total_balance ?? '—'} ${first.currency ?? ''} available`.trim(),
+        detail: `bought ${first.topped_up_balance ?? '—'} · grant ${first.granted_balance ?? '—'}`,
       };
     }
   }
@@ -67,21 +67,21 @@ export function usageTekst(snapshot?: ProviderUsageSnapshot | null): { kop: stri
   if (req || tok) {
     return {
       kop: 'RATE LIMIT',
-      regel: [req ? `${req} requests` : '', tok ? `${tok} tokens` : ''].filter(Boolean).join(' · ') + ' resterend',
-      detail: [reqReset ? `requests reset ${reqReset}` : '', tokReset ? `tokens reset ${tokReset}` : ''].filter(Boolean).join(' · ') || 'laatste echte providerresponse',
+      regel: [req ? `${req} requests` : '', tok ? `${tok} tokens` : ''].filter(Boolean).join(' · ') + ' remaining',
+      detail: [reqReset ? `requests reset ${reqReset}` : '', tokReset ? `tokens reset ${tokReset}` : ''].filter(Boolean).join(' · ') || 'last real provider response',
     };
   }
 
   if (b && b.supported === false) return {
     kop: 'USAGE',
-    regel: 'Exact saldo niet via deze key beschikbaar',
-    detail: 'AXE toont hier automatisch rate-limit headroom zodra de provider die bij een echte call teruggeeft.',
+    regel: 'Exact balance not available through this key',
+    detail: 'AXE shows rate-limit headroom here as soon as the provider returns it on a real call.',
   };
 
   return {
     kop: 'USAGE',
-    regel: 'Provider gaf geen resterend quota terug',
-    detail: snapshot.updatedAt ? `laatst bekeken ${new Date(snapshot.updatedAt).toLocaleTimeString()}` : '—',
+    regel: 'Provider returned no remaining quota',
+    detail: snapshot.updatedAt ? `last checked ${new Date(snapshot.updatedAt).toLocaleTimeString('en-GB')}` : '—',
   };
 }
 

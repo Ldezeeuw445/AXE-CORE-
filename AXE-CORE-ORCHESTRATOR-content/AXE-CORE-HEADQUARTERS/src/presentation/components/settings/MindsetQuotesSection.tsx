@@ -53,9 +53,9 @@ export function MindsetQuotesSection() {
       headerAction={<Zap size={14} style={{ color: 'var(--accent-cyan)' }} />}
     >
       <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
-        Jouw eigen lijst voor de cyan <strong style={{ color: 'var(--accent-cyan)' }}>AXE</strong>-knop
-        in de rechter drawer. Elke tik roteert en spreekt de volgende regel (actieve TTS).
-        De <strong>Mindset</strong>-knop gebruikt de vaste 40 power-lines.
+        Your own list for the cyan <strong style={{ color: 'var(--accent-cyan)' }}>AXE</strong> button
+        in the right drawer. Each tap rotates and speaks the next line (active TTS).
+        The <strong>Mindset</strong> button uses the fixed 40 power lines.
       </p>
 
       <div className="flex gap-1.5 mb-3">
@@ -79,7 +79,7 @@ export function MindsetQuotesSection() {
       <div className="space-y-1.5 max-h-64 overflow-y-auto mb-3">
         {quotes.length === 0 ? (
           <p className="text-[11px] py-2" style={{ color: 'var(--text-muted)' }}>
-            Nog geen quotes — voeg hierboven toe. AXE-knop doet niets tot er minstens één is.
+            No quotes yet — add one above. The AXE button does nothing until there is at least one.
           </p>
         ) : quotes.map((q, i) => (
           <div

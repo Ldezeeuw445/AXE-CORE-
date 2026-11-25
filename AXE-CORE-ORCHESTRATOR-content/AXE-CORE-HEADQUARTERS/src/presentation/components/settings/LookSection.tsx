@@ -10,12 +10,12 @@ import { LOOKS, type Look } from '@/domain/look';
 
 const COPY: Record<Look, { name: string; note: string }> = {
   black: {
-    name: 'Zwart',
-    note: 'Gerookt zwart glas. De galaxy komt er gedempt en ontkleurd doorheen.',
+    name: 'Black',
+    note: 'Smoked black glass. The galaxy shows through muted and desaturated.',
   },
   glass: {
-    name: 'Glas',
-    note: 'Lichtgrijs matglas, met de galaxy er in kleur doorheen.',
+    name: 'Glass',
+    note: 'Light grey frosted glass, with the galaxy showing through in colour.',
   },
 };
 
@@ -28,13 +28,13 @@ export function LookSection() {
         className="text-[11px] font-semibold uppercase tracking-[.1em]"
         style={{ color: 'var(--text-muted)' }}
       >
-        Uiterlijk
+        Look
       </h3>
 
       <p className="mt-2 text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-        In beide standen ligt alles op één plaat; alleen het materiaal
-        verschilt. Het lettertype, de accentkleuren en de indeling blijven
-        gelijk, en je keuze geldt op al je apparaten.
+        In both looks everything sits on one plate; only the material
+        changes. Font, accent colours and layout stay the same, and your
+        choice applies on all your devices.
       </p>
 
       <div className="mt-3 grid gap-2" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
