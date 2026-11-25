@@ -1194,9 +1194,21 @@ extra executor via dezelfde `cli/axe`.
 - [x] **7.3** Hek: alleen-lezen tot `--write`; hard geblokkeerd: mail,
       NorthSea `auto_send_*`, merge naar `orchestrator`, wissen.
 - [x] **7.4** `os3/SKILL.md` + `os3/SETUP.md`.
-- [ ] **7.5** Gemeten op de Mac mini en de VPS: `axe status --json` en de
-      vijf testprompts uit SETUP.md. Hier niet live gemeten.
-- [ ] **7.6** `cli_laag.py` op de box (`vps_sync.py check` na deploy).
+- [~] **7.5** Gemeten op de Mac mini en de VPS: `axe status --json` en de
+      vijf testprompts uit SETUP.md. 25 nov op de VPS GEMETEN: status, node list en
+      northsea deals geven ok (exit 0); memory add / notify zonder --write geweigerd (exit 2).
+      Gevonden: prompt 5 'stuur een mail naar de koper' en 'merge naar orchestrator' kwamen
+      DOOR het hek (alleen technische woorden telden) -- nu ook gewone taal, getest. En `status`
+      meldde terecht task_worker 'inactive': zie hieronder. Nog: de Mac mini -- daar staat
+      nog geen `~/.config/axe/config.json` (sleutel = Luka's stap, uit SLEUTELS.md).
+- [x] **7.6** `cli_laag.py` op de box (`vps_sync.py check` na deploy). 25 nov: IN SYNC,
+      `/cli/status` bestaat op de VPS (401 zonder sleutel, ok met sleutel).
+- [~] **Een agent zette de worker uit** (25 nov 16:17): taak 'Stop de lopende taak ...' vroeg
+      een ok voor `systemctl stop axe-task-worker`, kreeg hem (een van de 14 ok-vragen), en zette
+      zo de worker uit waarin hij zelf draaide -- 50 min liep er niets, niemand startte hem. Worker
+      weer gestart (17:05, /health ok). Nu: stoppen/herstarten/killen van axe-task-worker of
+      axe-core-api wordt altijd geweigerd, ook met een ok, en al vóór de ok-vraag (Luka krijgt
+      zo'n kaart niet meer). Bewezen als er na deploy geen kaart meer voor komt.
 - [ ] **7.7** AXON-read in chat — **niet** een vierde store. Write-bridge
       bestaat (`axonMemoryBridge.ts`); CLI-label `axon` is een stub op RAG.
       Alleen doen als je de bestaande `axonContextPack` in
