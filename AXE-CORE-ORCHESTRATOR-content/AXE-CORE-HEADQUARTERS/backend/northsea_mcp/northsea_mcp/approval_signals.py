@@ -78,7 +78,8 @@ def signals_for_draft(
     risk = any(n in (naam or "").lower() for n in RISK_NAAM)
     subject = d.get("subject") or ""
     generated = d.get("generated_by") or ""
-    generic = "supply qualification" in subject.lower() and ("northsea" in generated.lower() or d.get("generic_template") is True)
+    generic = (not has_thread and "supply qualification" in subject.lower()
+               and ("northsea" in generated.lower() or d.get("generic_template") is True))
 
     chases = 0
     first_today = 0

@@ -65,6 +65,23 @@ describe('classificeer: ernstige dingen eerst, daarna routine', () => {
     }))).toBe('generic_qualification');
   });
 
+  it('engine-vervolg in een thread is chase, geen auto-reject als generic_qualification', () => {
+    const kenmerk = k({
+      hasThread: true,
+      generatedBy: 'northsea-engine',
+      genericTemplate: true,
+      namedRecipient: false,
+      isRoleMailbox: true,
+      addressVerified: true,
+      subject: 'Re: Copper Cathode — supply qualification',
+      body: 'Dear colleagues at Finolex,\n\nI am following up on our earlier email.',
+    });
+    expect(classificeer(kenmerk)).toBe('chase');
+    const uit = evalueer(kenmerk);
+    expect(uit.mode).toBe('escalate');
+    expect(uit.needsLuka).toBe(true);
+  });
+
   it('chase: follow-up in bestaande thread, geen prijs', () => {
     expect(classificeer(k({
       hasThread: true,

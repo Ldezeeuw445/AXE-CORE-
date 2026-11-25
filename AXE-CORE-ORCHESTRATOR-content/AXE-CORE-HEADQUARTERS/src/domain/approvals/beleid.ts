@@ -154,7 +154,10 @@ export function classificeer(k: Kenmerk): ApprovalCategorie {
     if (NONBIND.test(t) && !OFFER_TERMEN.test(t) && !COMMITMENT.test(t)) return 'nonbinding';
     return 'inbound_offer';
   }
-  if (QUAL.test(k.subject ?? '') && (k.genericTemplate || ENGINE.test(k.generatedBy ?? ''))) {
+  // Alleen eerste contact. Een vervolg in een bestaande thread (Re: … supply
+  // qualification, generated_by northsea-engine) mag niet auto-rejecten: dat
+  // is juist het concept dat /wacht moet tonen als de inhoudspoort hem tegenhoudt.
+  if (!k.hasThread && QUAL.test(k.subject ?? '') && (k.genericTemplate || ENGINE.test(k.generatedBy ?? ''))) {
     return 'generic_qualification';
   }
   if (k.internalHousekeeping) return 'internal';

@@ -27,6 +27,17 @@ def test_generieke_qualification_vlag():
     assert uit["is_role_mailbox"] is True
 
 
+def test_vervolg_in_thread_is_geen_generic_template():
+    data = seed()
+    d = dict(data["reply_drafts"][0], subject="Re: Copper Cathode — supply qualification",
+             body="Dear colleagues at Finolex,\n\nFollowing up.",
+             generated_by="northsea-engine")
+    uit = signals_for_draft(d, companies=data["companies"], contacts=data["contacts"],
+                            communications=data["communications"], drafts=data["reply_drafts"])
+    assert uit["has_thread"] is True
+    assert uit["generic_template"] is False
+
+
 def test_named_recipient_is_false_als_de_brief_generiek_opent():
     data = seed()
     d = dict(data["reply_drafts"][0], body="Dear Sir or Madam,\n\nFollowing up.",
