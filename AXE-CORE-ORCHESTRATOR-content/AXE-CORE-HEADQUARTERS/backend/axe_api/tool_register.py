@@ -34,6 +34,12 @@ UITLEG: dict[str, dict[str, str]] = {
         "rechten": "alleen agents met deze tool; geweigerd in een alleen-lezen taak",
         "fouten": "'read-only task' bij een alleen-lezen taak; pad niet schrijfbaar",
     },
+    "system_status": {
+        "output": "de planningen (naam, aan/uit, laatste status en resultaat, laatste en volgende run, fouten op rij) "
+                  "en de intel-feeds (feed_id, last_sync_at, last_error)",
+        "rechten": "vrij; alleen lezen, via de eigen databaseverbinding -- het model ziet nooit een sleutel",
+        "fouten": "database niet bereikbaar (error), of niets dat op het filter past (lege lijst)",
+    },
     "list_devices": {
         "output": "Luka's Macs, of ze online zijn en welke werkplekken ze hebben",
         "rechten": "vrij; alleen lezen",

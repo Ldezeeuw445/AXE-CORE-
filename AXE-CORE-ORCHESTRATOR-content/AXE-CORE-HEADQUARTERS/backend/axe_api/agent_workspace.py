@@ -166,8 +166,8 @@ _BRIEVEN: dict[str, str] = {
     ),
 }
 
-_LEES = ("run_shell", "read_file", "list_devices", "run_on_device", "finish")
-_VOL = ("run_shell", "read_file", "write_file", "list_devices", "run_on_device", "finish")
+_LEES = ("run_shell", "read_file", "list_devices", "run_on_device", "system_status", "finish")
+_VOL = ("run_shell", "read_file", "write_file", "list_devices", "run_on_device", "system_status", "finish")
 _CREW = _VOL + ("run_crew",)
 # De NorthSea-desk leest de échte desk via de gateway (alleen leesacties).
 _NORTHSEA = _LEES + ("northsea_read",)

@@ -477,6 +477,22 @@ TOOL_DECLARATIONS = [
         },
     },
     {
+        "name": "system_status",
+        "description": (
+            "Read AXE's own live state, no keys needed: the standing schedules / cron jobs (name, "
+            "enabled, last status and result, last and next run, failures in a row) and the intel "
+            "feeds (feed_id, last_sync_at, last_error). Use this -- not curl to the API, not "
+            "systemctl or ps -- to find out whether a job or feed runs and what went wrong."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "about": {"type": "string", "description": "'schedules', 'feeds' or 'all' (default)"},
+                "filter": {"type": "string", "description": "optional text; only names containing it"},
+            },
+        },
+    },
+    {
         "name": "list_devices",
         "description": (
             "List Luka's Macs that can act for you (Mac mini, iMac), whether each is "
@@ -646,8 +662,17 @@ Where AXE itself lives on this VPS (do not guess unit names):
     core_job_runs, and what they told Luka in core_manager_messages. To check
     whether they run and what they found, read those (GET /cron/schedules on the
     local API, or the database), not systemctl.
-  - Reading status or logs (systemctl status, journalctl) is free; starting,
-    stopping or restarting a service needs Luka's approval.
+  - Intel feeds (corporateJets, militaryRadar, unusualOptions, marketTide, ...)
+    are NOT workers or services either: they run inside schedules ('Intel feeds:
+    ...'), code in intel_wereld.py / intel_feeds.py, state in intel_sync_log.
+    There is no 'corporateJets-worker' to find, grep for or restart.
+  - The FIRST step for "does X run / why did X fail": call system_status. Never
+    curl the API with a key and never look for key files: that is refused.
+  - Trading OS app code (incl. its intel-proxy) lives on the Mac in
+    ~/trading-os-app (workspace 'Trading OS'), not on this VPS.
+  - Reading status or logs (systemctl status, journalctl) is free. Never stop or
+    restart axe-task-worker or axe-core-api (that is you; refused). Other
+    services need Luka's approval.
 
 You have {MAX_STEPS} steps. Use them."""
 
@@ -1219,6 +1244,41 @@ def _workspace_path(path: str) -> str:
     if os.path.isabs(path):
         return path
     return os.path.join(_HUIDIGE_WORKSPACE.get(), path)
+
+def _system_status(about: str = "all", filter_: str = "") -> dict[str, Any]:
+    """Alleen lezen, via de eigen databaseverbinding: geen sleutel komt ooit bij het model.
+
+    25 nov live: agents zochten tot 40 stappen naar een 'corporateJets-worker' of
+    'unusualOptions-worker' (bestaan niet: feeds zijn planningen) en gingen sleutels raden om
+    /cron/schedules met curl te lezen. Dit geeft hetzelfde antwoord in één stap."""
+    db = _db_voor_stoelen()
+    if db is None:
+        return {"error": "database not reachable from here"}
+    about = (about or "all").strip().lower()
+    f = (filter_ or "").strip().lower()
+    uit: dict[str, Any] = {}
+    try:
+        if about in ("all", "schedules", "jobs", "cron"):
+            rijen = (db.table("core_schedules")
+                     .select("id,name,app,job_key,enabled,cron_expr,last_status,last_result,"
+                             "consecutive_failures,last_run_at,next_run_at").limit(300).execute().data) or []
+            uit["schedules"] = [
+                {**{k: r.get(k) for k in ("id", "name", "app", "enabled", "cron_expr", "last_status",
+                                         "consecutive_failures", "last_run_at", "next_run_at")},
+                 "last_result": str(r.get("last_result") or "")[:300]}
+                for r in rijen if not f or f in f"{r.get('name')} {r.get('job_key')}".lower()][:60]
+        if about in ("all", "feeds", "intel"):
+            rijen = (db.table("intel_sync_log").select("feed_id,last_sync_at,last_error")
+                     .limit(300).execute().data) or []
+            uit["feeds"] = [{"feed_id": r.get("feed_id"), "last_sync_at": r.get("last_sync_at"),
+                             "last_error": str(r.get("last_error") or "")[:200]}
+                            for r in rijen if not f or f in str(r.get("feed_id") or "").lower()][:80]
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"could not read status: {str(exc)[:200]}"}
+    uit["note"] = ("Intel feeds are not services: they run inside these schedules. "
+                   "'Restart a feed' means its schedule runs again (Luka: Cron tab, Run again).")
+    return uit
+
 
 def _read(path: str, max_bytes: int = 60000) -> dict[str, Any]:
     if _geheim_pad(path) or _geheim_pad(os.path.realpath(_workspace_path(path))):
@@ -2165,6 +2225,11 @@ async def _lus(
                     "step": step, "tool": "write_file", "path": path[:300],
                     "bytes": result.get("bytes_written"),
                 })
+            elif name == "system_status":
+                await on_event("axe.progress", f"Step {step}: reading AXE's schedules and feeds", {})
+                result = await asyncio.to_thread(
+                    _system_status, str(args.get("about") or "all"), str(args.get("filter") or ""))
+                transcript.append({"step": step, "tool": "system_status", "about": str(args.get("about") or "all")})
             elif name == "list_devices":
                 await on_event("axe.progress", f"Step {step}: checking which Macs are online", {})
                 result = {"devices": await asyncio.to_thread(device_actions.list_devices)}

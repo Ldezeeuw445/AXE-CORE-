@@ -16,6 +16,7 @@ export const AGENT_TOOLS = [
   'read_file',
   'write_file',
   'list_devices',
+  'system_status',
   'run_on_device',
   'run_crew',
   'finish',
@@ -36,11 +37,11 @@ export interface AgentWorkspace {
 }
 
 const LEES: readonly AgentToolId[] = [
-  'run_shell', 'read_file', 'list_devices', 'run_on_device', 'finish',
+  'run_shell', 'read_file', 'list_devices', 'run_on_device', 'system_status', 'finish',
 ];
 
 const VOL: readonly AgentToolId[] = [
-  'run_shell', 'read_file', 'write_file', 'list_devices', 'run_on_device', 'finish',
+  'run_shell', 'read_file', 'write_file', 'list_devices', 'run_on_device', 'system_status', 'finish',
 ];
 
 const MET_CREW: readonly AgentToolId[] = [...VOL, 'run_crew'];
