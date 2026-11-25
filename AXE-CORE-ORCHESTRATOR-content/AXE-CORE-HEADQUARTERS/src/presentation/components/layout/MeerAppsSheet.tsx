@@ -6,13 +6,17 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router';
 import { X } from 'lucide-react';
 import { meerGroepen } from '@/domain/navRegistry';
+import { useVerborgenTabs } from '@/presentation/store/maakVanJouStore';
 
 export function MeerAppsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const verborgen = useVerborgenTabs();
   if (!open || typeof document === 'undefined') return null;
 
-  const groepen = meerGroepen();
+  const groepen = meerGroepen()
+    .map((g) => ({ ...g, items: g.items.filter((i) => !verborgen.has(i.path)) }))
+    .filter((g) => g.items.length);
 
   return createPortal(
     <div className="fixed inset-0 z-[110]" data-axe-meer-sheet="open">

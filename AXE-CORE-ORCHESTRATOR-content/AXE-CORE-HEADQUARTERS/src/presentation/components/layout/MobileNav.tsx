@@ -15,6 +15,7 @@ import {
   Palette, MonitorSmartphone, BookOpenCheck, type LucideIcon,
 } from 'lucide-react';
 import { getAllNavItems } from '@/domain/navRegistry';
+import { useVerborgenTabs } from '@/presentation/store/maakVanJouStore';
 import { useUIStore } from '@/presentation/store/uiStore';
 import {
   groupMenu, searchMenu, menuTarget, toggleFavourite, moveFavourite, parseFavourites,
@@ -122,7 +123,8 @@ export function MobileNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const phone = usePhoneApp();
-  const items: MenuItem[] = getAllNavItems();
+  const verborgen = useVerborgenTabs();
+  const items: MenuItem[] = getAllNavItems().filter((i) => !verborgen.has(i.path));
   const opPlaat = !['/lock', '/maps-3d'].includes(location.pathname);
   const zweefKnop = phone ? !phoneHeeftAppBar(location.pathname) : true;
 

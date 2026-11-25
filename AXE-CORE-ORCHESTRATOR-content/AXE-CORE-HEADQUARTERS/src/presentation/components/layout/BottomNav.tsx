@@ -9,6 +9,7 @@ import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { PRIMARY_NAV_PATHS } from '@/domain/navRegistry';
 import { MeerAppsSheet } from '@/presentation/components/layout/MeerAppsSheet';
+import { useVerborgenTabs } from '@/presentation/store/maakVanJouStore';
 
 type NavItem = {
   icon?: LucideIcon;
@@ -232,6 +233,10 @@ export function BottomNav() {
   const isMobile = useIsMobile();
   const activePath = location.pathname;
   const [meerOpen, setMeerOpen] = useState(false);
+  // "Maak het van jou": "verberg Trading" in de chat haalt de tab hier weg.
+  const verborgen = useVerborgenTabs();
+  const links = leftItems.filter((i) => !verborgen.has(i.path));
+  const rechts = rightItems.filter((i) => !verborgen.has(i.path));
 
   const meerActive = meerOpen || activePath === '/dax'
     || (!!meerNavActive(activePath));
@@ -264,7 +269,7 @@ export function BottomNav() {
         }}
       >
         <div className="flex items-center gap-1 sm:gap-1.5 justify-end flex-shrink-0">
-          {(isMobile ? orderForMobile([...leftItems, ...rightItems]) : leftItems).map((item) => (
+          {(isMobile ? orderForMobile([...links, ...rechts]) : links).map((item) => (
             <NavTile
               key={item.path}
               item={item}
@@ -295,7 +300,7 @@ export function BottomNav() {
         </div>
 
         <div className="flex items-center gap-1 sm:gap-1.5 justify-start flex-shrink-0">
-          {(isMobile ? [] : rightItems).map((item) => (
+          {(isMobile ? [] : rechts).map((item) => (
             <NavTile
               key={item.path}
               item={item}

@@ -11,6 +11,8 @@ import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionS
 import { stripToolMarkers } from '@/domain/tools/toolCatalog';
 import { homeCommando, type HomeCommando } from '@/domain/overlay/homeCommando';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
+import { antwoord as maakAntwoord, maakVanJouOpdracht, pasToe } from '@/domain/maakVanJou';
+import { leesMaakVanJou, schrijfMaakVanJou } from '@/presentation/store/maakVanJouStore';
 
 const WEERGAVE_NAAM = { axe: 'de bol', neural: 'Neural', terrain: 'Terrain', runtime: 'Runtime' } as const;
 
@@ -89,6 +91,22 @@ export function installSpherePresent(): void {
           }));
           return;
         }
+      }
+
+      // "Maak het van jou" (25 nov): "verberg Trading", "maak het groen". Hier in de
+      // buitenste laag, anders projecteert de bol eerst een Trading-grafiek en gaat
+      // de zin daarna naar het model.
+      const eigen = trimmed ? maakVanJouOpdracht(trimmed) : null;
+      if (eigen) {
+        const na = pasToe(leesMaakVanJou(), eigen);
+        schrijfMaakVanJou(na);
+        const nu = Date.now();
+        useVoiceStore.setState(s => ({
+          conversation: [...s.conversation,
+            { role: 'user', text: trimmed, timestamp: nu },
+            { role: 'axe', text: maakAntwoord(eigen, na), timestamp: nu + 1 }],
+        }));
+        return;
       }
 
       if (trimmed) {
