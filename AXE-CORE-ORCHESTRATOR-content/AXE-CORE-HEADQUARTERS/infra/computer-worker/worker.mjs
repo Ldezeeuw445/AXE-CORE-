@@ -135,6 +135,11 @@ const WORKSPACE_DEFS = {
     // all, which is exactly the kind of thing an agent should never be
     // pointed at by accident.
     fallback: '/Volumes/EagetSSD/TRADING-OS',
+    // 25 nov: de SSD hangt niet aan de Mac mini, dus 'Trading OS' bestond daar niet en drie
+    // managertaken eindigden op "trading-os-app is niet beschikbaar". De levende repo is
+    // ~/trading-os-app (Ldezeeuw445/trading-os-app, vandaag nog bijgewerkt); ~/TRADING-OS
+    // is een oude kopie uit mei en blijft buiten beeld. Eerste die bestaat, wint.
+    alternatieven: ['~/trading-os-app'],
     protected: ['main'],
   },
 };
@@ -142,8 +147,9 @@ const WORKSPACE_DEFS = {
 const WORKSPACES = Object.fromEntries(
   Object.entries(WORKSPACE_DEFS)
     .map(([name, def]) => {
-      const raw = env[def.envKey] ?? def.fallback;
-      const root = resolve(raw.replace(/^~/, homedir()));
+      const pad = p => resolve(String(p).replace(/^~/, homedir()));
+      const kandidaten = env[def.envKey] ? [env[def.envKey]] : [def.fallback, ...(def.alternatieven || [])];
+      const root = pad(kandidaten.find(k => existsSync(pad(k))) ?? kandidaten[0]);
       return [name, { root, protected: def.protected, present: existsSync(root) }];
     })
     .filter(([name, w]) => {
