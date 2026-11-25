@@ -227,8 +227,10 @@ export default function MemoryLibraryPanel({ visual = 'neural' }: { visual?: Lib
             className="axe-kaart p-5 lg:p-6 relative overflow-hidden flex-shrink-0"
             style={{ outline: flash ? '1px solid rgba(167,139,250,0.45)' : undefined, outlineOffset: -1 }}
           >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
+            {/* 25 nov: het middenvak tussen de terrein-kolommen is smal; naast
+                elkaar knelde de tekst tot één woord per regel. Onder elkaar tot 2xl. */}
+            <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3">
                 <motion.div
                   className="rounded-xl flex items-center justify-center flex-shrink-0"
                   animate={flash ? { scale: [1, 1.12, 1], rotate: [0, -6, 6, 0] } : {}}
@@ -243,7 +245,7 @@ export default function MemoryLibraryPanel({ visual = 'neural' }: { visual?: Lib
                 >
                   <Library size={22} color="#34d399" />
                 </motion.div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-[11px] font-mono uppercase tracking-wider" style={{ color: '#6ee7b7' }}>
                     AXE Durable Brain
                   </div>
@@ -275,8 +277,8 @@ export default function MemoryLibraryPanel({ visual = 'neural' }: { visual?: Lib
                   </p>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col items-start 2xl:items-end gap-2 flex-shrink-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => void reload()}

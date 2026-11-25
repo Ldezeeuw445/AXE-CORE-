@@ -16,8 +16,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { RefreshCw, ExternalLink } from 'lucide-react';
-import { Page, Grid, Block, Stat } from '@/presentation/components/surface/Page';
-import { TabRuimte } from '@/presentation/components/layout/tabMaatstaf';
+import { DashSchil, DashKop, DashRaster, DashKaart, DashLeeg } from '@/presentation/components/layout/dashboardSchil';
 import { getSystemState, checkAllServices, type ServiceState } from '@/application/system/systemService';
 import { FEATURES, STATE_META, countByState, type Feature, type FeatureState } from '@/domain/system/featureRegistry';
 import { chatSaveHealth, type ChatSaveHealth } from '@/infrastructure/persistence/chatPersistence';
@@ -133,79 +132,59 @@ export default function StatusPage() {
   const online = services.filter(s => s.status === 'online').length;
   const offline = services.filter(s => s.status === 'offline').length;
 
+  /* 25 nov (Luka: geen scroll): de acht stat-blokken staan nu als cijfers in
+     de kopstrook, features + services + monitoring delen één raster. Alleen
+     de lijsten schuiven, binnen hun eigen kaart. */
   return (
     <div className="axe-status-v3 flex min-h-0 flex-1 flex-col" data-axe-status="v3">
-    <TabRuimte vullen>
-    <Page
-      title="Status"
-      subtitle={
-        checkedAt
-          ? `Services checked at ${checkedAt.toLocaleTimeString('en-US')} · features declared 31 Aug 2026`
-          : 'Services measured live · features declared, not measured'
-      }
-      actions={
-        <button
-          type="button"
-          onClick={runCheck}
-          disabled={checking}
-          className="flex items-center gap-1.5 rounded-button px-3 py-1.5 text-[12px] font-medium transition-colors"
-          style={{
-            background: 'var(--tint)',
-            border: '1px solid var(--tint-line)',
-            color: 'var(--accent-cyan)',
-            opacity: checking ? 0.6 : 1,
-          }}
-        >
-          <RefreshCw size={12} className={checking ? 'animate-spin' : undefined} />
-          {checking ? 'checking…' : 'Health check'}
-        </button>
+    <DashSchil
+      tab="status"
+      kop={
+        <DashKop
+          titel="Status"
+          sub={
+            checkedAt
+              ? `Checked ${checkedAt.toLocaleTimeString('en-GB')} · features declared 31 Aug 2026`
+              : 'Services measured live · features declared'
+          }
+          cijfers={[
+            { label: 'Works', waarde: counts.works, sub: 'tabs', toon: 'ok' },
+            { label: 'Partial', waarde: counts.partial, sub: 'unfinished', toon: 'warn' },
+            { label: 'Broken', waarde: counts.broken, sub: `${counts.empty + counts.duplicate} empty or dup`, toon: 'fout' },
+            {
+              label: 'Services',
+              waarde: services.length ? `${online}/${services.length}` : '—',
+              sub: services.length ? 'online' : 'run a check',
+              toon: services.length ? (offline > 0 ? 'warn' : 'ok') : undefined,
+            },
+          ]}
+          acties={
+            <button
+              type="button"
+              onClick={runCheck}
+              disabled={checking}
+              className="flex items-center gap-1.5 rounded-button px-3 py-1.5 text-[12px] font-medium transition-colors"
+              style={{
+                background: 'var(--tint)',
+                border: '1px solid var(--tint-line)',
+                color: 'var(--accent-cyan)',
+                opacity: checking ? 0.6 : 1,
+              }}
+            >
+              <RefreshCw size={12} className={checking ? 'animate-spin' : undefined} />
+              {checking ? 'checking…' : 'Health check'}
+            </button>
+          }
+        />
       }
     >
-      <Block title="Continuous monitoring"><ServiceMonitoringGlance /></Block>
-      <Grid rowHeight={132} min={168} className="mb-3">
-        <Block title="Works"><Stat value={counts.works} tone="ok" label="tabs" /></Block>
-        <Block title="Partial"><Stat value={counts.partial} tone="warn" label="thin or unfinished" /></Block>
-        <Block title="Broken"><Stat value={counts.broken} tone="err" label="do not work" /></Block>
-        <Block title="Empty"><Stat value={counts.empty} label="nothing in them" /></Block>
-        <Block title="Duplicate"><Stat value={counts.duplicate} label="same as another tab" /></Block>
-        <Block title="Saving chat">
-          <Stat
-            value={saveState.ok ? 'OK' : String(saveState.failures)}
-            tone={saveState.ok ? 'ok' : 'err'}
-            label={
-              saveState.ok
-                ? (saveState.lastSuccessAt ? 'last message stored' : 'nothing stored this session')
-                : 'mislukte pogingen'
-            }
-          />
-        </Block>
-        <Block title="Leerlus">
-          <Stat
-            value={loop.judged > 0 ? `${loop.good}/${loop.judged}` : String(loop.turns)}
-            tone={loop.reinforcedMemories > 0 ? 'ok' : loop.turns > 0 ? 'warn' : 'default'}
-            label={
-              loop.judged > 0
-                ? `beoordeeld · ${loop.reinforcedMemories} versterkt`
-                : loop.turns > 0
-                  ? 'fetched, not reviewed yet'
-                  : 'nothing fetched yet'
-            }
-          />
-        </Block>
-        <Block title="Services">
-          <Stat
-            value={services.length ? `${online}/${services.length}` : '—'}
-            tone={offline > 0 ? 'warn' : 'ok'}
-            label={services.length ? 'online' : 'run a health check'}
-          />
-        </Block>
-      </Grid>
-
-      <Grid rowHeight={430} min={330}>
-        <Block
-          span={2}
-          title="Features — declared, not measured"
-          action={
+      <DashRaster kolommen={3} rijen={2}>
+        <DashKaart
+          kolom={2}
+          rij={2}
+          titel="Features · declared"
+          telling={shown.length}
+          actie={
             <div className="flex gap-1">
               {(['all', 'broken', 'partial', 'empty'] as const).map(k => (
                 <button
@@ -230,13 +209,11 @@ export default function StatusPage() {
               <FeatureRow key={f.route} f={f} onOpen={r => navigate(`/${r}`)} />
             ))}
           </div>
-        </Block>
+        </DashKaart>
 
-        <Block title="Services — measured now">
+        <DashKaart titel="Services · measured" telling={services.length || undefined}>
           {services.length === 0 ? (
-            <p className="pt-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
-              No reading yet. Press Health check.
-            </p>
+            <DashLeeg>No reading yet. Press Health check.</DashLeeg>
           ) : (
             <div className="flex flex-col gap-0.5">
               {services.map(s => (
@@ -266,10 +243,33 @@ export default function StatusPage() {
               ))}
             </div>
           )}
-        </Block>
-      </Grid>
-    </Page>
-    </TabRuimte>
+        </DashKaart>
+
+        <DashKaart titel="Monitoring">
+          <div className="mb-2 grid grid-cols-2 gap-2" data-axe-status-lussen="">
+            <div className="rounded-card px-2.5 py-2" style={{ background: 'rgba(255,255,255,.03)' }}>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Chat save</div>
+              <div className="font-mono text-[16px] font-semibold" style={{ color: saveState.ok ? 'var(--success)' : 'var(--error)' }}>
+                {saveState.ok ? 'OK' : String(saveState.failures)}
+              </div>
+              <div className="truncate text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                {saveState.ok ? (saveState.lastSuccessAt ? 'last message stored' : 'nothing stored yet') : 'failed attempts'}
+              </div>
+            </div>
+            <div className="rounded-card px-2.5 py-2" style={{ background: 'rgba(255,255,255,.03)' }}>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>Learning loop</div>
+              <div className="font-mono text-[16px] font-semibold" style={{ color: loop.reinforcedMemories > 0 ? 'var(--success)' : loop.turns > 0 ? 'var(--warning)' : 'var(--text-primary)' }}>
+                {loop.judged > 0 ? `${loop.good}/${loop.judged}` : String(loop.turns)}
+              </div>
+              <div className="truncate text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                {loop.judged > 0 ? `reviewed · ${loop.reinforcedMemories} reinforced` : loop.turns > 0 ? 'fetched, not reviewed yet' : 'nothing fetched yet'}
+              </div>
+            </div>
+          </div>
+          <ServiceMonitoringGlance />
+        </DashKaart>
+      </DashRaster>
+    </DashSchil>
     </div>
   );
 }

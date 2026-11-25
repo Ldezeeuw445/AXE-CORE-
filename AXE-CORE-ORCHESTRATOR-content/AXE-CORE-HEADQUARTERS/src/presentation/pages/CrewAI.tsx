@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Bot, Rocket, Send, Sparkles, Target, Users } from 'lucide-react';
-import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { Send, Sparkles, Target, Users } from 'lucide-react';
 import { apiCreateTask, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { runCrewWithTools } from '@/application/crew/runCrewWithTools';
 import { SPECIALISTS } from '@/domain/catalogs/specialists';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
-import { TabRuimte, Kaart, StatRij, SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
+import { SchuifBalk } from '@/presentation/components/layout/tabMaatstaf';
+import { DashSchil, DashKop, DashRaster, DashKaart } from '@/presentation/components/layout/dashboardSchil';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 
@@ -158,91 +158,72 @@ export default function CrewAI() {
           ]}
         />
       </TabRail>
-      <TabRuimte>
-      <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
-        <div
-          className="text-[10px] px-2 py-1 rounded-full self-start"
-          style={{
-            background: isAxeApiConfigured ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
-            color: isAxeApiConfigured ? 'var(--success)' : 'var(--error)',
-            border: `1px solid ${isAxeApiConfigured ? 'rgba(16,185,129,0.18)' : 'rgba(239,68,68,0.18)'}`,
-          }}
-        >
-          {isAxeApiConfigured ? 'AXE API connected' : 'AXE API not configured'}
-        </div>
-      </div>
-
-      <StatRij className="flex-none">
-        {[
-          { label: 'Specialists', value: SPECIALISTS.length, icon: Bot, color: 'var(--accent-cyan)' },
-          { label: 'Selected', value: selected.length, icon: Users, color: '#8b5cf6' },
-          { label: 'Runtime', value: 'VPS · Ollama', icon: Rocket, color: 'var(--success)' },
-        ].map(card => {
-          const Icon = card.icon;
-          return (
-            <Kaart key={card.label} compact>
-              <div className="text-center py-1">
-                <div className="flex items-center justify-center gap-2 text-2xl font-bold font-mono-data" style={{ color: card.color }}>
-                  <Icon size={15} />
-                  <span>{card.value}</span>
-                </div>
-                <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{card.label}</div>
-              </div>
-            </Kaart>
-          );
-        })}
-      </StatRij>
-
-      {/* Twee vaste kolommen die de resthoogte vullen. Met auto-fill stonden
-          de roster en de taakkolom in twee van vier sporen en bleef de rechter
-          helft van de tab op 1728 breed leeg (UI-MAATSTAF regel 6); de roster
-          scrolt nu in de eigen kaart in plaats van de hele tab. */}
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-3">
-        <WidgetCard title="Crew Roster" headerAction={<Users size={13} style={{ color: 'var(--accent-cyan)' }} />}>
-          <div className="space-y-2">
-            {SPECIALISTS.map(s => {
-              const active = selected.includes(s.id);
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => toggle(s.id)}
-                  className="w-full text-left rounded-xl p-3 transition-colors"
-                  style={{
-                    background: active ? 'var(--tint)' : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${active ? 'var(--tint-line)' : 'rgba(255,255,255,0.05)'}`,
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>
-                        {s.emoji} {s.name} — {s.role}
+      {/* 25 nov (Luka: geen scroll): DashSchil. De drie stat-kaarten zijn
+          kopcijfers geworden (geen StatRij meer); roster | taak + resultaat
+          vullen het raster, alleen kaartlijven schuiven. */}
+      <DashSchil
+        tab="crewai"
+        kop={
+          <DashKop
+            titel="CrewAI"
+            sub="Wingman's crew · runs on the VPS"
+            cijfers={[
+              { label: 'Specialists', waarde: SPECIALISTS.length, sub: 'in roster' },
+              { label: 'Selected', waarde: selected.length, sub: selected.length ? 'for this run' : 'none · runs 1' },
+              { label: 'Runtime', waarde: 'VPS', sub: 'Ollama' },
+              {
+                label: 'AXE API',
+                waarde: isAxeApiConfigured ? 'On' : 'Off',
+                sub: isAxeApiConfigured ? 'connected' : 'not configured',
+                toon: isAxeApiConfigured ? 'ok' : 'fout',
+              },
+            ]}
+          />
+        }
+      >
+        <DashRaster kolommen={2} rijen={2}>
+          <DashKaart rij={2} titel="Crew roster" telling={SPECIALISTS.length} actie={<Users size={13} style={{ color: 'var(--accent-cyan)' }} />}>
+            <div className="space-y-2">
+              {SPECIALISTS.map(s => {
+                const active = selected.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => toggle(s.id)}
+                    className="w-full text-left rounded-xl p-3 transition-colors"
+                    style={{
+                      background: active ? 'var(--tint)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${active ? 'var(--tint-line)' : 'rgba(255,255,255,0.05)'}`,
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>
+                          {s.emoji} {s.name} — {s.role}
+                        </div>
+                        <div className="text-xs-custom mt-0.5" style={{ color: 'var(--text-muted)' }}>{s.focus}</div>
                       </div>
-                      <div className="text-xs-custom mt-0.5" style={{ color: 'var(--text-muted)' }}>{s.focus}</div>
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded-full font-mono self-start shrink-0"
+                        style={{
+                          background: active ? 'var(--tint)' : 'rgba(139,92,246,0.12)',
+                          color: active ? 'var(--accent-cyan)' : '#c084fc',
+                        }}
+                      >
+                        {active ? 'selected' : s.id}
+                      </span>
                     </div>
-                    <span
-                      className="text-[9px] px-1.5 py-0.5 rounded-full font-mono self-start shrink-0"
-                      style={{
-                        background: active ? 'var(--tint)' : 'rgba(139,92,246,0.12)',
-                        color: active ? 'var(--accent-cyan)' : '#c084fc',
-                      }}
-                    >
-                      {active ? 'selected' : s.id}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </WidgetCard>
-
-        <div className="flex min-h-0 flex-col gap-3">
-          <WidgetCard className="flex-none" title="Crew Task" headerAction={<Sparkles size={13} style={{ color: 'var(--accent-cyan)' }} />}>
+                  </button>
+                );
+              })}
+            </div>
+          </DashKaart>
+          <DashKaart titel="Crew task" actie={<Sparkles size={13} style={{ color: 'var(--accent-cyan)' }} />}>
             <div className="space-y-2.5">
               <textarea
                 value={task}
                 onChange={e => setTask(e.target.value)}
-                rows={5}
+                rows={4}
                 placeholder="Describe the task for the crew — e.g. 'Draft a launch plan for Trading OS: positioning, pricing, and the first three automation flows.'"
                 className="w-full px-3 py-2 rounded-lg text-xs-custom outline-none resize-none"
                 style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
@@ -277,9 +258,8 @@ export default function CrewAI() {
                 </div>
               )}
             </div>
-          </WidgetCard>
-
-          <WidgetCard className="flex-1" title={state === 'error' ? 'Crew Error' : 'Crew Result'}>
+          </DashKaart>
+          <DashKaart titel={state === 'error' ? 'Crew error' : 'Crew result'}>
             {/* What the run actually had, not what Settings says is configured —
                 a key can be saved and still be wrong, so this reads the crew
                 gateway's own report of what it attached to this specific run. */}
@@ -316,15 +296,13 @@ export default function CrewAI() {
               </div>
             )}
             {state === 'done' && result && (
-              <div className="rounded-xl px-3 py-2 text-xs-custom whitespace-pre-wrap max-h-[420px] overflow-y-auto" style={{ background: 'rgba(255,255,255,0.03)', color: 'var(--text-secondary)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="rounded-xl px-3 py-2 text-xs-custom whitespace-pre-wrap" style={{ background: 'rgba(255,255,255,0.03)', color: 'var(--text-secondary)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 {result}
               </div>
             )}
-          </WidgetCard>
-        </div>
-      </div>
-      </div>
-      </TabRuimte>
+          </DashKaart>
+        </DashRaster>
+      </DashSchil>
     </motion.div>
   );
 }

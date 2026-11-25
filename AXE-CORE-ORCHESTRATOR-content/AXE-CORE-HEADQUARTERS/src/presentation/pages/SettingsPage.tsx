@@ -1,4 +1,5 @@
 import { RailDaxBots } from '@/presentation/components/layout/RightPanel';
+import { useDashModus } from '@/presentation/components/layout/useDashModus';
 import { loadLocalFirstEnabled, setLocalFirstEnabled } from '@/domain/providers';
 import { axeVoiceHealth } from '@/infrastructure/gateways/axeCoreApiService';
 import { OPENAI_STEMMEN, getOpenAiStem, setOpenAiStem, isOpenAiTtsConfigured, type OpenAiStem } from '@/infrastructure/gateways/openAiTtsService';
@@ -2033,6 +2034,8 @@ function PreferencesV3Card() {
 }
 
 export default function SettingsPage() {
+  // 25 nov (Luka: geen scroll): één sectie tegelijk; alleen het paneel schuift, compacte composer geeft ~150px.
+  useDashModus('settings');
   const voice = useVoiceStore();
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
   const [clapEnabled, setClapEnabled] = useState(false);

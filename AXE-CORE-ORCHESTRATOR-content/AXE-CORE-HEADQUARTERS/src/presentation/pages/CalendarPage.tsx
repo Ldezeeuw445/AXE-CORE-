@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useDashModus } from '@/presentation/components/layout/useDashModus';
 import { motion } from 'framer-motion';
 
 import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
@@ -129,6 +130,8 @@ function formatDateKey(year: number, month: number, day: number): string {
 /* ------------------------------------------------------------------ */
 
 export default function CalendarPage() {
+  // 25 nov (Luka: geen scroll): week/maand vullen al het vak; uren schuiven in het rooster, compacte composer geeft ~150px.
+  useDashModus('calendar');
   const now = new Date();
   const [currentYear, setCurrentYear] = useState(now.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(now.getMonth());

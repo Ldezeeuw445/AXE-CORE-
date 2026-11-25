@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { requireSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { getSystemState, checkAllServices, type ServiceState } from '@/application/system/systemService';
 import { SystemRegistryPanel } from '@/presentation/components/shared/SystemRegistryPanel';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { Menu } from 'lucide-react';
-import { Kaart } from '@/presentation/components/layout/tabMaatstaf';
+import { DashSchil, DashKop, DashRaster, DashKaart, DashLeeg } from '@/presentation/components/layout/dashboardSchil';
 import { usePhoneApp } from '@/presentation/pages/phone/usePhoneApp';
 import PhoneSystems from '@/presentation/pages/phone/PhoneSystems';
 import { ollamaHeaders, ollamaUrl } from '@/infrastructure/config/ollamaSleutel';
@@ -161,18 +161,23 @@ export default function Infrastructure() {
     'shared':        ['supabase'],
   };
 
+  const projectLive = (projectServiceKeys[activeProject] ?? [])
+    .map(key => [key, liveStates[key]] as const)
+    .filter((e): e is readonly [string, NonNullable<typeof e[1]>] => !!e[1]);
+  const projectOnline = projectLive.filter(([, s]) => s.status === 'online').length;
+
   if (phone) return <PhoneSystems />;
 
   return (
-    <motion.div className="axe-tabruimte axe-infra-v3 h-full flex flex-col" data-axe-infrastructure="v3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+    <motion.div className="axe-infra-v3 h-full flex flex-col" data-axe-infrastructure="v3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+      <div className={isMobile ? 'flex items-center justify-between px-5 py-3 flex-shrink-0' : 'contents'} style={isMobile ? { borderBottom: '1px solid rgba(255,255,255,0.04)' } : undefined}>
       {/* De titel is weg -- de nav zegt al waar je bent -- maar de cijfers die
           eronder stonden niet: die zijn de stand van deze tab en horen in de
           topbalk, waar ze zichtbaar blijven zonder een regel te kosten. */}
       <TopbalkSlot>
         <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-secondary)' }}>
-          {tables.length} tabellen · {PROJECTS.length - 1} projecten{lastCheck ? ` · ${lastCheck.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}` : ''}
+          {tables.length} tables · {PROJECTS.length - 1} projects{lastCheck ? ` · ${lastCheck.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}
         </span>
       </TopbalkSlot>
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
@@ -210,9 +215,6 @@ export default function Infrastructure() {
               </SheetContent>
             </Sheet>
           )}
-          <button onClick={runCheck} disabled={checking} className="px-3 py-1 rounded-lg text-xs font-mono transition-all" style={{ background: checking ? 'var(--tint-line)' : 'var(--tint-line)', color: checking ? 'var(--tint-line)' : 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
-            {checking ? 'checking…' : '↻ health check'}
-          </button>
         </div>
       </div>
 
@@ -246,33 +248,37 @@ export default function Infrastructure() {
           </div>
       </TabRail>
 
-        {/* Main content */}
+        {/* Main content — 25 nov (Luka: geen scroll): één dashboardraster.
+            Kop = project + cijfers; stack, diensten en modellen boven,
+            architectuur en tabellen onder. Alleen kaartlijven schuiven. */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div key={activeProject} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="flex-1 flex flex-col min-h-0 p-5 gap-4 overflow-y-auto">
-
-              {/* Project header */}
-              <Kaart><div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2.5">
-                    <span style={{ color: project.color, fontSize: 20 }}>{project.emoji}</span>
-                    <h2 className="text-lg font-semibold" style={{ color: project.color }}>{project.name}</h2>
-                    <span className="rounded-full px-2 py-0.5 text-[9px] font-mono" style={{ background: `${project.color}18`, color: project.color }}>{projectTables.length} tables</span>
-                  </div>
-                  <p className="text-xs mt-0.5 ml-7" style={{ color: 'var(--text-muted)' }}>{project.description}</p>
-                  {project.url && <p className="text-[10px] ml-7 mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }}>{project.url}</p>}
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-mono font-bold" style={{ color: project.color }}>{totalRows.toLocaleString()}</div>
-                  <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>total rows</div>
-                </div>
-              </div></Kaart>
-
-              {/* Drie kaarten naast elkaar: stack, live diensten, modellen. */}
-              <div className="axe-infra-raster">
-
-              {/* Tech stack */}
-              <Kaart titel="TECH STACK">
+          <DashSchil
+            tab="infrastructure"
+            kop={
+              <DashKop
+                titel={<span style={{ color: project.color }}>{project.emoji} {project.name}</span>}
+                sub={project.url ?? project.description}
+                cijfers={[
+                  { label: 'Tables', waarde: projectTables.length, sub: `${tables.length} total` },
+                  { label: 'Rows', waarde: totalRows.toLocaleString('en-US'), sub: 'approx.' },
+                  {
+                    label: 'Services',
+                    waarde: `${projectOnline}/${projectLive.length}`,
+                    sub: projectLive.length ? 'online' : 'none tracked',
+                    toon: projectLive.length ? (projectOnline === projectLive.length ? 'ok' : 'warn') : undefined,
+                  },
+                  { label: 'Stack', waarde: project.stack.length, sub: 'components' },
+                ]}
+                acties={
+                  <button onClick={runCheck} disabled={checking} className="px-3 py-1.5 rounded-lg text-xs font-mono transition-all" style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)', opacity: checking ? 0.6 : 1 }}>
+                    {checking ? 'checking…' : '↻ Health check'}
+                  </button>
+                }
+              />
+            }
+          >
+            <DashRaster kolommen={3} rijen={2}>
+              <DashKaart titel="Tech stack" telling={project.stack.length}>
                 <div className="flex flex-wrap gap-2">
                   {project.stack.map(s => {
                     const serviceKey = s.name.toLowerCase().replace(/\s+/g, '_');
@@ -288,68 +294,60 @@ export default function Infrastructure() {
                     );
                   })}
                 </div>
-              </Kaart>
+              </DashKaart>
 
-              {/* Services from core_system_state for this project */}
-              <Kaart titel="LIVE SERVICES">
-              {(projectServiceKeys[activeProject] ?? []).length === 0 ? (
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No live services tracked for this project.</p>
-              ) : (
-                  <div className="flex flex-col gap-1.5">
-                    {(projectServiceKeys[activeProject] ?? []).map(key => {
-                      const s = liveStates[key];
-                      if (!s) return null;
-                      return (
-                        <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                          <div>
-                            <div className="text-xs" style={{ color: 'var(--text-primary)' }}>{s.display}</div>
-                            {s.latency_ms != null && <div className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>{s.latency_ms}ms</div>}
-                          </div>
-                          <span className="rounded-full" style={{ width: 8, height: 8, background: s.status === 'online' ? '#10B981' : s.status === 'degraded' ? '#F59E0B' : '#EF4444', boxShadow: s.status === 'online' ? '0 0 6px #10B981' : 'none' }} />
-                        </div>
-                      );
-                    })}
-                  </div>
-              )}
-              </Kaart>
-
-              {/* Ollama models — per-model card + test */}
-              <Kaart titel="OLLAMA MODELS (VPS)">
-                <OllamaModelCards />
-              </Kaart>
-              </div>
-
-              {/* Architectuur en tabellen naast elkaar. */}
-              <div className="axe-infra-raster axe-infra-raster--twee">
-              <SystemRegistryPanel />
-
-              {/* Tables */}
-              <Kaart titel="DATABASE TABLES" actie={<input value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder="filter tables…" className="text-[10px] px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-primary)', outline: 'none', width: 140 }} />}>
-                <div className="hidden">
-                </div>
-                {loading ? (
-                  <div className="flex items-center justify-center py-8" style={{ color: 'var(--text-muted)' }}>
-                    <span className="text-xs">Loading tables…</span>
-                  </div>
-                ) : filteredTables.length === 0 ? (
-                  <div className="text-xs py-4 text-center" style={{ color: 'var(--text-muted)' }}>No tables found</div>
+              <DashKaart titel="Live services" telling={projectLive.length || undefined}>
+                {projectLive.length === 0 ? (
+                  <DashLeeg>No live services tracked for this project.</DashLeeg>
                 ) : (
-                  <div className="grid grid-cols-1 gap-1 max-h-80 overflow-y-auto pr-1">
+                  <div className="flex flex-col gap-1.5">
+                    {projectLive.map(([key, s]) => (
+                      <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                        <div className="min-w-0">
+                          <div className="text-xs truncate" style={{ color: 'var(--text-primary)' }}>{s.display || key}</div>
+                          {s.latency_ms != null && <div className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>{s.latency_ms}ms</div>}
+                        </div>
+                        <span className="rounded-full flex-none" style={{ width: 8, height: 8, background: s.status === 'online' ? '#10B981' : s.status === 'degraded' ? '#F59E0B' : '#EF4444', boxShadow: s.status === 'online' ? '0 0 6px #10B981' : 'none' }} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </DashKaart>
+
+              <DashKaart titel="Ollama models (VPS)">
+                <OllamaModelCards />
+              </DashKaart>
+
+              <DashKaart kolom={2} vrij>
+                <div className="h-full overflow-y-auto p-1">
+                  <SystemRegistryPanel />
+                </div>
+              </DashKaart>
+
+              <DashKaart
+                titel="Database tables"
+                telling={filteredTables.length || undefined}
+                actie={<input value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder="filter tables…" className="text-[10px] px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-primary)', outline: 'none', width: 120 }} />}
+              >
+                {loading ? (
+                  <DashLeeg>Loading tables…</DashLeeg>
+                ) : filteredTables.length === 0 ? (
+                  <DashLeeg>No tables found</DashLeeg>
+                ) : (
+                  <div className="grid grid-cols-1 gap-1">
                     {filteredTables.map(t => (
                       <div key={t.tbl} className="flex items-center justify-between px-3 py-1.5 rounded" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                        <span className="text-[11px] font-mono" style={{ color: 'var(--text-primary)' }}>{t.tbl}</span>
+                        <span className="text-[11px] font-mono truncate" style={{ color: 'var(--text-primary)' }}>{t.tbl}</span>
                         <span className="text-[10px] font-mono ml-2" style={{ color: t.approx_rows > 0 ? project.color : 'var(--text-muted)' }}>
-                          {t.approx_rows.toLocaleString()}
+                          {t.approx_rows.toLocaleString('en-US')}
                         </span>
                       </div>
                     ))}
                   </div>
                 )}
-              </Kaart>
-              </div>
-
-            </motion.div>
-          </AnimatePresence>
+              </DashKaart>
+            </DashRaster>
+          </DashSchil>
         </div>
       </div>
     </motion.div>
