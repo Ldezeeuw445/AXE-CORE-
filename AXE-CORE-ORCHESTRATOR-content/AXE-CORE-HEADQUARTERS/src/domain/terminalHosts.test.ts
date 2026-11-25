@@ -37,7 +37,7 @@ describe('een machine toevoegen', () => {
 
   it('vult een ontbrekende omschrijving in plaats van hem leeg te laten', () => {
     // Het waarvoor staat op elke knop; leeg zou een gat in de rij geven.
-    expect(maakHost('iMac', '', 'ws://a:1/t')?.waarvoor).toBe('Geen omschrijving');
+    expect(maakHost('iMac', '', 'ws://a:1/t')?.waarvoor).toBe('No description');
   });
 });
 

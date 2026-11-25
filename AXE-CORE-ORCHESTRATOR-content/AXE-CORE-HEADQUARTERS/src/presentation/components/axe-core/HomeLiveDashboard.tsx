@@ -7,8 +7,8 @@ import { taakActieLabel, taakFoutVan, type TaakActie } from '@/domain/taken/taak
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import {
-  calendarJobs, codingSeatsHeartbeat, fixDurableTask, ledgerOverview, lockscreenSnapshot, retryDurableTask,
-  type LedgerEntry, type LockscreenSnapshot,
+  abonnementVerbruik, calendarJobs, codingSeatsHeartbeat, fixDurableTask, keysOverview, ledgerOverview, lockscreenSnapshot, retryDurableTask,
+  usageCreditsSnapshot, type LedgerEntry, type LedgerTotal, type LockscreenSnapshot,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
 import { groepeerAbonnementen, stoelSleutel, type CodingSeat } from '@/domain/codingSeats';
@@ -27,11 +27,12 @@ import { railRijen } from '@/domain/tierRouter/agentVenster';
 import { serverStand } from '@/domain/agents/serverStatus';
 import { STAND } from '@/presentation/components/axe-core/managerStand';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
-import { agendaVanJobs } from '@/domain/grootboek';
-import { datumSleutel } from '@/domain/weekRooster';
+import { appVanRegel } from '@/domain/grootboek';
+import { appMeta } from '@/domain/apps';
+import { listTrades } from '@/infrastructure/persistence/tradingTradesService';
 import {
-  feedRegels, geledenTekst, kiesMachines, llmTelling, providerTegels, ringToon, ringWaarde, vandaagVanafNu,
-  type FeedRegel, type Machine, type Toon,
+  feedRegels, geledenTekst, kiesMachines, limietRegels, llmTelling, perUur, pnlLijn, providerTegels, recenteToestellen, ringToon, ringWaarde,
+  tijdlijnVandaag, type FeedRegel, type Machine, type ProviderSleutel, type TijdJob, type Toon,
 } from '@/domain/homeCommandCenter';
 import './homeLive.css';
 import './homeCommandCenter.css';
@@ -113,6 +114,37 @@ function Ring({ pct, label }: { pct: number | null; label: string }) {
   );
 }
 
+/** Sparkline van een rij getallen; een vlakke nul-lijn als alles nul is, niets als er geen data is. */
+function Spark({ waarden, toon = 'ok' }: { waarden: readonly number[]; toon?: Toon }) {
+  if (waarden.length < 2) return null;
+  const w = 84; const h = 22;
+  const min = Math.min(...waarden); const max = Math.max(...waarden);
+  const span = max - min || 1;
+  const pad = waarden.map((v, i) => `${i ? 'L' : 'M'}${((i / (waarden.length - 1)) * w).toFixed(1)},${(h - 2 - ((v - min) / span) * (h - 4)).toFixed(1)}`).join(' ');
+  return (
+    <svg className="axe-hcc-spark" data-toon={toon} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
+      <path d={`${pad} L${w},${h} L0,${h} Z`} className="axe-hcc-spark-vlak" />
+      <path d={pad} className="axe-hcc-spark-lijn" />
+    </svg>
+  );
+}
+
+/** Eén KPI: label, getal, één regel, en waar dat kan een sparkline. Klik = de tab erachter. */
+function Kpi({ label, waarde, regel, toon, spark, onKlik }: {
+  label: string; waarde: ReactNode; regel: string; toon: Toon; spark?: readonly number[]; onKlik: () => void;
+}) {
+  return (
+    <button type="button" className="axe-hcc-kpi" data-axe-hcc-kpi={label} onClick={onKlik}>
+      <span className="axe-hcc-kpi-kop"><Stip toon={toon} /><span className="axe-hcc-kpi-label">{label}</span></span>
+      <span className="axe-hcc-kpi-rij">
+        <span className="axe-hcc-kpi-waarde">{waarde}</span>
+        {spark && <Spark waarden={spark} toon={toon === 'uit' ? 'ok' : toon} />}
+      </span>
+      <span className="axe-hcc-kpi-regel">{regel}</span>
+    </button>
+  );
+}
+
 /* ── Data ──────────────────────────────────────────────────────────────── */
 
 /** Herhaal een fetch op een vaste tik; pauzeert als het venster verborgen is. */
@@ -179,7 +211,27 @@ async function laadVandaagTijdlijn() {
   const eind = new Date(nu);
   eind.setHours(23, 59, 59, 999);
   const r = await calendarJobs(nu, eind);
-  return agendaVanJobs(r.items ?? []);
+  return (r.items ?? []).map((i): TijdJob => ({
+    key: i.key, at: i.at, naam: i.naam, aantal: i.aantal, herhaling: i.herhaling, kleur: appMeta(appVanRegel(i.app)).kleur,
+  }));
+}
+
+/** Alle sleutelrijen met een provider, over alle apps heen; Home leest alleen status en laatste HTTP-code. */
+async function laadProviderSleutels(): Promise<ProviderSleutel[]> {
+  const r = await keysOverview();
+  return (r.apps ?? []).flatMap((a) => a.keys.map((k) => ({
+    provider: k.provider ?? null, status: k.status, usage: k.usage ? { last_status: k.usage.last_status } : null,
+  })));
+}
+
+/** Taken van de laatste 24 uur: alleen status en tijd, voor de grafiekjes. */
+async function laadTaken24u(): Promise<Array<{ status: string; updated_at: string }>> {
+  const sb = getSupabase();
+  if (!sb) throw new Error('no database connection');
+  const sinds = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const { data, error } = await sb.from('core_tasks').select('status, updated_at').gte('updated_at', sinds).limit(5000);
+  if (error) throw error;
+  return (data ?? []) as Array<{ status: string; updated_at: string }>;
 }
 
 function useKlok(): Date {
@@ -218,8 +270,13 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
   const vandaag = usePoll(telVandaag, 120_000).data;
   const devices = usePoll(laadDevices, 60_000);
   const snapshot = usePoll<LockscreenSnapshot>(lockscreenSnapshot, 60_000);
-  const fouten = usePoll<LedgerEntry[]>(() => ledgerOverview({ hours: 24, failsOnly: true, limit: 20 }).then((r) => r.entries), 120_000);
+  const fouten = usePoll<{ entries: LedgerEntry[]; totals: LedgerTotal[] }>(() => ledgerOverview({ hours: 24, failsOnly: true, limit: 20 }), 120_000);
+  const taken24 = usePoll(laadTaken24u, 300_000);
+  const verbruik = usePoll(() => abonnementVerbruik(), 300_000);
+  const credits = usePoll(usageCreditsSnapshot, 300_000);
+  const trades = usePoll(() => listTrades({ status: 'closed', limit: 200 }), 600_000);
   const tijdlijn = usePoll(laadVandaagTijdlijn, 300_000);
+  const sleutels = usePoll(laadProviderSleutels, 300_000);
 
   const stand = homeLiveStand({
     agents: server.agents,
@@ -236,19 +293,20 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
   const klok = nu.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   const kernToon: Toon = kern?.kleur === 'var(--error)' ? 'fout' : kern?.label === 'Online' ? 'ok' : kern ? 'let-op' : 'uit';
 
-  /* Core overview */
-  const llm = llmTelling(providers);
+  /* Core overview: de providers eerst, want de LLMs-tegel telt ze */
+  const provTegels = providerTegels(providers, sleutels.data ?? []);
+  const llm = llmTelling(provTegels);
   const stemLabel = voiceStatus === 'idle' ? 'Ready' : VOICE_STATUS_LABEL[voiceStatus];
 
   /* Diensten en toestellen */
-  const toestellen: AxeDevice[] = devices.data?.devices ?? [];
+  const toestellen: AxeDevice[] = recenteToestellen(devices.data?.devices ?? [], nu.getTime());
   const diensten = snapshot.data?.services ?? [];
   const stoelenKlaar = stoelen.filter((s) => s.logged_in === true && !s.rate_limited).length;
 
   /* Feed */
   const feed: FeedRegel[] = feedRegels({
     meldingen: notifications.map((n) => ({ id: n.id, type: n.type, title: n.title, detail: n.detail, timestamp: n.timestamp, read: n.read })),
-    fouten: fouten.data ?? [],
+    fouten: fouten.data?.entries ?? [],
     recent: stand.recent,
   }, 7);
   const recentOp = new Map(stand.recent.map((t) => [`taak:${t.id}`, t]));
@@ -258,11 +316,22 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
   const gewicht = (r: (typeof rijen)[number]) => (r.job?.state === 'waiting' ? 0 : r.job ? 1 : 2);
   const agentTegels = [...rijen].sort((a, b) => gewicht(a) - gewicht(b)).slice(0, 6);
 
+  /* KPI's en grafiekjes: alleen wat echt gemeten is */
+  const taken = taken24.data;
+  const klaarUren = taken ? perUur(taken.filter((t) => t.status === 'done' || t.status === 'completed').map((t) => t.updated_at), nu.getTime()) : null;
+  const foutUren = taken ? perUur(taken.filter((t) => t.status === 'failed').map((t) => t.updated_at), nu.getTime()) : null;
+  const som = (r: number[] | null) => (r ? r.reduce((a, b) => a + b, 0) : null);
+  const ledgerFout = fouten.data ? fouten.data.totals.filter((t) => /fail|error/i.test(t.status)).reduce((n, t) => n + t.n, 0) : null;
+  const limieten = verbruik.data || credits.data
+    ? limietRegels(verbruik.data?.accounts ?? [], credits.data?.seats ?? [], nu.getTime()) : [];
+  const krapst = limieten.find((l) => l.pct != null) ?? null;
+  const pnl = trades.data ? pnlLijn(trades.data) : null;
+  const geld = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toLocaleString('en-GB', { maximumFractionDigits: 0 })}`;
+
   /* Systeemmonitor en providers */
   const machines: Machine[] = kiesMachines(snapshot.data?.systems);
-  const provTegels = providerTegels(providers);
-  const tijdItems = vandaagVanafNu(tijdlijn.data ?? [], datumSleutel(nu),
-    `${String(nu.getHours()).padStart(2, '0')}:${String(nu.getMinutes()).padStart(2, '0')}`, 5);
+  const dag = tijdlijnVandaag(tijdlijn.data ?? [], nu, 4);
+  const tijdItems = dag.eenmalig;
 
   return (
     <div className="axe-hcc" data-axe-hcc>
@@ -302,6 +371,28 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
         </button>
       </header>
 
+      {/* ── KPI's: zes getallen die je in één blik leest, boven de core ── */}
+      <div className="axe-hcc-kpis" data-axe-hcc-kpis>
+        <Kpi label="Tasks · 24h" waarde={som(klaarUren) ?? '–'} toon={klaarUren ? 'ok' : 'uit'} spark={klaarUren ?? undefined}
+          regel={klaarUren ? 'done, per hour' : taken24.fout ? 'Tasks did not answer' : 'Counting…'} onKlik={() => navigate('/tasks')} />
+        <Kpi label="Failures · 24h" waarde={som(foutUren) ?? '–'} toon={!foutUren ? 'uit' : som(foutUren) ? 'fout' : 'ok'} spark={foutUren ?? undefined}
+          regel={ledgerFout == null ? 'failed tasks, per hour' : `tasks · ${ledgerFout} failed runs in the ledger`} onKlik={() => navigate('/ledger')} />
+        <Kpi label="AI sessions today" waarde={credits.data?.spread.paid_today ?? '–'}
+          toon={!credits.data ? 'uit' : credits.data.spread.even ? 'ok' : 'let-op'}
+          regel={!credits.data ? (credits.fout ? 'Usage did not answer' : 'Loading usage…') : credits.data.spread.even ? 'paid seats, spread evenly' : 'paid seats, spread unevenly'}
+          onKlik={() => navigate('/settings')} />
+        <Kpi label="App budgets" waarde={credits.data ? `${credits.data.apps_met}/${credits.data.apps_total}` : '–'}
+          toon={!credits.data ? 'uit' : credits.data.apps.some((a) => a.stand === 'over') ? 'let-op' : 'ok'}
+          regel={credits.data ? `on budget · ${credits.data.apps.filter((a) => a.stand === 'over').length} over, ${credits.data.apps.filter((a) => a.stand === 'under').length} under` : 'No budget data yet'}
+          onKlik={() => navigate('/settings')} />
+        <Kpi label="Tightest AI limit" waarde={krapst ? `${krapst.pct}%` : '–'} toon={krapst ? krapst.toon : 'uit'}
+          regel={krapst ? `${krapst.naam} · ${krapst.regel}` : verbruik.fout ? 'Limits did not answer' : 'No limit measured yet'} onKlik={() => navigate('/settings')} />
+        <Kpi label="Trading P&L" waarde={pnl && pnl.length ? geld(pnl[pnl.length - 1]) : '–'}
+          toon={!pnl || !pnl.length ? 'uit' : pnl[pnl.length - 1] >= 0 ? 'ok' : 'fout'} spark={pnl && pnl.length > 1 ? pnl : undefined}
+          regel={!pnl ? 'Loading trades…' : pnl.length ? `closed trades (${pnl.length}), cumulative` : 'No closed trades yet, so no curve'}
+          onKlik={() => navigate('/trading')} />
+      </div>
+
       {/* ── Links: kern en diensten ── */}
       <div className="axe-hcc-links">
         <DashKaart titel="Core overview" className="axe-hcc-kaart axe-hcc-kaart--kern" vrij>
@@ -316,7 +407,7 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
               regel={stand.namen.length ? `running: ${stand.namen.slice(0, 3).join(', ')}` : 'None running · all on standby'} onKlik={() => navigate('/managers')} />
             <KernRij label="LLMs" waarde={llm ? `${llm.verbonden}/${llm.ingesteld}` : '–'}
               toon={!llm ? 'uit' : llm.verbonden ? 'ok' : 'fout'}
-              regel={llm ? `connected · ${llm.ingesteld} with a key` : 'No provider check yet'} onKlik={() => navigate('/settings')} />
+              regel={llm ? `answering · ${llm.ingesteld} with a key` : 'No provider check yet'} onKlik={() => navigate('/settings')} />
             <KernRij label="System" waarde={vandaag?.klaar ?? '–'} toon={vandaag?.mislukt ? 'let-op' : vandaag ? 'ok' : 'uit'}
               regel={vandaag?.mislukt == null ? 'Counting today’s tasks…' : `done today · ${vandaag.mislukt} failed`} onKlik={() => navigate('/tasks')} />
           </div>
@@ -431,10 +522,17 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
             })}
           </div>
         </DashKaart>
-        <DashKaart titel="Today" telling={tijdItems.length || undefined} className="axe-hcc-kaart" vrij
+        <DashKaart titel="Today" telling={tijdItems.length + (dag.herhalend?.jobs ?? 0) || undefined} className="axe-hcc-kaart" vrij
           actie={<button type="button" className="axe-hcc-kopknop" onClick={() => navigate('/calendar')}>Calendar</button>}>
           <div className="axe-hcc-tijdlijn" data-axe-hcc-tijdlijn>
-            {tijdItems.length === 0 && (
+            {dag.herhalend && (
+              <div className="axe-hcc-tijd axe-hcc-tijd--herhaal" data-axe-hcc-herhaal title="Crons that run several times today, counted together">
+                <span className="axe-hcc-tijd-uur font-mono-data">↻</span>
+                <i className="axe-hcc-tijd-punt" aria-hidden="true" />
+                <span className="axe-hcc-tijd-titel">{dag.herhalend.regel}</span>
+              </div>
+            )}
+            {tijdItems.length === 0 && !dag.herhalend && (
               <DashLeeg>{tijdlijn.fout ? 'Schedule did not answer.' : tijdlijn.data ? 'Nothing else planned today.' : 'Loading today…'}</DashLeeg>
             )}
             {tijdItems.map((i) => (
@@ -442,6 +540,24 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
                 <span className="axe-hcc-tijd-uur font-mono-data">{i.tijd}</span>
                 <i className="axe-hcc-tijd-punt" style={{ background: i.kleur }} aria-hidden="true" />
                 <span className="axe-hcc-tijd-titel">{i.titel}</span>
+              </div>
+            ))}
+          </div>
+        </DashKaart>
+        <DashKaart titel="AI limits" telling={limieten.filter((l) => l.pct != null).length || undefined} className="axe-hcc-kaart" vrij
+          actie={<button type="button" className="axe-hcc-kopknop" onClick={() => navigate('/settings')}>Usage</button>}>
+          <div className="axe-hcc-limieten" data-axe-hcc-limieten>
+            {limieten.length === 0 && (
+              <DashLeeg>{verbruik.fout && credits.fout ? 'Usage & Credits did not answer.' : verbruik.data || credits.data ? 'No subscriptions measured.' : 'Loading limits…'}</DashLeeg>
+            )}
+            {limieten.slice(0, 6).map((l) => (
+              <div key={l.id} className="axe-hcc-limiet" data-toon={l.toon} title={`${l.naam}: ${l.regel}`}>
+                <span className="axe-hcc-limiet-naam"><Stip toon={l.toon} />{l.naam}</span>
+                {l.pct != null
+                  ? <span className="axe-hcc-limiet-balk"><i style={{ width: `${Math.max(2, Math.min(100, l.pct))}%` }} /></span>
+                  : <span className="axe-hcc-limiet-balk axe-hcc-limiet-balk--leeg" />}
+                <span className="axe-hcc-limiet-regel">{l.pct != null ? `${l.pct}%` : ''}</span>
+                <span className="axe-hcc-limiet-sub">{l.regel}</span>
               </div>
             ))}
           </div>
@@ -466,10 +582,13 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
         <DashKaart titel="LLM providers" telling={provTegels.length || undefined} className="axe-hcc-kaart" vrij>
           <div className="axe-hcc-providers" data-axe-hcc-providers>
             {provTegels.length === 0 && <DashLeeg>No provider check yet.</DashLeeg>}
-            {provTegels.slice(0, 9).map((p) => (
-              <div key={p.id} className="axe-hcc-provider" title={p.regel}>
+            {provTegels.slice(0, 8).map((p) => (
+              <div key={p.id} className="axe-hcc-provider" data-toon={p.toon} title={`${p.naam}: ${p.regel}`}>
                 <Stip toon={p.toon} />
-                <span className="axe-hcc-provider-naam">{p.naam}</span>
+                <span className="axe-hcc-provider-tekst">
+                  <span className="axe-hcc-provider-naam">{p.naam}</span>
+                  <span className="axe-hcc-provider-regel">{p.regel}</span>
+                </span>
               </div>
             ))}
           </div>

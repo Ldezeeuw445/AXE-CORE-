@@ -10,7 +10,7 @@ export type ShellRoute = "/northsea" | "/trading";
 export const NOTCH_TABS: readonly { id: NotchTab; label: string; icon: string }[] = [
   { id: "home", label: "Home", icon: "⌂" },
   { id: "chat", label: "Chat", icon: "💬" },
-  { id: "meldingen", label: "Meldingen", icon: "🔔" },
+  { id: "meldingen", label: "Alerts", icon: "🔔" },
   { id: "agents", label: "Agents", icon: "🤖" },
   { id: "northsea", label: "NorthSea", icon: "🌊" },
   { id: "trading", label: "Trading", icon: "📈" },

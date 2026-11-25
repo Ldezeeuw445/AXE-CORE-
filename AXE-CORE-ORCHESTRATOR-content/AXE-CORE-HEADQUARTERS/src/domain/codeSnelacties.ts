@@ -24,29 +24,29 @@ function actie(i: number, id: string, label: string, prompt: string): Snelactie 
 }
 
 export function codeSnelacties(ctx: CodeContext): Snelactie[] {
-  const repo = ctx.repo || 'deze repo';
+  const repo = ctx.repo || 'this repo';
   if (ctx.bestand && ctx.patchOpen) {
     const naam = ctx.bestand.split('/').pop() ?? ctx.bestand;
     return [
-      actie(0, 'patch-uitleg', 'Leg deze wijziging uit', `Leg de openstaande wijziging in ${ctx.bestand} uit: wat verandert er en waarom? `),
-      actie(1, 'patch-risico', 'Wat kan er stuk?', `Wat kan er stukgaan door de wijziging in ${ctx.bestand}? Noem de randgevallen. `),
-      actie(2, 'patch-tests', `Tests voor ${naam}`, `Schrijf tests die de wijziging in ${ctx.bestand} vastleggen. `),
-      actie(3, 'patch-kleiner', 'Maak hem kleiner', `Maak de wijziging in ${ctx.bestand} zo klein mogelijk zonder het gedrag te veranderen. `),
+      actie(0, 'patch-uitleg', 'Explain this change', `Explain the open change in ${ctx.bestand}: what changes and why? `),
+      actie(1, 'patch-risico', 'What could break?', `What could break because of the change in ${ctx.bestand}? Name the edge cases. `),
+      actie(2, 'patch-tests', `Tests for ${naam}`, `Write tests that pin down the change in ${ctx.bestand}. `),
+      actie(3, 'patch-kleiner', 'Make it smaller', `Make the change in ${ctx.bestand} as small as possible without changing behaviour. `),
     ];
   }
   if (ctx.bestand) {
     const naam = ctx.bestand.split('/').pop() ?? ctx.bestand;
     return [
-      actie(0, 'uitleg', `Leg ${naam} uit`, `Leg uit wat ${ctx.bestand} doet en hoe het in ${repo} past. `),
-      actie(1, 'bugs', 'Zoek bugs', `Zoek bugs en stille fouten in ${ctx.bestand}. Noem regel en reden. `),
-      actie(2, 'tests', 'Schrijf tests', `Schrijf tests voor ${ctx.bestand} in de teststijl van ${repo}. `),
-      actie(3, 'opschonen', 'Maak het leesbaarder', `Maak ${ctx.bestand} leesbaarder zonder het gedrag te veranderen. `),
+      actie(0, 'uitleg', `Explain ${naam}`, `Explain what ${ctx.bestand} does and how it fits into ${repo}. `),
+      actie(1, 'bugs', 'Find bugs', `Find bugs and silent errors in ${ctx.bestand}. Name the line and the reason. `),
+      actie(2, 'tests', 'Write tests', `Write tests for ${ctx.bestand} in the test style of ${repo}. `),
+      actie(3, 'opschonen', 'Make it more readable', `Make ${ctx.bestand} more readable without changing behaviour. `),
     ];
   }
   return [
-    actie(0, 'verken', `Verken ${repo}`, `Geef me een kaart van ${repo}: de mappen, waar de ingang zit en welke bestanden ertoe doen. `),
-    actie(1, 'wijzigingen', 'Wat is er veranderd?', `Vat de openstaande git-wijzigingen in ${repo} samen. `),
-    actie(2, 'feature', 'Plan een feature', `Maak een plan voor deze feature in ${repo}, met de bestanden die je aanraakt: `),
-    actie(3, 'fout', 'Los een fout op', `Zoek en los deze fout op in ${repo}: `),
+    actie(0, 'verken', `Explore ${repo}`, `Give me a map of ${repo}: the folders, where the entry point is and which files matter. `),
+    actie(1, 'wijzigingen', 'What changed?', `Summarise the open git changes in ${repo}. `),
+    actie(2, 'feature', 'Plan a feature', `Make a plan for this feature in ${repo}, with the files you will touch: `),
+    actie(3, 'fout', 'Fix an error', `Find and fix this error in ${repo}: `),
   ];
 }

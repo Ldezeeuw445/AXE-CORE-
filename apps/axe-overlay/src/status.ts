@@ -75,13 +75,13 @@ export async function decideApproval(
   if (approved && isDangerousApproval(item)) {
     return {
       ok: false,
-      message: "Geblokkeerd: trades/payments nooit via notch-goedkeuring. Doe dit in AXE CORE.",
+      message: "Blocked: trades/payments are never approved from the notch. Do this in AXE CORE.",
     };
   }
   const { origin, key } = await originAndKey();
-  if (!key) return { ok: false, message: "Geen API key" };
+  if (!key) return { ok: false, message: "No API key" };
   const taskId = item.task_id;
-  if (!taskId) return { ok: false, message: "Approval mist task_id" };
+  if (!taskId) return { ok: false, message: "Approval is missing task_id" };
   try {
     const r = await fetch(
       `${origin}/tasks/${encodeURIComponent(taskId)}/approvals/${encodeURIComponent(item.id)}/decision`,
@@ -95,7 +95,7 @@ export async function decideApproval(
       const body = await r.text().catch(() => "");
       return { ok: false, message: `Decision ${r.status}: ${body.slice(0, 140)}` };
     }
-    return { ok: true, message: approved ? "Goedgekeurd" : "Afgewezen" };
+    return { ok: true, message: approved ? "Approved" : "Declined" };
   } catch (e) {
     return { ok: false, message: (e as Error).message };
   }
@@ -103,7 +103,7 @@ export async function decideApproval(
 
 export async function fetchNorthseaBrief(): Promise<string> {
   const { origin, key } = await originAndKey();
-  if (!key) return "Geen API key";
+  if (!key) return "No API key";
   try {
     const r = await fetch(`${origin}/northsea/overzicht`, { headers: authHeaders(key) });
     if (!r.ok) return `NorthSea ${r.status}`;
@@ -116,16 +116,16 @@ export async function fetchNorthseaBrief(): Promise<string> {
     const t = d.tellers || {};
     const top = (d.kaart || []).slice(0, 5);
     const lines = [
-      `NorthSea — pipeline ${d.pipeline ?? "?"} · actief ${d.actief ?? "?"}`,
-      `7d: comm ${t.communicatie_7d ?? 0} · contacten ${t.contacten ?? 0} · campagnes ${t.campagnes ?? 0}`,
+      `NorthSea — pipeline ${d.pipeline ?? "?"} · active ${d.actief ?? "?"}`,
+      `7d: comm ${t.communicatie_7d ?? 0} · contacts ${t.contacten ?? 0} · campaigns ${t.campagnes ?? 0}`,
     ];
     for (const k of top) {
       lines.push(`• ${k.naam || k.titel || "deal"} — ${k.status || "?"}${k.next ? ` → ${k.next}` : ""}`);
     }
-    if (top.length === 0) lines.push("Geen open deal-kaarten in overzicht.");
+    if (top.length === 0) lines.push("No open deal cards in the overview.");
     return lines.join("\n");
   } catch (e) {
-    return `NorthSea fout: ${(e as Error).message}`;
+    return `NorthSea error: ${(e as Error).message}`;
   }
 }
 
@@ -154,7 +154,7 @@ export async function fetchDailyBrief(
         const d = (await tr.json()) as { accounts?: Array<{ label?: string; enabled?: boolean }> };
         const demos = (d.accounts || []).filter((a) => /demo/i.test(a.label || ""));
         parts.push(
-          `Trading demo: ${demos.map((a) => a.label).join(", ") || "geen demo-accounts"}`,
+          `Trading demo: ${demos.map((a) => a.label).join(", ") || "no demo accounts"}`,
         );
       }
     } catch { /* ignore */ }

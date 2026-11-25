@@ -12,6 +12,10 @@
   --hcc-lucht: 0px;
   --hcc-onder: calc(var(--axe-composer-onder, 104px) + var(--axe-composer-hoog, 90px) + var(--hcc-gat) + var(--hcc-lucht));
   --hcc-strip: 38px;
+  /* KPI-tegels: zo hoog als label + getal + regel, niet hoger. Twee rijen van
+     drie boven de core, zodat de zijkolommen hun volle hoogte houden. */
+  --hcc-kpi-rij: 64px;
+  --hcc-kpi: calc(2 * var(--hcc-kpi-rij) + var(--hcc-gat));
   --hcc-onder-hoog: clamp(140px, 20vh, 204px);
   --hcc-kol: calc((100vw - 2 * var(--hcc-inset) - 3 * var(--hcc-gat)) / 4);
   --hcc-kop: 28px;
@@ -27,9 +31,10 @@
   z-index: 15;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: var(--hcc-strip) minmax(0, 1fr) var(--hcc-onder-hoog);
+  grid-template-rows: var(--hcc-strip) var(--hcc-kpi) minmax(0, 1fr) var(--hcc-onder-hoog);
   grid-template-areas:
     'strip strip strip strip'
+    'links kpi kpi rechts'
     'links kern kern rechts'
     'onder onder onder onder';
   gap: var(--hcc-gat);
@@ -56,6 +61,8 @@
 .axe-hcc-stip[data-toon='ok'] { background: var(--ok); }
 .axe-hcc-stip[data-toon='let-op'] { background: var(--warn); }
 .axe-hcc-stip[data-toon='fout'] { background: var(--err); }
+/* Er is een sleutel, maar vandaag niet gemeten: geen groen, geen alarm. */
+.axe-hcc-stip[data-toon='stil'] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-muted); }
 
 /* ── Kopstrook ── */
 .axe-hcc-strip {
@@ -108,6 +115,8 @@
 .axe-hcc .axe-hcc-kaart--ok .axe-dash-kaart-lijf { padding: 4px 10px 6px; }
 .axe-hcc .axe-hcc-kaart--ok .axe-dash-leeg { padding: 4px 0; }
 .axe-hcc-rechts > .axe-hcc-kaart--snel { flex: 0 0 auto; }
+/* Niets te doen = één regel, geen groot leeg vak; de feed krijgt de ruimte. */
+.axe-hcc-rechts > .axe-hcc-kaart--ok:not(.is-aandacht) { flex: 0 0 auto; min-height: 0; }
 
 /* Core overview: zes gelijke tegels, 2 × 3, die het vak vullen. Elke tegel:
    stip + label, de waarde groot, één statusregel. */
@@ -169,11 +178,49 @@
 }
 .axe-hcc-snelknop:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.06); }
 
-/* ── Onderste rij: vier gelijke kaarten op dezelfde kolommen ── */
+/* ── KPI-rij: zes tegels, elk zo breed als een zesde ── */
+.axe-hcc-kpis { grid-area: kpi; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, var(--hcc-kpi-rij)); gap: var(--hcc-gat); min-height: 0; }
+.axe-hcc-kpi {
+  display: flex; flex-direction: column; justify-content: center; gap: 3px; min-width: 0; padding: 5px 12px;
+  border-radius: 12px; text-align: left; overflow: hidden;
+  background: var(--axe-kaart-vlak); border: 1px solid var(--axe-kaart-lijn);
+  border-top-color: var(--axe-kaart-lijn-boven, var(--axe-kaart-lijn));
+}
+.axe-hcc-kpi:hover { background: rgba(255, 255, 255, 0.05); }
+.axe-hcc-kpi-kop { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.axe-hcc-kpi-label { font-size: 9.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-hcc-kpi-rij { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; min-width: 0; height: 20px; }
+.axe-hcc-kpi-waarde { font-size: 17px; font-weight: 600; line-height: 1; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.axe-hcc-kpi-regel { font-size: 9.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-hcc-spark { flex: 0 1 84px; min-width: 40px; height: 20px; overflow: visible; }
+.axe-hcc-spark-lijn { fill: none; stroke: var(--ok); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.axe-hcc-spark-vlak { fill: var(--ok); opacity: 0.12; }
+.axe-hcc-spark[data-toon='fout'] .axe-hcc-spark-lijn { stroke: var(--err); }
+.axe-hcc-spark[data-toon='fout'] .axe-hcc-spark-vlak { fill: var(--err); }
+.axe-hcc-spark[data-toon='let-op'] .axe-hcc-spark-lijn { stroke: var(--warn); }
+.axe-hcc-spark[data-toon='let-op'] .axe-hcc-spark-vlak { fill: var(--warn); }
+
+/* AI-limieten: naam, balk, procent; de uitleg eronder klein. */
+.axe-hcc-limieten { display: flex; flex-direction: column; flex-wrap: wrap; align-content: flex-start; gap: 2px 24px; padding: 6px 12px 8px; height: 100%; overflow: hidden; }
+.axe-hcc-limieten > .axe-dash-leeg { padding: 2px 0; }
+.axe-hcc-limiet {
+  flex: 0 0 auto; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 64px 30px; grid-template-rows: auto auto;
+  column-gap: 8px; align-items: center; font-size: 11px; min-width: 0;
+}
+.axe-hcc-limiet-naam { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-hcc-limiet-balk { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.axe-hcc-limiet-balk i { display: block; height: 100%; background: var(--ok); border-radius: 2px; }
+.axe-hcc-limiet[data-toon='let-op'] .axe-hcc-limiet-balk i { background: var(--warn); }
+.axe-hcc-limiet[data-toon='fout'] .axe-hcc-limiet-balk i { background: var(--err); }
+.axe-hcc-limiet-balk--leeg { background: transparent; }
+.axe-hcc-limiet-regel { font-size: 10.5px; color: var(--text-primary); text-align: right; font-variant-numeric: tabular-nums; }
+.axe-hcc-limiet-sub { grid-column: 1 / -1; font-size: 9.5px; color: var(--text-muted); line-height: 1.2; padding-left: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Onderste rij: vijf kaarten; de monitor en de agents krijgen iets meer ── */
 .axe-hcc-onder {
   grid-area: onder;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1.1fr 1fr 1fr 1.1fr 1fr;
   gap: var(--hcc-gat);
   min-height: 0;
 }
@@ -199,6 +246,9 @@
 .axe-hcc-tijd-uur { color: var(--text-muted); font-size: 10.5px; }
 .axe-hcc-tijd-punt { width: 7px; height: 7px; border-radius: 50%; }
 .axe-hcc-tijd-titel { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-hcc-tijd--herhaal .axe-hcc-tijd-uur { color: var(--accent, var(--text-muted)); font-size: 13px; text-align: center; }
+.axe-hcc-tijd--herhaal .axe-hcc-tijd-punt { background: var(--text-muted); }
+.axe-hcc-tijd--herhaal .axe-hcc-tijd-titel { color: var(--text-primary, var(--text-secondary)); }
 
 /* Systeemmonitor: per machine drie ringen. */
 .axe-hcc-monitor { display: flex; flex-direction: column; justify-content: space-around; gap: 4px; padding: 6px 10px; height: 100%; overflow: hidden; }
@@ -220,8 +270,8 @@
 
 /* Providers: raster van 3 kolommen. */
 .axe-hcc-providers {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 6px;
-  padding: 8px 10px 10px; height: 100%; overflow: hidden; align-content: stretch;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 4px 6px;
+  padding: 6px 10px 8px; height: 100%; overflow: hidden; align-content: stretch;
 }
 .axe-hcc-providers > .axe-dash-leeg { grid-column: 1 / -1; }
 .axe-hcc-provider {
@@ -229,13 +279,16 @@
   border-radius: 9px; background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 11px; color: var(--text-secondary);
 }
+.axe-hcc-provider-tekst { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .axe-hcc-provider-naam { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-hcc-provider-regel { font-size: 9.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-hcc-provider[data-toon='uit'] { opacity: 0.55; }
 
 /* ── De core in het middenvak ── */
 @media (min-width: 768px) {
   .axe-home-v3[data-axe-home-view='axe'] .axe-home-bolvak {
     position: fixed !important;
-    top: calc(var(--hcc-top) + var(--hcc-strip) + var(--hcc-gat)) !important;
+    top: calc(var(--hcc-top) + var(--hcc-strip) + var(--hcc-kpi) + 2 * var(--hcc-gat)) !important;
     bottom: calc(var(--hcc-onder) + var(--hcc-onder-hoog) + var(--hcc-gat)) !important;
     left: calc(var(--hcc-inset) + var(--hcc-kol) + var(--hcc-gat)) !important;
     right: calc(var(--hcc-inset) + var(--hcc-kol) + var(--hcc-gat)) !important;
@@ -251,7 +304,9 @@
 /* Laag venster (onder 760px hoog): de statusregel van de kerntegels valt weg,
    de onderste rij wordt lager. Eerst passen, dan pas details. */
 @media (max-height: 760px) {
-  :root { --hcc-onder-hoog: 128px; --hcc-strip: 34px; }
+  :root { --hcc-onder-hoog: 128px; --hcc-strip: 34px; --hcc-kpi-rij: 44px; }
+  .axe-hcc-kpi-regel { display: none; }
+  .axe-hcc-limiet-sub { display: none; }
   .axe-hcc-kernrij-regel { display: none; }
   .axe-hcc-rechts > .axe-hcc-kaart--snel .axe-hcc-snelknop { height: 22px; }
 }
