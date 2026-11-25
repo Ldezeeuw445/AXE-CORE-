@@ -81,7 +81,7 @@ def _draai(vangst, **kw):
 
 
 def test_brief_van_northsea_staat_voor_de_system_prompt(monkeypatch):
-    vangst = _Vangst("systemctl restart axe-core-api")
+    vangst = _Vangst("systemctl restart northsea-mcp")
     monkeypatch.setattr(agent_loop, "_call_model", vangst)
 
     with pytest.raises(agent_loop.ApprovalRequired):
@@ -96,7 +96,7 @@ def test_brief_van_northsea_staat_voor_de_system_prompt(monkeypatch):
 
 
 def test_zonder_agent_blijft_de_prompt_ongewijzigd(monkeypatch):
-    vangst = _Vangst("systemctl restart axe-core-api")
+    vangst = _Vangst("systemctl restart northsea-mcp")
     monkeypatch.setattr(agent_loop, "_call_model", vangst)
 
     with pytest.raises(agent_loop.ApprovalRequired):

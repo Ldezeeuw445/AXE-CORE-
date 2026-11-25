@@ -163,11 +163,29 @@ _REFUSED = (
 )
 
 
+# 25 nov live: een taak ("Stop de lopende taak ...") vroeg een ok voor
+# `systemctl stop axe-task-worker`, kreeg hem, en zette zo de worker uit waarin hij zelf
+# draaide: 50 minuten liep er geen enkele taak, en niemand startte hem weer. De lus mag
+# zijn eigen worker en de API nooit stoppen of herstarten, ook niet met een ok: een
+# herstart gaat via de deploy (scripts/vps_sync.py), een taak stoppen via de Taken-tab.
+_EIGEN_DIENST = re.compile(
+    r"\b(systemctl|service)\b[^;&|]*\b(stop|kill|disable|mask|restart|reload|try-restart|reload-or-restart)\b"
+    r"[^;&|]*\baxe-(task-worker|core-api)\b"
+    r"|\bservice\s+axe-(task-worker|core-api)\s+(stop|restart|reload|force-reload)\b"
+    r"|\b(pkill|killall)\b[^;&|]*\b(task_worker|axe-task-worker|uvicorn|axe-core-api)\b",
+    re.I,
+)
+
+
 def _refuse(command: str) -> str | None:
     lowered = " ".join(command.lower().split())
     for pattern in _REFUSED:
         if pattern in lowered:
             return f"Refused: command matches the destructive pattern {pattern!r}."
+    if _EIGEN_DIENST.search(lowered):
+        return ("Refused: this would stop or restart the AXE task worker or API -- the process running "
+                "you and every other task. Never do this, even with approval. To stop a task, cancel it "
+                "in the Tasks tab; a restart happens through the normal deploy. Say so in your summary.")
     return None
 
 
@@ -1828,11 +1846,22 @@ async def _lus(
         await on_event("axe.progress", f"Resuming at step {eerste_stap} after waiting for capacity "
                        f"({len(transcript)} earlier steps kept).", {"hervat": eerste_stap})
 
+    meetbaar: list[bool] = []  # [] = nog niet bekeken; [False] = deze taak heeft niets te meten
+
     async def klaar_door_meting(stap: int, notitie: str) -> dict[str, Any] | None:
         """Taak met een MEETBARE acceptatie (feed: voor -> na) die nu gehaald is: klaar,
-        met de meting als bewijs. None = niets te meten of (nog) niet gehaald."""
+        met de meting als bewijs. None = niets te meten of (nog) niet gehaald.
+
+        Alleen voor een echte taak (UUID), en een taak zonder meetbare acceptatie wordt
+        maar één keer bekeken: anders kostte elke tekststap een databasevraag (en hingen
+        tests 120 s op het netwerk)."""
         import acceptatie as _acceptatie
-        acc = await asyncio.to_thread(_acceptatie.na_meting_voor_taak, _db_voor_stoelen(), _HUIDIGE_TAAK.get())
+        taak_id = str(_HUIDIGE_TAAK.get() or "")
+        if meetbaar == [False] or not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", taak_id):
+            return None
+        acc = await asyncio.to_thread(_acceptatie.na_meting_voor_taak, _db_voor_stoelen(), taak_id)
+        if not meetbaar:
+            meetbaar.append(acc is not None)
         if not (acc and acc.get("gehaald")):
             return None
         await on_event("verification.passed", "Acceptance measured and met: " + acc["regel"][:300],
@@ -2042,6 +2071,13 @@ async def _lus(
 
             if name == "run_shell":
                 command = str(args.get("command") or "")
+                if (geweigerd := _refuse(command)):
+                    # Vóór de ok-vraag: Luka krijgt nooit een kaart voor iets dat toch nooit mag.
+                    transcript.append({"step": step, "tool": "run_shell", "command": command[:300], "refused": "hard"})
+                    await on_event("axe.progress", f"Step {step}: refused -- {command[:120]}", {"command": command})
+                    responses.append({"functionResponse": {"name": "run_shell", "response": {
+                        "exit_code": 126, "stdout": "", "stderr": geweigerd}}})
+                    continue
                 needs = approval_reason(command, args.get("cwd"), read_only)
                 if needs and normalize_command(command) in pre_approved:
                     # Luka already said yes to exactly this command on this task.

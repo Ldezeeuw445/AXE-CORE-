@@ -81,7 +81,7 @@ def test_gehaalde_feed_acceptatie_maakt_tekst_tot_klaar(monkeypatch, tmp_path):
     oordeel = {"soort": "feed", "gehaald": True, "regel": "feed corporateJets: ... = gehaald", "na": {}}
     monkeypatch.setattr(acceptatie, "na_meting_voor_taak", lambda db, tid: oordeel)
     gezien, events, ev = _lus(monkeypatch, tmp_path, [TEKST])
-    uit = asyncio.run(al.run_agent_loop("repareer feed corporateJets", "taak-5", ev))
+    uit = asyncio.run(al.run_agent_loop("repareer feed corporateJets", "00000000-0000-4000-8000-000000000005", ev))
     assert uit["acceptatie"]["gehaald"] is True
     assert uit["verification"]["checks"][0]["name"] == "acceptatie"
 
@@ -92,7 +92,7 @@ def test_niet_gehaalde_acceptatie_blijft_geen_klaar(monkeypatch, tmp_path):
     monkeypatch.setattr(acceptatie, "na_meting_voor_taak", lambda db, tid: oordeel)
     gezien, events, ev = _lus(monkeypatch, tmp_path, [TEKST, TEKST, TEKST])
     with pytest.raises(RuntimeError, match="without taking an action"):
-        asyncio.run(al.run_agent_loop("repareer feed corporateJets", "taak-6", ev))
+        asyncio.run(al.run_agent_loop("repareer feed corporateJets", "00000000-0000-4000-8000-000000000006", ev))
     assert any("no action taken" in e for e in events)
 
 
@@ -102,7 +102,7 @@ def test_meting_wint_van_agent_die_zegt_dat_hij_het_niet_kon_nagaan(monkeypatch,
     monkeypatch.setattr(acceptatie, "na_meting_voor_taak", lambda db, tid: oordeel)
     twijfel = {"parts": [{"text": "Het lukte niet om de logs te lezen; als de feed al vers is, is er niets meer te doen."}]}
     gezien, events, ev = _lus(monkeypatch, tmp_path, [twijfel])
-    uit = asyncio.run(al.run_agent_loop("repareer feed corporateJets", "taak-7", ev))
+    uit = asyncio.run(al.run_agent_loop("repareer feed corporateJets", "00000000-0000-4000-8000-000000000007", ev))
     assert uit["summary"].startswith("Acceptance measured and met")
 
 
@@ -111,5 +111,5 @@ def test_lus_meet_om_de_5_stappen_en_stopt_als_gehaald(monkeypatch, tmp_path):
     oordeel = {"soort": "feed", "gehaald": True, "regel": "feed corporateJets: ... = gehaald", "na": {}}
     monkeypatch.setattr(acceptatie, "na_meting_voor_taak", lambda db, tid: oordeel)
     gezien, events, ev = _lus(monkeypatch, tmp_path, [SHELL] * 10)
-    uit = asyncio.run(al.run_agent_loop("repareer feed corporateJets", "taak-8", ev))
+    uit = asyncio.run(al.run_agent_loop("repareer feed corporateJets", "00000000-0000-4000-8000-000000000008", ev))
     assert uit["steps_used"] == al.ACCEPTATIE_ELKE_N

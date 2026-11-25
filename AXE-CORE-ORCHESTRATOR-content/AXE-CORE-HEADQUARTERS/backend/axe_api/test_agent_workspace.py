@@ -72,7 +72,7 @@ def test_lus_laadt_de_werkplek_in_de_prompt(monkeypatch):
     async def model(contents, _k):
         gezien["prompt"] = agent_loop.systeem_prompt()
         return {"parts": [{"functionCall": {
-            "name": "run_shell", "args": {"command": "systemctl restart axe-core-api"},
+            "name": "run_shell", "args": {"command": "systemctl restart northsea-mcp"},
         }}]}
 
     monkeypatch.setattr(agent_loop, "_call_model", model)
