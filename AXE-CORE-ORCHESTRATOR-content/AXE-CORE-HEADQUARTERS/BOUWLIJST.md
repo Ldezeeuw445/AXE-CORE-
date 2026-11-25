@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 36% klaar** `███████░░░░░░░░░░░░░` -- 75 klaar, 79 gebouwd maar nog niet bewezen, 52 open (van 206).
+**Stand: 36% klaar** `███████░░░░░░░░░░░░░` -- 77 klaar, 87 gebouwd maar nog niet bewezen, 47 open (van 211).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -11,14 +11,14 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (47%) | 10 | 0 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 30 | 4 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 5 | 2 |
-| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (13%) | 15 | 26 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (13%) | 17 | 24 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
 | 4 — Computer use, browser, code-editor | 1 (33%) | 0 | 2 |
-| 5 — Luka kan het zelf | 3 (43%) | 1 | 3 |
+| 5 — Luka kan het zelf | 3 (38%) | 3 | 2 |
 | 6 — AXE als baas (Jarvis-route, niet letterlijk Jarvis) | 23 (92%) | 0 | 2 |
-| 7 — axe-commandolaag (CLI + hek, geen tweede agent) | 4 (57%) | 0 | 3 |
+| 7 — axe-commandolaag (CLI + hek, geen tweede agent) | 6 (55%) | 4 | 1 |
 <!-- stand:end -->
 
 Bijgewerkt 19 november 2026. Alles hieronder is **gemeten**, niet aangenomen.
@@ -359,7 +359,7 @@ Wat AXE ook moet kunnen, naar het voorbeeld van Spazio OS Pro:
 - [ ] **Interview**: AXE leert wie Luka is via een geleid gesprek.
 - [ ] **Jouw stem**: 3-5 eigen teksten -> AXE schrijft en reviewt in die stem.
 - [ ] **De Raad**: acht bedachte experts reviewen teksten, pagina's, projecten.
-- [ ] **"Doe het zelf"-knop** op een stap: AXE werkt hem op de achtergrond af.
+- [x] **"Doe het zelf"-knop** op een stap: AXE werkt hem op de achtergrond af. *(25 nov, 1b0de9e5 + fix: "Do it for me" naast "Done" bij Your turn en Together in Tasks > Wiens beurt; POST /stappen/{id}/zelf (rij.doe_zelf) zet de stap op AXE en in de wachtrij, met de titel als opdracht. Zelfde grens als de rij: geld, trading, NorthSea-akkoorden, wissen en wat op jouw ja wacht -> 409 met de reden onder de stap. LIVE BEWEZEN: proefstap "drie USB-C-docks voor de Mac mini M4" -> AXE schreef de notitie en controleerde hem zelf (2 stappen); eerste proef liet zien dat alleen het waarom werd meegegeven, gerepareerd. Betaal-proefstap geweigerd, ook via de knop in de preview gezien. Beide proefstappen afgesloten.)*
 - [ ] **Maak het van jou**: "verberg X", "andere kleuren" in gewone taal.
 - [ ] Focusmodus, geld achter een PIN, rustige muziek (Life OS-hoek).
 
