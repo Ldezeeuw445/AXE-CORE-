@@ -177,7 +177,43 @@ _EIGEN_DIENST = re.compile(
 )
 
 
+# 25 nov live: een agent ("Zelf oplossen: Vaste jobs worden niet opgepakt") gokte een
+# tiental plekken voor een API-sleutel af: `cat /root/.axe_token`, `cat /etc/axe/
+# companion_api_key`, `cat .../companionmgr/.env`, ... Wat hij leest gaat als context naar
+# het model dat antwoordt -- soms een externe API. Sleutelbestanden en de omgeving van het
+# proces lezen mag nooit; voor de API zijn er tools.
+_CODE_EXT = (".py", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".md", ".rs", ".go", ".sql", ".sh", ".yml", ".yaml", ".toml")
+
+
+def _geheim_pad(pad: str) -> bool:
+    p = os.path.normpath(str(pad or "").strip().strip("'\"")).lower()
+    if not p or p == ".":
+        return False
+    naam = os.path.basename(p)
+    if "/.ssh/" in p + "/" or p.startswith("/etc/axe/") or re.fullmatch(r"/proc/[^/]+/environ", p):
+        return True
+    if re.fullmatch(r"\.env(\..*)?", naam) and not naam.endswith((".example", ".sample", ".template")):
+        return True
+    if re.search(r"(^id_(rsa|ed25519|ecdsa)|\.(pem|p12|pfx|key)$|^credentials(\.json)?$|^\.netrc$|^\.pgpass$)", naam):
+        return True
+    if re.search(r"(api[_-]?key|apikey|token|secret|password|passwd)", naam) and not naam.endswith(_CODE_EXT):
+        return True
+    return False
+
+
+_OMGEVING_DUMP = re.compile(r"(^|[;&|(]\s*)(printenv|env|export\s+-p|declare\s+-x|set)\s*($|[;&|>])", re.I)
+
+
 def _refuse(command: str) -> str | None:
+    if _OMGEVING_DUMP.search(command) or "/environ" in command:
+        return ("Refused: dumping the process environment exposes API keys. Never do this; "
+                "use your tools for AXE's API instead of raw keys.")
+    for deel in re.split(r"[\s;&|<>=]+", command):
+        kaal_geheim = bool(re.fullmatch(r"(credentials\.json|id_(rsa|ed25519|ecdsa)|[\w.-]+\.(pem|p12|pfx))",
+                                         deel.strip("'\"").lower()))
+        if deel and (kaal_geheim or (("/" in deel or deel.startswith(".")) and _geheim_pad(deel))):
+            return (f"Refused: {deel[:80]!r} looks like a key or secrets file. Reading keys is never allowed; "
+                    "use your tools for AXE's API instead of raw keys.")
     lowered = " ".join(command.lower().split())
     for pattern in _REFUSED:
         if pattern in lowered:
@@ -1185,6 +1221,9 @@ def _workspace_path(path: str) -> str:
     return os.path.join(_HUIDIGE_WORKSPACE.get(), path)
 
 def _read(path: str, max_bytes: int = 60000) -> dict[str, Any]:
+    if _geheim_pad(path) or _geheim_pad(os.path.realpath(_workspace_path(path))):
+        return {"error": "Refused: this looks like a key or secrets file. Reading keys is never allowed; "
+                         "use your tools for AXE's API instead of raw keys."}
     dax = _HUIDIGE_DAX.get()
     if dax is not None:
         return dax.lees(path, max_bytes)
