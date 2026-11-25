@@ -74,6 +74,20 @@ const APPS: ReadonlyArray<{ id: HomeAppId; naam: string; route: string; dienst: 
 
 const FOUT = /^(fail|failed|error|timeout)$/i;
 
+/* Een app heet niet overal hetzelfde: core_schedules eist 'trading_os' (CHECK),
+   andere bronnen schrijven 'trading-os', 'tradingos' of 'Trading OS'. Alles
+   naar één sleutel; geen app = AXE Core zelf. */
+const ALIAS: Record<string, HomeAppId> = {
+  axecore: 'axe_core', axe: 'axe_core', axecompanion: 'axe_companion', companion: 'axe_companion',
+  tradingos: 'trading_os', trading: 'trading_os', axonmemory: 'axon_memory', axon: 'axon_memory',
+  northsea: 'northsea', northseadesk: 'northsea',
+};
+export function appSleutel(app: string | null | undefined): string {
+  if (app == null || !app.trim()) return 'axe_core';
+  const plat = app.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return ALIAS[plat] ?? app.toLowerCase().trim();
+}
+
 function tijd(t: string | null | undefined): number | null {
   const ms = t ? Date.parse(t) : NaN;
   return Number.isFinite(ms) ? ms : null;
@@ -90,7 +104,7 @@ export function runsNaarUren(rijen: readonly JobRun[]): RunUur[] {
     const ms = tijd(r.created_at);
     if (ms == null) continue;
     const uur = new Date(Math.floor(ms / 3600_000) * 3600_000).toISOString();
-    const app = r.app ?? 'axe_core';
+    const app = appSleutel(r.app);
     const k = `${app}|${uur}`;
     const v = vakken.get(k) ?? { app, uur, ok: 0, fout: 0 };
     if (FOUT.test(r.status)) v.fout += 1; else v.ok += 1;
@@ -110,7 +124,7 @@ export function uurReeks(rijen: readonly RunUur[] | null, nu: number, app?: stri
   const uurMs = 3600_000;
   const eind = Math.floor(nu / uurMs) * uurMs + uurMs;
   for (const r of rijen) {
-    if (app && (r.app ?? 'axe_core') !== app) continue;
+    if (app && appSleutel(r.app) !== appSleutel(app)) continue;
     const ms = tijd(r.uur);
     if (ms == null || ms >= eind || ms < eind - uren * uurMs) continue;
     const i = uren - 1 - Math.floor((eind - 1 - ms) / uurMs);
@@ -138,7 +152,7 @@ export function appsGezondheid(in_: {
 }): AppGezond[] {
   return APPS.map((app) => {
     const reeks = uurReeks(in_.runs, in_.nu, app.id);
-    const schemas = (in_.schemas ?? []).filter((s) => s.app === app.id && s.enabled);
+    const schemas = (in_.schemas ?? []).filter((s) => appSleutel(s.app) === app.id && s.enabled);
     const dienst = app.dienst ? in_.diensten.find((d) => app.dienst!.test(d.name)) ?? null : null;
     const sessie = in_.sessies.find((s) => s.id.replace(/-/g, '_') === app.id) ?? null;
 
@@ -151,7 +165,7 @@ export function appsGezondheid(in_: {
       .sort((a, b) => (b.consecutive_failures ?? 0) - (a.consecutive_failures ?? 0));
 
     /* Uit de uurtellers weten we alleen het uur; de schema's weten de minuut. */
-    const laatsteUur = (in_.runs ?? []).filter((r) => (r.app ?? 'axe_core') === app.id && r.ok + r.fout > 0)
+    const laatsteUur = (in_.runs ?? []).filter((r) => appSleutel(r.app) === app.id && r.ok + r.fout > 0)
       .reduce<number | null>((m, r) => { const t = tijd(r.uur); return t != null && (m == null || t > m) ? t : m; }, null);
     const laatsteRun = laatsteUur == null ? null : Math.min(in_.nu, laatsteUur + 3599_000);
     const laatsteSchema = schemas.reduce<number | null>((m, s) => {
