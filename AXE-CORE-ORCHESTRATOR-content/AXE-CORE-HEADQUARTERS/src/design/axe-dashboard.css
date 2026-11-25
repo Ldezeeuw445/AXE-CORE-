@@ -211,6 +211,12 @@
   overflow: hidden;
   border-radius: var(--axe-kaart-hoek, 18px);
 }
+:root[data-look] .axe-dash-venster--breed {
+  width: 100%;
+  height: calc(100% - 24px);
+  max-height: none;
+}
+:root[data-look] .axe-dash-venster-laag:has(.axe-dash-venster--breed) { padding-top: 12px; }
 :root[data-look] .axe-dash-sluit { color: var(--text-muted); background: none; border: 0; cursor: pointer; padding: 4px; }
 
 /* Lage schermen (1280×800 en kleiner): kop en gaten iets krapper. */
