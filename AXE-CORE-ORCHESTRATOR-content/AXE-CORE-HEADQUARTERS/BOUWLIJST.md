@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 36% klaar** `███████░░░░░░░░░░░░░` -- 75 klaar, 78 gebouwd maar nog niet bewezen, 53 open (van 206).
+**Stand: 36% klaar** `███████░░░░░░░░░░░░░` -- 75 klaar, 79 gebouwd maar nog niet bewezen, 52 open (van 206).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -9,7 +9,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 |---|---|---|---|
 | Luka 22 nov -- deze week af: OS3, managers = Grokbot = DAX, NorthSea maakt deals | 1 (5%) | 18 | 2 |
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (47%) | 10 | 0 |
-| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 29 | 5 |
+| Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 30 | 4 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 5 | 2 |
 | Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 6 (13%) | 15 | 26 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
@@ -912,7 +912,7 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
   *(22 nov: live gedraaid tegen de echte VPS. Vier valse rode regels weg -- de anon-sleutel zag door RLS niets en meldde core_tasks "niet leesbaar" en de leerlus "0 episodes"; nu wordt er bij leeg opnieuw via de VPS gemeten. AGENTS en DIENSTEN lezen ook via de VPS als de kluis-SSD er niet is. Ollama's 401 = beveiligd, groen. "Liggen eruit" zegt per soort de echte stap: alleen echte units herstarten (ollama, axe-terminal, gemeten), providers = sleutel testen, n8n draait niet op de VPS, axe_intel = Supabase-functie, trading niet aanraken. Lege kopjes zeggen dat ze leeg zijn.)*
 - [~] **Minder goedkeuren** (22 nov, Luka: "ik moet nog heel veel approven"): gemeten in 72 uur -- bijna alles was kijken (crontab -l, df, docker compose ps, docker network inspect, supabase functions list, systemctl status ... || echo, kijken via ssh strato-dax, a; b van leescommando's). Die mogen nu zonder ok (`beslis_beleid.EXTRA_LEES_RE`, `EIGEN_SSH_RE`); starten/stoppen/prune/POST/inspect-zonder-format blijven gevraagd. En dezelfde NorthSea-dealvraag kwam 2x per dag terug (6x goedgekeurd): een deal waar Luka in 7 dagen over besliste wordt niet opnieuw gevraagd (`recent_beslist_deal`). Tests groen.
 - [ ] **NorthSea-dealbesluit echt laten landen**: een ok op "Yes needed: <deal>" in AXE verandert niets aan de deal in de desk (daarom vroeg de cron het steeds opnieuw). Het besluit moet naar de NorthSea Desk (MCP), anders is de knop leeg.
-- [ ] **Mac-CLI als denkhoofd stuurt het hele log als werkbon** (gevonden 22 nov): als de API-modellen falen, stuurt `provider_router.seat_prompt` het lus-transcript via `claude_code.run` naar de Mac; daar komt de werkbon omheen en draait het in een eigen worktree, dus Claude weigert ("transcript niet van deze sessie, verkeerde map"). Een denk-aanroep is geen codeeropdracht: eigen pad zonder werkbon/worktree, of geen CLI als brein.
+- [~] **Mac-CLI als denkhoofd stuurt het hele log als werkbon** (25 nov gebouwd, 0536f8d1: een denk-aanroep is nu een eigen pad -- geen werkbon, geen worktree, lege tmp-map, alleen lezen; het prompt geeft het doel altijd mee plus de tools van de werkplek en vraagt één JSON-actie; Codex' laatste bericht via -o. Echt gemeten op de Mac mini: Codex gaf in 18 s `{"name":"run_shell",...}` (eerst: minuten per stap, alleen tekst). Bewezen als een echte taak via het stoel-brein acties doet.) (gevonden 22 nov): als de API-modellen falen, stuurt `provider_router.seat_prompt` het lus-transcript via `claude_code.run` naar de Mac; daar komt de werkbon omheen en draait het in een eigen worktree, dus Claude weigert ("transcript niet van deze sessie, verkeerde map"). Een denk-aanroep is geen codeeropdracht: eigen pad zonder werkbon/worktree, of geen CLI als brein.
 - [ ] **5.4** Strato: waarom valt de VPS uit? Op 7 sep was het ollama; op 9 sep
       viel hij hard weg (geen ping, poorten dicht) — dat is iets anders.
 
