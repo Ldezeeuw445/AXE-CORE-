@@ -144,13 +144,9 @@ export default function Home() {
         <div
           className="axe-scene axe-home-v3 h-full relative rounded-2xl overflow-hidden"
           data-axe-home="v3"
+          data-axe-home-view={coreView}
           style={{ backgroundColor: 'var(--bg-base)' }}
         >
-          {!isMobile && (
-            <div className="axe-home-v3-hint" role="note">
-              Managers L/R van de core · klik → chat · Escape → terug · bottom nav = 1-klik
-            </div>
-          )}
 
           {/* 25 nov: op desktop staan core-stand en bouw als tegels in de
               kopstrook (HomeLiveDashboard); dit hoekbadge alleen nog op mobiel. */}
@@ -242,8 +238,9 @@ export default function Home() {
                   bestand, grafiek) ook op de plaat verschijnt; alleen de bol
                   eronder verschilt. */}
               <SphereStage status={coreStatus} bol={opPlaat ? <AxeCoreSphere /> : undefined} />
-              {/* Wie AXE nu aan het werk heeft, in gewone taal, rond de core. */}
-              <AgentVensters />
+              {/* Telefoon: wie AXE aan het werk heeft, rond de core. Op desktop
+                  staan de agents als 3×2-tegels in het command center (25 nov v2). */}
+              {isMobile && <AgentVensters />}
               {!isMobile && <HomeLiveDashboard kern={kern} bouw={{ commit: bouw?.commit ?? null, regel: bouwRegel, oud: bouwOud }} />}
             </div>
           {/* De drie weergaven vullen het HELE vak, niet alleen het stuk boven

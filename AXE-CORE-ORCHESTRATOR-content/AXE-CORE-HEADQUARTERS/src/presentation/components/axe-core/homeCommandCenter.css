@@ -1,0 +1,258 @@
+/* ═══ Home command center (Luka 25 nov, v2) ═══════════════════════════════
+   Eén scherm, niets schuift: kopstrook / kern+diensten · core · feed+ok+snel /
+   vier gelijke kaarten. Mat zwart, de AXE-kaarten en -kleuren; geen neon.
+   De bol zelf staat in Home (axe-home-bolvak) en wordt hier in het middenvak
+   gezet, zodat er nooit iets over de core heen ligt. */
+:root {
+  --hcc-inset: clamp(12px, 1.6vw, 32px);
+  --hcc-gat: clamp(8px, 1.1vh, 12px);
+  --hcc-top: calc(var(--axe-kop-h, 66px) + var(--axe-sat, 0px) + 6px);
+  /* De ronde dok-knoppen naast de compacte composer staan hoger dan de
+     composer zelf; --hcc-lucht houdt de onderste kaarten daarvan vrij. */
+  --hcc-lucht: 0px;
+  --hcc-onder: calc(var(--axe-composer-onder, 104px) + var(--axe-composer-hoog, 90px) + var(--hcc-gat) + var(--hcc-lucht));
+  --hcc-strip: 38px;
+  --hcc-onder-hoog: clamp(140px, 20vh, 204px);
+  --hcc-kol: calc((100vw - 2 * var(--hcc-inset) - 3 * var(--hcc-gat)) / 4);
+  --hcc-kop: 28px;
+}
+:root[data-axe-dash] { --hcc-lucht: 30px; }
+
+.axe-hcc {
+  position: fixed;
+  top: var(--hcc-top);
+  bottom: var(--hcc-onder);
+  left: var(--hcc-inset);
+  right: var(--hcc-inset);
+  z-index: 15;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: var(--hcc-strip) minmax(0, 1fr) var(--hcc-onder-hoog);
+  grid-template-areas:
+    'strip strip strip strip'
+    'links kern kern rechts'
+    'onder onder onder onder';
+  gap: var(--hcc-gat);
+  pointer-events: none;
+  overflow: hidden;
+}
+.axe-hcc > * { pointer-events: auto; min-width: 0; min-height: 0; }
+.axe-hcc-kern { grid-area: kern; pointer-events: none; }
+
+/* Kaarten in het command center: lagere kop, geen schuifbalk op de pagina. */
+.axe-hcc .axe-hcc-kaart { --axe-dash-kaart-kop-hoog: var(--hcc-kop); --axe-dash-binnen: 12px; }
+.axe-hcc .axe-hcc-kaart .axe-dash-kaart-lijf { padding: 8px 12px 10px; }
+.axe-hcc .axe-hcc-kaart .axe-dash-kaart-lijf--vrij { padding: 0; }
+.axe-hcc .axe-hcc-kaart.is-aandacht .axe-dash-kaart-titel { color: var(--warn); }
+.axe-hcc .axe-dash-leeg { margin: 0; padding: 8px 12px; font-size: 11px; color: var(--text-muted); }
+.axe-hcc-kopknop {
+  font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted);
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--axe-kaart-lijn);
+}
+.axe-hcc-kopknop:hover { color: var(--text-primary); }
+
+/* Statusstip: kleur in de stip, nooit in het vlak. */
+.axe-hcc-stip { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); }
+.axe-hcc-stip[data-toon='ok'] { background: var(--ok); }
+.axe-hcc-stip[data-toon='let-op'] { background: var(--warn); }
+.axe-hcc-stip[data-toon='fout'] { background: var(--err); }
+
+/* ── Kopstrook ── */
+.axe-hcc-strip {
+  grid-area: strip;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.axe-hcc-strip > * { flex: 0 0 auto; height: var(--hcc-strip); }
+.axe-hcc-strip-klok {
+  display: flex; align-items: baseline; gap: 8px; padding: 0 14px 0 4px;
+  line-height: var(--hcc-strip);
+}
+.axe-hcc-strip-klok b { font-size: 20px; font-weight: 600; color: var(--text-primary); letter-spacing: 0.02em; }
+.axe-hcc-strip-klok span { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.axe-hcc-strip-pil,
+.axe-hcc-strip-zoek,
+.axe-hcc-strip-knop,
+.axe-hcc-strip-brief {
+  display: inline-flex; align-items: center; gap: 8px; padding: 0 12px;
+  border-radius: 12px;
+  background: var(--axe-kaart-vlak);
+  border: 1px solid var(--axe-kaart-lijn);
+  border-top-color: var(--axe-kaart-lijn-boven, var(--axe-kaart-lijn));
+  font-size: 11px; color: var(--text-muted);
+  white-space: nowrap;
+}
+.axe-hcc-strip-pil b { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.axe-hcc-strip-vul { flex: 1 1 auto; height: 1px; }
+.axe-hcc-strip-zoek { min-width: 220px; }
+.axe-hcc-strip-zoek span { flex: 1 1 auto; text-align: left; }
+.axe-hcc-strip-zoek kbd { font-size: 10px; color: var(--text-muted); opacity: 0.7; font-family: inherit; }
+.axe-hcc-strip-knop { position: relative; padding: 0 11px; color: var(--text-secondary); }
+.axe-hcc-strip-tal {
+  position: absolute; top: 4px; right: 4px; min-width: 15px; height: 15px; padding: 0 4px;
+  border-radius: 999px; background: var(--warn); color: #000; font-size: 9px; font-weight: 700; line-height: 15px; text-align: center;
+}
+.axe-hcc-strip-brief { color: var(--text-primary); font-weight: 600; }
+.axe-hcc-strip button:hover { color: var(--text-primary); }
+
+/* ── Zijkolommen ── */
+.axe-hcc-links, .axe-hcc-rechts { display: flex; flex-direction: column; gap: var(--hcc-gat); min-height: 0; }
+.axe-hcc-links { grid-area: links; }
+.axe-hcc-rechts { grid-area: rechts; }
+.axe-hcc-links > .axe-hcc-kaart { flex: 1 1 0; }
+.axe-hcc-links > .axe-hcc-kaart--kern { flex: 1.65 1 0; }
+.axe-hcc-rechts > .axe-hcc-kaart { flex: 1 1 0; min-height: 64px; }
+.axe-hcc-rechts > .axe-hcc-kaart:first-child { flex: 1.7 1 0; }
+.axe-hcc .axe-hcc-kaart--ok .axe-dash-kaart-lijf { padding: 4px 10px 6px; }
+.axe-hcc .axe-hcc-kaart--ok .axe-dash-leeg { padding: 4px 0; }
+.axe-hcc-rechts > .axe-hcc-kaart--snel { flex: 0 0 auto; }
+
+/* Core overview: zes gelijke tegels, 2 × 3, die het vak vullen. Elke tegel:
+   stip + label, de waarde groot, één statusregel. */
+.axe-hcc-kernlijst {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 6px; height: 100%; padding: 8px 10px 10px;
+}
+.axe-hcc-kernrij {
+  display: flex; flex-direction: column; justify-content: center; gap: 3px; min-height: 0; min-width: 0; padding: 0 10px;
+  border-radius: 10px; text-align: left; overflow: hidden;
+  background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.axe-hcc-kernrij:hover { background: rgba(255, 255, 255, 0.05); }
+.axe-hcc-kernrij-kop { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.axe-hcc-kernrij-label {
+  flex: 0 0 auto; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.axe-hcc-kernrij-waarde {
+  flex: 1 1 auto; min-width: 0; text-align: right; font-size: 13px; font-weight: 600; color: var(--text-primary);
+  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;
+}
+.axe-hcc-kernrij-regel {
+  font-size: 10px; color: var(--text-muted); line-height: 1.25;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Kolommen die vollopen en dan doorlopen naar rechts, buiten beeld: zo staat
+   er nooit een half afgesneden regel, en schuift er niets. */
+.axe-hcc-dienstlijst {
+  display: flex; flex-direction: column; flex-wrap: wrap; align-content: flex-start;
+  padding: 6px 12px; overflow: hidden; height: 100%;
+}
+.axe-hcc-dienstlijst > .axe-dash-leeg { padding: 2px 0; }
+.axe-hcc-dienst { flex: 0 0 24px; width: 50%; padding-right: 10px; display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 11px; }
+.axe-hcc-dienst-naam { flex: 1 1 auto; min-width: 0; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-hcc-dienst-stand { flex: 0 0 auto; font-size: 10px; color: var(--text-muted); }
+
+/* Live feed */
+.axe-hcc-feed { display: flex; flex-direction: column; flex-wrap: wrap; align-content: flex-start; padding: 4px 6px; overflow: hidden; height: 100%; }
+.axe-hcc-feed > .axe-dash-leeg { width: 100%; }
+.axe-hcc-feedrij { flex: 0 0 38px; width: 100%; display: flex; align-items: center; gap: 9px; padding: 4px 6px; border-radius: 8px; text-align: left; min-width: 0; }
+.axe-hcc-feedrij:hover { background: rgba(255, 255, 255, 0.03); }
+.axe-hcc-feed-streep { flex: 0 0 3px; align-self: stretch; border-radius: 2px; background: rgba(255, 255, 255, 0.18); }
+.axe-hcc-feedrij[data-soort='fout'] .axe-hcc-feed-streep { background: var(--err); }
+.axe-hcc-feedrij[data-soort='let-op'] .axe-hcc-feed-streep { background: var(--warn); }
+.axe-hcc-feedrij[data-soort='klaar'] .axe-hcc-feed-streep { background: var(--ok); }
+.axe-hcc-feed-tekst { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.axe-hcc-feed-kop { font-size: 11.5px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-hcc-feed-sub { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-hcc-feed-tijd { flex: 0 0 auto; font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* Snelle commando's: 3 × 2 gelijke knoppen. */
+.axe-hcc-snel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px 10px 10px; }
+.axe-hcc-snelknop {
+  height: 26px; border-radius: 8px; font-size: 11px; color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--axe-kaart-lijn);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.axe-hcc-snelknop:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.06); }
+
+/* ── Onderste rij: vier gelijke kaarten op dezelfde kolommen ── */
+.axe-hcc-onder {
+  grid-area: onder;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--hcc-gat);
+  min-height: 0;
+}
+
+/* Agents 3 × 2 */
+.axe-hcc-agents {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 6px; padding: 8px 10px 10px; height: 100%;
+}
+.axe-hcc-agent {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; min-height: 0;
+  border-radius: 10px; background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.axe-hcc-agent:hover { background: rgba(255, 255, 255, 0.05); }
+.axe-hcc-agent-tekst { display: flex; flex-direction: column; align-items: center; min-width: 0; max-width: 100%; line-height: 1.15; }
+.axe-hcc-agent-naam { font-size: 11px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.axe-hcc-agent-stand { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+/* Tijdlijn van vandaag */
+.axe-hcc-tijdlijn { display: flex; flex-direction: column; flex-wrap: wrap; align-content: flex-start; padding: 8px 12px; overflow: hidden; height: 100%; }
+.axe-hcc-tijdlijn > .axe-dash-leeg { width: 100%; padding: 0; }
+.axe-hcc-tijd { flex: 0 0 24px; width: 100%; display: grid; grid-template-columns: 40px 8px minmax(0, 1fr); align-items: center; gap: 8px; height: 22px; font-size: 11px; }
+.axe-hcc-tijd-uur { color: var(--text-muted); font-size: 10.5px; }
+.axe-hcc-tijd-punt { width: 7px; height: 7px; border-radius: 50%; }
+.axe-hcc-tijd-titel { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Systeemmonitor: per machine drie ringen. */
+.axe-hcc-monitor { display: flex; flex-direction: column; justify-content: space-around; gap: 4px; padding: 6px 10px; height: 100%; overflow: hidden; }
+.axe-hcc-machine { display: flex; align-items: center; gap: 10px; min-height: 0; }
+.axe-hcc-machine-naam { flex: 0 0 74px; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-hcc-ringen { flex: 1 1 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.axe-hcc-ring { position: relative; display: flex; flex-direction: column; align-items: center; }
+.axe-hcc-ring svg { width: clamp(36px, 5.2vh, 48px); height: clamp(36px, 5.2vh, 48px); }
+.axe-hcc-ring-baan { fill: none; stroke: rgba(255, 255, 255, 0.08); stroke-width: 5; }
+.axe-hcc-ring-boog { fill: none; stroke: var(--text-secondary); stroke-width: 5; stroke-linecap: round; }
+.axe-hcc-ring[data-toon='ok'] .axe-hcc-ring-boog { stroke: var(--ok); }
+.axe-hcc-ring[data-toon='let-op'] .axe-hcc-ring-boog { stroke: var(--warn); }
+.axe-hcc-ring[data-toon='fout'] .axe-hcc-ring-boog { stroke: var(--err); }
+.axe-hcc-ring-getal {
+  position: absolute; top: 0; height: clamp(36px, 5.2vh, 48px); display: flex; align-items: center;
+  font-size: 10px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.axe-hcc-ring-label { font-size: 9px; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* Providers: raster van 3 kolommen. */
+.axe-hcc-providers {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 6px;
+  padding: 8px 10px 10px; height: 100%; overflow: hidden; align-content: stretch;
+}
+.axe-hcc-providers > .axe-dash-leeg { grid-column: 1 / -1; }
+.axe-hcc-provider {
+  display: flex; align-items: center; gap: 7px; min-width: 0; padding: 0 8px; max-height: 40px;
+  border-radius: 9px; background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 11px; color: var(--text-secondary);
+}
+.axe-hcc-provider-naam { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── De core in het middenvak ── */
+@media (min-width: 768px) {
+  .axe-home-v3[data-axe-home-view='axe'] .axe-home-bolvak {
+    position: fixed !important;
+    top: calc(var(--hcc-top) + var(--hcc-strip) + var(--hcc-gat)) !important;
+    bottom: calc(var(--hcc-onder) + var(--hcc-onder-hoog) + var(--hcc-gat)) !important;
+    left: calc(var(--hcc-inset) + var(--hcc-kol) + var(--hcc-gat)) !important;
+    right: calc(var(--hcc-inset) + var(--hcc-kol) + var(--hcc-gat)) !important;
+    height: auto !important;
+  }
+}
+
+/* Smaller dan een laptop: de strip laat de zoekbalk en de briefing vallen. */
+@media (max-width: 1180px) {
+  .axe-hcc-strip-zoek { min-width: 0; }
+  .axe-hcc-strip-zoek span, .axe-hcc-strip-zoek kbd { display: none; }
+}
+/* Laag venster (onder 760px hoog): de statusregel van de kerntegels valt weg,
+   de onderste rij wordt lager. Eerst passen, dan pas details. */
+@media (max-height: 760px) {
+  :root { --hcc-onder-hoog: 128px; --hcc-strip: 34px; }
+  .axe-hcc-kernrij-regel { display: none; }
+  .axe-hcc-rechts > .axe-hcc-kaart--snel .axe-hcc-snelknop { height: 22px; }
+}
+@media (max-width: 900px) { .axe-hcc { display: none; } }
