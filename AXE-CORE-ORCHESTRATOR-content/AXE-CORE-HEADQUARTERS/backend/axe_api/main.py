@@ -2546,6 +2546,12 @@ try:
 except Exception as _e:  # noqa: BLE001
     log.warning("cli_laag niet ingeladen (%s) -- /cli/* bestaat niet", _e)
 
+try:
+    from chats_zoek import build_router as _chats_router  # noqa: E402
+    app.include_router(_chats_router(sb), prefix="/chats", dependencies=[AUTH], tags=["chats"])
+except Exception as _e:  # noqa: BLE001
+    log.warning("chats_zoek niet ingeladen (%s) -- /chats/* bestaat niet", _e)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # WORKSPACE FILES — backs the in-app Code Editor (Cursor-style IDE)
