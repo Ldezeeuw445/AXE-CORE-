@@ -754,3 +754,23 @@ def test_ids_yes_needed_duplicaten_houdt_een_per_deal():
     assert "b" in gesloten and "c" in gesloten
     assert "d" not in gesloten  # andere deal, alleen
     assert "e" not in gesloten  # al done
+
+
+class TestVervolgMetEchtDoel:
+    """25 nov live: 'Continue: > Trading OS Manager: "Goed idee, en dit…"' -- afgekapte titel
+    als heel het doel; de motor ging verkennen in ~/.config/axe en faalde twee Planner-runs."""
+
+    def test_afgekapte_titel_zonder_doel_geeft_geen_vervolg(self):
+        uit = p.planner_pass([
+            {"id": "a", "title": '> Trading OS Manager: "Goed idee, en dit…', "status": "failed", "requested_by": "luka"},
+        ], [])
+        assert uit == []
+
+    def test_vervolg_krijgt_het_echte_doel_en_de_grens_mee(self):
+        uit = p.planner_pass([
+            {"id": "b", "title": "Zet marketTide op de feed…", "status": "failed", "requested_by": "luka",
+             "goal": "Zet marketTide net als unusualOptions op de marktfeed-meldingen in trading-os-app."},
+        ], [])
+        assert len(uit) == 1
+        assert "unusualOptions op de marktfeed-meldingen" in uit[0]["doel"]
+        assert "~/.config" in uit[0]["doel"]

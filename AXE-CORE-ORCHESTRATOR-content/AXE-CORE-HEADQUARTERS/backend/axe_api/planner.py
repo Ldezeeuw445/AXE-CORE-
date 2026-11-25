@@ -730,6 +730,16 @@ def planner_pass(gevraagd: list[dict], kapot: list[dict]) -> list[dict]:
         # daar niets aan doen. En "Continue: Continue: ..." is nooit bedoeld.
         if is_yes_needed_wacht(titel) or re.match(r"continue\b", titel, re.IGNORECASE):
             continue
+        # 25 nov live: "Continue: > Trading OS Manager: "Goed idee, en dit…"" -- een afgekapte
+        # titel als heel het doel. De motor wist niet wat te doen, ging verkennen (ook in
+        # ~/.config/axe en ~/bin) en faalde twee Planner-runs. Het echte doel gaat mee;
+        # zonder echt doel is er niets concreets om te vervolgen.
+        bron_doel = " ".join(str(t.get("goal") or "").split())
+        if bron_doel.lower().startswith("continue the work"):
+            bron_doel = ""
+        afgekapt = titel.endswith(("…", "..."))
+        if afgekapt and len(bron_doel) < 40:
+            continue
         sleutel = f"vervolg:{t.get('id') or titel}"
         if sleutel in gezien or f"titel:{titel.lower()}" in gezien:
             continue
@@ -737,7 +747,10 @@ def planner_pass(gevraagd: list[dict], kapot: list[dict]) -> list[dict]:
         gezien.add(f"titel:{titel.lower()}")
         uit.append({
             "titel": f"Continue: {titel}"[:120],
-            "doel": f"Continue the work Luka asked for: {titel}"[:1200],
+            "doel": (f"Continue the work Luka asked for: {titel}"
+                     + (f"\n\nOriginal request:\n{bron_doel}" if bron_doel and bron_doel != titel else "")
+                     + "\n\nWork only inside the repository; never read or change ~/.config, ~/bin, keys "
+                       "or other home folders.")[:1200],
             "waarom": "continuation of a spoken or requested task",
             "risico": "lezen",
             "prioriteit": "high",
@@ -1500,7 +1513,7 @@ class Planner:
     def _luka_werk(self) -> list[dict]:
         try:
             rijen = (self.sb().table("core_tasks")
-                     .select("id,title,status,assignee,requested_by,capability,metadata,error")
+                     .select("id,title,goal,status,assignee,requested_by,capability,metadata,error")
                      .in_("status", list(VOLGENDE_STAP))
                      .order("updated_at", desc=True).limit(40).execute().data) or []
         except Exception as e:  # noqa: BLE001
