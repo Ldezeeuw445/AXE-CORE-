@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appsGezondheid, eenRegel, fixAlsNodig, runsNaarUren, uurReeks } from '@/domain/homeAppsHealth';
+import { appSleutel, appsGezondheid, eenRegel, fixAlsNodig, runsNaarUren, uurReeks } from '@/domain/homeAppsHealth';
 
 const NU = Date.parse('2026-11-25T20:00:00Z');
 const uurTerug = (h: number) => new Date(NU - h * 3600_000).toISOString();
@@ -141,5 +141,39 @@ describe('AXE Core: mislukte schema\'s duidelijk in Apps health (v5)', () => {
     expect(kern.kapot).toEqual([{ id: 'r', naam: 'Review Desk', keer: 15 }, { id: 'p', naam: 'Planner', keer: 4 }]);
     expect(kern.kpiSub).toBe('Review Desk ×15, Planner ×4 failing');
     expect(kern.fix).toEqual({ soort: 'open', route: '/cron-manager?open=r', uitleg: 'Review Desk ×15, Planner ×4 failing. Open Review Desk in Cron Manager.' });
+  });
+});
+
+describe('Trading OS heet trading_os (CHECK op core_schedules), met aliassen', () => {
+  it('appSleutel maakt van elke spelling één sleutel', () => {
+    for (const a of ['trading_os', 'trading-os', 'tradingos', 'Trading OS', 'TRADING_OS', 'trading']) expect(appSleutel(a)).toBe('trading_os');
+    expect(appSleutel('axe-core')).toBe('axe_core');
+    expect(appSleutel(null)).toBe('axe_core');
+    expect(appSleutel('iets_anders')).toBe('iets_anders');
+  });
+  it('runs en schema\'s onder elke spelling landen in de Trading OS-rij', () => {
+    const nu = Date.parse('2026-11-25T22:00:00Z');
+    const tos = appsGezondheid({
+      runs: [
+        { app: 'trading_os', uur: new Date(nu - 600_000).toISOString(), ok: 12, fout: 0 },
+        { app: 'trading-os', uur: new Date(nu - 4000_000).toISOString(), ok: 10, fout: 1 },
+        { app: 'tradingos', uur: new Date(nu - 8000_000).toISOString(), ok: 2, fout: 0 },
+      ],
+      schemas: [
+        { id: 's1', name: 'TOS collector', app: 'trading_os', enabled: true, last_status: 'ok', last_run_at: new Date(nu - 120_000).toISOString(), consecutive_failures: 0 },
+        { id: 's2', name: 'TOS brief', app: 'trading-os', enabled: true, last_status: 'fail', last_run_at: new Date(nu - 300_000).toISOString(), consecutive_failures: 2 },
+      ],
+      diensten: [], sessies: [], nu,
+    }).find((x) => x.id === 'trading_os')!;
+    expect(tos.kpi).toBe('25');
+    expect(tos.kapot).toEqual([{ id: 's2', naam: 'TOS brief', keer: 2 }]);
+    expect(tos.laatst).toBeGreaterThanOrEqual(nu - 120_000);
+  });
+  it('runsNaarUren voegt aliassen samen', () => {
+    const r = runsNaarUren([
+      { app: 'trading-os', status: 'ok', created_at: '2026-11-25T21:10:00Z' },
+      { app: 'trading_os', status: 'ok', created_at: '2026-11-25T21:20:00Z' },
+    ]);
+    expect(r).toEqual([{ app: 'trading_os', uur: '2026-11-25T21:00:00.000Z', ok: 2, fout: 0 }]);
   });
 });

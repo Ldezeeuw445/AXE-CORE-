@@ -143,3 +143,28 @@ describe('Home v5: migratie voor de servertelling', () => {
     expect(sql).toMatch(/NIET automatisch toegepast/);
   });
 });
+
+describe('Home v6: statuskaarten en groot scherm', () => {
+  const dash = bron('HomeLiveDashboard.tsx');
+  const css = bron('homeCommandCenter.css');
+  it('vier statuskaarten, alleen lezen; een test alleen na een klik', () => {
+    for (const t of ['"Connectors"', '"Trading accounts"', '"Mail"', '"System status"']) expect(dash).toContain(`<Kop tekst=${t}`);
+    // Accounts: de alleen-lezen lijst zonder token, nooit getAccounts (dat kan schrijven).
+    expect(dash).toContain('leesAccountsZonderToken()');
+    expect(dash).not.toMatch(/getAccounts\(/);
+    expect(dash).not.toMatch(/\.token\b/);
+    // mcpHubTest staat alleen in testMcp, en testMcp alleen in een onClick.
+    expect(dash.match(/mcpHubTest\(/g)).toHaveLength(1);
+    expect(dash).toMatch(/onClick=\{\(\) => \{ void testMcp\(\); \}\}/);
+    // Geen inbox in AXE Core: dat staat er eerlijk bij.
+    expect(dash).toContain('No inbox is connected to AXE Core');
+  });
+  it('vanaf 2000px zes kolommen; de bol blijft in de twee middelste', () => {
+    expect(css).toMatch(/@media \(min-width: 2000px\) \{/);
+    expect(css).toMatch(/'links extra-l kern kern extra-r rechts'/);
+    expect(css).toMatch(/--hcc-kol: calc\(\(100vw - 2 \* var\(--hcc-inset\) - 5 \* var\(--hcc-gat\)\) \/ 6\)/);
+    expect(css).toMatch(/left: calc\(var\(--hcc-inset\) \+ 2 \* var\(--hcc-kol\) \+ 2 \* var\(--hcc-gat\)\) !important/);
+    // Onder 2000px bestaan de statuskaarten niet in beeld.
+    expect(css).toMatch(/^\.axe-hcc-extra \{ display: none; \}/m);
+  });
+});

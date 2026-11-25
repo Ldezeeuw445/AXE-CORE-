@@ -133,6 +133,20 @@ async function readStored(): Promise<AccountsState | null> {
 }
 
 /**
+ * Home's statuskaart: de opgeslagen lijst, alleen lezen. Geen migratie of
+ * adoptie (dat schrijft; dat doet de Trading-tab), en de token gaat er hier
+ * al af, zodat hij nooit in Home's state belandt.
+ */
+export async function leesAccountsZonderToken(): Promise<Omit<TradingAccount, 'token'>[]> {
+  const stored = await readStored();
+  return (stored?.accounts ?? []).map((a) => {
+    const zonder: Partial<TradingAccount> = { ...a };
+    delete zonder.token;
+    return zonder as Omit<TradingAccount, 'token'>;
+  });
+}
+
+/**
  * The list, folding in the single account that already exists.
  *
  * Idempotent: once migrated, the stored list wins and metaapi_config is only
