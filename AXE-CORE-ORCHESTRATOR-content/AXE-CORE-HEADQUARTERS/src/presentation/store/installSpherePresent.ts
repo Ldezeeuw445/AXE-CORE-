@@ -13,6 +13,7 @@ import { homeCommando, type HomeCommando } from '@/domain/overlay/homeCommando';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import { antwoord as maakAntwoord, maakVanJouOpdracht, pasToe } from '@/domain/maakVanJou';
 import { leesMaakVanJou, schrijfMaakVanJou } from '@/presentation/store/maakVanJouStore';
+import { interviewBeurt } from '@/application/axe/profiel';
 
 const WEERGAVE_NAAM = { axe: 'de bol', neural: 'Neural', terrain: 'Terrain', runtime: 'Runtime' } as const;
 
@@ -105,6 +106,18 @@ export function installSpherePresent(): void {
           conversation: [...s.conversation,
             { role: 'user', text: trimmed, timestamp: nu },
             { role: 'axe', text: maakAntwoord(eigen, na), timestamp: nu + 1 }],
+        }));
+        return;
+      }
+
+      // Interview (25 nov): "interview me", en zolang het loopt is elk bericht een antwoord.
+      const vraag = trimmed ? await interviewBeurt(trimmed).catch(() => null) : null;
+      if (vraag) {
+        const nu = Date.now();
+        useVoiceStore.setState(s => ({
+          conversation: [...s.conversation,
+            { role: 'user', text: trimmed, timestamp: nu },
+            { role: 'axe', text: vraag, timestamp: nu + 1 }],
         }));
         return;
       }

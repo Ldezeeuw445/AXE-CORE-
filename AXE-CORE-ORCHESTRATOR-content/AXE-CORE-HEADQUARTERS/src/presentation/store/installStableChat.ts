@@ -12,6 +12,7 @@
  */
 import { terugkomstContext } from '@/application/axe/terugkomst';
 import { haalSessieNotities, noteerAfgerondeSessies, sessieGeheugenContext } from '@/application/axe/sessieGeheugen';
+import { haalProfiel, profielContext } from '@/application/axe/profiel';
 import { callWithFallback } from '@/infrastructure/gateways/llmGateway';
 import { rijActie, rijAntwoord } from '@/domain/chat/rijOpdracht';
 import { rijActieApi, rijStand } from '@/infrastructure/gateways/axeCoreApiService';
@@ -358,6 +359,7 @@ async function stableSimpleSend(text: string): Promise<boolean> {
     (memoryBlock ? `\n\n${memoryBlock}` : '') +
     terugkomstContext() +
     sessieGeheugenContext() +
+    profielContext() +
     replyLanguageInstruction() +
     `\n\n${CONVERSATION_FIRST_RULE}` +
     (isSocialChatTurn(text)
@@ -500,6 +502,7 @@ export function installStableChat(): void {
   if (installed) return;
   installed = true;
   void haalSessieNotities();
+  void haalProfiel();
 
   const original = useVoiceStore.getState().sendMessage;
   // Het hervatten van lopende taken staat in installTierRouter

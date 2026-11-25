@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 78 klaar, 88 gebouwd maar nog niet bewezen, 45 open (van 211).
+**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 78 klaar, 89 gebouwd maar nog niet bewezen, 44 open (van 211).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -11,7 +11,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (47%) | 10 | 0 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 30 | 4 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 5 | 2 |
-| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 7 (15%) | 18 | 22 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 7 (15%) | 19 | 21 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
@@ -356,7 +356,7 @@ Wat AXE ook moet kunnen, naar het voorbeeld van Spazio OS Pro:
       wat Luka nodig heeft wordt een stap.
 - [~] **Vandaag-scherm** (18 nov: "Eén ding vandaag" staat bovenaan Home in de notch; eigen keuze gedeeld tussen de Macs, anders je oudste stap): de ene prioriteit van vandaag, volgende stappen en
       wiens beurt het is, projecten van idee tot verkoop, log van wat af is.
-- [ ] **Interview**: AXE leert wie Luka is via een geleid gesprek.
+- [~] **Interview**: AXE leert wie Luka is via een geleid gesprek. *(25 nov gebouwd: zeg "interview me" of "leer me kennen" in de chat -> 10 vaste vragen (werk, doel dit jaar, projecten op volgorde, goede dag, hoe AXE praat, wanneer storen, nooit zonder vragen, energie, mensen, verder). Elk bericht is dan het antwoord; "sla over", "stop interview", "ga verder met het interview". Antwoorden in global_memory (luka_profiel, `profiel:<id>`), dus gedeeld tussen de apparaten, en in beide chatroutes als "Wie Luka is" in de systeemprompt. Zonder model. `domain/chat/interview.ts` + `application/axe/profiel.ts`, 10 tests. In de preview: start en pauze werken (antwoorden staan in het gesprek); geen echte antwoorden ingevuld -- dat is aan Luka. Bewezen als jij het interview gedaan hebt en AXE het gebruikt.)*
 - [ ] **Jouw stem**: 3-5 eigen teksten -> AXE schrijft en reviewt in die stem.
 - [ ] **De Raad**: acht bedachte experts reviewen teksten, pagina's, projecten.
 - [x] **"Doe het zelf"-knop** op een stap: AXE werkt hem op de achtergrond af. *(25 nov, 1b0de9e5 + fix: "Do it for me" naast "Done" bij Your turn en Together in Tasks > Wiens beurt; POST /stappen/{id}/zelf (rij.doe_zelf) zet de stap op AXE en in de wachtrij, met de titel als opdracht. Zelfde grens als de rij: geld, trading, NorthSea-akkoorden, wissen en wat op jouw ja wacht -> 409 met de reden onder de stap. LIVE BEWEZEN: proefstap "drie USB-C-docks voor de Mac mini M4" -> AXE schreef de notitie en controleerde hem zelf (2 stappen); eerste proef liet zien dat alleen het waarom werd meegegeven, gerepareerd. Betaal-proefstap geweigerd, ook via de knop in de preview gezien. Beide proefstappen afgesloten.)*
