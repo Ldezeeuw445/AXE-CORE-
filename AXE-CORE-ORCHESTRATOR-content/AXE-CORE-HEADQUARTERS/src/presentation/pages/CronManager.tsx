@@ -17,23 +17,23 @@ import {
 
 /* ── Human-readable cron ─────────────────────────────────────────────────── */
 const CRON_PRESETS: Array<{ label: string; expr: string }> = [
-  { label: 'Elke 15 min', expr: '*/15 * * * *' },
-  { label: 'Elk uur', expr: '0 * * * *' },
-  { label: 'Dagelijks 08:00', expr: '0 8 * * *' },
-  { label: 'Dagelijks 18:00', expr: '0 18 * * *' },
-  { label: 'Ma 09:00', expr: '0 9 * * 1' },
-  { label: 'Elke maandag', expr: '0 9 * * 1' },
+  { label: 'Every 15 min', expr: '*/15 * * * *' },
+  { label: 'Every hour', expr: '0 * * * *' },
+  { label: 'Daily 08:00', expr: '0 8 * * *' },
+  { label: 'Daily 18:00', expr: '0 18 * * *' },
+  { label: 'Mon 09:00', expr: '0 9 * * 1' },
+  { label: 'Every Monday', expr: '0 9 * * 1' },
 ];
 
 function cronToHuman(expr: string): string {
   const map: Record<string, string> = {
-    '*/15 * * * *': 'elke 15 minuten',
-    '*/5 * * * *': 'elke 5 minuten',
-    '0 * * * *': 'elk uur',
-    '0 8 * * *': 'dagelijks om 08:00',
-    '0 18 * * *': 'dagelijks om 18:00',
-    '0 9 * * 1': 'elke maandag om 09:00',
-    '0 0 * * *': 'dagelijks om middernacht',
+    '*/15 * * * *': 'every 15 minutes',
+    '*/5 * * * *': 'every 5 minutes',
+    '0 * * * *': 'every hour',
+    '0 8 * * *': 'daily at 08:00',
+    '0 18 * * *': 'daily at 18:00',
+    '0 9 * * 1': 'every Monday at 09:00',
+    '0 0 * * *': 'daily at midnight',
   };
   return map[expr.trim()] ?? expr;
 }
@@ -44,9 +44,9 @@ const ACTION_META: Record<CronActionType, { label: string; icon: typeof Bot; col
   flow:    { label: 'CrewAI Flow', icon: Workflow,     color: '#c4b5fd' },
   exec:    { label: 'VPS Command', icon: Terminal,     color: 'var(--warning)' },
   webhook: { label: 'Webhook',    icon: Globe,         color: 'var(--success)' },
-  observed: { label: 'Draait elders', icon: Workflow,  color: 'var(--text-muted)' },
+  observed: { label: 'Runs elsewhere', icon: Workflow,  color: 'var(--text-muted)' },
   planner: { label: 'Planner (Mac)', icon: Bot,        color: '#F472B6' },
-  northsea: { label: 'NorthSea-desk', icon: Globe,     color: '#F472B6' },
+  northsea: { label: 'NorthSea desk', icon: Globe,     color: '#F472B6' },
 };
 
 /* ── App tabs ─────────────────────────────────────────────────────────────
@@ -271,7 +271,7 @@ export default function CronManager() {
           topbalk, waar ze zichtbaar blijven zonder een regel te kosten. */}
       <TopbalkSlot>
         <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-secondary)' }}>
-          {loading ? 'Laden…' : `${activeCount} active · ${schedules.length} schedules`}
+          {loading ? 'Loading…' : `${activeCount} active · ${schedules.length} schedules`}
         </span>
       </TopbalkSlot>
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
@@ -421,7 +421,7 @@ export default function CronManager() {
                     style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-primary)', fontSize: 16 }}
                   />
                   <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                    Een volledige institutionele research-cyclus kan lang duren (meerdere agent-stappen na elkaar) — plan dit niet vaker dan een paar keer per dag.
+                    A full institutional research cycle can take a long time (several agent steps in a row) — do not schedule it more than a few times a day.
                   </p>
                 </div>
               )}
@@ -439,12 +439,12 @@ export default function CronManager() {
                       style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-primary)', fontSize: 16 }} />
                   </div>
                   <input value={draft.bodyJson} onChange={e => setDraft(d => ({ ...d, bodyJson: e.target.value }))}
-                    placeholder='JSON body (optioneel, bijv. {"key":"value"})'
+                    placeholder='JSON body (optional, e.g. {"key":"value"})'
                     className="w-full text-xs-custom font-mono px-3 py-2 rounded-lg outline-none"
                     style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-primary)', fontSize: 16 }} />
                   <label className="flex items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
                     <input type="checkbox" checked={draft.includeCronKey} onChange={e => setDraft(d => ({ ...d, includeCronKey: e.target.checked }))} />
-                    Stuur mijn CRON_SECRET mee als Bearer-token (voor AXE Companion / Trading OS)
+                    Send my CRON_SECRET as a Bearer token (for AXE Companion / Trading OS)
                   </label>
                 </div>
               )}
@@ -452,7 +452,7 @@ export default function CronManager() {
               <div className="flex justify-end gap-2 pt-1">
                 <button onClick={() => { setAdding(false); setDraft(EMPTY_DRAFT); }}
                   className="px-3 py-1.5 rounded-lg text-xs-custom" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
-                  Annuleren
+                  Cancel
                 </button>
                 <button onClick={() => { void create(); }} disabled={busy.has('__new__') || !draft.name.trim()}
                   className="px-4 py-1.5 rounded-lg text-xs-custom font-medium disabled:opacity-50" style={{ background: 'var(--accent-cyan)', color: '#000' }}>

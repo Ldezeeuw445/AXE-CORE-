@@ -42,7 +42,7 @@ function tijd(iso: string | null): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
   const vandaag = new Date().toDateString() === d.toDateString();
-  return d.toLocaleString('nl-NL', vandaag ? { hour: '2-digit', minute: '2-digit' } : { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString('en-GB', vandaag ? { hour: '2-digit', minute: '2-digit' } : { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function Grootboek() {
@@ -134,10 +134,10 @@ export default function Grootboek() {
                   <div className="flex gap-2" style={{ color: 'var(--text-muted)' }}>
                     <span>{bronWoord(j.bron === 'pg_cron' ? 'pg_cron' : 'schedule', j.executor)}</span>
                     <span className="font-mono-data">{j.cron}</span>
-                    <span className="ml-auto">{j.enabled ? tijd(j.next_run_at) : 'uit'}</span>
+                    <span className="ml-auto">{j.enabled ? tijd(j.next_run_at) : 'off'}</span>
                   </div>
                   {(j.consecutive_failures ?? 0) > 0 && (
-                    <div style={{ color: 'var(--m-broken)' }}>{j.consecutive_failures}× op rij mislukt</div>
+                    <div style={{ color: 'var(--m-broken)' }}>{j.consecutive_failures}× failed in a row</div>
                   )}
                 </li>
               ))}
@@ -166,11 +166,11 @@ export default function Grootboek() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {fout && <div className="mb-4 text-sm" style={{ color: 'var(--m-broken)' }}>Grootboek niet bereikbaar: {fout}</div>}
+        {fout && <div className="mb-4 text-sm" style={{ color: 'var(--m-broken)' }}>Ledger unreachable: {fout}</div>}
 
         <KpiRij tegels={[
-          { label: 'Runs', waarde: laden ? '…' : som.totaal.toLocaleString('nl-NL'), sub: VENSTERS.find(v => v.uren === uren)?.label },
-          { label: 'Failed', waarde: laden ? '…' : som.fout.toLocaleString('nl-NL'), toon: som.fout ? 'bad' : undefined,
+          { label: 'Runs', waarde: laden ? '…' : som.totaal.toLocaleString('en-GB'), sub: VENSTERS.find(v => v.uren === uren)?.label },
+          { label: 'Failed', waarde: laden ? '…' : som.fout.toLocaleString('en-GB'), toon: som.fout ? 'bad' : undefined,
             sub: stand.find(s2 => s2.laatsteFout)?.laatsteFout ? `last: ${[...stand].filter(s2 => s2.laatsteFout).sort((a, b) => b.laatsteFout!.at.localeCompare(a.laatsteFout!.at))[0].laatsteFout!.name}` : 'no failures' },
           { label: 'Success rate', waarde: slaagt == null ? '–' : `${slaagt}%`, toon: slaagt != null && slaagt < 95 ? 'warn' : 'ok', sub: 'finished runs' },
           { label: 'Running now', waarde: laden ? '…' : String(som.bezig), sub: 'tasks and jobs in progress' },
@@ -184,9 +184,9 @@ export default function Grootboek() {
               <button key={s.app} type="button" onClick={() => setApp(app === s.app ? 'alle' : s.app)}
                 className="axe-gb-app" data-aan={app === s.app ? 'ja' : undefined} style={{ ['--app-kleur' as string]: m.kleur }}>
                 <span className="axe-gb-app-titel" title={m.label}>{m.label}</span>
-                <b>{laden ? '…' : s.totaal === 0 ? '0' : s.totaal.toLocaleString('nl-NL')}<small> runs</small></b>
+                <b>{laden ? '…' : s.totaal === 0 ? '0' : s.totaal.toLocaleString('en-GB')}<small> runs</small></b>
                 <span className="axe-gb-app-tellers">
-                  <span className="is-ok">{s.goed.toLocaleString('nl-NL')} ok</span>
+                  <span className="is-ok">{s.goed.toLocaleString('en-GB')} ok</span>
                   {s.fout > 0 && <span className="is-fout">{s.fout} failed</span>}
                   {s.bezig + s.open > 0 && <span>{s.bezig + s.open} open</span>}
                 </span>
@@ -202,7 +202,7 @@ export default function Grootboek() {
           <div className="axe-cron-rol">
             <table className="axe-cron-tabel">
               <thead>
-                <tr><th>Wanneer</th><th>App</th><th>Bron</th><th>Wat</th><th>Status</th><th className="axe-cron-r">Duur</th><th>Detail</th></tr>
+                <tr><th>When</th><th>App</th><th>Source</th><th>What</th><th>Status</th><th className="axe-cron-r">Duration</th><th>Detail</th></tr>
               </thead>
               <tbody>
                 {zichtbaar.slice(0, 500).map(r => {

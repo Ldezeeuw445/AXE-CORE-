@@ -364,11 +364,11 @@ function ChasePaneel({
       {fout && (
         <div className="flex gap-2 rounded-lg bg-white/[0.03] p-2 text-[11px]" style={{ border: '1px solid rgba(248,113,113,0.35)', color: '#F87171' }}>
           <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-          <span>NorthSea-data niet op te halen: {fout}</span>
+          <span>Could not fetch NorthSea data: {fout}</span>
         </div>
       )}
-      {!fout && !data && <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Laden…</div>}
-      {data && gefilterd.length === 0 && <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Niets om achterna te zitten.</div>}
+      {!fout && !data && <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Loading…</div>}
+      {data && gefilterd.length === 0 && <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Nothing to chase.</div>}
 
       <ul className="flex flex-col gap-1">
         {zichtbaar.map(i => <ChaseRegel key={i.id} item={i} nu={nu} onKies={onKies} />)}

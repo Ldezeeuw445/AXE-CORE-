@@ -31,9 +31,9 @@ import type { NorthseaAgendaItem } from '@/domain/northsea/tabs/typen';
  */
 type Weergave = 'dag' | 'week' | 'maand';
 const WEERGAVEN: ZuilItem[] = [
-  { id: 'dag', label: 'Dag', kleur: '#2EF2C2', icoon: <CalendarDays size={17} /> },
+  { id: 'dag', label: 'Day', kleur: '#2EF2C2', icoon: <CalendarDays size={17} /> },
   { id: 'week', label: 'Week', kleur: '#8B7CF6', icoon: <CalendarRange size={17} /> },
-  { id: 'maand', label: 'Maand', kleur: '#22D3EE', icoon: <LayoutGrid size={17} /> },
+  { id: 'maand', label: 'Month', kleur: '#22D3EE', icoon: <LayoutGrid size={17} /> },
 ];
 
 /** De legenda: de kleur van elke app, dezelfde als in Taken en Cron. */
@@ -311,16 +311,16 @@ export default function CalendarPage() {
         <div className="axe-cal-toolbar" role="toolbar" aria-label="Calendar view">
           <h2 className="axe-cal-titel">
             {weergave === 'dag'
-              ? weekAnker.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' })
+              ? weekAnker.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
               : weergave === 'week'
-                ? `${weekAnker.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })} · week`
-                : new Date(currentYear, currentMonth, 1).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' })}
+                ? `${weekAnker.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} · week`
+                : new Date(currentYear, currentMonth, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
           </h2>
           <div className="axe-cal-segbar" role="tablist" aria-label="Day week month">
             {([
-              ['dag', 'Dag'],
+              ['dag', 'Day'],
               ['week', 'Week'],
-              ['maand', 'Maand'],
+              ['maand', 'Month'],
             ] as const).map(([id, label]) => (
               <button
                 key={id}

@@ -24,10 +24,10 @@ function dagKop(sleutel: string, nu: Date): { kop: string; onder: string } {
   const vandaag = datumSleutel(nu);
   const morgenDatum = new Date(nu);
   morgenDatum.setDate(morgenDatum.getDate() + 1);
-  const vol = d.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
+  const vol = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   if (sleutel === vandaag) return { kop: 'Today', onder: vol };
-  if (sleutel === datumSleutel(morgenDatum)) return { kop: 'Morgen', onder: vol };
-  return { kop: d.toLocaleDateString('nl-NL', { weekday: 'long' }), onder: vol };
+  if (sleutel === datumSleutel(morgenDatum)) return { kop: 'Tomorrow', onder: vol };
+  return { kop: d.toLocaleDateString('en-GB', { weekday: 'long' }), onder: vol };
 }
 
 export function AgendaLijst({

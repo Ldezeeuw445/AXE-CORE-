@@ -62,7 +62,7 @@ export function MaandRooster({
       <header className="axe-maand-kop">
         <span className="axe-maand-titel">
           <CalendarDays size={15} />
-          {new Date(jaar, maand, 1).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' })}
+          {new Date(jaar, maand, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
         </span>
         <span className="axe-maand-nav">
           <button onClick={() => stap(-1)} title="Previous month"><ChevronLeft size={15} /></button>
@@ -70,7 +70,7 @@ export function MaandRooster({
             className="axe-maand-nu"
             onClick={() => { const n = new Date(); opMaand(n.getFullYear(), n.getMonth()); opKies(datumSleutel(n)); }}
           >
-            Vandaag
+            Today
           </button>
           <button onClick={() => stap(1)} title="Next month"><ChevronRight size={15} /></button>
         </span>

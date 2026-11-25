@@ -19,9 +19,9 @@ describe('grootboek', () => {
     ]);
     expect(items[0].kleur).toBe(appMeta('axe_companion').kleur);
     expect(items[0].titel).toContain('elke 10 min (144×)');
-    expect(items[0].soort).toBe('Supabase-cron');
+    expect(items[0].soort).toBe('Supabase cron');
     expect(items[1].app).toBe('axe_core');
-    expect(items[1].soort).toBe('job op de Mac');
+    expect(items[1].soort).toBe('job on the Mac');
   });
 
   it('onbekende app valt terug op AXE Core in plaats van te verdwijnen', () => {
@@ -61,9 +61,9 @@ describe('grootboek', () => {
   });
 
   it('zegt status, bron en duur in gewone woorden', () => {
-    expect([statusWoord('ok'), statusWoord('failed'), statusWoord('waiting_approval'), statusWoord('iets')]).toEqual(['gelukt', 'mislukt', 'wacht op akkoord', 'iets']);
+    expect([statusWoord('ok'), statusWoord('failed'), statusWoord('waiting_approval'), statusWoord('iets')]).toEqual(['ok', 'failed', 'waiting for OK', 'iets']);
     expect([uitkomst('completed'), uitkomst('timeout'), uitkomst('running'), uitkomst('pending')]).toEqual(['goed', 'fout', 'bezig', 'open']);
-    expect([bronWoord('launchd'), bronWoord('schedule', 'vps'), bronWoord('task')]).toEqual(['Mac-onderhoud', 'job op de VPS', 'taak']);
+    expect([bronWoord('launchd'), bronWoord('schedule', 'vps'), bronWoord('task')]).toEqual(['Mac maintenance', 'job on the VPS', 'task']);
     expect([duurTekst(250), duurTekst(4200), duurTekst(95000), duurTekst(null)]).toEqual(['250 ms', '4.2 s', '1 min 35 s', '']);
   });
 

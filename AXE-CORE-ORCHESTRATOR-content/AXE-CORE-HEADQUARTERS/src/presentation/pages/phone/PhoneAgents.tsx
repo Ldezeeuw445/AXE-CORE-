@@ -54,7 +54,7 @@ export default function PhoneAgents() {
             />
           ) : elders ? null : (
             <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-              {elders === null ? 'Kijken wat er wacht…' : 'Niets wacht op jou.'}
+              {elders === null ? 'Checking what is waiting…' : 'Nothing is waiting on you.'}
             </div>
           )}
           {elders ? (

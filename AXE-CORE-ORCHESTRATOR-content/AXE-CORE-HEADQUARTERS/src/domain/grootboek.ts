@@ -51,11 +51,11 @@ export function appVanRegel(app: string): AppId {
 /** Een run of taak in één woord. Onbekende statussen blijven wat ze zijn. */
 export function statusWoord(status: string): string {
   const woorden: Record<string, string> = {
-    ok: 'gelukt', completed: 'gelukt', succeeded: 'gelukt',
-    fail: 'mislukt', failed: 'mislukt', error: 'mislukt', timeout: 'time-out',
-    running: 'bezig', in_progress: 'bezig', claimed: 'bezig',
-    pending: 'wacht', queued: 'wacht', waiting_approval: 'wacht op akkoord',
-    skipped: 'overgeslagen', cancelled: 'geannuleerd',
+    ok: 'ok', completed: 'done', succeeded: 'done',
+    fail: 'failed', failed: 'failed', error: 'failed', timeout: 'timeout',
+    running: 'running', in_progress: 'running', claimed: 'running',
+    pending: 'waiting', queued: 'queued', waiting_approval: 'waiting for OK',
+    skipped: 'skipped', cancelled: 'cancelled',
   };
   return woorden[status] ?? status;
 }
@@ -72,13 +72,13 @@ export function uitkomst(status: string): Uitkomst {
 /** Waar het vandaan komt, zoals je het zou zeggen. */
 export function bronWoord(source: string, executor?: string): string {
   const woorden: Record<string, string> = {
-    schedule: executor === 'mac' ? 'job op de Mac' : 'job op de VPS',
-    pg_cron: 'Supabase-cron',
-    task: 'taak',
+    schedule: executor === 'mac' ? 'job on the Mac' : 'job on the VPS',
+    pg_cron: 'Supabase cron',
+    task: 'task',
     planner: 'planner',
-    launchd: 'Mac-onderhoud',
-    northsea: 'NorthSea-desk',
-    manual: 'handmatig',
+    launchd: 'Mac maintenance',
+    northsea: 'NorthSea desk',
+    manual: 'manual',
   };
   return woorden[source] ?? source;
 }
