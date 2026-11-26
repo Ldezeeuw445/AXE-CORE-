@@ -102,7 +102,8 @@
   max-width: 100%;
   max-height: 100%;
   border-radius: 18px;
-  background: var(--axe-kaart-vlak, rgba(12, 12, 15, 0.92));
+  /* Het matzwart komt uit het token (kaartKleur.test): geen eigen rgba-vlak. */
+  background: var(--axe-card-bg);
   border: 1px solid var(--axe-kaart-lijn, rgba(255, 255, 255, 0.08));
   border-top-color: var(--axe-kaart-lijn-boven, rgba(255, 255, 255, 0.14));
   box-shadow: var(--axe-kaart-schaduw, 0 18px 40px rgba(0, 0, 0, 0.45));
@@ -166,6 +167,77 @@
   font-weight: 600;
   letter-spacing: 0.02em;
   white-space: nowrap;
+}
+
+/* ── Rust: aandachtstegels (26 nov, fase 1) ─────────────────────────────
+   Alleen wat nu aandacht vraagt. Matzwart uit het token, dunne gloed, cyaan
+   in de letters; de inhoud bepaalt de maat. Ze staan onder de bol op de
+   vloer, zodat de bol het midden blijft. */
+.axe-podium-aandacht {
+  /* Geen translate om te centreren: framer-motion zet zijn eigen transform
+     (y-animatie) en die veegde translate(-50%) weg -- de tegels liepen dan
+     rechts het vak uit. Links en rechts vast, inhoud gecentreerd. */
+  position: absolute;
+  left: 3%;
+  right: 3%;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: flex-end;
+  gap: 8px;
+  max-height: calc(100% - 24px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.axe-podium-tegel {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  max-width: 230px;
+  flex: 0 1 auto;
+  padding: 8px 12px;
+  border-radius: 14px;
+  text-align: left;
+  background: var(--axe-card-bg);
+  border: 1px solid var(--axe-kaart-lijn, rgba(255, 255, 255, 0.08));
+  border-top-color: var(--axe-kaart-lijn-boven, rgba(255, 255, 255, 0.14));
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(34, 211, 238, 0.04);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.axe-podium-tegel:hover,
+.axe-podium-tegel:focus-visible {
+  border-color: rgba(34, 211, 238, 0.35);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4), 0 0 14px rgba(34, 211, 238, 0.12);
+  transform: translateY(-1px);
+  outline: none;
+}
+.axe-podium-tegel-titel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #f4f4f5);
+  white-space: nowrap;
+}
+.axe-podium-tegel-regel {
+  max-width: 100%;
+  font-size: 11px;
+  color: var(--text-secondary, #a1a1aa);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.axe-podium-tegel[data-toon='fout'] .axe-podium-tegel-titel { color: var(--error, #f87171); }
+.axe-podium-tegel[data-toon='let-op'] .axe-podium-tegel-titel { color: rgb(251, 191, 36); }
+.axe-podium-tegel[data-toon='info'] .axe-podium-tegel-titel { color: var(--accent-cyan, #22d3ee); }
+
+@container (max-width: 520px) {
+  .axe-podium-tegel { max-width: 46%; }
 }
 
 .axe-podium-onderschrift {

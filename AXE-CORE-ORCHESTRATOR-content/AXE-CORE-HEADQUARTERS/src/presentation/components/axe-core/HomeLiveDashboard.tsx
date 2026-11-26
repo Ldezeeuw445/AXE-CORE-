@@ -42,6 +42,8 @@ import {
 import {
   appsGezondheid, eenRegel, fixAlsNodig, runsNaarUren, uurReeks, type AppGezond, type FixActie, type JobRun, type RunUur, type Schema,
 } from '@/domain/homeAppsHealth';
+import { aandachtTegels } from '@/domain/sphere/podiumAandacht';
+import { usePodiumAandacht } from '@/presentation/store/podiumAandachtStore';
 import './homeLive.css';
 import './homeCommandCenter.css';
 
@@ -552,6 +554,27 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
     comms7d: northsea.data?.tellers?.communicatie_7d ?? null,
     wacht: okTal,
   });
+  /* 3D-vak in rust (26 nov): dezelfde data, alleen wat nu aandacht vraagt. */
+  const volgende = dag.eenmalig[0];
+  const volgendeMin = volgende ? (() => {
+    const [u, m] = volgende.tijd.split(':').map(Number);
+    return Number.isFinite(u) && Number.isFinite(m) ? (u * 60 + m) - (nu.getHours() * 60 + nu.getMinutes()) : null;
+  })() : null;
+  const vakTegels = aandachtTegels({
+    werkend: stand.werkend,
+    werkTitels: stand.lopend.map((t) => `${t.agent}: ${t.titel}`),
+    wacht: okTal,
+    wachtTitels: stand.goedkeuringen.map((g) => g.wat),
+    concepten: northsea.data ? northsea.data.concepten.map((c) => String((c as { titel?: unknown }).titel ?? 'Draft')) : null,
+    afspraak: volgende && volgendeMin != null ? { tijd: volgende.tijd, titel: volgende.titel, minutenTot: volgendeMin } : null,
+    dienstenDown: diensten.filter((d) => d.ok === false).map((d) => d.name),
+    toestellenOffline: toestellen.filter((d) => !isOnline(d.last_seen, nu.getTime())).map((d) => d.device_name),
+    vpsWeg: !!snapshot.fout && !snapshot.data,
+  });
+  const zetVak = usePodiumAandacht((s) => s.zet);
+  useEffect(() => { zetVak(vakTegels); });
+  useEffect(() => () => zetVak([]), [zetVak]);
+
   const sl = sleutelTelling(sleutelsRuw.data?.apps ?? []);
   const bv = bouwVps.data;
   const systeemRegels: StatusRegel[] = [

@@ -25,6 +25,9 @@ import {
 } from '@/domain/sphere/podium';
 import { podiumKrachtVan, webglBeschikbaar, type PodiumKracht } from '@/domain/sphere/podiumKracht';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { useNavigate } from 'react-router';
+import { usePodiumAandacht } from '@/presentation/store/podiumAandachtStore';
+import { ANTWOORD_RUST_MS, antwoordBlijft, tegelsZichtbaar } from '@/domain/sphere/podiumAandacht';
 import './axePodium.css';
 
 const EASE_EMERGE = [0.16, 1, 0.3, 1] as const;
@@ -110,6 +113,20 @@ export function SphereStage({
     heeftStream: !!stream,
   });
 
+  /* Na het antwoord komen de aandachtstegels terug: een minuut na het praten,
+     of meteen als je de kaart wegklikt. Projecties sluiten zelf (Esc/X). */
+  const [weggelegdTs, setWeggelegdTs] = useState<number | null>(null);
+  const [nuTik, setNuTik] = useState(() => Date.now());
+  const laatsteAxeTs = lastAxe?.timestamp ?? null;
+  useEffect(() => {
+    if (voiceStatus !== 'idle' || laatsteAxeTs == null) return;
+    const over = laatsteAxeTs + ANTWOORD_RUST_MS - Date.now();
+    if (over <= 0) { setNuTik(Date.now()); return; }
+    const t = window.setTimeout(() => setNuTik(Date.now()), over + 50);
+    return () => window.clearTimeout(t);
+  }, [voiceStatus, laatsteAxeTs]);
+  const blijft = antwoordBlijft({ voiceStatus, laatsteAxeTs, nu: Math.max(nuTik, Date.now()), weggelegdTs });
+
   const liveKaarten = useMemo(
     () => podiumKaartenVan({
       phase,
@@ -117,17 +134,23 @@ export function SphereStage({
       antwoord,
       vraag: lastUser?.text,
       voiceStatus,
-      antwoordHuidig,
+      antwoordHuidig: antwoordHuidig && blijft,
       agenten,
       goedkeuringen,
     }),
-    [phase, payload, antwoord, lastUser?.text, voiceStatus, antwoordHuidig, agenten, goedkeuringen],
+    [phase, payload, antwoord, lastUser?.text, voiceStatus, antwoordHuidig, blijft, agenten, goedkeuringen],
   );
 
   const demo = podiumDemoAan(demoVlag(), import.meta.env.DEV);
   const kaarten = liveKaarten.length || !demo ? liveKaarten : podiumDemoKaarten();
   const hoofd = kaarten.find(k => k.soort !== 'agenten') ?? null;
-  const agentKaart = kaarten.find(k => k.soort === 'agenten') ?? null;
+  /* Rust (26 nov): de aandachtstegels uit het dashboard. Ze wijken voor een
+     antwoord of projectie en komen daarna terug. Zijn er tegels, dan is de
+     losse agent-pil overbodig: de agents-tegel zegt hetzelfde. */
+  const aandacht = usePodiumAandacht(s => s.tegels);
+  const navigate = useNavigate();
+  const toonTegels = tegelsZichtbaar(!!hoofd, aandacht.length);
+  const agentKaart = aandacht.length ? null : kaarten.find(k => k.soort === 'agenten') ?? null;
 
   const projecting = phase === 'opening' || phase === 'projecting' || phase === 'closing';
   const mode = payload?.mode ?? 'none';
@@ -257,13 +280,59 @@ export function SphereStage({
                       </div>
                     </>
                   ) : (
-                    <AntwoordKaart kaart={hoofd} />
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setWeggelegdTs(laatsteAxeTs ?? Date.now())}
+                        className="absolute top-3 right-3 z-30 rounded-full p-1.5"
+                        data-axe-podium-weg
+                        aria-label="Put the answer away"
+                        style={{
+                          background: 'rgba(0,0,0,0.75)',
+                          color: 'rgba(255,255,255,0.85)',
+                          border: '1px solid rgba(255,255,255,0.18)',
+                        }}
+                        title="Put away"
+                      >
+                        <X size={15} />
+                      </button>
+                      <AntwoordKaart kaart={hoofd} />
+                    </>
                   )}
                 </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
+
+          <AnimatePresence>
+            {toonTegels && (
+              <motion.div
+                key="aandacht"
+                className="axe-podium-aandacht"
+                data-axe-podium-aandacht={aandacht.length}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 24, scale: 0.96 }}
+                transition={{ duration: kracht === 'plat' ? 0.01 : 0.3, ease: EASE_EMERGE }}
+              >
+                {aandacht.map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="axe-podium-tegel"
+                    data-axe-podium-tegel={t.id}
+                    data-toon={t.toon}
+                    onClick={() => navigate(t.route)}
+                    title={`${t.titel} · ${t.regel}`}
+                  >
+                    <span className="axe-podium-tegel-titel">{t.titel}</span>
+                    <span className="axe-podium-tegel-regel">{t.regel}</span>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {agentKaart && (
             <div className="axe-podium-agenten" data-axe-podium-kaart="agenten">
