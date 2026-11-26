@@ -185,7 +185,9 @@ export function managerRijen(
  * Eigen job, geen roll-up — anders verdwijnt Cron/Memory achter Developer.
  */
 export function railRijen(jobs: AxeJob[], nu: number): ManagerRij[] {
-  const agents = AXE_AGENTS.filter((a) => a.id !== 'axe' && a.tier !== 'managers');
+  // 26 nov: de DAX-bots die nu manager zijn, en de Browser (gedeelde computer, geen agent), niet nog eens los.
+  const agents = AXE_AGENTS.filter((a) => a.id !== 'axe' && a.tier !== 'managers'
+    && !(a.id in MANAGER_VAN_DAX_BOT) && a.id !== 'browser');
   const perAgent = new Map<AxeAgentId, AxeJob>();
   for (const job of jobs) {
     if (!levendeJob(job, nu)) continue;
@@ -194,6 +196,34 @@ export function railRijen(jobs: AxeJob[], nu: number): ManagerRij[] {
   }
   return agents.map((agent) => {
     const job = perAgent.get(agent.id) ?? null;
+    return { agent, job, regel: job ? regelVan(job) : '' };
+  });
+}
+
+/**
+ * 26 nov (ADR managers-zijn-dax): de oude DAX-botnamen zijn aliassen van hun
+ * manager. Werk dat nog op de oude naam binnenkomt telt voor de manager.
+ */
+export const MANAGER_VAN_DAX_BOT: Readonly<Partial<Record<AxeAgentId, AxeAgentId>>> = {
+  thinktank: 'axemanager', developer: 'projectsmgr', northsea: 'northseamgr', trading: 'tradingos',
+};
+
+export function managerVoor(id: AxeAgentId): AxeAgentId {
+  return MANAGER_VAN_DAX_BOT[id] ?? id;
+}
+
+/** De zes agents op Home: de managers (die nu ook de DAX-bots zijn), met hun lopende werk. */
+export function appManagerRijen(jobs: AxeJob[], nu: number): ManagerRij[] {
+  const managers = AXE_AGENTS.filter((a) => a.tier === 'managers');
+  const perManager = new Map<AxeAgentId, AxeJob>();
+  for (const job of jobs) {
+    if (!levendeJob(job, nu)) continue;
+    const id = managerVoor(job.agent);
+    const staand = perManager.get(id);
+    if (!staand || job.startedAt >= staand.startedAt) perManager.set(id, job);
+  }
+  return managers.map((agent) => {
+    const job = perManager.get(agent.id) ?? null;
     return { agent, job, regel: job ? regelVan(job) : '' };
   });
 }

@@ -544,7 +544,9 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
         except OSError:
             pass
         branch_name = f"axe/{safe_agent}/{safe_task[:12]}"
-        uitvoerder = await _dax_uitvoerder(agent_ws, safe_task, context)
+        # 26 nov: werk aan de VPS zelf (eigen ronde, systemctl, ...) blijft op de VPS.
+        from agent_workspace import draait_op_dax
+        uitvoerder = await _dax_uitvoerder(agent_ws, safe_task, context) if draait_op_dax(task) else None
         if uitvoerder is not None:
             task_workspace = uitvoerder.werkmap
         await context.event("axe.progress", f"{agent_id} workspace ready.", {

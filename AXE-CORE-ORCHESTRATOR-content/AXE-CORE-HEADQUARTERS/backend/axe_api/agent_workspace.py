@@ -5,6 +5,8 @@ een agent zonder werkplek, dan stopt de lus — geen stille val terug op AXE.
 """
 from __future__ import annotations
 
+import re
+
 from pathlib import Path
 from typing import Any
 
@@ -252,39 +254,81 @@ AGENT_WORKSPACES: dict[str, dict[str, Any]] = {
         "role": "Boss · orchestrator of the other managers",
         "system_prompt": _BRIEVEN["axemanager"],
         "tools": _CREW, "preferred_device": "vps", "memory_scope": "agent",
-        "crew": [],
+        # 26 nov: de manager ÍS de DAX-bot -- ThinkTank's computer en crew zijn nu van hem.
+        "crew": ["nova", "atlas"],
+        "dax_computer": "dax-thinktank-01", "computer_mode": "persistent",
     },
     "projectsmgr": {
         "role": "Projects and tasks · Notion-style rows",
         "system_prompt": _BRIEVEN["projectsmgr"],
-        "tools": _VOL, "preferred_device": None, "memory_scope": "agent",
-        "crew": [],
+        "tools": _CREW, "preferred_device": None, "memory_scope": "agent",
+        "crew": ["wags", "forge"],
+        "dax_computer": "dax-developer-01", "computer_mode": "persistent",
     },
     "companionmgr": {
         "role": "Owns AXE Companion",
         "system_prompt": _BRIEVEN["companionmgr"],
         "tools": _VOL, "preferred_device": "vps", "memory_scope": "agent",
         "crew": [],
+        "dax_computer": "dax-companion-01", "computer_mode": "persistent",
     },
     "axon": {
         "role": "Owns AXON Memory",
         "system_prompt": _BRIEVEN["axon"],
         "tools": _VOL, "preferred_device": "vps", "memory_scope": "agent",
         "crew": [],
+        "dax_computer": "dax-axon-01", "computer_mode": "persistent",
     },
     "tradingos": {
         "role": "Owns Trading OS · no live orders",
         "system_prompt": _BRIEVEN["tradingos"],
         "tools": _LEES, "preferred_device": None, "memory_scope": "agent",
-        "crew": [],
+        "crew": ["dollar_bill", "intel"],
+        "dax_computer": "dax-trading-01", "computer_mode": "persistent",
     },
     "northseamgr": {
         "role": "Owns NorthSea Desk · first deal is the priority",
         "system_prompt": _BRIEVEN["northseamgr"],
         "tools": _NORTHSEA, "preferred_device": None, "memory_scope": "agent",
         "crew": [],
+        "dax_computer": "dax-northsea-01", "computer_mode": "persistent",
     },
 }
+
+# 26 nov (Luka, ADR managers-zijn-dax): één agent per app. De oude DAX-bot-namen
+# zijn aliassen van hun manager; de Browser-bot is geen agent meer maar een gedeelde
+# browsercomputer (dax-browser-01) die elke manager kan gebruiken.
+MANAGER_VAN_DAX_BOT: dict[str, str] = {
+    "thinktank": "axemanager", "developer": "projectsmgr", "northsea": "northseamgr", "trading": "tradingos",
+}
+GEDEELDE_BROWSER_DAX = "dax-browser-01"
+
+
+def manager_voor(agent: str | None) -> str | None:
+    """De manager achter een (oude) DAX-bot-naam; een manager zelf geeft zichzelf terug."""
+    if not agent:
+        return None
+    return MANAGER_VAN_DAX_BOT.get(agent, agent)
+
+
+_VPS_WERK = re.compile(
+    r"\b(systemctl|journalctl|nginx|/opt/axe-core-api|axe-core-api|axe-task-worker|loginctl|"
+    r"crontab|ufw|the vps|de vps|op de vps|on the vps|vps-?dienst|vps service)\b", re.I)
+
+
+def draait_op_dax(task: dict[str, Any]) -> bool:
+    """Mag deze taak op de eigen DAX-computer van de manager draaien?
+
+    26 nov: de manager ÍS de DAX-bot, dus zijn werk loopt op zijn eigen computer.
+    Behalve werk aan de VPS zelf: in een container ziet run_shell de VPS-diensten
+    niet, en dan zou de eigen ronde ("repareer wat NU faalt") stuklopen.
+    """
+    meta = task.get("metadata") or {}
+    if meta.get("eigen_ronde") or meta.get("pinned_device") == "vps" or meta.get("device") == "vps":
+        return False
+    tekst = f"{task.get('title') or ''} {task.get('goal') or ''}"
+    return not _VPS_WERK.search(tekst)
+
 
 # Blijft bestaan: test_agent_briefs en de lus lezen deze naam.
 AGENT_BRIEFS: dict[str, str] = {

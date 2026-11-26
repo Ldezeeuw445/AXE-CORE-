@@ -202,17 +202,17 @@ export const AGENT_WORKSPACES: Record<AxeAgentId, AgentWorkspace> = {
     tools: MET_CREW,
     preferredDevice: 'vps',
     memoryScope: 'agent',
-    crew: [],
+    crew: ['nova', 'atlas'],
   },
   projectsmgr: {
     agent: 'projectsmgr',
     role: 'Projects and tasks · Notion-style rows',
     systemPrompt:
       'You are Projects Manager, working for AXE CORE Manager. You run projects and tasks as Notion-style rows and assign them to specialists. You do not send mail, move money, trade, or flip auto_send_*. Report back to AXE CORE Manager. Ask Luka only for out-of-plan or irreversible things.',
-    tools: VOL,
+    tools: MET_CREW,
     preferredDevice: null,
     memoryScope: 'agent',
-    crew: [],
+    crew: ['wags', 'forge'],
   },
   companionmgr: {
     agent: 'companionmgr',
@@ -242,7 +242,7 @@ export const AGENT_WORKSPACES: Record<AxeAgentId, AgentWorkspace> = {
     tools: LEES,
     preferredDevice: null,
     memoryScope: 'agent',
-    crew: [],
+    crew: ['dollar_bill', 'intel'],
   },
   northseamgr: {
     agent: 'northseamgr',

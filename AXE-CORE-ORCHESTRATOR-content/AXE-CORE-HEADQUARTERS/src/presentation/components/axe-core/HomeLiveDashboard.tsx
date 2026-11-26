@@ -23,7 +23,7 @@ import { useCoreStatusStore } from '@/presentation/store/coreStatusStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { VOICE_STATUS_LABEL } from '@/presentation/store/voiceStatusLabel';
 import { useUIStore } from '@/presentation/store/uiStore';
-import { railRijen } from '@/domain/tierRouter/agentVenster';
+import { MANAGER_VAN_DAX_BOT, appManagerRijen } from '@/domain/tierRouter/agentVenster';
 import { serverStand } from '@/domain/agents/serverStatus';
 import { STAND } from '@/presentation/components/axe-core/managerStand';
 import { ManagerAvatar } from '@/presentation/components/axe-core/ManagerAvatar';
@@ -504,7 +504,8 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
   const recentOp = new Map(stand.recent.map((t) => [`taak:${t.id}`, t]));
 
   /* Agents: zes tegels, wie werkt of wacht eerst */
-  const rijen = railRijen(jobs, nu.getTime());
+  /* 26 nov: de zes managers (die ook de DAX-bots zijn), niet de oude losse bots. */
+  const rijen = appManagerRijen(jobs, nu.getTime());
   const gewicht = (r: (typeof rijen)[number]) => (r.job?.state === 'waiting' ? 0 : r.job ? 1 : 2);
   const agentTegels = [...rijen].sort((a, b) => gewicht(a) - gewicht(b)).slice(0, 6);
 
@@ -863,7 +864,8 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
           actie={<button type="button" className="axe-hcc-kopknop" onClick={() => navigate('/managers')}>All</button>}>
           <div className="axe-hcc-agents" data-axe-hcc-agents>
             {agentTegels.map(({ agent, job }) => {
-              const srv = server.agents[agent.id];
+              const srv = server.agents[agent.id]
+                ?? Object.entries(MANAGER_VAN_DAX_BOT).filter(([, m]) => m === agent.id).map(([bot]) => server.agents[bot]).find(Boolean);
               const s = job ? STAND[job.state] : srv ? serverStand(srv) : null;
               const label = s?.label || 'idle';
               const kleur = s?.kleur || 'var(--text-muted)';

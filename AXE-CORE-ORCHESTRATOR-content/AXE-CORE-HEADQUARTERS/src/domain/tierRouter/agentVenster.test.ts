@@ -76,12 +76,9 @@ describe('managerRijen', () => {
 
   it('railKolommen splitst roster-volgorde: hoofdagents links, rest rechts', () => {
     const { links, rechts } = railKolommen(railRijen([], 0));
-    expect(links.map((r) => r.agent.id)).toEqual([
-      'wingman', 'northsea', 'trading', 'developer', 'thinktank', 'browser',
-    ]);
-    expect(rechts.map((r) => r.agent.id)).toEqual([
-      'memory', 'task', 'cron', 'finance', 'apps', 'intel', 'companion',
-    ]);
+    // 26 nov: NorthSea/Trading/Developer/ThinkTank zijn nu managers en Browser is een gedeelde computer.
+    expect(links.map((r) => r.agent.id)).toEqual(['wingman', 'memory', 'task', 'cron']);
+    expect(rechts.map((r) => r.agent.id)).toEqual(['finance', 'apps', 'intel', 'companion']);
   });
 
   it('geeft altijd alle vijf de managers, in de volgorde van de roster', () => {
@@ -247,5 +244,18 @@ describe('links en rechts tonen niet twee keer hetzelfde', () => {
     expect(overgebleven).toHaveLength(1);
     // De overgebleven werker is via zijn manager nog steeds te zien.
     expect(links.some((r) => r.job != null)).toBe(true);
+  });
+});
+
+describe('26 nov: de managers zijn de DAX-bots', () => {
+  it('zes managers, en werk op een oude botnaam telt voor zijn manager', async () => {
+    const { appManagerRijen, managerVoor } = await import('./agentVenster');
+    expect(managerVoor('northsea')).toBe('northseamgr');
+    expect(managerVoor('axemanager')).toBe('axemanager');
+    const nu = Date.now();
+    const job = { id: 'j', agent: 'northsea', state: 'running', title: 'Zoek kopers', sourceText: 'x', startedAt: nu - 1000 } as never;
+    const rijen = appManagerRijen([job], nu);
+    expect(rijen.map((r) => r.agent.id)).toEqual(['axemanager', 'projectsmgr', 'companionmgr', 'axon', 'tradingos', 'northseamgr']);
+    expect(rijen.find((r) => r.agent.id === 'northseamgr')?.job).not.toBeNull();
   });
 });

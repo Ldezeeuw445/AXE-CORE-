@@ -434,6 +434,10 @@
       "kind": "migration"
     },
     {
+      "path": "supabase/migrations/20261126210000_managers_zijn_dax.sql",
+      "kind": "migration"
+    },
+    {
       "path": "supabase/northsea/migrations/20260916150000_p0_a_columns.sql",
       "kind": "migration"
     },
@@ -2511,7 +2515,8 @@
         "supabase/migrations/20261123120000_sleutel_verbruik.sql",
         "supabase/migrations/20261123130000_grootboek_stand.sql",
         "supabase/migrations/20261125230000_job_runs_per_uur.sql",
-        "supabase/migrations/20261126180000_http_outcome_alleen_top_ok.sql"
+        "supabase/migrations/20261126180000_http_outcome_alleen_top_ok.sql",
+        "supabase/migrations/20261126210000_managers_zijn_dax.sql"
       ]
     },
     {
@@ -6501,7 +6506,8 @@
         "supabase/migrations/20261123120000_sleutel_verbruik.sql",
         "supabase/migrations/20261123130000_grootboek_stand.sql",
         "supabase/migrations/20261125230000_job_runs_per_uur.sql",
-        "supabase/migrations/20261126180000_http_outcome_alleen_top_ok.sql"
+        "supabase/migrations/20261126180000_http_outcome_alleen_top_ok.sql",
+        "supabase/migrations/20261126210000_managers_zijn_dax.sql"
       ]
     },
     {
