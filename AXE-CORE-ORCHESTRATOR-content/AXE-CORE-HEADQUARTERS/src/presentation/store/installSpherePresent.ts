@@ -14,6 +14,8 @@ import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import { antwoord as maakAntwoord, maakVanJouOpdracht, pasToe } from '@/domain/maakVanJou';
 import { leesMaakVanJou, schrijfMaakVanJou } from '@/presentation/store/maakVanJouStore';
 import { interviewBeurt } from '@/application/axe/profiel';
+import { heeftStem, stemBeurt } from '@/application/axe/stem';
+import { GEEN_STEM_REGEL, wilStem } from '@/domain/chat/stem';
 
 const WEERGAVE_NAAM = { axe: 'de bol', neural: 'Neural', terrain: 'Terrain', runtime: 'Runtime' } as const;
 
@@ -111,7 +113,11 @@ export function installSpherePresent(): void {
       }
 
       // Interview (25 nov): "interview me", en zolang het loopt is elk bericht een antwoord.
-      const vraag = trimmed ? await interviewBeurt(trimmed).catch(() => null) : null;
+      // Jouw stem (26 nov): "leer mijn stem: ..." en "mijn stem" -- voor het interview,
+      // anders wordt een geplakte tekst tijdens een lopend interview een antwoord.
+      const vraag = trimmed
+        ? (await stemBeurt(trimmed).catch(() => null)) ?? await interviewBeurt(trimmed).catch(() => null)
+        : null;
       if (vraag) {
         const nu = Date.now();
         useVoiceStore.setState(s => ({
@@ -131,6 +137,19 @@ export function installSpherePresent(): void {
       }
 
       await original(text);
+
+      // "In mijn stem" zonder voorbeelden: eerlijk zeggen, onder het antwoord.
+      if (trimmed && wilStem(trimmed) && !heeftStem()) {
+        useVoiceStore.setState(s => {
+          const conv = [...s.conversation];
+          for (let i = conv.length - 1; i >= 0; i--) {
+            if (conv[i].role !== 'axe') continue;
+            if (!conv[i].text.includes(GEEN_STEM_REGEL)) conv[i] = { ...conv[i], text: `${conv[i].text}\n\n${GEEN_STEM_REGEL}` };
+            break;
+          }
+          return { conversation: conv };
+        });
+      }
 
       if (!userDid) {
         try {

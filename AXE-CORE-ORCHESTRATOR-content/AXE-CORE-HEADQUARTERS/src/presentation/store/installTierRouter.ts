@@ -5,6 +5,8 @@
  * en als parallelle jobs uitgezet. De chat wacht daar niet op.
  * NorthSea auto-send blijft hier buiten.
  */
+import { raadVraag } from '@/domain/chat/raad';
+import { wilStem } from '@/domain/chat/stem';
 import { isKorteOpenOpdracht } from '@/domain/tierRouter/navigatieZin';
 import { detectChatAction } from '@/application/chat/chatActionService';
 import { useVoiceStore, getProviderKeySlot, writeConversationMemory, type ConversationMessage, type RoutingEvent } from '@/presentation/store/voiceStore';
@@ -1076,6 +1078,14 @@ export function installTierRouter(): void {
       // Als AXE net om toestemming vroeg, moet een kort gesproken ja/nee die
       // echte geparkeerde taak bedienen -- niet als nieuw chatbericht eindigen.
       if (await probeerGesprokenGoedkeuring(text)) return;
+
+      // De Raad en "in mijn stem" (26 nov) zijn schrijfwerk voor het chatmodel,
+      // met hun eigen blok in de prompt. Het plan maakte van een geplakte tekst
+      // anders een taak ("ik zet het in een notitie op de desk").
+      if (raadVraag(text) || wilStem(text)) {
+        await original(text);
+        return;
+      }
 
       // "mac: ..." was een legacy bypass naar claude_local. Dat maakte twee
       // werkelijkheden: gewone opdrachten gingen via de durable AXE-kernel,

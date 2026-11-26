@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 78 klaar, 89 gebouwd maar nog niet bewezen, 44 open (van 211).
+**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 78 klaar, 91 gebouwd maar nog niet bewezen, 42 open (van 211).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -11,7 +11,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (47%) | 10 | 0 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 30 | 4 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 5 | 2 |
-| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 7 (15%) | 19 | 21 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 7 (15%) | 21 | 19 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
@@ -357,8 +357,8 @@ Wat AXE ook moet kunnen, naar het voorbeeld van Spazio OS Pro:
 - [~] **Vandaag-scherm** (18 nov: "Eén ding vandaag" staat bovenaan Home in de notch; eigen keuze gedeeld tussen de Macs, anders je oudste stap): de ene prioriteit van vandaag, volgende stappen en
       wiens beurt het is, projecten van idee tot verkoop, log van wat af is.
 - [~] **Interview**: AXE leert wie Luka is via een geleid gesprek. *(25 nov gebouwd: zeg "interview me" of "leer me kennen" in de chat -> 10 vaste vragen (werk, doel dit jaar, projecten op volgorde, goede dag, hoe AXE praat, wanneer storen, nooit zonder vragen, energie, mensen, verder). Elk bericht is dan het antwoord; "sla over", "stop interview", "ga verder met het interview". Antwoorden in global_memory (luka_profiel, `profiel:<id>`), dus gedeeld tussen de apparaten, en in beide chatroutes als "Wie Luka is" in de systeemprompt. Zonder model. `domain/chat/interview.ts` + `application/axe/profiel.ts`, 10 tests. In de preview: start en pauze werken (antwoorden staan in het gesprek); geen echte antwoorden ingevuld -- dat is aan Luka. Bewezen als jij het interview gedaan hebt en AXE het gebruikt.)*
-- [ ] **Jouw stem**: 3-5 eigen teksten -> AXE schrijft en reviewt in die stem.
-- [ ] **De Raad**: acht bedachte experts reviewen teksten, pagina's, projecten.
+- [~] **Jouw stem**: 3-5 eigen teksten -> AXE schrijft en reviewt in die stem. *(26 nov gebouwd: in de chat "leer mijn stem: <tekst>" (min. 80 tekens) bewaart een tekst, tot 5, daarna vervangt een nieuwe de oudste; "mijn stem" laat zien wat AXE heeft. Bewaren zonder model, in global_memory (luka_stem, `stem:<1-5>`), dus gedeeld tussen de apparaten. Zeg je "... in mijn stem" / "in my voice" / "zoals ik het zou zeggen", dan gaan de teksten mee in de prompt met regels voor schrijven en reviewen; zonder teksten zet AXE er eerlijk onder dat hij je stem nog niet kent. `domain/chat/stem.ts` + `application/axe/stem.ts`, 9 tests. In de preview: "mijn stem", te kort, en een mail "in mijn stem" zonder voorbeelden mét de eerlijke regel -- geen echte teksten bewaard, dat is aan Luka. Bewezen als jij 3 teksten gaf en AXE er een in jouw stem schreef.)*
+- [~] **De Raad**: acht bedachte experts reviewen teksten, pagina's, projecten. *(26 nov gebouwd: "laat de raad kijken naar: <tekst>" / "vraag de raad: ..." / "council review: ..." -> Buyer, Sceptic, Editor, Designer, Lawyer, Operator, Investor, Newcomer, elk met cijfer, probleem (met citaat) en fix; dan de drie belangrijkste wijzigingen en een eindscore. Zonder geplakte tekst vraagt AXE erom in plaats van een review te verzinnen. Gaat langs de planner heen rechtstreeks naar het chatmodel -- de eerste proef maakte er een taak van ("ik zet het in een notitie op de desk"), gerepareerd in installTierRouter. `domain/chat/raad.ts`, 3 tests. In de preview GEZIEN met een echte NorthSea-zin: 8 rollen, "Beste prijs gegarandeerd" en "geen risico" terecht aangewezen, score 6/10. Komt met de app-build.)*
 - [x] **"Doe het zelf"-knop** op een stap: AXE werkt hem op de achtergrond af. *(25 nov, 1b0de9e5 + fix: "Do it for me" naast "Done" bij Your turn en Together in Tasks > Wiens beurt; POST /stappen/{id}/zelf (rij.doe_zelf) zet de stap op AXE en in de wachtrij, met de titel als opdracht. Zelfde grens als de rij: geld, trading, NorthSea-akkoorden, wissen en wat op jouw ja wacht -> 409 met de reden onder de stap. LIVE BEWEZEN: proefstap "drie USB-C-docks voor de Mac mini M4" -> AXE schreef de notitie en controleerde hem zelf (2 stappen); eerste proef liet zien dat alleen het waarom werd meegegeven, gerepareerd. Betaal-proefstap geweigerd, ook via de knop in de preview gezien. Beide proefstappen afgesloten.)*
 - [~] **Maak het van jou**: "verberg X", "andere kleuren" in gewone taal. *(25 nov gebouwd: in de chat, zonder model -- "verberg Trading" / "toon Trading weer" / "laat alle tabs zien" (onderbalk, More en het menu), "maak het groen" / "andere kleuren" / "standaard kleuren" (accentkleur, 8 kleuren). Home en Settings blijven altijd staan. Bewaard in localStorage + user_settings, dus gedeeld tussen de Macs en de telefoon. `domain/maakVanJou.ts` (6 tests) + `store/maakVanJouStore.ts`, herkend in de buitenste chatlaag (installSpherePresent) -- in installStableChat kwam "verberg Trading" nooit aan: de bol maakte er eerst een Trading-grafiek van. In de preview GEZIEN: Trading weg + groen, blijft na herladen, en terug. Komt met de app-build.)*
 - [ ] Focusmodus, geld achter een PIN, rustige muziek (Life OS-hoek).
