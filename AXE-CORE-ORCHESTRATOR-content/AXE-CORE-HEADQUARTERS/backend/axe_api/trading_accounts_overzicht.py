@@ -20,18 +20,30 @@ def _is_demo_testrij(r: dict[str, Any]) -> bool:
     return (r.get("connection_method") == "demo_paper" or r.get("provider") == "demo")
 
 
+def _rij(r: dict[str, Any], aantal: int = 1) -> dict[str, Any]:
+    return {
+        "id": r.get("id"), "label": r.get("label") or "Account", "provider": r.get("provider"),
+        "status": r.get("status"), "verbonden": (r.get("provider_status") or r.get("status")) in ("connected", "active"),
+        "provider_status": r.get("provider_status"), "modus": r.get("trading_mode"),
+        "login": r.get("masked_login"), "laatste_sync": r.get("last_sync_at"), "aantal": aantal,
+    }
+
+
 def companion_accounts(rijen: list[dict[str, Any]]) -> dict[str, Any]:
     echt = [r for r in rijen if not _is_demo_testrij(r)]
     demo = [r for r in rijen if _is_demo_testrij(r)]
-    return {
-        "accounts": [{
-            "id": r.get("id"), "label": r.get("label") or "Account", "provider": r.get("provider"),
-            "status": r.get("status"), "verbonden": (r.get("provider_status") or r.get("status")) in ("connected", "active"),
-            "provider_status": r.get("provider_status"), "modus": r.get("trading_mode"),
-            "login": r.get("masked_login"), "laatste_sync": r.get("last_sync_at"),
-        } for r in sorted(echt, key=lambda x: str(x.get("last_sync_at") or ""), reverse=True)],
-        "demo_testrijen": len(demo),
-    }
+    # 26 nov: 39 identieke "AXE Alpaca Paper"-rijen -> één regel "×39".
+    groepen: dict[tuple, list[dict[str, Any]]] = {}
+    for r in echt:
+        groepen.setdefault((r.get("label"), r.get("provider"), r.get("trading_mode")), []).append(r)
+    accounts = []
+    for leden in groepen.values():
+        nieuwste = max(leden, key=lambda x: str(x.get("last_sync_at") or ""))
+        accounts.append(_rij(nieuwste, len(leden)))
+    # Live eerst, dan paper; binnen elk de laatst gesynchroniseerde bovenaan.
+    accounts.sort(key=lambda a: str(a["laatste_sync"] or ""), reverse=True)
+    accounts.sort(key=lambda a: a["modus"] != "live")
+    return {"accounts": accounts, "demo_testrijen": len(demo)}
 
 
 def overzicht(db: Any) -> dict[str, Any]:

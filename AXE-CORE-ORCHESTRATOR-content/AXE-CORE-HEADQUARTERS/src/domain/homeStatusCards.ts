@@ -68,7 +68,7 @@ export function accountRegels(accounts: readonly AccountRij[], breakers: Readonl
 
 /* ── Accounts per app (26 nov, Luka) ───────────────────────────────────── */
 
-export type CompanionRij = { id: string; label: string; provider: string | null; verbonden: boolean; provider_status: string | null; modus: string | null; laatste_sync: string | null };
+export type CompanionRij = { id: string; label: string; provider: string | null; verbonden: boolean; provider_status: string | null; modus: string | null; laatste_sync: string | null; aantal?: number };
 export type AccountGroep = { id: 'axe_core' | 'companion' | 'trading_os'; titel: string; regels: StatusRegel[]; leeg: string };
 
 function geleden(iso: string | null, nu: number): string {
@@ -93,7 +93,7 @@ export function accountGroepen(in_: {
 }): AccountGroep[] {
   const comp: StatusRegel[] = (in_.companion?.accounts ?? []).map((a) => ({
     id: `c:${a.id}`,
-    naam: a.label,
+    naam: (a.aantal ?? 1) > 1 ? `${a.label} ×${a.aantal}` : a.label,
     toon: a.verbonden ? 'ok' : 'fout',
     regel: [a.verbonden ? 'connected' : (a.provider_status || 'not connected'), a.modus, a.provider, geleden(a.laatste_sync, in_.nu)].filter(Boolean).join(' · '),
   }));

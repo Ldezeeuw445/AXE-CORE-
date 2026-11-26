@@ -23,3 +23,14 @@ def test_overzicht_zegt_eerlijk_dat_trading_os_niet_bereikbaar_is():
     uit = t.overzicht(DB())
     assert "fout" in uit["companion"]
     assert uit["trading_os"]["bereikbaar"] is False
+
+
+def test_gelijke_accounts_worden_een_regel_met_aantal_en_live_staat_bovenaan():
+    rijen = [{"id": f"p{i}", "label": "AXE Alpaca Paper", "provider": "alpaca", "status": "active", "provider_status": "connected",
+              "trading_mode": "paper", "last_sync_at": f"2026-11-2{i % 6}T10:00:00Z"} for i in range(39)]
+    rijen += [{"id": "v", "label": "Vantage", "provider": "mt5", "status": "inactive", "provider_status": "disconnected",
+               "trading_mode": "live", "last_sync_at": None}]
+    uit = t.companion_accounts(rijen)["accounts"]
+    assert [a["label"] for a in uit] == ["Vantage", "AXE Alpaca Paper"]
+    assert uit[1]["aantal"] == 39 and uit[0]["aantal"] == 1
+    assert uit[0]["verbonden"] is False
