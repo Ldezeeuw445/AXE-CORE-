@@ -3,8 +3,7 @@
 AXE Core (AXE Algo) heeft zijn eigen lijst in de app (cfg:trading_accounts).
 AXE Companion heeft `user_broker_accounts` -- die leest de app niet zelf (RLS),
 dus hier, met alleen wat Home mag zien: geen login, geen sleutel, geen token.
-Trading OS heeft een eigen database waar deze server (nog) niet bij kan; dat
-zeggen we eerlijk in plaats van een lege lijst te tonen.
+Trading OS deelt dezelfde database en broker-hub; daarbij komt zijn MT5-snapshot.
 
 Alleen lezen. Geen orders, geen wijzigingen aan accounts.
 """
@@ -53,10 +52,18 @@ def overzicht(db: Any) -> dict[str, Any]:
         uit["companion"] = companion_accounts(rijen)
     except Exception as e:  # noqa: BLE001
         uit["companion"] = {"fout": str(e)[:160]}
-    uit["trading_os"] = {
-        "bereikbaar": False,
-        "reden": "Trading OS keeps its accounts in its own database; this server has no read access to it yet.",
-    }
+    # 26 nov (Luka): Trading OS, Companion en AXE Core delen één Supabase. Trading OS
+    # gebruikt dezelfde broker-hub (user_broker_accounts) als Companion; daarnaast een
+    # MT5-snapshot. Die laten we zien, met hoe oud hij is.
+    tos: dict[str, Any] = {"bereikbaar": True, "gedeeld_met_companion": True, "mt5": []}
+    try:
+        snaps = (db.table("mt5_account_snapshots").select("account_id,name,server,currency,updated_at")
+                 .order("updated_at", desc=True).limit(10).execute().data) or []
+        tos["mt5"] = [{"naam": r.get("name") or "MT5", "server": r.get("server"), "valuta": r.get("currency"),
+                       "bijgewerkt": r.get("updated_at")} for r in snaps]
+    except Exception as e:  # noqa: BLE001
+        tos["fout"] = str(e)[:160]
+    uit["trading_os"] = tos
     return uit
 
 

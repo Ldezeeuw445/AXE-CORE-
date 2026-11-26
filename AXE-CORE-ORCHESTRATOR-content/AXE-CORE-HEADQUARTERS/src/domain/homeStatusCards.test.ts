@@ -60,7 +60,7 @@ describe('26 nov: accounts per app', () => {
     const g = accountGroepen({
       axeCore: [],
       companion: { accounts: [{ id: 'a', label: '100K 1STEP UPCOMERS', provider: 'mt5', verbonden: true, provider_status: 'connected', modus: 'live', laatste_sync: '2026-11-26T17:50:00Z' }], demo_testrijen: 28 },
-      tradingOs: { bereikbaar: false },
+      tradingOs: { bereikbaar: true, gedeeld_met_companion: true, mt5: [{ naam: 'Luka', server: 'Fundedelite-Server', bijgewerkt: '2026-04-21T08:18:25Z' }] },
       nu,
     });
     expect(g.map((x) => x.id)).toEqual(['axe_core', 'companion', 'trading_os']);
@@ -68,6 +68,8 @@ describe('26 nov: accounts per app', () => {
     expect(g[1].regels[0]).toMatchObject({ naam: '100K 1STEP UPCOMERS', toon: 'ok' });
     expect(g[1].regels[0].regel).toContain('synced 10 min ago');
     expect(g[1].regels[1]).toMatchObject({ naam: '28 demo test rows', toon: 'stil' });
-    expect(g[2].regels[0].naam).toContain('Not readable');
+    expect(g[1].titel).toContain('Trading OS (shared broker hub)');
+    expect(g[2].regels[0]).toMatchObject({ naam: 'Luka · MT5 snapshot', toon: 'let-op' });
+    expect(g[2].regels[0].regel).toContain('Fundedelite-Server');
   });
 });

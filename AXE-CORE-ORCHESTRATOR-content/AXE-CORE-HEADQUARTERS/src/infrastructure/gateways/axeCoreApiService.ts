@@ -1374,7 +1374,7 @@ export function deskDagkoers(symbol: 'XCUUSD' | 'BCOUSD' | 'DXY'): Promise<DeskD
 export interface CompanionAccount { id: string; label: string; provider: string | null; status: string | null; verbonden: boolean; provider_status: string | null; modus: string | null; login: string | null; laatste_sync: string | null; aantal?: number }
 export interface AccountsPerApp {
   companion: { accounts?: CompanionAccount[]; demo_testrijen?: number; fout?: string };
-  trading_os: { bereikbaar: boolean; reden?: string };
+  trading_os: { bereikbaar: boolean; reden?: string; gedeeld_met_companion?: boolean; mt5?: { naam: string; server: string | null; valuta?: string | null; bijgewerkt: string | null }[]; fout?: string };
 }
 export function tradingAccountsPerApp(): Promise<AccountsPerApp> { return call('GET', '/home/trading-accounts'); }
 

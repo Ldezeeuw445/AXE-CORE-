@@ -88,7 +88,7 @@ function geleden(iso: string | null, nu: number): string {
 export function accountGroepen(in_: {
   axeCore: StatusRegel[];
   companion: { accounts?: CompanionRij[]; demo_testrijen?: number; fout?: string } | null;
-  tradingOs: { bereikbaar: boolean; reden?: string } | null;
+  tradingOs: { bereikbaar: boolean; reden?: string; gedeeld_met_companion?: boolean; mt5?: { naam: string; server: string | null; bijgewerkt: string | null }[] } | null;
   nu: number;
 }): AccountGroep[] {
   const comp: StatusRegel[] = (in_.companion?.accounts ?? []).map((a) => ({
@@ -100,13 +100,17 @@ export function accountGroepen(in_: {
   if (in_.companion?.demo_testrijen) {
     comp.push({ id: 'c:demo', naam: `${in_.companion.demo_testrijen} demo test rows`, toon: 'stil', regel: 'paper accounts from 11 Sep, not shown' });
   }
-  const tos: StatusRegel[] = in_.tradingOs?.bereikbaar === false
-    ? [{ id: 't:niet', naam: 'Not readable from AXE yet', toon: 'stil', regel: 'Trading OS keeps accounts in its own database' }]
-    : [];
+  /* 26 nov: Trading OS deelt de database en de broker-hub met Companion. Zijn eigen
+     MT5-snapshot staat erbij, met hoe oud hij is (een snapshot van april is geen live account). */
+  const tos: StatusRegel[] = (in_.tradingOs?.mt5 ?? []).map((m, i) => {
+    const oud = m.bijgewerkt ? in_.nu - Date.parse(m.bijgewerkt) > 2 * 86400_000 : true;
+    return { id: `t:${i}`, naam: `${m.naam} · MT5 snapshot`, toon: oud ? 'let-op' : 'ok', regel: [m.server, geleden(m.bijgewerkt, in_.nu).replace('synced', 'updated')].filter(Boolean).join(' · ') };
+  });
+  const gedeeld = in_.tradingOs?.gedeeld_met_companion === true;
   return [
     { id: 'axe_core', titel: 'AXE Core · AXE Algo', regels: in_.axeCore, leeg: 'No accounts linked to AXE Algo yet. Add one in Trading > Accounts.' },
-    { id: 'companion', titel: 'AXE Companion', regels: comp, leeg: in_.companion?.fout ? 'Companion accounts did not load.' : in_.companion ? 'No Companion accounts.' : 'Reading…' },
-    { id: 'trading_os', titel: 'Trading OS', regels: tos, leeg: in_.tradingOs ? 'No Trading OS accounts.' : 'Reading…' },
+    { id: 'companion', titel: gedeeld ? 'AXE Companion · Trading OS (shared broker hub)' : 'AXE Companion', regels: comp, leeg: in_.companion?.fout ? 'Broker accounts did not load.' : in_.companion ? 'No broker accounts.' : 'Reading…' },
+    { id: 'trading_os', titel: 'Trading OS', regels: tos, leeg: in_.tradingOs ? 'No MT5 snapshot from Trading OS.' : 'Reading…' },
   ];
 }
 

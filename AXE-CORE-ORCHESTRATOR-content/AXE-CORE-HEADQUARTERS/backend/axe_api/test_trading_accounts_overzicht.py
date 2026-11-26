@@ -16,13 +16,21 @@ def test_demo_testrijen_worden_een_getal_en_geheimen_gaan_niet_mee():
     assert "GEHEIM" not in str(uit) and "token" not in str(uit)
 
 
-def test_overzicht_zegt_eerlijk_dat_trading_os_niet_bereikbaar_is():
+def test_overzicht_leest_trading_os_uit_dezelfde_database():
+    class Q:
+        def __init__(self, data): self.data = data
+        def select(self, *_): return self
+        def order(self, *_, **__): return self
+        def limit(self, *_): return self
+        def execute(self): return self
     class DB:
-        def table(self, _):
-            raise RuntimeError("geen db")
+        def table(self, naam):
+            if naam == "mt5_account_snapshots":
+                return Q([{"account_id": "x", "name": "Luka", "server": "Fundedelite-Server", "currency": "USD", "updated_at": "2026-04-21T08:18:25Z"}])
+            return Q([])
     uit = t.overzicht(DB())
-    assert "fout" in uit["companion"]
-    assert uit["trading_os"]["bereikbaar"] is False
+    assert uit["trading_os"]["bereikbaar"] is True and uit["trading_os"]["gedeeld_met_companion"] is True
+    assert uit["trading_os"]["mt5"][0]["server"] == "Fundedelite-Server"
 
 
 def test_gelijke_accounts_worden_een_regel_met_aantal_en_live_staat_bovenaan():
