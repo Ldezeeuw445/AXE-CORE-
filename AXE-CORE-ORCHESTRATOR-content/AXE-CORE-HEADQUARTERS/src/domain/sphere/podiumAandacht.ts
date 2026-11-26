@@ -7,7 +7,7 @@
  * klik naar de plek waar je het oplost. Puur: geen I/O, geen klok.
  */
 
-export type AandachtSoort = 'storing' | 'wacht' | 'northsea' | 'afspraak' | 'agents';
+export type AandachtSoort = 'storing' | 'apps' | 'wacht' | 'northsea' | 'afspraak' | 'posities' | 'agents';
 export type AandachtToon = 'fout' | 'let-op' | 'info';
 
 export interface AandachtTegel {
@@ -16,6 +16,8 @@ export interface AandachtTegel {
   regel: string;
   route: string;
   toon: AandachtToon;
+  /** Fase 2: wat de tegel laat zien als hij uitgroeit (max DETAIL_MAX regels). */
+  details: string[];
 }
 
 export interface AandachtInvoer {
@@ -34,11 +36,20 @@ export interface AandachtInvoer {
   toestellenOffline: readonly string[];
   /** De VPS antwoordt niet (snapshot faalt zonder data). */
   vpsWeg: boolean;
+  /** Fase 2: apps die falen of waarschuwen ("Trading OS: Failing · Review Desk ×15"). */
+  appsMis?: readonly string[];
+  /** Fase 2: open posities, alleen lezen ("EURUSD long · Demo 1"). */
+  posities?: readonly string[];
 }
 
 /** Een afspraak is pas aandacht als hij binnen dit venster valt. */
 export const AFSPRAAK_VENSTER_MIN = 120;
-export const MAX_TEGELS = 5;
+export const MAX_TEGELS = 6;
+export const DETAIL_MAX = 6;
+
+function details(namen: readonly string[]): string[] {
+  return namen.map(schoon).filter(Boolean).slice(0, DETAIL_MAX);
+}
 
 /** "Dit is: een shell-commando" -> "een shell-commando": de kop zegt het al. */
 function schoon(n: string): string {
@@ -71,6 +82,18 @@ export function aandachtTegels(i: AandachtInvoer): AandachtTegel[] {
       regel: lijst(delen, 3),
       route: hard ? '/apps' : '/devices',
       toon: hard ? 'fout' : 'let-op',
+      details: details(delen),
+    });
+  }
+
+  if (i.appsMis && i.appsMis.length) {
+    t.push({
+      id: 'apps',
+      titel: tal(i.appsMis.length, 'app needs a look', 'apps need a look'),
+      regel: lijst(i.appsMis),
+      route: '/apps',
+      toon: 'let-op',
+      details: details(i.appsMis),
     });
   }
 
@@ -81,6 +104,12 @@ export function aandachtTegels(i: AandachtInvoer): AandachtTegel[] {
       regel: lijst(i.wachtTitels) || 'Open Waiting on you',
       route: '/wacht',
       toon: 'let-op',
+      details: (() => {
+        const d = details(i.wachtTitels);
+        if (i.wacht <= d.length) return d;
+        const getoond = d.slice(0, DETAIL_MAX - 1);
+        return [...getoond, `+${i.wacht - getoond.length} more in Waiting on you`];
+      })(),
     });
   }
 
@@ -91,6 +120,7 @@ export function aandachtTegels(i: AandachtInvoer): AandachtTegel[] {
       regel: lijst(i.concepten),
       route: '/northsea',
       toon: 'let-op',
+      details: details(i.concepten),
     });
   }
 
@@ -102,6 +132,18 @@ export function aandachtTegels(i: AandachtInvoer): AandachtTegel[] {
       regel: i.afspraak.titel,
       route: '/calendar',
       toon: m <= 15 ? 'let-op' : 'info',
+      details: [`${i.afspraak.tijd} · ${i.afspraak.titel}`],
+    });
+  }
+
+  if (i.posities && i.posities.length) {
+    t.push({
+      id: 'posities',
+      titel: tal(i.posities.length, 'open position', 'open positions'),
+      regel: lijst(i.posities),
+      route: '/trading',
+      toon: 'info',
+      details: details(i.posities),
     });
   }
 
@@ -112,6 +154,7 @@ export function aandachtTegels(i: AandachtInvoer): AandachtTegel[] {
       regel: lijst(i.werkTitels) || 'Open Managers',
       route: '/managers',
       toon: 'info',
+      details: details(i.werkTitels),
     });
   }
 
@@ -119,8 +162,8 @@ export function aandachtTegels(i: AandachtInvoer): AandachtTegel[] {
 }
 
 /** Stabiele sleutel: alleen opnieuw tekenen als er echt iets veranderde. */
-export function aandachtSleutel(t: readonly AandachtTegel[]): string {
-  return t.map((x) => `${x.id}|${x.titel}|${x.regel}|${x.toon}`).join('\n');
+export function aandachtSleutel(t: readonly AandachtTegel[], strook: string | null = null): string {
+  return `${strook ?? ''}\n${t.map((x) => `${x.id}|${x.titel}|${x.regel}|${x.toon}|${x.details.join('~')}`).join('\n')}`;
 }
 
 /** Tegels opzij zolang AXE iets op het toneel zet (antwoord of projectie). */
@@ -147,4 +190,33 @@ export function antwoordBlijft(i: {
   if (i.laatsteAxeTs == null) return true;
   if (i.weggelegdTs != null && i.weggelegdTs >= i.laatsteAxeTs) return false;
   return i.nu - i.laatsteAxeTs < (i.rustMs ?? ANTWOORD_RUST_MS);
+}
+
+/** Waar een tegel naartoe gaat, in het "Open ..."-knopje van de uitgegroeide tegel. */
+export const PLEK: Record<AandachtSoort, string> = {
+  storing: 'Apps', apps: 'Apps', wacht: 'Waiting on you', northsea: 'NorthSea',
+  afspraak: 'Calendar', posities: 'Trading', agents: 'Managers',
+};
+
+/**
+ * Welke tegels nu in beeld: in rust alles; tijdens een antwoord of projectie
+ * alleen de vastgezette (fase 2). Een vastgezette tegel zonder aandacht
+ * verschijnt niet: vastzetten bewaart een plek, geen nepdata.
+ */
+export function zichtbareTegels(tegels: readonly AandachtTegel[], vast: ReadonlySet<string>, heeftHoofdkaart: boolean): AandachtTegel[] {
+  return heeftHoofdkaart ? tegels.filter((t) => vast.has(t.id)) : [...tegels];
+}
+
+/** Compacte strook voor vandaag, of null als er niets gemeten is. */
+export function vandaagStrook(i: {
+  klaar: number | null;
+  mislukt: number | null;
+  volgende: readonly { tijd: string; titel: string }[];
+}): string | null {
+  const delen: string[] = [];
+  if (i.klaar != null) delen.push(`${i.klaar} done`);
+  if (i.mislukt) delen.push(`${i.mislukt} failed`);
+  const v = i.volgende.slice(0, 2).map((x) => `${x.tijd} ${x.titel.length > 28 ? `${x.titel.slice(0, 27)}…` : x.titel}`);
+  if (v.length) delen.push(`next ${v.join(', ')}`);
+  return delen.length ? `Today · ${delen.join(' · ')}` : null;
 }

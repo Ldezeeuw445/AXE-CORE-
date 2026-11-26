@@ -63,3 +63,36 @@ describe('antwoord maakt plaats voor de tegels', () => {
     expect(antwoordBlijft({ voiceStatus: 'idle', laatsteAxeTs: 5000, nu: 6000, weggelegdTs: 1000 })).toBe(true);
   });
 });
+
+describe('fase 2: details, apps, posities, vastzetten, vandaag', () => {
+  it('apps en posities komen erbij op hun plek, met details', async () => {
+    const { aandachtTegels } = await import('./podiumAandacht');
+    const t = aandachtTegels({ ...RUST, werkend: 1, werkTitels: ['x'], appsMis: ['Trading OS: Failing', 'AXE Core: Warning'], posities: ['EURUSD long · Demo 1'] });
+    expect(t.map((x) => x.id)).toEqual(['apps', 'posities', 'agents']);
+    expect(t[0]).toMatchObject({ titel: '2 apps need a look', route: '/apps', details: ['Trading OS: Failing', 'AXE Core: Warning'] });
+    expect(t[1]).toMatchObject({ titel: '1 open position', route: '/trading' });
+  });
+
+  it('details zijn kort en schoon', async () => {
+    const { aandachtTegels, DETAIL_MAX } = await import('./podiumAandacht');
+    const [w] = aandachtTegels({ ...RUST, wacht: 9, wachtTitels: Array.from({ length: 9 }, (_, n) => `Dit is: vraag ${n}`) });
+    expect(w.details).toHaveLength(DETAIL_MAX);
+    expect(w.details[0]).toBe('vraag 0');
+    expect(w.details[DETAIL_MAX - 1]).toBe('+4 more in Waiting on you');
+  });
+
+  it('tijdens een antwoord alleen vastgezette tegels', async () => {
+    const { aandachtTegels, zichtbareTegels } = await import('./podiumAandacht');
+    const t = aandachtTegels({ ...RUST, wacht: 1, wachtTitels: ['a'], werkend: 1, werkTitels: ['b'] });
+    expect(zichtbareTegels(t, new Set(['wacht']), false)).toHaveLength(2);
+    expect(zichtbareTegels(t, new Set(['wacht']), true).map((x) => x.id)).toEqual(['wacht']);
+    expect(zichtbareTegels(t, new Set(['northsea']), true)).toEqual([]);
+  });
+
+  it('vandaag-strook alleen met metingen', async () => {
+    const { vandaagStrook } = await import('./podiumAandacht');
+    expect(vandaagStrook({ klaar: null, mislukt: null, volgende: [] })).toBeNull();
+    expect(vandaagStrook({ klaar: 68, mislukt: 0, volgende: [{ tijd: '18:00', titel: 'Sweep' }] })).toBe('Today · 68 done · next 18:00 Sweep');
+    expect(vandaagStrook({ klaar: 5, mislukt: 2, volgende: [] })).toBe('Today · 5 done · 2 failed');
+  });
+});

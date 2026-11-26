@@ -42,7 +42,7 @@ import {
 import {
   appsGezondheid, eenRegel, fixAlsNodig, runsNaarUren, uurReeks, type AppGezond, type FixActie, type JobRun, type RunUur, type Schema,
 } from '@/domain/homeAppsHealth';
-import { aandachtTegels } from '@/domain/sphere/podiumAandacht';
+import { aandachtTegels, vandaagStrook } from '@/domain/sphere/podiumAandacht';
 import { usePodiumAandacht } from '@/presentation/store/podiumAandachtStore';
 import './homeLive.css';
 import './homeCommandCenter.css';
@@ -451,6 +451,8 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
   const verbruik = usePoll(() => abonnementVerbruik(), 300_000);
   const credits = usePoll(usageCreditsSnapshot, 300_000);
   const trades = usePoll(() => listTrades({ status: 'closed', limit: 200 }), 600_000);
+  /* 3D-vak fase 2: open posities, alleen lezen. */
+  const openTrades = usePoll(() => listTrades({ status: 'open', limit: 20 }), 120_000);
   const tijdlijn = usePoll(laadVandaagTijdlijn, 300_000);
   const sleutelsRuw = usePoll(keysOverview, 300_000);
   const sleutels = { data: sleutelsRuw.data ? naarProviderSleutels(sleutelsRuw.data) : null };
@@ -570,9 +572,12 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
     dienstenDown: diensten.filter((d) => d.ok === false).map((d) => d.name),
     toestellenOffline: toestellen.filter((d) => !isOnline(d.last_seen, nu.getTime())).map((d) => d.device_name),
     vpsWeg: !!snapshot.fout && !snapshot.data,
+    appsMis: apps.filter((a) => a.toon === 'fout' || a.toon === 'let-op').map((a) => `${a.naam}: ${a.stand}${a.kpiSub ? ` · ${a.kpiSub}` : ''}`),
+    posities: (openTrades.data ?? []).map((p) => `${p.symbol} ${p.side}${p.account_label ? ` · ${p.account_label}` : ''}`),
   });
+  const vakStrook = vandaagStrook({ klaar: vandaag?.klaar ?? null, mislukt: vandaag?.mislukt ?? null, volgende: dag.eenmalig });
   const zetVak = usePodiumAandacht((s) => s.zet);
-  useEffect(() => { zetVak(vakTegels); });
+  useEffect(() => { zetVak(vakTegels, vakStrook); });
   useEffect(() => () => zetVak([]), [zetVak]);
 
   const sl = sleutelTelling(sleutelsRuw.data?.apps ?? []);

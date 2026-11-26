@@ -239,6 +239,58 @@
 @container (max-width: 520px) {
   .axe-podium-tegel { max-width: 46%; }
 }
+.axe-podium-tegel[data-open='1'] {
+  border-color: rgba(34, 211, 238, 0.45);
+}
+
+/* Fase 2: de uitgegroeide tegel en de vandaag-strook. */
+.axe-podium-uitgegroeid { min-height: 0; max-height: 72%; }
+.axe-podium-uitgegroeid-lijst {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-secondary, #a1a1aa);
+}
+.axe-podium-uitgegroeid-lijst li {
+  padding-left: 10px;
+  border-left: 1px solid rgba(34, 211, 238, 0.25);
+}
+.axe-podium-uitgegroeid[data-toon='fout'] .axe-podium-tegel-titel { color: var(--error, #f87171); }
+.axe-podium-uitgegroeid[data-toon='let-op'] .axe-podium-tegel-titel { color: rgb(251, 191, 36); }
+.axe-podium-uitgegroeid[data-toon='info'] .axe-podium-tegel-titel { color: var(--accent-cyan, #22d3ee); }
+.axe-podium-knop {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  color: var(--accent-cyan, #22d3ee);
+}
+.axe-podium-knop:hover { border-color: rgba(34, 211, 238, 0.35); }
+
+.axe-podium-strook {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  z-index: 3;
+  margin: 0;
+  max-width: 92%;
+  /* Geen transform op dit element: framer-motion zou hem overschrijven. */
+  translate: -50% 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-secondary, #a1a1aa);
+  background: transparent;
+  border: 1px solid var(--axe-kaart-lijn, rgba(255, 255, 255, 0.08));
+  cursor: pointer;
+}
+.axe-podium-strook:hover { color: var(--text-primary, #f4f4f5); border-color: rgba(34, 211, 238, 0.3); }
 
 .axe-podium-onderschrift {
   position: absolute;

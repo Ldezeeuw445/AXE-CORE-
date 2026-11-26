@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+import { ArrowUpRight, Pin, PinOff, X } from 'lucide-react';
 import { HolographicSphere, type CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { ProjectionBody } from '@/presentation/components/axe-core/sphere/ProjectionBody';
@@ -27,7 +27,7 @@ import { podiumKrachtVan, webglBeschikbaar, type PodiumKracht } from '@/domain/s
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useNavigate } from 'react-router';
 import { usePodiumAandacht } from '@/presentation/store/podiumAandachtStore';
-import { ANTWOORD_RUST_MS, antwoordBlijft, tegelsZichtbaar } from '@/domain/sphere/podiumAandacht';
+import { ANTWOORD_RUST_MS, PLEK, antwoordBlijft, zichtbareTegels } from '@/domain/sphere/podiumAandacht';
 import './axePodium.css';
 
 const EASE_EMERGE = [0.16, 1, 0.3, 1] as const;
@@ -148,8 +148,19 @@ export function SphereStage({
      antwoord of projectie en komen daarna terug. Zijn er tegels, dan is de
      losse agent-pil overbodig: de agents-tegel zegt hetzelfde. */
   const aandacht = usePodiumAandacht(s => s.tegels);
+  const strook = usePodiumAandacht(s => s.strook);
+  const vast = usePodiumAandacht(s => s.vast);
+  const wisselVast = usePodiumAandacht(s => s.wisselVast);
   const navigate = useNavigate();
-  const toonTegels = tegelsZichtbaar(!!hoofd, aandacht.length);
+  /* Fase 2: tijdens een antwoord blijven alleen de vastgezette tegels staan;
+     een aangeklikte tegel groeit uit in het vak (alleen in rust). */
+  const tegelsNu = zichtbareTegels(aandacht, vast, !!hoofd);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const toonTegels = tegelsNu.length > 0 && !(openId && !hoofd && aandacht.some(t => t.id === openId));
+  const uitgegroeid = !hoofd && openId ? aandacht.find(t => t.id === openId) ?? null : null;
+  /* Een antwoord sluit de uitgegroeide tegel; daarna begin je weer in rust. */
+  const heeftHoofd = !!hoofd;
+  useEffect(() => { if (heeftHoofd) setOpenId(null); }, [heeftHoofd]);
   const agentKaart = aandacht.length ? null : kaarten.find(k => k.soort === 'agenten') ?? null;
 
   const projecting = phase === 'opening' || phase === 'projecting' || phase === 'closing';
@@ -177,6 +188,7 @@ export function SphereStage({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && projecting) dismiss();
+      else if (e.key === 'Escape') setOpenId(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -193,7 +205,7 @@ export function SphereStage({
     );
   }, [payload?.id, mode, phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const heeftInhoud = !!hoofd;
+  const heeftInhoud = !!hoofd || !!uitgegroeid;
   const sphereOpacity = heeftInhoud ? (projecting ? 0.22 : 0.45) : 1;
   const sphereScale = heeftInhoud ? 1.02 : 1;
 
@@ -302,31 +314,88 @@ export function SphereStage({
                 </div>
                 </motion.div>
               )}
+              {uitgegroeid && (
+                <motion.div
+                  key={`tegel-${uitgegroeid.id}`}
+                  className="axe-podium-kaart-beweging"
+                  initial={{ opacity: 0, scale: 0.8, y: 30 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, y: 30 }}
+                  transition={{ duration: kracht === 'plat' ? 0.01 : 0.3, ease: EASE_EMERGE }}
+                >
+                  <div className="axe-podium-kaart axe-podium-kaart--compact axe-podium-uitgegroeid" data-axe-podium-uitgegroeid={uitgegroeid.id} data-toon={uitgegroeid.toon}>
+                    <button type="button" onClick={() => setOpenId(null)} className="absolute top-3 right-3 z-30 rounded-full p-1.5"
+                      aria-label="Close" title="Esc"
+                      style={{ background: 'rgba(0,0,0,0.75)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.18)' }}>
+                      <X size={15} />
+                    </button>
+                    <div className="flex h-full min-h-0 flex-col px-6 pb-4 pt-5">
+                      <div className="axe-podium-tegel-titel mb-2 pr-8 text-[15px]">{uitgegroeid.titel}</div>
+                      <ul className="axe-podium-uitgegroeid-lijst min-h-0 flex-1 overflow-y-auto">
+                        {(uitgegroeid.details.length ? uitgegroeid.details : [uitgegroeid.regel]).map((r, n) => <li key={n}>{r}</li>)}
+                      </ul>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" className="axe-podium-chip axe-podium-knop" data-axe-podium-open
+                          onClick={() => { setOpenId(null); navigate(uitgegroeid.route); }}>
+                          <ArrowUpRight size={12} /> Open {PLEK[uitgegroeid.id]}
+                        </button>
+                        <button type="button" className="axe-podium-chip axe-podium-knop" data-axe-podium-vast={vast.has(uitgegroeid.id) ? 'aan' : 'uit'}
+                          onClick={() => wisselVast(uitgegroeid.id)}
+                          title="A pinned tile stays visible while AXE answers">
+                          {vast.has(uitgegroeid.id) ? <><PinOff size={12} /> Unpin</> : <><Pin size={12} /> Pin</>}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </AnimatePresence>
           </div>
+
+          <AnimatePresence>
+            {!hoofd && strook && (
+              <motion.button
+                key="strook"
+                type="button"
+                className="axe-podium-strook"
+                data-axe-podium-strook
+                onClick={() => navigate('/tasks')}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: kracht === 'plat' ? 0.01 : 0.25 }}
+              >
+                {strook}
+              </motion.button>
+            )}
+          </AnimatePresence>
 
           <AnimatePresence>
             {toonTegels && (
               <motion.div
                 key="aandacht"
                 className="axe-podium-aandacht"
-                data-axe-podium-aandacht={aandacht.length}
+                data-axe-podium-aandacht={tegelsNu.length}
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 24, scale: 0.96 }}
                 transition={{ duration: kracht === 'plat' ? 0.01 : 0.3, ease: EASE_EMERGE }}
               >
-                {aandacht.map(t => (
+                {tegelsNu.map(t => (
                   <button
                     key={t.id}
                     type="button"
                     className="axe-podium-tegel"
                     data-axe-podium-tegel={t.id}
                     data-toon={t.toon}
-                    onClick={() => navigate(t.route)}
+                    data-open={openId === t.id ? '1' : undefined}
+                    onClick={() => (hoofd ? navigate(t.route) : setOpenId(id => (id === t.id ? null : t.id)))}
                     title={`${t.titel} · ${t.regel}`}
                   >
-                    <span className="axe-podium-tegel-titel">{t.titel}</span>
+                    <span className="axe-podium-tegel-titel">
+                      {vast.has(t.id) && <Pin size={10} className="mr-1 inline-block align-[-1px] opacity-70" aria-label="pinned" />}
+                      {t.titel}
+                    </span>
                     <span className="axe-podium-tegel-regel">{t.regel}</span>
                   </button>
                 ))}

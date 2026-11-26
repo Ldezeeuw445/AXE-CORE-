@@ -64,3 +64,21 @@ describe('Home-podium is aangesloten op echte bronnen (25 nov)', () => {
     expect(resolver).toContain('No live series');
   });
 });
+
+describe('3D-vak in rust (26 nov, fase 1+2)', () => {
+  it('leest de aandachtstegels uit het dashboard, geen eigen fetch', () => {
+    const stage = bron('SphereStage.tsx');
+    expect(stage).toContain('usePodiumAandacht');
+    expect(stage).toContain('zichtbareTegels');
+    expect(stage).toContain('antwoordBlijft');
+    expect(stage).not.toMatch(/\bfetch\(|usePoll\(/);
+  });
+
+  it('openId bestaat voordat iets hem leest (anders crasht Home: TDZ, tsc ziet het niet)', () => {
+    const stage = bron('SphereStage.tsx');
+    const def = stage.indexOf('const [openId, setOpenId]');
+    expect(def).toBeGreaterThan(0);
+    const eersteGebruik = stage.search(/[^[]\bopenId\b(?!, setOpenId)/);
+    expect(eersteGebruik).toBeGreaterThan(def);
+  });
+});
