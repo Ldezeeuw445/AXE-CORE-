@@ -96,3 +96,41 @@ describe('fase 2: details, apps, posities, vastzetten, vandaag', () => {
     expect(vandaagStrook({ klaar: 5, mislukt: 2, volgende: [] })).toBe('Today · 5 done · 2 failed');
   });
 });
+
+describe('fase 3: slepen, naar voren halen, nieuws', () => {
+  const T = (id: string) => ({ id, titel: id, regel: id, route: '/', toon: 'info', details: [] }) as never;
+
+  it('eigen volgorde, onbekend achteraan', async () => {
+    const { ordenTegels } = await import('./podiumAandacht');
+    const uit = ordenTegels([T('storing'), T('wacht'), T('agents')], ['agents', 'wacht']);
+    expect(uit.map((x: { id: string }) => x.id)).toEqual(['agents', 'wacht', 'storing']);
+  });
+
+  it('verplaatsen naar voren en naar achteren, verborgen soorten houden hun plek', async () => {
+    const { verplaats } = await import('./podiumAandacht');
+    expect(verplaats([], ['wacht', 'afspraak', 'agents'], 'agents', 'wacht')).toEqual(['agents', 'wacht', 'afspraak']);
+    expect(verplaats([], ['wacht', 'afspraak', 'agents'], 'wacht', 'agents')).toEqual(['afspraak', 'agents', 'wacht']);
+    expect(verplaats(['northsea', 'wacht', 'agents'], ['wacht', 'agents'], 'agents', 'wacht')).toEqual(['northsea', 'agents', 'wacht']);
+    expect(verplaats(['a'], ['a'], 'a', 'a')).toEqual(['a']);
+  });
+
+  it('herkent "wat wacht er" en "laat X zien", niet gewone zinnen', async () => {
+    const { podiumOpdracht } = await import('./podiumAandacht');
+    expect(podiumOpdracht('Wat wacht er?')).toEqual(['wacht']);
+    expect(podiumOpdracht('laat trading zien')).toEqual(['posities']);
+    expect(podiumOpdracht('toon de storingen')).toEqual(['storing', 'apps']);
+    expect(podiumOpdracht('show the news tile')).toEqual(['nieuws']);
+    expect(podiumOpdracht('wat is het nieuws')).toEqual(['nieuws']);
+    expect(podiumOpdracht('laat me de kaart van New York zien')).toBeNull();
+    expect(podiumOpdracht('laat zien hoe trading werkt in de app')).toBeNull();
+  });
+
+  it('nieuwstegel alleen met echte koppen, en een eerlijk antwoord', async () => {
+    const { nieuwsTegel, naarVorenAntwoord } = await import('./podiumAandacht');
+    expect(nieuwsTegel([])).toBeNull();
+    const n = nieuwsTegel([{ kop: 'ECB picks De Cos', bron: 'Reuters' }])!;
+    expect(n).toMatchObject({ id: 'nieuws', details: ['ECB picks De Cos (Reuters)'] });
+    expect(naarVorenAntwoord(n, 'nieuws')).toBe('Latest news: ECB picks De Cos (Reuters).');
+    expect(naarVorenAntwoord(null, 'wacht')).toContain('niets');
+  });
+});

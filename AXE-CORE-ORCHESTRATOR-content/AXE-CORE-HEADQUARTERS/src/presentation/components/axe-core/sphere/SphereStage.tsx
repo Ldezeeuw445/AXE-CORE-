@@ -27,7 +27,7 @@ import { podiumKrachtVan, webglBeschikbaar, type PodiumKracht } from '@/domain/s
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useNavigate } from 'react-router';
 import { usePodiumAandacht } from '@/presentation/store/podiumAandachtStore';
-import { ANTWOORD_RUST_MS, PLEK, antwoordBlijft, zichtbareTegels } from '@/domain/sphere/podiumAandacht';
+import { ANTWOORD_RUST_MS, PLEK, antwoordBlijft, ordenTegels, zichtbareTegels } from '@/domain/sphere/podiumAandacht';
 import './axePodium.css';
 
 const EASE_EMERGE = [0.16, 1, 0.3, 1] as const;
@@ -151,16 +151,31 @@ export function SphereStage({
   const strook = usePodiumAandacht(s => s.strook);
   const vast = usePodiumAandacht(s => s.vast);
   const wisselVast = usePodiumAandacht(s => s.wisselVast);
+  const volgorde = usePodiumAandacht(s => s.volgorde);
+  const sleep = usePodiumAandacht(s => s.sleep);
+  const extra = usePodiumAandacht(s => s.extra);
+  const voren = usePodiumAandacht(s => s.voren);
+  const [sleepId, setSleepId] = useState<string | null>(null);
   const navigate = useNavigate();
   /* Fase 2: tijdens een antwoord blijven alleen de vastgezette tegels staan;
      een aangeklikte tegel groeit uit in het vak (alleen in rust). */
-  const tegelsNu = zichtbareTegels(aandacht, vast, !!hoofd);
+  const tegelsNu = ordenTegels(zichtbareTegels(aandacht, vast, !!hoofd), volgorde);
   const [openId, setOpenId] = useState<string | null>(null);
-  const toonTegels = tegelsNu.length > 0 && !(openId && !hoofd && aandacht.some(t => t.id === openId));
-  const uitgegroeid = !hoofd && openId ? aandacht.find(t => t.id === openId) ?? null : null;
+  const toonTegels = tegelsNu.length > 0 && !uitgegroeidOpen(openId, !!hoofd, aandacht, extra);
+  const uitgegroeid = !hoofd && openId
+    ? aandacht.find(t => t.id === openId) ?? (extra?.id === openId ? extra : null)
+    : null;
   /* Een antwoord sluit de uitgegroeide tegel; daarna begin je weer in rust. */
   const heeftHoofd = !!hoofd;
   useEffect(() => { if (heeftHoofd) setOpenId(null); }, [heeftHoofd]);
+  /* Fase 3: "wat wacht er" / "laat trading zien" haalt een tegel naar voren.
+     Het korte AXE-antwoord in de chat hoort niet als kaart op het toneel:
+     die leggen we meteen weg, zodat de tegel zelf het antwoord is. */
+  useEffect(() => {
+    if (!voren) return;
+    setWeggelegdTs(voren.ts);
+    setOpenId(voren.id);
+  }, [voren]);
   const agentKaart = aandacht.length ? null : kaarten.find(k => k.soort === 'agenten') ?? null;
 
   const projecting = phase === 'opening' || phase === 'projecting' || phase === 'closing';
@@ -339,11 +354,11 @@ export function SphereStage({
                           onClick={() => { setOpenId(null); navigate(uitgegroeid.route); }}>
                           <ArrowUpRight size={12} /> Open {PLEK[uitgegroeid.id]}
                         </button>
-                        <button type="button" className="axe-podium-chip axe-podium-knop" data-axe-podium-vast={vast.has(uitgegroeid.id) ? 'aan' : 'uit'}
+                        {uitgegroeid.id !== 'nieuws' && <button type="button" className="axe-podium-chip axe-podium-knop" data-axe-podium-vast={vast.has(uitgegroeid.id) ? 'aan' : 'uit'}
                           onClick={() => wisselVast(uitgegroeid.id)}
                           title="A pinned tile stays visible while AXE answers">
                           {vast.has(uitgegroeid.id) ? <><PinOff size={12} /> Unpin</> : <><Pin size={12} /> Pin</>}
-                        </button>
+                        </button>}
                       </div>
                     </div>
                   </div>
@@ -389,6 +404,17 @@ export function SphereStage({
                     data-axe-podium-tegel={t.id}
                     data-toon={t.toon}
                     data-open={openId === t.id ? '1' : undefined}
+                    data-sleept={sleepId === t.id ? '1' : undefined}
+                    draggable={!hoofd}
+                    onDragStart={(e) => { setSleepId(t.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', t.id); }}
+                    onDragEnd={() => setSleepId(null)}
+                    onDragOver={(e) => { if (sleepId && sleepId !== t.id) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const van = e.dataTransfer.getData('text/plain') || sleepId;
+                      if (van && van !== t.id) sleep(tegelsNu.map(x => x.id), van, t.id);
+                      setSleepId(null);
+                    }}
                     onClick={() => (hoofd ? navigate(t.route) : setOpenId(id => (id === t.id ? null : t.id)))}
                     title={`${t.titel} · ${t.regel}`}
                   >
@@ -456,4 +482,10 @@ function AntwoordKaart({ kaart }: { kaart: PodiumKaart }) {
       </div>
     </div>
   );
+}
+
+/** Staat er een uitgegroeide tegel open (dan wijkt de rij)? */
+function uitgegroeidOpen(openId: string | null, heeftHoofd: boolean, aandacht: readonly { id: string }[], extra: { id: string } | null): boolean {
+  if (!openId || heeftHoofd) return false;
+  return aandacht.some(t => t.id === openId) || extra?.id === openId;
 }

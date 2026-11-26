@@ -24,6 +24,7 @@
  * buiten de chat.
  */
 import { useState, useEffect, useRef } from 'react';
+import { podiumOpdracht } from '@/domain/sphere/podiumAandacht';
 import { useNavigate, useLocation } from 'react-router';
 import { motion } from 'framer-motion';
 import { isHoofdgesprek } from '@/domain/chat/hoofdgesprek';
@@ -111,6 +112,11 @@ export function PlaatChat() {
     const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
     if (!last?.text || last.text === lastProjectedMsgRef.current) return;
     lastProjectedMsgRef.current = last.text;
+    /* 3D-vak fase 3: "wat wacht er" / "laat trading zien" op Home haalt een
+       tegel naar voren; dat antwoord is geen projectie (anders werd
+       "3 open positions" een BTC-grafiek die de tegel wegduwde). */
+    const vraag = [...voice.conversation].reverse().find(m => m.role === 'user' && m.timestamp <= last.timestamp);
+    if (vraag && podiumOpHome(vraag.text)) return;
     let cancelled = false;
     void (async () => {
       let proj = await directFromAssistantMessageAsync(last.text);
@@ -142,6 +148,7 @@ export function PlaatChat() {
     if (last.timestamp === lastProjectedUserTsRef.current) return;
     lastProjectedUserTsRef.current = last.timestamp;
     lastUserTextRef.current = last.text;
+    if (podiumOpHome(last.text)) return;
 
     let cancelled = false;
     void (async () => {
@@ -649,4 +656,9 @@ export function PlaatChat() {
       />
     </>
   );
+}
+
+/** Een podium-opdracht op Home (zie installSpherePresent): geen projectie. */
+function podiumOpHome(tekst: string): boolean {
+  return typeof location !== 'undefined' && /^#?\/?$/.test(location.hash) && podiumOpdracht(tekst) !== null;
 }

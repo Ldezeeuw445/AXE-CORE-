@@ -7,7 +7,7 @@
  * klik naar de plek waar je het oplost. Puur: geen I/O, geen klok.
  */
 
-export type AandachtSoort = 'storing' | 'apps' | 'wacht' | 'northsea' | 'afspraak' | 'posities' | 'agents';
+export type AandachtSoort = 'storing' | 'apps' | 'wacht' | 'northsea' | 'afspraak' | 'posities' | 'agents' | 'nieuws';
 export type AandachtToon = 'fout' | 'let-op' | 'info';
 
 export interface AandachtTegel {
@@ -195,7 +195,7 @@ export function antwoordBlijft(i: {
 /** Waar een tegel naartoe gaat, in het "Open ..."-knopje van de uitgegroeide tegel. */
 export const PLEK: Record<AandachtSoort, string> = {
   storing: 'Apps', apps: 'Apps', wacht: 'Waiting on you', northsea: 'NorthSea',
-  afspraak: 'Calendar', posities: 'Trading', agents: 'Managers',
+  afspraak: 'Calendar', posities: 'Trading', agents: 'Managers', nieuws: 'Market intel',
 };
 
 /**
@@ -219,4 +219,73 @@ export function vandaagStrook(i: {
   const v = i.volgende.slice(0, 2).map((x) => `${x.tijd} ${x.titel.length > 28 ? `${x.titel.slice(0, 27)}…` : x.titel}`);
   if (v.length) delen.push(`next ${v.join(', ')}`);
   return delen.length ? `Today · ${delen.join(' · ')}` : null;
+}
+
+/* ── Fase 3: slepen en naar voren halen ─────────────────────────────────── */
+
+/** Tegels in Luka's eigen volgorde; wat er nog niet in staat komt achteraan, in de standaardvolgorde. */
+export function ordenTegels(tegels: readonly AandachtTegel[], volgorde: readonly string[]): AandachtTegel[] {
+  const plek = new Map(volgorde.map((id, n) => [id, n]));
+  return tegels
+    .map((t, n) => ({ t, k: plek.has(t.id) ? plek.get(t.id)! : volgorde.length + n }))
+    .sort((a, b) => a.k - b.k)
+    .map((x) => x.t);
+}
+
+/**
+ * Sleep `van` naar de plek van `naar`. Werkt op de volgorde van wat nu in beeld
+ * staat en bewaart ook soorten die nu niet zichtbaar zijn (die houden hun plek).
+ */
+export function verplaats(volgorde: readonly string[], zichtbaar: readonly string[], van: string, naar: string): string[] {
+  if (van === naar) return [...volgorde];
+  const alle = [...volgorde, ...zichtbaar.filter((id) => !volgorde.includes(id))];
+  const zonder = alle.filter((id) => id !== van);
+  const doel = zonder.indexOf(naar);
+  if (doel < 0) return alle;
+  const naarAchter = alle.indexOf(van) < alle.indexOf(naar);
+  zonder.splice(naarAchter ? doel + 1 : doel, 0, van);
+  return zonder;
+}
+
+/** Een tegel als nieuwstegel, uit echte koppen (op verzoek, geen poll). */
+export function nieuwsTegel(koppen: readonly { kop: string; bron?: string }[]): AandachtTegel | null {
+  const regels = koppen.map((k) => `${k.kop}${k.bron ? ` (${k.bron})` : ''}`).filter(Boolean).slice(0, DETAIL_MAX);
+  if (!regels.length) return null;
+  return { id: 'nieuws', titel: 'Latest news', regel: regels[0], route: '/trading-intel', toon: 'info', details: regels };
+}
+
+const NAMEN: Array<[RegExp, AandachtSoort[]]> = [
+  [/^(?:wacht|waiting|goedkeuring(?:en)?|ok'?s?|approvals?)$/, ['wacht']],
+  [/^(?:trading|posities|positions|trades)$/, ['posities']],
+  [/^(?:apps|app-storingen|storingen|storing|problemen|errors?|issues)$/, ['storing', 'apps']],
+  [/^(?:northsea|concepten|drafts)$/, ['northsea']],
+  [/^(?:agents?|agenten|managers)$/, ['agents']],
+  [/^(?:vandaag|agenda|afspraak|afspraken|today|schedule)$/, ['afspraak']],
+  [/^(?:nieuws|news|het\s+nieuws)$/, ['nieuws']],
+];
+
+/**
+ * "wat wacht er" / "laat trading zien" / "toon de nieuws-tegel": welke tegel(s)
+ * naar voren. Alleen korte, duidelijke zinnen; de rest gaat gewoon naar AXE.
+ */
+export function podiumOpdracht(tekst: string): AandachtSoort[] | null {
+  const t = (tekst ?? '').trim().toLowerCase().replace(/[?!.]+$/, '').replace(/\s+/g, ' ');
+  if (!t || t.length > 50) return null;
+  if (/^(?:axe[, ]+)?(?:wat wacht er(?: op mij)?|wat moet ik (?:nog )?(?:goedkeuren|beslissen)|what(?:'s| is) waiting(?: on me)?)$/.test(t)) return ['wacht'];
+  if (/^(?:axe[, ]+)?(?:wat is het nieuws|what(?:'s| is) the news)$/.test(t)) return ['nieuws'];
+  const m = /^(?:axe[, ]+)?(?:laat|toon|show|haal)(?: me)? (?:de |het |the |mijn |my )?(.+?)(?:[- ](?:tegel|tile))?(?: zien| naar voren| forward)?$/.exec(t);
+  if (!m) return null;
+  for (const [re, ids] of NAMEN) if (re.test(m[1].trim())) return ids;
+  return null;
+}
+
+/** Wat AXE zegt als hij een tegel naar voren haalt (ook hardop bruikbaar). */
+export function naarVorenAntwoord(tegel: AandachtTegel | null, gevraagd: AandachtSoort): string {
+  if (!tegel) {
+    return gevraagd === 'nieuws'
+      ? 'Ik kon nu geen nieuws ophalen.'
+      : 'Daar vraagt nu niets aandacht voor.';
+  }
+  const kort = tegel.details.slice(0, 3).join('; ');
+  return kort ? `${tegel.titel}: ${kort}.` : `${tegel.titel}.`;
 }

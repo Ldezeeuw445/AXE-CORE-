@@ -242,6 +242,9 @@
 .axe-podium-tegel[data-open='1'] {
   border-color: rgba(34, 211, 238, 0.45);
 }
+/* Fase 3: slepen. De tegel die je vasthoudt wordt doorzichtig; een greep-cursor zegt dat het kan. */
+.axe-podium-tegel[draggable='true'] { cursor: grab; }
+.axe-podium-tegel[data-sleept='1'] { opacity: 0.45; cursor: grabbing; }
 
 /* Fase 2: de uitgegroeide tegel en de vandaag-strook. */
 .axe-podium-uitgegroeid { min-height: 0; max-height: 72%; }

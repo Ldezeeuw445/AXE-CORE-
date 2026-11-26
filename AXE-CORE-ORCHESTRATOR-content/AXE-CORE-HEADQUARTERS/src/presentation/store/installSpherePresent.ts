@@ -19,6 +19,7 @@ import { bureauBeurt } from '@/application/axe/bureau';
 import { oogstBeurt } from '@/application/memory/oogstProject';
 import { rustOpdracht } from '@/domain/rust';
 import { voerRustUit } from '@/presentation/store/focusStore';
+import { podiumBeurt, usePodiumAandacht } from '@/presentation/store/podiumAandachtStore';
 import { GEEN_STEM_REGEL, wilStem } from '@/domain/chat/stem';
 
 const WEERGAVE_NAAM = { axe: 'de bol', neural: 'Neural', terrain: 'Terrain', runtime: 'Runtime' } as const;
@@ -113,6 +114,21 @@ export function installSpherePresent(): void {
             { role: 'user', text: trimmed, timestamp: nu },
             { role: 'axe', text: maakAntwoord(eigen, na), timestamp: nu + 1 }],
         }));
+        return;
+      }
+
+      // 3D-vak fase 3 (26 nov): "wat wacht er", "laat trading zien", "het nieuws" --
+      // alleen op Home; daar haalt het de tegel naar voren in het vak.
+      const opHome = typeof location !== 'undefined' && /^#?\/?$/.test(location.hash);
+      const podium = trimmed ? await podiumBeurt(trimmed, opHome).catch(() => null) : null;
+      if (podium) {
+        const nu = Date.now();
+        useVoiceStore.setState(s => ({
+          conversation: [...s.conversation,
+            { role: 'user', text: trimmed, timestamp: nu },
+            { role: 'axe', text: podium.antwoord, timestamp: nu + 1 }],
+        }));
+        if (podium.id) usePodiumAandacht.getState().naarVoren(podium.id, nu + 1);
         return;
       }
 
