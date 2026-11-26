@@ -67,10 +67,11 @@ export async function stemBeurt(tekst: string): Promise<string | null> {
   const plek = volgendePlek(bestaand);
   const op = Date.now();
   try {
-    await memUpsert([{
+    const bewaard = await memUpsert([{
       user_id: AXE_USER_ID, category: STEM_CATEGORIE, key: stemSleutel(plek), value: o.tekst,
       confidence: 0.95, metadata: { agentId: 'stem', op },
     }]);
+    if (!bewaard?.length) throw new Error('the server did not save it');
   } catch (e) {
     return `Ik kon je tekst niet bewaren (${e instanceof Error ? e.message : String(e)}). Probeer het nog eens.`.slice(0, 220);
   }

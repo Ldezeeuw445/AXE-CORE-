@@ -31,6 +31,7 @@ import { noteerAfgerondeSessies, sessieGeheugenContext } from '@/application/axe
 import { profielContext } from '@/application/axe/profiel';
 import { stemContext } from '@/application/axe/stem';
 import { raadBlok } from '@/domain/chat/raad';
+import { bureauContext } from '@/application/axe/bureau';
 
 // Re-exported for backwards compatibility: consumers historically imported
 // the provider registry and LLM dispatch from this store. New code should
@@ -918,7 +919,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         shouldSearch?tavilySearch(text.slice(0,300),{maxResults:5,depth:'basic'}).catch(()=>[]):Promise.resolve([]),
       ]);
       if(ragCtx) systemContent+=`\n\n${ragCtx}`;
-      systemContent+=sessieGeheugenContext()+profielContext()+stemContext(text)+raadBlok(text);
+      systemContent+=sessieGeheugenContext()+profielContext()+stemContext(text)+raadBlok(text)+bureauContext(text);
       {const draadNu=[...get().conversation];const slotsNu=[...orderedSlots];setTimeout(()=>{void noteerAfgerondeSessies(draadNu,(m)=>callWithFallback(slotsNu,m));},20_000);}
       if(tavilyResults.length>0) systemContent+=`\n\n${formatTavilyResults(tavilyResults,text)}`;
 

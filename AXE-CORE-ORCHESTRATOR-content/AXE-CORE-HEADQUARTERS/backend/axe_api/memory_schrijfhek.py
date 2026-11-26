@@ -31,6 +31,17 @@ _UUID_STAART = re.compile(
 
 GEHEUGEN_TABELLEN = frozenset({"memory", "global_memory", "rag_memories"})
 
+# Luka's eigen gegevens (26 nov): wat hij zelf zegt of bewaart -- interview,
+# stem, bureau. Geen agent-ruis, dus niet door het hek: de sleutel blijft
+# precies zoals gegeven (de app leest `profiel:werk`, niet `profiel:werk:<hash>`),
+# bijwerken overschrijft dezelfde rij, en de daglimiet van de agents geldt niet.
+# Zonder dit werd op een drukke dag alles stil weggegooid (123 rijen voor 26 nov).
+EIGEN_CATEGORIEEN = frozenset({"luka_profiel", "luka_stem", "luka_bureau"})
+
+
+def is_eigen(rij: dict) -> bool:
+    return str(rij.get("category") or "") in EIGEN_CATEGORIEEN
+
 
 def inhoud_hash(tekst: str) -> str:
     return hashlib.sha256((tekst or "").strip().encode("utf-8")).hexdigest()[:16]

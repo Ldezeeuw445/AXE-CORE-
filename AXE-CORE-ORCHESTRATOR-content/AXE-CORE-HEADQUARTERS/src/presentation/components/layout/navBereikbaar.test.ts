@@ -81,6 +81,7 @@ const BEWUST_VERBORGEN: Record<string, string> = {
   '/ledger': 'Systeem hub',
   '/brief': 'Systeem hub',
   '/chats': 'Systeem hub',
+  '/bureau': 'Systeem hub · Meer > Work',
   '/crewai': 'Systeem hub',
   '/agents': 'Redirect → /managers',
   '/ai-core': 'Redirect → /managers',

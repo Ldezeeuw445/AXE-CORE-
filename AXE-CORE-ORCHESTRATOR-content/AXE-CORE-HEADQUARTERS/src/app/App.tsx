@@ -33,6 +33,7 @@ const TradingDemoHub = lazy(() => import('@/presentation/pages/hubs/TradingDemoH
 const Tasks = lazy(() => import('@/presentation/pages/Tasks'));
 const DailyBrief = lazy(() => import('@/presentation/pages/DailyBrief'));
 const ChatsPage = lazy(() => import('@/presentation/pages/ChatsPage'));
+const BureauPage = lazy(() => import('@/presentation/pages/BureauPage'));
 const CalendarPage = lazy(() => import('@/presentation/pages/CalendarPage'));
 const Memory = lazy(() => import('@/presentation/pages/Memory'));
 const MemoryHub = lazy(() => import('@/presentation/pages/MemoryHub'));
@@ -292,6 +293,7 @@ export default function App() {
             <Route path="tasks" element={<Tasks />} />
             <Route path="brief" element={<DailyBrief />} />
             <Route path="chats" element={<ChatsPage />} />
+            <Route path="bureau" element={<BureauPage />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="ledger" element={<Grootboek />} />
             <Route path="companion" element={<CompanionPage />} />

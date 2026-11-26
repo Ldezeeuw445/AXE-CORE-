@@ -73,10 +73,11 @@ export async function interviewBeurt(tekst: string): Promise<string | null> {
   if (beurt.bewaar) {
     const { id, kop, vraag, antwoord } = beurt.bewaar;
     try {
-      await memUpsert([{
+      const bewaard = await memUpsert([{
         user_id: AXE_USER_ID, category: PROFIEL_CATEGORIE, key: profielSleutel(id), value: antwoord,
         confidence: 0.95, metadata: { agentId: 'interview', kop, vraag },
       }]);
+      if (!bewaard?.length) throw new Error('the server did not save it');
       cache = [...cache.filter((r) => r.id !== id), { id, antwoord }];
     } catch (e) {
       // Niet doen alsof: de vraag blijft open zodat hij het opnieuw kan zeggen.

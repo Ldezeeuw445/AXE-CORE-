@@ -130,3 +130,10 @@ def test_nieuwe_notitie_en_echte_les_gaan_gewoon_door():
     assert hek.filter_rij(db, "rag_memories", _notitie("eerste keer"))[0] == "ok"
     les = {"category": "agent", "content": "Planner: een taak zonder eigenaar blijft liggen.", "metadata": {}}
     assert hek.filter_rij(db, "rag_memories", les)[0] == "ok"
+
+def test_eigen_categorieen_buiten_het_hek():
+    import memory_schrijfhek as h
+    assert h.is_eigen({"category": "luka_profiel", "key": "profiel:werk"})
+    assert h.is_eigen({"category": "luka_bureau"})
+    assert not h.is_eigen({"category": "conversation_context"})
+    assert not h.is_eigen({})

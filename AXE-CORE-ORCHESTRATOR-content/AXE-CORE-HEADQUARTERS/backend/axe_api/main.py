@@ -2145,11 +2145,14 @@ async def memory_upsert(entries: list[MemoryEntry]):
     for rij in rows:
         if not is_config_sleutel(rij.get("key")):
             rij["value"] = verberg_geheimen(rij.get("value"))
+    import memory_schrijfhek as hek
+    eigen = [r for r in rows if hek.is_eigen(r)]
+    rows = [r for r in rows if not hek.is_eigen(r)]
     try:
-        import memory_schrijfhek as hek
-        rows, _skipped = hek.filter_batch(sb(), "global_memory", rows)
+        rows, _skipped = hek.filter_batch(sb(), "global_memory", rows) if rows else (rows, {})
     except Exception as hek_err:
         log.warning("memory hek batch failed, writing anyway: %s", hek_err)
+    rows = eigen + rows
     if not rows:
         return []
     # Na het hek kunnen twee rijen dezelfde stabiele sleutel hebben.

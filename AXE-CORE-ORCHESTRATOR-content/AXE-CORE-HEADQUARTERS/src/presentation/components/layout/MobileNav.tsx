@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router';
 import {
-  Home, Brain, Database, Share2, BookMarked, Cable, Network,
+  Home, Brain, Database, Share2, BookMarked, Cable, Network, FolderOpen,
   Workflow, Table2, Clock, Bot, Megaphone, CalendarDays, ListTodo, Wallet,
   LineChart, Globe, FileCode, Sparkles, Compass, Users, Terminal, Settings,
   Smartphone, Lock, LayoutGrid, TrendingUp, Menu, X, Search, Star, ChevronUp, ChevronDown,
@@ -36,7 +36,7 @@ const ROUTE_ICON: Record<string, LucideIcon> = {
   '/maps-3d': Globe, '/code-editor': FileCode, '/eve': Sparkles,
   '/browser': Compass, '/organization': Users, '/terminal': Terminal, '/terminals': Terminal,
   '/developer': Terminal, '/settings': Settings, '/device': Smartphone, '/lock': Lock,
-  '/ledger': BookOpenCheck, '/companion': Sparkles,
+  '/ledger': BookOpenCheck, '/bureau': FolderOpen, '/companion': Sparkles,
 };
 
 const FAV_KEY = 'axe_menu_favourites';
