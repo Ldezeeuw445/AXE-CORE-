@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 79 klaar, 95 gebouwd maar nog niet bewezen, 37 open (van 211).
+**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 79 klaar, 96 gebouwd maar nog niet bewezen, 37 open (van 212).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -11,7 +11,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (47%) | 10 | 0 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 30 | 4 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 5 | 2 |
-| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 8 (17%) | 22 | 17 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 8 (17%) | 23 | 17 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
@@ -498,6 +498,7 @@ Niet namaken -- AXE heeft al Taken, Home en de managers. Wat erbij moet:
 - [~] **Bureau**: mappen met links (sites, tools, methodes) met één regel
       waarom ze ertoe doen. *(26 nov gebouwd, b85a90c0: pagina Bureau onder More > Work -- link + map + waarom toevoegen, zoeken, per map, weghalen = archiveren. In de chat: "bewaar resend.com in Tools: waarom", "zet x.com op mijn bureau: waarom", "wat staat er op mijn bureau". In global_memory (luka_bureau), gedeeld tussen de apparaten; vraag je AXE iets over "mijn bureau"/"mijn links", dan gaan ze mee in de prompt. 6 tests. In de preview GEZIEN tegen de echte VPS: bewaren via chat en formulier, teruglezen, lijst in de chat, weghalen; de twee proeflinks zijn gearchiveerd. Daarbij gevonden en LIVE gerepareerd: het geheugenhek op /memory/upsert plakte een hash aan elke sleutel en weigerde alles boven 120 rijen per dag (26 nov: 123) -- interview, stem en bureau konden dus niets bewaren en zeiden toch "bewaard". Die drie categorieën gaan nu buiten het hek om, en de app zegt eerlijk "niet bewaard" als de server niets teruggeeft. Komt met de app-build.)*
 
+- [~] **Managers zijn de DAX-bots** (26 nov, Luka: "alle dax bots moeten de managers zijn"; ADR docs/ADR-2026-11-26-managers-zijn-dax.md, 98e705ad): één agent per app met gesprek + lus + eigen DAX-computer. AXE CORE Manager <- ThinkTank (crew nova, atlas), Projects <- Developer (wags, forge), NorthSea Desk <- NorthSea, Trading OS <- Trading (blijft alleen-lezen, geen orders), Companion en AXON kregen dax-companion-01 / dax-axon-01. Oude botnamen zijn aliassen; Browser is een gedeelde computer, geen agent; niets verwijderd. Werk aan de VPS zelf (eigen ronde, systemctl) blijft op de VPS. Home en telefoon tonen de zes managers, geen tweede NorthSea/Trading. LIVE BEWEZEN: proeftaak Companion-manager draaide op `Linux dax-companion-01` (nieuwe container op Strato gestart), 2 stappen, zelf gecontroleerd. Bewezen voor alle zes als elke manager een echte taak op zijn eigen DAX doet.
 - [~] **Managers als Grok Bot**: zelf doen, onderling overleggen, alleen
       vragen wat echt van Luka is. 20 nov: `manager_werk.py`, staande dienst elke
       2 min op de VPS (gratis modellen): (1) jouw bericht zonder antwoord na 3 min
