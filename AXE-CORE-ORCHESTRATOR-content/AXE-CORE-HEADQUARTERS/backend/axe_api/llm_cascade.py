@@ -118,14 +118,38 @@ def laat_rusten(naam: str, nu: Optional[float] = None, seconden: Optional[float]
     _rust_tot[naam] = (_klok() if nu is None else nu) + (RUST_S if seconden is None else seconden)
 
 
-def rust_voor(status: int, headers: Any, tekst: str = "") -> Optional[float]:
+DAG_RUST_MAX_S = 24 * 3600.0
+
+
+def _tot_reset(headers: Any, nu_epoch: float) -> float:
+    """Seconden tot de daglimiet weer vrij is: OpenRouter's X-RateLimit-Reset
+    (ms of s sinds epoch), anders tot middernacht UTC (dan reset de teller)."""
+    try:
+        ruw = float((headers or {}).get("x-ratelimit-reset") or (headers or {}).get("X-RateLimit-Reset") or "")
+        reset = ruw / 1000.0 if ruw > 1e11 else ruw
+        if reset > nu_epoch:
+            return min(DAG_RUST_MAX_S, reset - nu_epoch + 30.0)
+    except (TypeError, ValueError):
+        pass
+    middernacht = (int(nu_epoch // 86400) + 1) * 86400
+    return min(DAG_RUST_MAX_S, middernacht - nu_epoch + 30.0)
+
+
+def rust_voor(status: int, headers: Any, tekst: str = "", nu_epoch: Optional[float] = None) -> Optional[float]:
     """Hoe lang rusten na deze fout. Een minuutlimiet (429 met retry-after, Groq) is na
     ~een minuut weer vrij; tien minuten rust maakte de gratis capaciteit onnodig krap
-    (23 nov). Geen tegoed, dagquotum of een kapotte sleutel: de gewone RUST_S."""
+    (23 nov). Geen tegoed of een kapotte sleutel: de gewone RUST_S.
+
+    26 nov: een DAGlimiet ("free-models-per-day", OpenRouter: 50 gratis verzoeken per
+    dag per account) rustte maar RUST_S en werd dan de hele dag opnieuw geprobeerd --
+    30 tot 107 verspilde 429's per sleutel per dag, en elke keer vertraging. Nu rust
+    hij tot de reset."""
     if status != 429:
         return None
     low = (tekst or "").lower()
-    if any(w in low for w in ("insufficient_quota", "credit", "per-day", "per day", "daily")):
+    if any(w in low for w in ("per-day", "per day", "daily", "free-models-per-day")):
+        return _tot_reset(headers, time.time() if nu_epoch is None else nu_epoch)
+    if any(w in low for w in ("insufficient_quota", "credit")):
         return None
     try:
         na = float((headers or {}).get("retry-after") or "")

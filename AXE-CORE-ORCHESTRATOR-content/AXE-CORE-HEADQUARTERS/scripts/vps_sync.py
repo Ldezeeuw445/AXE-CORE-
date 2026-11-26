@@ -94,6 +94,7 @@ MANIFEST = {
     "/opt/axe-core-api/abonnement_verbruik.py": ("backend/axe_api/abonnement_verbruik.py", "axe-core-api"),
     "/opt/axe-core-api/cli_laag.py": ("backend/axe_api/cli_laag.py", "axe-core-api"),
     "/opt/axe-core-api/chats_zoek.py": ("backend/axe_api/chats_zoek.py", "axe-core-api"),
+    "/opt/axe-core-api/trading_accounts_overzicht.py": ("backend/axe_api/trading_accounts_overzicht.py", "axe-core-api"),
     "/opt/axe-core-api/vaste_briefs.py": ("backend/axe_api/vaste_briefs.py", "axe-core-api"),
     "/opt/axe-core-api/run_crew.py": ("backend/axe_api/run_crew.py", None),
     "/opt/axe-core-api/flow_runner.py": ("infra/axe-core-api/flow_runner.py", "axe-core-api"),
@@ -256,7 +257,7 @@ OPTIONAL_WHEN_MISSING = {
 WORKER_IMPORTS = {
     "task_worker.py": ("agent_loop.py", "task_runtime.py", "missies.py", "mission_engine.py", "dax.py", "northsea_desk_handler.py", "dax_bouw.py", "bouw_publiceer.py"),
     "agent_loop.py": ("klaar_regels.py", "device_actions.py", "agent_workspace.py", "beslis_beleid.py", "provider_router.py", "sleutel_teller.py", "acceptatie.py"),
-    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "grok_managers.py", "taak_fout.py", "gezondheid.py", "memory_schrijfhek.py", "geheimen.py", "device_notify.py", "modelbox.py", "northsea_mailwachter.py", "sleutels.py", "stoelen_actueel.py", "stem_vloer.py", "manager_draad.py", "northsea_opruimen.py", "rij.py", "sleutel_teller.py", "markt_dag.py", "mt5_bridge_status.py", "dax_werk.py", "chats_zoek.py"),
+    "main.py": ("missie_api.py", "missies.py", "agent_activiteit.py", "dax.py", "service_probes.py", "abonnement_verbruik.py", "dax_wacht.py", "dax_routine.py", "staande_diensten.py", "grok_managers.py", "taak_fout.py", "gezondheid.py", "memory_schrijfhek.py", "geheimen.py", "device_notify.py", "modelbox.py", "northsea_mailwachter.py", "sleutels.py", "stoelen_actueel.py", "stem_vloer.py", "manager_draad.py", "northsea_opruimen.py", "rij.py", "sleutel_teller.py", "markt_dag.py", "mt5_bridge_status.py", "dax_werk.py", "chats_zoek.py", "trading_accounts_overzicht.py"),
     "memory_schrijfhek.py": ("geheimen.py",),
     "provider_router.py": ("stoelen_actueel.py",),
     "staande_diensten.py": ("manager_werk.py", "grok_managers.py", "dax_bouw.py", "intel_bewaker.py", "intel_feeds.py",

@@ -177,3 +177,29 @@ describe('Trading OS heet trading_os (CHECK op core_schedules), met aliassen', (
     expect(r).toEqual([{ app: 'trading_os', uur: '2026-11-25T21:00:00.000Z', ok: 2, fout: 0 }]);
   });
 });
+
+describe('26 nov: wachten is geen falen', () => {
+  const basis = { runs: null, diensten: [], sessies: [], nu: Date.parse('2026-11-26T18:00:00Z') };
+  const schema = (p: Record<string, unknown>) => ({ id: 'x', name: 'Review Desk: bronnen lezen', app: 'axe_core', enabled: true, last_status: 'skipped', last_run_at: '2026-11-26T17:07:00Z', consecutive_failures: 15, ...p });
+
+  it('skipped met een teller = Waiting, niet Failing', async () => {
+    const { appsGezondheid } = await import('./homeAppsHealth');
+    const axe = appsGezondheid({ ...basis, schemas: [schema({})] as never }).find((a) => a.id === 'axe_core')!;
+    expect(axe.stand).toBe('Waiting');
+    expect(axe.toon).toBe('let-op');
+    expect(axe.kapot).toEqual([]);
+  });
+
+  it('een oude teller bij een run die alweer ok was telt niet', async () => {
+    const { appsGezondheid } = await import('./homeAppsHealth');
+    const axe = appsGezondheid({ ...basis, schemas: [schema({ last_status: 'ok', consecutive_failures: 40 })] as never }).find((a) => a.id === 'axe_core')!;
+    expect(axe.stand).not.toBe('Failing');
+  });
+
+  it('echt falen blijft Failing met ×N', async () => {
+    const { appsGezondheid } = await import('./homeAppsHealth');
+    const axe = appsGezondheid({ ...basis, schemas: [schema({ name: 'Planner: agents plannen', last_status: 'fail', consecutive_failures: 9 })] as never }).find((a) => a.id === 'axe_core')!;
+    expect(axe.stand).toBe('Failing');
+    expect(axe.fix?.uitleg).toContain('Planner ×9');
+  });
+});

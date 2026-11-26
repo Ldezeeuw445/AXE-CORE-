@@ -148,7 +148,13 @@ def test_minuutlimiet_rust_kort_dagquotum_en_tegoed_lang():
     import llm_cascade as lc
     assert lc.rust_voor(429, {"retry-after": "40"}) == 42.0
     assert lc.rust_voor(429, {"retry-after": "1"}) == 15.0
-    assert lc.rust_voor(429, {"retry-after": "40"}, "Rate limit exceeded: free-models-per-day") is None
+    # 26 nov: een daglimiet rust tot de reset, niet RUST_S (en dan de hele dag opnieuw).
+    nu = 1795700000.0  # ergens op een dag
+    assert lc.rust_voor(429, {"x-ratelimit-reset": str(int((nu + 3600) * 1000))},
+                        "Rate limit exceeded: free-models-per-day", nu_epoch=nu) == 3630.0
+    tot_middernacht = (int(nu // 86400) + 1) * 86400 - nu + 30.0
+    assert lc.rust_voor(429, {"retry-after": "40"}, "Rate limit exceeded: free-models-per-day", nu_epoch=nu) == tot_middernacht
+    assert lc.rust_voor(429, {}, "insufficient_quota") is None
     assert lc.rust_voor(429, {"retry-after": "40"}, '{"type":"insufficient_quota"}') is None
     assert lc.rust_voor(429, {}) is None
     assert lc.rust_voor(402, {"retry-after": "5"}) is None

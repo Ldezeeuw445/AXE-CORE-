@@ -774,3 +774,18 @@ class TestVervolgMetEchtDoel:
         assert len(uit) == 1
         assert "unusualOptions op de marktfeed-meldingen" in uit[0]["doel"]
         assert "~/.config" in uit[0]["doel"]
+
+
+class TestSchijfLos:
+    """26 nov: werkkopie op een externe SSD die niet aan de Mac hing -> de hele
+    ronde viel om met FileNotFoundError. Nu wordt alleen die taak overgeslagen."""
+
+    def test_canon_met_weg_pad_blokkeert_alleen_die_repo(self, tmp_path, monkeypatch):
+        import agent_runner
+        weg = str(tmp_path / "EagetSSD" / "agent-werk" / "axe-companion")
+        monkeypatch.setattr(agent_runner, "_repos", lambda: {"axe-companion": weg})
+        pl = p.Planner(lambda: None, lambda **k: {}, lambda: {"axe-companion": weg})
+        uit = pl._canon("axe-companion")
+        assert uit["actie"] == "geen"
+        assert "is not there" in uit["geblokkeerd"]
+        assert weg in uit["geblokkeerd"]

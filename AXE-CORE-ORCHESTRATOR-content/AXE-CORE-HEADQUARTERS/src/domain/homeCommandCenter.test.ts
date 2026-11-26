@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  feedRegels, geledenTekst, kiesMachines, limietRegels, llmTelling, perUur, pnlLijn, providerTegels, recenteToestellen, ringToon, ringWaarde,
+  feedRegels, geledenTekst, kiesMachines, limietRegels, monitorRijen, llmTelling, perUur, pnlLijn, providerTegels, recenteToestellen, ringToon, ringWaarde,
   tijdlijnVandaag,
 } from './homeCommandCenter';
 
@@ -77,7 +77,17 @@ describe('home command center', () => {
       { id: 'vps', name: 'VPS API', online: true, cpu: 1, mem: 1, disk: 1 },
       { id: 'mac-mini', name: 'Mac mini', online: true, cpu: 1, mem: 1, disk: 1 },
     ]);
-    expect(m.map((x) => x.name)).toEqual(['Mac mini', 'VPS']);
+    // 26 nov (Luka): alle machines, Macs eerst, dan de VPS'en.
+    expect(m.map((x) => x.name)).toEqual(['Mac mini', 'iMac', 'VPS']);
+    const alle = kiesMachines([
+      { id: 'mt5bridge', name: 'VPS MT5 bridge', online: true, cpu: null, mem: null, disk: null },
+      { id: 'modelbox', name: 'VPS Models', online: true, cpu: 1, mem: 1, disk: 1 },
+      { id: 'vps', name: 'VPS API', online: true, cpu: 1, mem: 1, disk: 1 },
+      { id: 'imac', name: 'iMac', online: true, cpu: 1, mem: 1, disk: 1 },
+      { id: 'macmini', name: 'Mac mini', online: true, cpu: 1, mem: 1, disk: 1 },
+    ]);
+    expect(alle.map((x) => x.name)).toEqual(['Mac mini', 'iMac', 'VPS', 'VPS Models', 'VPS MT5']);
+    expect([monitorRijen(1), monitorRijen(2), monitorRijen(5), monitorRijen(6)]).toEqual([1, 2, 3, 3]);
     expect(kiesMachines(null)).toEqual([]);
   });
 

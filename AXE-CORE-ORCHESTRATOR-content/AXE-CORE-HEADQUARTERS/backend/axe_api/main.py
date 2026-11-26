@@ -2556,6 +2556,14 @@ except Exception as _e:  # noqa: BLE001
     log.warning("chats_zoek niet ingeladen (%s) -- /chats/* bestaat niet", _e)
 
 
+@app.get("/trading/accounts-per-app", dependencies=[AUTH])
+async def trading_accounts_per_app():
+    """Home (26 nov): accounts per app -- AXE Companion uit user_broker_accounts,
+    zonder login of sleutel; Trading OS eerlijk als nog niet leesbaar. Alleen lezen."""
+    import trading_accounts_overzicht as _tao
+    return await asyncio.to_thread(_tao.overzicht, sb())
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # WORKSPACE FILES — backs the in-app Code Editor (Cursor-style IDE)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -6177,8 +6185,21 @@ async def _ls_systems() -> list[dict]:
         data = await AGENT_TUNNEL.get_json("/host/metrics", params, timeout=25.0) if AGENT_TUNNEL else None
         return _lockscreen.machine_row(machine_id, name, data)
 
+    async def mt5bridge() -> dict:
+        """De derde VPS (Strato, MT5-bridge). Online = SSH-poort antwoordt, gemeten vanaf hier. Cijfers
+        hebben we niet (geen leestoegang); die blijven leeg in plaats van te verzinnen (26 nov)."""
+        host = (os.environ.get("MT5_BRIDGE_HOST") or "31.70.196.19").strip()
+        poort = int(os.environ.get("MT5_BRIDGE_PORT") or 22)
+        try:
+            _r, w = await asyncio.wait_for(asyncio.open_connection(host, poort), timeout=4.0)
+            w.close()
+            up = True
+        except (OSError, asyncio.TimeoutError):
+            up = False
+        return _lockscreen.machine_row("mt5bridge", "VPS MT5 bridge", {"cpu": None, "mem": None, "disk": None} if up else None)
+
     rows = await asyncio.gather(
-        remote("macmini", "Mac mini", None), remote("imac", "iMac", {"target": "imac"}), vps(), modelbox(),
+        remote("macmini", "Mac mini", None), remote("imac", "iMac", {"target": "imac"}), vps(), modelbox(), mt5bridge(),
     )
     return list(rows)
 

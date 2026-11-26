@@ -163,20 +163,35 @@ export function geledenTekst(at: number | null, nu = Date.now()): string {
 export type Machine = { id: string; name: string; online: boolean; cpu: number | null; mem: number | null; disk: number | null };
 
 /** Hooguit twee machines voor de ringen: de Mac mini en de VPS als die er zijn, anders de eerste twee. */
+/**
+ * 26 nov (Luka): alle machines, niet de eerste twee -- de Macs en de drie
+ * VPS'en. Volgorde: Macs, dan de VPS'en; max 6 zodat de kaart nooit scrolt.
+ */
 export function kiesMachines(systems: Machine[] | null | undefined): Machine[] {
   if (!systems?.length) return [];
   const score = (m: Machine) => {
     const s = `${m.id} ${m.name}`.toLowerCase();
     if (/mini/.test(s)) return 0;
-    if (/vps|server|strato/.test(s)) return 1;
-    return 2;
+    if (/imac/.test(s)) return 1;
+    if (/^vps$|vps api/.test(s)) return 2;
+    if (/model|ollama/.test(s)) return 3;
+    if (/vps|server|strato|mt5|bridge/.test(s)) return 4;
+    return 5;
   };
-  return [...systems].sort((a, b) => score(a) - score(b)).slice(0, 2).map((m) => ({ ...m, name: machineNaam(m.name) }));
+  return [...systems].sort((a, b) => score(a) - score(b)).slice(0, 6).map((m) => ({ ...m, name: machineNaam(m.name) }));
 }
 
 /** Korte namen voor de ringen: de snapshot zegt "VPS API", Luka zegt VPS. */
 function machineNaam(naam: string): string {
-  return /^vps api$/i.test(naam.trim()) ? 'VPS' : naam;
+  const n = naam.trim();
+  if (/^vps api$/i.test(n)) return 'VPS';
+  if (/^vps mt5 bridge$/i.test(n)) return 'VPS MT5';
+  return n;
+}
+
+/** Hoeveel rijen de monitor heeft: tot twee machines onder elkaar, daarna twee kolommen. */
+export function monitorRijen(aantal: number): number {
+  return aantal <= 2 ? Math.max(1, aantal) : Math.ceil(aantal / 2);
 }
 
 /** Een percentage voor een ring, of null als het niet gemeten is. */

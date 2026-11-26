@@ -69,7 +69,7 @@ export const VPS_BRIDGE_PROVIDER_IDS = new Set<ProviderId>([
 
 /** Cloud providers suitable as AXE identity backups (multi-capable, not local-only). */
 export const CLOUD_IDENTITY_PROVIDERS = new Set<ProviderId>([
-  'google', 'openai', 'anthropic', 'xai', 'groq', 'openrouter', 'openrouter2', 'cerebras',
+  'google', 'openai', 'anthropic', 'groq', 'openrouter', 'openrouter2', 'cerebras',
 ]);
 
 const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? '/proxy/openhands';
@@ -163,7 +163,11 @@ export function classifyQuery(text:string):QueryCapability {
   return 'fast';
 }
 
-export function selectByCapability(cap:QueryCapability,all:KeySlot[]):KeySlot[]{
+/** Uitgezette aanbieders: nooit in een keten, ook niet als er nog een sleutel staat (26 nov: Grok). */
+export const UITGEZET = new Set<string>(['xai']);
+
+export function selectByCapability(cap:QueryCapability,alles:KeySlot[]):KeySlot[]{
+  const all=alles.filter(s=>!UITGEZET.has(s.provider));
   if(all.length===0) return[];
   const bp=(ids:string[])=>all.filter(s=>ids.includes(s.provider));
   const rest=(ids:string[])=>all.filter(s=>!ids.includes(s.provider));
@@ -171,11 +175,11 @@ export function selectByCapability(cap:QueryCapability,all:KeySlot[]):KeySlot[]{
     case 'privacy': return[...bp(['ollama']),...rest(['ollama'])];
     // Prefer real configured models (google/anthropic/xai) over openrouter/free —
     // free auto-router was winning chat and made ★ Primair look broken.
-    case 'code': case 'analysis': case 'reasoning': return[...bp(['google']),...bp(['anthropic']),...bp(['xai']),...bp(['openai']),...bp(['openrouter']),...rest(['google','anthropic','xai','openai','openrouter'])];
-    case 'creative': return[...bp(['google']),...bp(['anthropic']),...bp(['xai']),...bp(['openai']),...bp(['openrouter']),...rest(['google','anthropic','xai','openai','openrouter'])];
+    case 'code': case 'analysis': case 'reasoning': return[...bp(['google']),...bp(['anthropic']),...bp(['openai']),...bp(['openrouter']),...rest(['google','anthropic','openai','openrouter'])];
+    case 'creative': return[...bp(['google']),...bp(['anthropic']),...bp(['openai']),...bp(['openrouter']),...rest(['google','anthropic','openai','openrouter'])];
     // fast: Gemini first among capability prefs; ★ Primair still forced later.
     // Ollama is never preferred here — only last-resort via prioritizeOllamaSlots.
-    case 'fast': default: return[...bp(['google']),...bp(['openai']),...bp(['anthropic']),...bp(['xai']),...bp(['groq']),...bp(['cerebras']),...bp(['openrouter']),...rest(['google','openai','anthropic','xai','groq','cerebras','openrouter','ollama']),...bp(['ollama'])];
+    case 'fast': default: return[...bp(['google']),...bp(['openai']),...bp(['anthropic']),...bp(['groq']),...bp(['cerebras']),...bp(['openrouter']),...rest(['google','openai','anthropic','groq','cerebras','openrouter','ollama']),...bp(['ollama'])];
   }
 }
 
@@ -381,7 +385,7 @@ export function buildStableChatCascade(
   //    stays first (the ★ / one source of truth) and is simply not repeated.
   //    Order: fast+free first (Groq/Cerebras), then smart (Anthropic/OpenAI),
   //    then Gemini (great but its free key runs out), then the rest.
-  const AXE_PREF = ['groq', 'cerebras', 'anthropic', 'openai', 'google', 'xai', 'openrouter'];
+  const AXE_PREF = ['groq', 'cerebras', 'anthropic', 'openai', 'google', 'openrouter'];
   for (const id of AXE_PREF) {
     if (out.length >= 3) break;
     const s = allSlots.find(x => x.provider === id);

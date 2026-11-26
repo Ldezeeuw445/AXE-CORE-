@@ -52,3 +52,22 @@ describe('sleutelTelling', () => {
       .toEqual({ werkt: 5, aanwezig: 4, ontbreekt: 1, kapot: 1 });
   });
 });
+
+describe('26 nov: accounts per app', () => {
+  it('drie blokken, demo-testrijen als één regel, Trading OS eerlijk', async () => {
+    const { accountGroepen } = await import('./homeStatusCards');
+    const nu = Date.parse('2026-11-26T18:00:00Z');
+    const g = accountGroepen({
+      axeCore: [],
+      companion: { accounts: [{ id: 'a', label: '100K 1STEP UPCOMERS', provider: 'mt5', verbonden: true, provider_status: 'connected', modus: 'live', laatste_sync: '2026-11-26T17:50:00Z' }], demo_testrijen: 28 },
+      tradingOs: { bereikbaar: false },
+      nu,
+    });
+    expect(g.map((x) => x.id)).toEqual(['axe_core', 'companion', 'trading_os']);
+    expect(g[0].leeg).toContain('No accounts linked to AXE Algo');
+    expect(g[1].regels[0]).toMatchObject({ naam: '100K 1STEP UPCOMERS', toon: 'ok' });
+    expect(g[1].regels[0].regel).toContain('synced 10 min ago');
+    expect(g[1].regels[1]).toMatchObject({ naam: '28 demo test rows', toon: 'stil' });
+    expect(g[2].regels[0].naam).toContain('Not readable');
+  });
+});

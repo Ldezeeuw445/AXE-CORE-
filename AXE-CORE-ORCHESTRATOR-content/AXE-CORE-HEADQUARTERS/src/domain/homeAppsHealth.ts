@@ -160,9 +160,13 @@ export function appsGezondheid(in_: {
     const nRuns = som(reeks?.ok) + nFout;
     const okUren = nRuns ? reeks!.ok : null;
     const foutUren = nRuns ? reeks!.fout : null;
+    /* 26 nov: alleen een laatste run die echt faalde is kapot. De teller bleef
+       staan bij 'skipped' (Review Desk wacht op Luka's inlog: 15x "Failing")
+       en bij een run die alweer ok was. */
     const kapot = schemas
-      .filter((s) => FOUT.test(s.last_status ?? '') || (s.consecutive_failures ?? 0) > 0)
+      .filter((s) => FOUT.test(s.last_status ?? ''))
       .sort((a, b) => (b.consecutive_failures ?? 0) - (a.consecutive_failures ?? 0));
+    const wacht = schemas.filter((s) => /^skipped$/i.test(s.last_status ?? '') && (s.consecutive_failures ?? 0) > 0);
 
     /* Uit de uurtellers weten we alleen het uur; de schema's weten de minuut. */
     const laatsteUur = (in_.runs ?? []).filter((r) => appSleutel(r.app) === app.id && r.ok + r.fout > 0)
@@ -184,6 +188,12 @@ export function appsGezondheid(in_: {
         soort: 'open', route: `/cron-manager?open=${encodeURIComponent(kapot[0].id)}`,
         uitleg: `${schemaRegel(kapot)} failing. Open ${kortNaam(kapot[0].name)} in Cron Manager.`,
       };
+    } else if (wacht.length) {
+      toon = 'let-op'; stand = 'Waiting';
+      fix = {
+        soort: 'open', route: `/cron-manager?open=${encodeURIComponent(wacht[0].id)}`,
+        uitleg: `${schemaRegel(wacht)} skipped: waiting on a sign-in or input from you. Open ${kortNaam(wacht[0].name)} in Cron Manager.`,
+      };
     } else if (nFout) {
       toon = 'let-op'; stand = 'Warning';
       fix = { soort: 'open', route: '/ledger', uitleg: `${nFout} failed ${nFout === 1 ? 'run' : 'runs'} in 24h. Open the ledger.` };
@@ -201,7 +211,7 @@ export function appsGezondheid(in_: {
       kpiUitleg = erbij == null ? 'memories stored' : `memories stored · ${erbij} added in the last 24h`;
     } else if (nRuns) {
       kpi = nRuns.toLocaleString('en-GB');
-      kpiSub = kapot.length ? `${schemaRegel(kapot)} failing` : nFout ? `runs · ${nFout} failed` : 'runs';
+      kpiSub = kapot.length ? `${schemaRegel(kapot)} failing` : wacht.length ? `${schemaRegel(wacht)} waiting` : nFout ? `runs · ${nFout} failed` : 'runs';
       kpiUitleg = `cron runs in the last 24h · ${nFout} failed${kapot.length ? ` · failing: ${schemaRegel(kapot)}` : ''}`;
     } else if (sessie) {
       kpi = String(sessie.sessions_today);

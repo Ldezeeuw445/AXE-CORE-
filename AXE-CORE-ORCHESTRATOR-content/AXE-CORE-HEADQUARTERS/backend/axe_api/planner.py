@@ -1420,6 +1420,13 @@ class Planner:
             from agent_runner import WERK_MAP, WERK_OVERRIDES, _git, _repos
         except ImportError as e:
             return {"actie": "geen", "reden": f"agent_runner: {e}"}
+        # 26 nov: de werkkopie stond op /Volumes/EagetSSD en die schijf hing niet
+        # aan de Mac. git(cwd=<weg>) gaf FileNotFoundError en de HELE ronde viel
+        # om (9x op rij "Failing" op Home). Nu: alleen deze taak overslaan, met
+        # waarom -- de rest van de ronde loopt door.
+        pad_nu = _repos().get(repo)
+        if pad_nu and not os.path.exists(pad_nu):
+            return {"actie": "geen", "geblokkeerd": f"{repo}: {pad_nu} is not there (external disk unplugged?)"}
         uit = bouw_publiceer.zorg_voor_canon(_git, repo, _repos().get(repo),
                                              werk_map=WERK_MAP, overrides_pad=WERK_OVERRIDES)
         if uit.get("actie") == "overgezet":

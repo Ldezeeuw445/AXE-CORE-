@@ -50,7 +50,7 @@ describe('één bron voor providers', () => {
     // ze "voor de volledigheid" terugzet -- dat is precies hoe ze er de eerste
     // keer in kwamen.
     expect(ids, 'smartthings is eruit gehaald').not.toContain('smartthings');
-    expect(ids, 'Grok (xAI) hoort in de catalogus').toContain('xai');
+    expect(ids, 'Grok (xAI) is eruit (26 nov, Luka gebruikt hem niet)').not.toContain('xai');
     // Perplexity is onderzoek, geen chatmodel. In de sleutelcatalogus, niet
     // in PROVIDERS — anders gaat de cascade hem als LLM inzetten.
     expect(PROVIDERS.map(p => p.id), 'Perplexity is geen chat-provider').not.toContain('perplexity');
@@ -62,6 +62,17 @@ describe('één bron voor providers', () => {
       expect(p.icon, p.id).toBeTruthy();
       expect(p.accent, p.id).toMatch(/^#|^var\(/);
       expect(typeof p.needsKey, p.id).toBe('boolean');
+    }
+  });
+});
+
+describe('26 nov: Grok (xAI) zit in geen enkele keten meer', () => {
+  it('ook met een opgeslagen sleutel valt hij eruit', async () => {
+    const { selectByCapability, UITGEZET } = await import('./providers');
+    expect(UITGEZET.has('xai')).toBe(true);
+    const slots = [{ provider: 'xai', model: 'grok-4.5' }, { provider: 'groq', model: 'x' }] as never;
+    for (const cap of ['fast', 'code', 'creative', 'analysis'] as const) {
+      expect(selectByCapability(cap, slots).map((s: { provider: string }) => s.provider), cap).not.toContain('xai');
     }
   });
 });

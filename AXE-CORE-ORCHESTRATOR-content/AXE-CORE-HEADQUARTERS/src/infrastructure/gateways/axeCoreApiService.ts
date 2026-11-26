@@ -1370,6 +1370,14 @@ export function deskDagkoers(symbol: 'XCUUSD' | 'BCOUSD' | 'DXY'): Promise<DeskD
 
 // NorthSea: de commodity desk leest AXE Commodities alleen-lezen via de
 // MCP-hub op de agent-host (backend/axe_api/northsea.py).
+/** Home (26 nov): trading-accounts van de andere apps, zonder login of sleutel. Alleen lezen. */
+export interface CompanionAccount { id: string; label: string; provider: string | null; status: string | null; verbonden: boolean; provider_status: string | null; modus: string | null; login: string | null; laatste_sync: string | null }
+export interface AccountsPerApp {
+  companion: { accounts?: CompanionAccount[]; demo_testrijen?: number; fout?: string };
+  trading_os: { bereikbaar: boolean; reden?: string };
+}
+export function tradingAccountsPerApp(): Promise<AccountsPerApp> { return call('GET', '/trading/accounts-per-app'); }
+
 export function northseaOverzicht(vers = false): Promise<NorthseaOverzicht> {
   return call('GET', `/northsea/overzicht${vers ? '?vers=true' : ''}`);
 }

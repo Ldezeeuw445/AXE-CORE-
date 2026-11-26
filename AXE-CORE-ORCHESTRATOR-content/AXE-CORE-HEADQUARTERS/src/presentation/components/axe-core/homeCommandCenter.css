@@ -499,3 +499,34 @@
   :root { --hcc-onder-hoog: 300px; }
 }
 @media (max-width: 900px) { .axe-hcc { display: none; } }
+
+/* 26 nov: Trading accounts per app (AXE Core · AXE Algo, AXE Companion, Trading OS). */
+.axe-hcc-accountgroep + .axe-hcc-accountgroep { margin-top: 10px; }
+.axe-hcc-accountgroep-kop {
+  margin: 2px 2px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted, #71717a);
+}
+
+/* 26 nov: alle machines (Macs + drie VPS'en) zonder scrollen. Boven twee machines
+   twee kolommen; de ringen schalen mee met de hoogte per rij (--rijen). */
+.axe-hcc-monitor { container-type: size; }
+.axe-hcc-monitor[data-kolommen='2'] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  column-gap: 18px;
+  row-gap: 2px;
+  align-items: center;
+}
+.axe-hcc-monitor[data-kolommen='2'] .axe-hcc-machine-naam { flex-basis: 66px; }
+.axe-hcc-monitor .axe-hcc-ring svg,
+.axe-hcc-monitor .axe-hcc-ring-getal {
+  --ring: clamp(24px, calc(100cqh / var(--rijen, 2) - 22px), 48px);
+  width: var(--ring);
+  height: var(--ring);
+}
+.axe-hcc-monitor .axe-hcc-ring-getal { width: auto; }

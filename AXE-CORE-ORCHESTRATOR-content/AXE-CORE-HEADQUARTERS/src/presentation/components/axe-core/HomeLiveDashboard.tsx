@@ -7,7 +7,7 @@ import { taakActieLabel, taakFoutVan, type TaakActie } from '@/domain/taken/taak
 import { useServerAgents, verversServerAgents } from '@/presentation/components/axe-core/useServerAgents';
 import { useAxeJobStore } from '@/presentation/store/axeJobStore';
 import {
-  abonnementVerbruik, buildStatus, calendarJobs, codingSeatsHeartbeat, fixDurableTask, keysOverview, ledgerOverview, lockscreenSnapshot, mcpHubLijst, mcpHubTest,
+  abonnementVerbruik, buildStatus, calendarJobs, codingSeatsHeartbeat, fixDurableTask, keysOverview, ledgerOverview, lockscreenSnapshot, mcpHubLijst, mcpHubTest, tradingAccountsPerApp,
   northseaOverzicht, retryDurableTask, usageCreditsSnapshot, type LedgerEntry, type LedgerTotal, type LockscreenSnapshot,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { beslisAgentOk } from '@/application/approvals/beslisAgentOk';
@@ -33,16 +33,17 @@ import { listTrades } from '@/infrastructure/persistence/tradingTradesService';
 import { leesAccountsZonderToken } from '@/infrastructure/persistence/tradingAccountsService';
 import { getCircuitBreakerState } from '@/infrastructure/persistence/tradingCircuitBreakerService';
 import {
-  accountRegels, connectorRegels, mailStand, sleutelTelling, type Breaker, type ConnectorTest, type StatusRegel,
+  accountGroepen, accountRegels, connectorRegels, mailStand, sleutelTelling, type Breaker, type ConnectorTest, type StatusRegel,
 } from '@/domain/homeStatusCards';
 import {
-  feedRegels, geledenTekst, kiesMachines, limietRegels, llmTelling, perUur, pnlLijn, providerTegels, recenteToestellen, ringToon, ringWaarde,
+  feedRegels, geledenTekst, kiesMachines, limietRegels, monitorRijen, llmTelling, perUur, pnlLijn, providerTegels, recenteToestellen, ringToon, ringWaarde,
   tijdlijnVandaag, type FeedRegel, type Machine, type ProviderSleutel, type TijdJob, type Toon,
 } from '@/domain/homeCommandCenter';
 import {
   appsGezondheid, eenRegel, fixAlsNodig, runsNaarUren, uurReeks, type AppGezond, type FixActie, type JobRun, type RunUur, type Schema,
 } from '@/domain/homeAppsHealth';
 import { aandachtTegels, vandaagStrook } from '@/domain/sphere/podiumAandacht';
+import { kernTegelToon, systeemTegelToon } from '@/domain/homeKernToon';
 import { usePodiumAandacht } from '@/presentation/store/podiumAandachtStore';
 import './homeLive.css';
 import './homeCommandCenter.css';
@@ -458,6 +459,7 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
   const sleutels = { data: sleutelsRuw.data ? naarProviderSleutels(sleutelsRuw.data) : null };
   const mcp = usePoll(laadMcp, 300_000);
   const accounts = usePoll(laadAccounts, 300_000);
+  const accountsPerApp = usePoll(tradingAccountsPerApp, 300_000);
   const northsea = usePoll(() => northseaOverzicht(), 600_000);
   const bouwVps = usePoll(buildStatus, 600_000);
   const [mcpTests, setMcpTests] = useState<Record<string, ConnectorTest>>({});
@@ -479,7 +481,9 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
   /* Kopstrook */
   const datum = nu.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
   const klok = nu.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  const kernToon: Toon = kern?.kleur === 'var(--error)' ? 'fout' : kern?.label === 'Online' ? 'ok' : kern ? 'let-op' : 'uit';
+  /* 26 nov: Thinking/Speaking/Listening is AXE aan het werk, geen storing -- dat
+     gaf een gele FIX. Alleen een wachtende goedkeuring is let-op, offline is fout. */
+  const kernToon: Toon = kernTegelToon(kern ? { label: kern.label, fout: kern.kleur === 'var(--error)' } : null);
 
   /* Core overview: de providers eerst, want de LLMs-tegel telt ze */
   const provTegels = providerTegels(providers, sleutels.data ?? []);
@@ -536,7 +540,8 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
   const agentFix: FixActie | null = stand.goedkeuringen.length
     ? { soort: 'wacht', route: '/wacht', uitleg: `${stand.goedkeuringen.length} waiting for your OK. Open Waiting on you.` }
     : laatsteFout?.taskId ? { soort: 'opnieuw', taskId: laatsteFout.taskId, uitleg: `Retry “${laatsteFout.titel}” (queues a copy; no send, no order).` } : null;
-  const systeemToon: Toon = !runs && !vandaag ? 'uit' : runFouten || vandaag?.mislukt ? 'let-op' : 'ok';
+  /* 26 nov: één mislukte run op 99,4% gaf een gele FIX. Nu op het aandeel. */
+  const systeemToon: Toon = systeemTegelToon({ gemeten: !!runs || !!vandaag, totaal: runTotaal, fouten: runFouten, takenMislukt: runs ? 0 : vandaag?.mislukt ?? 0 });
   const llmToon: Toon = !llm ? 'uit' : !llm.verbonden ? 'fout' : provTegels.some((p) => p.toon === 'fout') ? 'let-op' : 'ok';
 
   /* Apps health: AXE Core en de vier apps */
@@ -550,6 +555,12 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
   const mcpDienst = diensten.find((d) => /mcp/i.test(d.name ?? '') || d.id === 'mcp');
   const con = connectorRegels(mcp.data ?? [], mcpTests);
   const acc = accountRegels(accounts.data?.accounts ?? [], accounts.data?.breakers ?? {});
+  const accGroepen = accountGroepen({
+    axeCore: acc.regels,
+    companion: accountsPerApp.data?.companion ?? null,
+    tradingOs: accountsPerApp.data?.trading_os ?? null,
+    nu: nu.getTime(),
+  });
   const mail = mailStand({
     concepten: northsea.data ? northsea.data.concepten.length : null,
     bounces: northsea.data ? northsea.data.bounces.length : null,
@@ -756,14 +767,20 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
           <StatusLijst regels={con.regels} onKlik={() => navigate('/mcp')}
             leeg={mcp.fout ? 'MCP hub did not answer.' : mcp.data ? 'No MCP servers set up.' : 'Reading the MCP hub…'} />
         </DashKaart>
-        <DashKaart titel={<Kop tekst="Trading accounts" onKlik={() => navigate('/trading')} />} telling={acc.regels.length || undefined}
+        {/* 26 nov: per app -- AXE Core (AXE Algo), AXE Companion, Trading OS -- zodat AXE Core van alle drie weet. */}
+        <DashKaart titel={<Kop tekst="Trading accounts" onKlik={() => navigate('/trading')} />} telling={accGroepen.reduce((n, g) => n + g.regels.filter((r) => r.toon !== 'stil').length, 0) || undefined}
           className={`axe-hcc-kaart axe-hcc-kaart--status${acc.gestopt ? ' is-aandacht' : ''}`} vrij>
           <div className="axe-hcc-statuskop">
             <span>{acc.aan} on · {acc.regels.length - acc.aan} off</span>
             <span>{acc.gestopt ? `${acc.gestopt} breaker tripped` : accounts.data ? 'no breaker tripped' : ''}</span>
           </div>
-          <StatusLijst regels={acc.regels} onKlik={() => navigate('/trading')}
-            leeg={accounts.fout ? 'Accounts did not load.' : accounts.data ? 'No trading accounts saved.' : 'Reading accounts…'} />
+          {accGroepen.map((g) => (
+            <div key={g.id} className="axe-hcc-accountgroep" data-axe-accountgroep={g.id}>
+              <div className="axe-hcc-accountgroep-kop">{g.titel}</div>
+              <StatusLijst regels={g.regels} onKlik={() => navigate(g.id === 'companion' ? '/companion' : '/trading')}
+                leeg={g.id === 'axe_core' && accounts.fout ? 'Accounts did not load.' : g.leeg} />
+            </div>
+          ))}
         </DashKaart>
       </div>
       <div className="axe-hcc-extra axe-hcc-extra--r" data-axe-hcc-extra>
@@ -904,7 +921,8 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
           </div>
         </DashKaart>
         <DashKaart titel={<Kop tekst="System monitor" onKlik={() => navigate('/status')} />} className="axe-hcc-kaart" vrij>
-          <div className="axe-hcc-monitor" data-axe-hcc-monitor>
+          <div className="axe-hcc-monitor" data-axe-hcc-monitor data-kolommen={machines.length > 2 ? 2 : 1}
+            style={{ ['--rijen' as string]: monitorRijen(machines.length) }}>
             {machines.length === 0 && (
               <DashLeeg>{snapshot.fout ? 'No live metrics: the VPS snapshot did not answer.' : 'Waiting for the first measurement…'}</DashLeeg>
             )}
