@@ -299,6 +299,38 @@ else
   tail -5 "$LOG" | sed 's/^/       /'
 fi
 
+kop "VPS-HOST"
+# 5.4 (26 nov): waarom valt de VPS uit? Sinds 28 sep niet meer (59 dagen op).
+# Wel gevonden: systemd-logind (255) hield 8192 SSH-sessies op "closing"
+# (utmp-inconsistent) en weigerde sinds 6 nov elke nieuwe -- 7.233 keer per dag.
+# SSH bleef werken (pam_systemd is optioneel), maar het is precies het soort
+# stil volgelopen ding dat later een echte storing wordt. Eén ssh, alleen lezen.
+if [ -f "${AXE_VPS_KEY:-$HOME/.ssh/axe-core-vps}" ]; then
+  meting=$(ssh -i "${AXE_VPS_KEY:-$HOME/.ssh/axe-core-vps}" -o ConnectTimeout=10 -o BatchMode=yes root@212.227.91.79 \
+    'echo "op=$(cut -d. -f1 /proc/uptime) sessies=$(loginctl list-sessions --no-legend 2>/dev/null | wc -l) closing=$(loginctl list-sessions --no-legend 2>/dev/null | grep -c closing) swap=$(free -m | awk "/Swap/{print \$3\"/\"\$2}") oom=$(journalctl -k -b --no-pager 2>/dev/null | grep -ci "out of memory")"' 2>/dev/null)
+  if [ -z "$meting" ]; then
+    rood "vps ssh" "geen antwoord op ssh"
+    fix "reageert de VPS niet op ssh, dan is de server weg -- herstart hem in het IONOS-paneel"
+  else
+    eval "$meting"
+    groen "vps op" "$(( op / 86400 )) dagen sinds de laatste herstart"
+    if [ "${closing:-0}" -gt 1000 ]; then
+      rood "logind-sessies" "$sessies sessies, $closing blijven op 'closing' hangen (limiet 8192)"
+      fix "ssh -i ~/.ssh/axe-core-vps root@212.227.91.79 'systemctl restart systemd-logind'  (sluit niets af; ruimt de spooksessies op)"
+    else
+      groen "logind-sessies" "$sessies open, $closing op closing"
+    fi
+    if [ "${oom:-0}" -gt 0 ]; then
+      rood "geheugen" "$oom keer 'out of memory' sinds de herstart · swap $swap MB"
+      fix "ssh ... root@212.227.91.79 'journalctl -k -b | grep -i \"out of memory\" | tail'  -- welk proces? vaak ollama (val 4)"
+    else
+      groen "geheugen" "geen out-of-memory sinds de herstart · swap $swap MB"
+    fi
+  fi
+else
+  geel "vps ssh" "geen VPS-sleutel op deze Mac -- niet gemeten"
+fi
+
 kop "APP"
 [ -d dist/public/assets ] && {
   hoofd=$(ls -S dist/public/assets/*.js 2>/dev/null | head -1)

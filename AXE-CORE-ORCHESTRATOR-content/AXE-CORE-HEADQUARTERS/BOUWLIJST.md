@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 79 klaar, 93 gebouwd maar nog niet bewezen, 39 open (van 211).
+**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 79 klaar, 94 gebouwd maar nog niet bewezen, 38 open (van 211).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -16,7 +16,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
 | 4 — Computer use, browser, code-editor | 1 (33%) | 0 | 2 |
-| 5 — Luka kan het zelf | 3 (38%) | 3 | 2 |
+| 5 — Luka kan het zelf | 3 (38%) | 4 | 1 |
 | 6 — AXE als baas (Jarvis-route, niet letterlijk Jarvis) | 23 (92%) | 1 | 1 |
 | 7 — axe-commandolaag (CLI + hek, geen tweede agent) | 6 (55%) | 4 | 1 |
 <!-- stand:end -->
@@ -914,8 +914,9 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
 - [ ] **NorthSea-dealbesluit echt laten landen**: een ok op "Yes needed: <deal>" in AXE verandert niets aan de deal in de desk (daarom vroeg de cron het steeds opnieuw). Het besluit moet naar de NorthSea Desk (MCP), anders is de knop leeg.
 - [~] **Wachtrij-taken zonder pogingen** (25 nov): 17 taken stonden sinds 24 nov 01:35 op queued met attempt 3/3 -- door mijn eigen terugzetting van die nacht zonder de teller -- en de worker pakt alleen attempt < max_attempts: 31 uur niets opgepakt. Nu geeft projectsmgr zo'n taak elke ronde een poging terug (2fef0f20). LIVE BEWEZEN 25 nov 09:15: 17x task.unstuck, binnen een minuut 17 opgepakt; daarna 14 ok-vragen bij Luka, 1 klaar, 2 blocked, 1 mislukt (40 stappen). Gevonden: 'Ik kon ... geen ... vinden om ...' heette klaar -- nu toegegeven falen (klaar_regels).
 - [~] **Mac-CLI als denkhoofd stuurt het hele log als werkbon** (25 nov gebouwd, 0536f8d1: een denk-aanroep is nu een eigen pad -- geen werkbon, geen worktree, lege tmp-map, alleen lezen; het prompt geeft het doel altijd mee plus de tools van de werkplek en vraagt één JSON-actie; Codex' laatste bericht via -o. Echt gemeten op de Mac mini: Codex gaf in 18 s `{"name":"run_shell",...}` (eerst: minuten per stap, alleen tekst). Bewezen als een echte taak via het stoel-brein acties doet.) (gevonden 22 nov): als de API-modellen falen, stuurt `provider_router.seat_prompt` het lus-transcript via `claude_code.run` naar de Mac; daar komt de werkbon omheen en draait het in een eigen worktree, dus Claude weigert ("transcript niet van deze sessie, verkeerde map"). Een denk-aanroep is geen codeeropdracht: eigen pad zonder werkbon/worktree, of geen CLI als brein.
-- [ ] **5.4** Strato: waarom valt de VPS uit? Op 7 sep was het ollama; op 9 sep
+- [~] **5.4** Strato: waarom valt de VPS uit? Op 7 sep was het ollama; op 9 sep
       viel hij hard weg (geen ping, poorten dicht) — dat is iets anders.
+  *(26 nov gemeten op de VPS, alleen lezen: hij valt niet meer uit -- 59 dagen op sinds de herstart van 28 sep. Tussen 5 en 28 sep 15 herstarts; de oorzaak daarvan is niet meer te bewijzen: het journaal begint op 10 okt. Geen enkele out-of-memory sinds de herstart; swap 2,4 van 4 GB in gebruik. WEL GEVONDEN en LIVE gerepareerd: systemd-logind (255) hield 8192 SSH-sessies vast op 'closing' (utmp-inconsistent, 7.470 van deze iMac, 669 van 86.87.25.25 -- vooral 27 okt-6 nov) en zat sinds 6 nov op zijn limiet: elke nieuwe login kreeg 'Maximum number of sessions (8192) reached', vandaag 7.233 keer. SSH werkte nog (pam_systemd is optioneel), maar het was stil volgelopen. `systemctl restart systemd-logind`: 8192 -> 1, API/worker/ssh bleven draaien; daarna 5 testlogins (ook met tty) sloten netjes. Ook gezien: 86.87.25.25 logt met de VPS-sleutel elke 10 s twee keer in (een pollende lus op een andere machine). `axe-status` heeft nu een kopje VPS-HOST: dagen op, logind-sessies (rood boven 1000 op closing, met de herstel-stap), out-of-memory en swap. Bewezen als hij over een week nog niet volloopt.)*
 
 ---
 
