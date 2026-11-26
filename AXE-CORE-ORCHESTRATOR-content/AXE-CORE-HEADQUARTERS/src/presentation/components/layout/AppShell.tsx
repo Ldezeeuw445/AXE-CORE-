@@ -45,6 +45,7 @@ import { isLockPad, phoneZonderComposer } from '@/domain/phone/phoneChrome';
 import { phoneHeeftAppBar } from '@/domain/phone/phoneMenu';
 import { useManagersDeskStore } from '@/presentation/store/managersDeskStore';
 import { isManagersTabPad } from '@/domain/agents/managersComposerDoel';
+import { FocusPil } from '@/presentation/components/layout/FocusPil';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -580,6 +581,7 @@ export function AppShell() {
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       {!opSlot && <GlobalCommandPalette />}
+      {!opSlot && <FocusPil />}
       <SplitWorkspace />
 
       {/* AXE ALGO's floating chat — survives navigation, same pattern as RightPanel */}

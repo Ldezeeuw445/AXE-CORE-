@@ -6,6 +6,7 @@
  * NorthSea auto-send blijft hier buiten.
  */
 import { raadVraag } from '@/domain/chat/raad';
+import { inFocus, telVastgehouden } from '@/infrastructure/persistence/focusOpslag';
 import { wilStem } from '@/domain/chat/stem';
 import { isKorteOpenOpdracht } from '@/domain/tierRouter/navigatieZin';
 import { detectChatAction } from '@/application/chat/chatActionService';
@@ -133,6 +134,8 @@ function speakZonderKap(text: string, bron: 'ack' | 'job'): void {
   try {
     if (localStorage.getItem('axe_response_mode') === 'type') return;
   } catch { /* ignore */ }
+  // Focusmodus: een taakbericht staat al in het gesprek; niet hardop, wel tellen.
+  if (bron === 'job' && inFocus()) { telVastgehouden('berichten'); return; }
   const stand = stemlusVanVoice(useVoiceStore.getState().voiceStatus, useVoiceStore.getState().error);
   if (kiesSpraakPad(text, stand, bron) === 'queue') return;
   const hoor = () => pushBeurtLatentie();
@@ -1065,6 +1068,7 @@ export function installTierRouter(): void {
     if (st.voiceStatus === vorige.voiceStatus) return;
     if (st.voiceStatus !== 'idle') return;
     if (spraakRijLengte() === 0) return;
+    if (inFocus()) return;
     flushAxeSpraakRij();
   });
 

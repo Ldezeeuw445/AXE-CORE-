@@ -44,6 +44,7 @@ const KnowledgeBase = lazy(() => import('@/presentation/pages/KnowledgeBase'));
 const Trading = lazy(() => import('@/presentation/pages/Trading'));
 const TradingIntel = lazy(() => import('@/presentation/pages/TradingIntel'));
 const Finance = lazy(() => import('@/presentation/pages/Finance'));
+const GeldSlot = lazy(() => import('@/presentation/components/finance/GeldSlot'));
 const MCPCenter = lazy(() => import('@/presentation/pages/MCPCenter'));
 const Infrastructure = lazy(() => import('@/presentation/pages/Infrastructure'));
 const CommandCenter = lazy(() => import('@/presentation/pages/CommandCenter'));
@@ -320,7 +321,7 @@ export default function App() {
             <Route path="terminal" element={<Navigate to="/terminals" replace />} />
             <Route path="thinkthanks" element={<Navigate to="/" replace />} />
             <Route path="eve" element={<Navigate to="/bouwen" replace />} />
-            <Route path="finance" element={<Finance />} />
+            <Route path="finance" element={<GeldSlot><Finance /></GeldSlot>} />
             <Route path="mcp" element={<MCPCenter />} />
             <Route path="infrastructure" element={<Infrastructure />} />
             {/* /command was a second route onto the same TerminalPage, with no

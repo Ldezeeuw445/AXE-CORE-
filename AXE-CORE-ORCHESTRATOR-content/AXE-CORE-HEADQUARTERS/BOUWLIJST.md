@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 79 klaar, 90 gebouwd maar nog niet bewezen, 42 open (van 211).
+**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 79 klaar, 91 gebouwd maar nog niet bewezen, 41 open (van 211).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -11,7 +11,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | Eerst — één doorlopend systeem (audit 19 nov 2026) | 9 (47%) | 10 | 0 |
 | Besproken 9-19 nov -- alles wat Luka vroeg, op één plek | 2 (6%) | 30 | 4 |
 | Nu — AXE als co-founder (Luka, 17 nov 2026) | 4 (36%) | 5 | 2 |
-| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 8 (17%) | 20 | 19 |
+| Uit Spazio OS (Pulsar) -- voor AXE (Luka, 18 nov) | 8 (17%) | 21 | 18 |
 | 1 — Tabs kloppend maken | 4 (57%) | 0 | 3 |
 | 2 — Agents | 6 (86%) | 0 | 1 |
 | 3 — Trading | 12 (75%) | 0 | 4 |
@@ -361,7 +361,7 @@ Wat AXE ook moet kunnen, naar het voorbeeld van Spazio OS Pro:
 - [~] **De Raad**: acht bedachte experts reviewen teksten, pagina's, projecten. *(26 nov gebouwd: "laat de raad kijken naar: <tekst>" / "vraag de raad: ..." / "council review: ..." -> Buyer, Sceptic, Editor, Designer, Lawyer, Operator, Investor, Newcomer, elk met cijfer, probleem (met citaat) en fix; dan de drie belangrijkste wijzigingen en een eindscore. Zonder geplakte tekst vraagt AXE erom in plaats van een review te verzinnen. Gaat langs de planner heen rechtstreeks naar het chatmodel -- de eerste proef maakte er een taak van ("ik zet het in een notitie op de desk"), gerepareerd in installTierRouter. `domain/chat/raad.ts`, 3 tests. In de preview GEZIEN met een echte NorthSea-zin: 8 rollen, "Beste prijs gegarandeerd" en "geen risico" terecht aangewezen, score 6/10. Komt met de app-build.)*
 - [x] **"Doe het zelf"-knop** op een stap: AXE werkt hem op de achtergrond af. *(25 nov, 1b0de9e5 + fix: "Do it for me" naast "Done" bij Your turn en Together in Tasks > Wiens beurt; POST /stappen/{id}/zelf (rij.doe_zelf) zet de stap op AXE en in de wachtrij, met de titel als opdracht. Zelfde grens als de rij: geld, trading, NorthSea-akkoorden, wissen en wat op jouw ja wacht -> 409 met de reden onder de stap. LIVE BEWEZEN: proefstap "drie USB-C-docks voor de Mac mini M4" -> AXE schreef de notitie en controleerde hem zelf (2 stappen); eerste proef liet zien dat alleen het waarom werd meegegeven, gerepareerd. Betaal-proefstap geweigerd, ook via de knop in de preview gezien. Beide proefstappen afgesloten.)*
 - [~] **Maak het van jou**: "verberg X", "andere kleuren" in gewone taal. *(25 nov gebouwd: in de chat, zonder model -- "verberg Trading" / "toon Trading weer" / "laat alle tabs zien" (onderbalk, More en het menu), "maak het groen" / "andere kleuren" / "standaard kleuren" (accentkleur, 8 kleuren). Home en Settings blijven altijd staan. Bewaard in localStorage + user_settings, dus gedeeld tussen de Macs en de telefoon. `domain/maakVanJou.ts` (6 tests) + `store/maakVanJouStore.ts`, herkend in de buitenste chatlaag (installSpherePresent) -- in installStableChat kwam "verberg Trading" nooit aan: de bol maakte er eerst een Trading-grafiek van. In de preview GEZIEN: Trading weg + groen, blijft na herladen, en terug. Komt met de app-build.)*
-- [ ] Focusmodus, geld achter een PIN, rustige muziek (Life OS-hoek).
+- [~] Focusmodus, geld achter een PIN, rustige muziek (Life OS-hoek). *(26 nov gebouwd, in de chat zonder model: "focus" / "focus 50 min" / "niet storen" -> systeemmeldingen (Mac + telefoon) en hardop voorgelezen taakberichten worden vastgehouden en geteld, een pil bovenin toont de tijd met "End"; aan het eind zegt AXE "Focus klaar (N min)" en wat er binnenkwam. "Focus uit", "hoe lang nog". "Rustige muziek" / "muziek uit": zachte bruine ruis met een trage lage toon, in de browser gemaakt (geen bestand, geen dienst). Finance-tab: "Lock with PIN" (4-8 cijfers, PBKDF2-hash alleen op dit apparaat, 10 min open, 5 fout = 30 s wachten); een privacyscherm tegen meekijken, geen bankslot -- "Forgot PIN?" haalt het slot weg. "Zet mijn geld achter een pin" in de chat legt uit waar, want een PIN typ je niet in de chat. `domain/rust.ts`, `domain/geldPin.ts`, `focusOpslag`, `rustGeluid`, `focusStore`, `GeldSlot`, `FocusPil`; 9 tests. In de preview GEZIEN: focus 2 min met pil en "Focus klaar (2 min). Er kwam niets binnen.", geluid aan/uit, PIN zetten -> slot -> fout -> goed -> weghalen. Het geluid zelf niet gehoord (preview). Komt met de app-build.)*
 
 ### AXON Memory: één globaal geheugen voor elke AI (Luka, 18 nov)
 

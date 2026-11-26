@@ -15,6 +15,8 @@ import { antwoord as maakAntwoord, maakVanJouOpdracht, pasToe } from '@/domain/m
 import { leesMaakVanJou, schrijfMaakVanJou } from '@/presentation/store/maakVanJouStore';
 import { interviewBeurt } from '@/application/axe/profiel';
 import { heeftStem, stemBeurt } from '@/application/axe/stem';
+import { rustOpdracht } from '@/domain/rust';
+import { voerRustUit } from '@/presentation/store/focusStore';
 import { GEEN_STEM_REGEL, wilStem } from '@/domain/chat/stem';
 
 const WEERGAVE_NAAM = { axe: 'de bol', neural: 'Neural', terrain: 'Terrain', runtime: 'Runtime' } as const;
@@ -108,6 +110,19 @@ export function installSpherePresent(): void {
           conversation: [...s.conversation,
             { role: 'user', text: trimmed, timestamp: nu },
             { role: 'axe', text: maakAntwoord(eigen, na), timestamp: nu + 1 }],
+        }));
+        return;
+      }
+
+      // Life OS (26 nov): "focus 50 min", "rustige muziek", "muziek uit".
+      const rust = trimmed ? rustOpdracht(trimmed) : null;
+      if (rust) {
+        const antwoord = await voerRustUit(rust).catch((e) => `Dat lukte niet: ${e instanceof Error ? e.message : String(e)}`);
+        const nu = Date.now();
+        useVoiceStore.setState(s => ({
+          conversation: [...s.conversation,
+            { role: 'user', text: trimmed, timestamp: nu },
+            { role: 'axe', text: antwoord, timestamp: nu + 1 }],
         }));
         return;
       }

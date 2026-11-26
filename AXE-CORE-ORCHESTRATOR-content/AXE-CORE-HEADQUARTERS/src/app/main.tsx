@@ -68,6 +68,7 @@ import { installTierRouter } from '@/presentation/store/installTierRouter'
 import { installGesprekSync } from '@/presentation/store/installGesprekSync'
 import { installVoorkeurSync } from '@/presentation/store/installVoorkeurSync'
 import { installMaakVanJou } from '@/presentation/store/maakVanJouStore';
+import { installFocus } from '@/presentation/store/focusStore';
 import { installDeelDoel } from '@/presentation/store/installDeelDoel'
 import { installSpherePresent } from '@/presentation/store/installSpherePresent'
 import { installCoreStatus } from '@/presentation/store/installCoreStatus'
@@ -90,6 +91,7 @@ installTierRouter();
 installGesprekSync();
 installVoorkeurSync();
 installMaakVanJou();
+installFocus();
 // Delen vanuit elke andere app komt binnen in de composer. Moet vóór de eerste
 // render draaien: dit leest de zoekreeks en haalt hem daarna uit de adresbalk.
 installDeelDoel();

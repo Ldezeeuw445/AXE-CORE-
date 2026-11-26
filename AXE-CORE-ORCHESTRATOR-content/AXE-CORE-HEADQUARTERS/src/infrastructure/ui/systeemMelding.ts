@@ -13,6 +13,7 @@
 import { isAndroidShellRuntime, isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import type { SysteemMelding } from '@/domain/systeemMelding';
 import { nativeNotify } from '@/infrastructure/gateways/androidNotifyBridge';
+import { inFocus, telVastgehouden } from '@/infrastructure/persistence/focusOpslag';
 
 let gevraagd = false;
 
@@ -26,6 +27,8 @@ async function magMelden(plugin: typeof import('@tauri-apps/plugin-notification'
 /** Gooit nooit: een melding die niet lukt mag de bel niet meenemen. */
 export function toonSysteemMeldingen(meldingen: readonly SysteemMelding[]): void {
   if (meldingen.length === 0) return;
+  // Focusmodus: niet tonen, wel tellen; aan het eind zegt AXE hoeveel (de bel houdt ze).
+  if (inFocus()) { telVastgehouden('meldingen', meldingen.length); return; }
   if (isAndroidShellRuntime()) {
     for (const m of meldingen) nativeNotify(m.title, m.body, m.id ?? m.title);
     return;
