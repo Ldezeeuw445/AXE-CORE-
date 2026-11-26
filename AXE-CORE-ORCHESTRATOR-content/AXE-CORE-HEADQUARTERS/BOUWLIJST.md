@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 79 klaar, 92 gebouwd maar nog niet bewezen, 40 open (van 211).
+**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 79 klaar, 93 gebouwd maar nog niet bewezen, 39 open (van 211).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -17,7 +17,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | 3 — Trading | 12 (75%) | 0 | 4 |
 | 4 — Computer use, browser, code-editor | 1 (33%) | 0 | 2 |
 | 5 — Luka kan het zelf | 3 (38%) | 3 | 2 |
-| 6 — AXE als baas (Jarvis-route, niet letterlijk Jarvis) | 23 (92%) | 0 | 2 |
+| 6 — AXE als baas (Jarvis-route, niet letterlijk Jarvis) | 23 (92%) | 1 | 1 |
 | 7 — axe-commandolaag (CLI + hek, geen tweede agent) | 6 (55%) | 4 | 1 |
 <!-- stand:end -->
 
@@ -1007,7 +1007,7 @@ continuous memory.
   mislukte taak wil je over een week ook nog kunnen opzoeken. Zelfde vorm als
   `axe report` in de CLI al schreef (`# titel` + tekst), nu in `projects`.
 
-- [ ] **6.6a — harvest.** Een klaar project wordt een wiki-artikel: de
+- [~] **6.6a — harvest.** *(26 nov gebouwd: zeg "oogst AXE CORE" / "maak een wiki-artikel van NorthSea" -> alle `projects/*`-rapporten van dat project (op agent: tradingos/northseamgr/axemanager, of op de woorden in titel en opdracht), één per job (het hek maakte soms twee rijen per job), samengevoegd tot `wiki/<project>`: wat gedaan is, waar het op stopte, bronnen. De rapporten blijven staan; de app kijkt na dat het artikel echt bewaard is. `domain/memory/oogst.ts` + `application/memory/oogstProject.ts`, 7 tests. ECHT GEDAAN tegen de VPS: "oogst AXE CORE" -> wiki/axe-core uit 11 rapporten (9 klaar, 2 gestopt, 5 t/m 24 nov), in de database nagelezen. Komt met de app-build; een knop op de Memory-tab nog niet.)* Een klaar project wordt een wiki-artikel: de
       `projects/*`-rapporten van één project samengevoegd tot één
       `wiki/<project>`. Afgesplitst omdat de drie punten hierboven af en gemeten
       zijn en dit niet; het is ook het minst omschreven punt van 6.6. Het bouwt

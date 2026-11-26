@@ -16,6 +16,7 @@ import { leesMaakVanJou, schrijfMaakVanJou } from '@/presentation/store/maakVanJ
 import { interviewBeurt } from '@/application/axe/profiel';
 import { heeftStem, stemBeurt } from '@/application/axe/stem';
 import { bureauBeurt } from '@/application/axe/bureau';
+import { oogstBeurt } from '@/application/memory/oogstProject';
 import { rustOpdracht } from '@/domain/rust';
 import { voerRustUit } from '@/presentation/store/focusStore';
 import { GEEN_STEM_REGEL, wilStem } from '@/domain/chat/stem';
@@ -134,6 +135,7 @@ export function installSpherePresent(): void {
       const vraag = trimmed
         ? (await stemBeurt(trimmed).catch(() => null))
           ?? (await bureauBeurt(trimmed).catch(() => null))
+          ?? (await oogstBeurt(trimmed).catch(() => null))
           ?? await interviewBeurt(trimmed).catch(() => null)
         : null;
       if (vraag) {
