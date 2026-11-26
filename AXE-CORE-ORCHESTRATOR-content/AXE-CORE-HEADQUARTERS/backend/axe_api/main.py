@@ -2556,7 +2556,7 @@ except Exception as _e:  # noqa: BLE001
     log.warning("chats_zoek niet ingeladen (%s) -- /chats/* bestaat niet", _e)
 
 
-@app.get("/trading/accounts-per-app", dependencies=[AUTH])
+@app.get("/home/trading-accounts", dependencies=[AUTH])
 async def trading_accounts_per_app():
     """Home (26 nov): accounts per app -- AXE Companion uit user_broker_accounts,
     zonder login of sleutel; Trading OS eerlijk als nog niet leesbaar. Alleen lezen."""

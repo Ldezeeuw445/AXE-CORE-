@@ -1376,7 +1376,7 @@ export interface AccountsPerApp {
   companion: { accounts?: CompanionAccount[]; demo_testrijen?: number; fout?: string };
   trading_os: { bereikbaar: boolean; reden?: string };
 }
-export function tradingAccountsPerApp(): Promise<AccountsPerApp> { return call('GET', '/trading/accounts-per-app'); }
+export function tradingAccountsPerApp(): Promise<AccountsPerApp> { return call('GET', '/home/trading-accounts'); }
 
 export function northseaOverzicht(vers = false): Promise<NorthseaOverzicht> {
   return call('GET', `/northsea/overzicht${vers ? '?vers=true' : ''}`);
