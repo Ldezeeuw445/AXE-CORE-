@@ -53,15 +53,15 @@ describe('Home-podium is aangesloten op echte bronnen (25 nov)', () => {
   it('grafiek zonder series verzint geen weekdagen', () => {
     const chart = bron('projections/ChartProjection.tsx');
     expect(chart).not.toContain("label: 'Mon'");
-    expect(chart).toContain('No series in this projection.');
-    expect(chart).toContain('return [];');
+    expect(chart).toContain('No live data for this question.');
+    expect(chart).toContain('leesCandles');
   });
 
-  it('chartResolver verzint geen BTC-sample als de feed uitblijft', () => {
+  it('chartResolver verzint geen BTC: geen symbool of geen feed = niets neerzetten (26 nov)', () => {
     const resolver = bron('../../../../application/sphere/projectionResolvers/chartResolver.ts');
     expect(resolver).not.toContain('64200');
-    expect(resolver).toContain("source: 'empty'");
-    expect(resolver).toContain('No live series');
+    expect(resolver).not.toMatch(/return 'BTCUSDT';/);
+    expect(resolver).toContain('if (!symbol) return null;');
   });
 });
 

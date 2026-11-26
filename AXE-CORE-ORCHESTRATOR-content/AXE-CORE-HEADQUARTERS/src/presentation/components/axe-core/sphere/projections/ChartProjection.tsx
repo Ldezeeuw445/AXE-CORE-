@@ -1,154 +1,126 @@
+/**
+ * Grafiek in het 3D-vak (26 nov, opnieuw: Luka "het moet 100% kloppen").
+ *
+ * Koers (Binance-candles): echte candlesticks, as van laag tot hoog, prijs- en
+ * tijdlabels, laatste koers en verandering groot. Verdeling (inkomen per bron):
+ * horizontale balken vanaf 0 met bedragen. Geen nep, geen sample: zonder echte
+ * reeks zet de resolver niets neer (chartResolver.ts).
+ */
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
+import { leesCandles, prijsAs, prijsTekst, verandering, type Candle } from '@/domain/sphere/grafiek';
 
-type Point = { label: string; value: number };
+const OP = '#34D399';
+const NEER = '#F87171';
+const LIJN = 'rgba(255,255,255,0.06)';
+const LABEL = 'rgba(255,255,255,0.42)';
 
-function readSeries(payload: ProjectionPayload): Point[] {
-  const raw = payload.data?.series;
-  if (Array.isArray(raw) && raw.length) {
-    return raw.map((p, i) => {
-      const row = p as Record<string, unknown>;
-      return {
-        label: String(row.label ?? row.x ?? i),
-        value: Number(row.value ?? row.y ?? 0),
-      };
-    });
-  }
-  return [];
+function uurLabel(t: number): string {
+  const d = new Date(t);
+  return `${String(d.getHours()).padStart(2, '0')}:00`;
 }
 
-export function ChartProjection({ payload }: { payload: ProjectionPayload }) {
-  const series = readSeries(payload);
-  if (!series.length) {
-    return (
-      <div className="h-full flex items-center justify-center text-[12px] px-6" style={{ color: 'var(--text-muted)' }}>
-        No series in this projection.
-      </div>
-    );
-  }
-  const max = Math.max(...series.map(s => s.value), 1);
-  const total = series.reduce((a, s) => a + s.value, 0);
-  const peak = series.reduce((best, s) => (s.value > best.value ? s : best), series[0]);
-  const source = String(payload.data?.source ?? 'resolved');
-  const currency = payload.data?.currency != null ? String(payload.data.currency) : '';
-
-  const w = 360;
-  const h = 168;
-  const padL = 28;
-  const padR = 12;
-  const padT = 16;
-  const padB = 28;
-  const innerW = w - padL - padR;
-  const innerH = h - padT - padB;
-  const n = series.length;
-  const gap = 6;
-  const barW = Math.max(8, (innerW - gap * Math.max(n - 1, 0)) / Math.max(n, 1));
-
-  const linePts = series
-    .map((s, i) => {
-      const x = padL + i * (barW + gap) + barW / 2;
-      const y = padT + innerH - (s.value / max) * innerH;
-      return `${x},${y}`;
-    })
-    .join(' ');
-
+function Kop({ titel, waarde, sub, toon }: { titel: string; waarde?: string; sub?: string; toon?: 'op' | 'neer' }) {
   return (
-    <div className="h-full flex flex-col min-h-0">
-      <div className="flex-shrink-0 px-4 pt-3 pb-1 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold truncate" style={{ color: '#F5F0E6' }}>{payload.title}</div>
-          {payload.subtitle && (
-            <div className="text-[9px] mt-0.5 truncate" style={{ color: 'rgba(212,252,52,0.55)' }}>{payload.subtitle}</div>
-          )}
-        </div>
-        <div
-          className="text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0"
-          style={{
-            color: source === 'income_ledger' ? '#d4fc34' : 'rgba(255,255,255,0.35)',
-            border: `1px solid ${source === 'income_ledger' ? 'rgba(212,252,52,0.35)' : 'rgba(255,255,255,0.08)'}`,
-          }}
-        >
-          {source === 'income_ledger' ? 'live ledger' : source === 'sample' ? 'sample' : source}
-        </div>
+    <div className="flex-shrink-0 px-5 pt-4 pb-2 flex items-end justify-between gap-4">
+      <div className="min-w-0">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--text-muted, #71717a)' }}>{titel}</div>
+        {waarde && <div className="mt-1 text-[26px] font-semibold leading-none tabular-nums" style={{ color: 'var(--text-primary, #f4f4f5)' }}>{waarde}</div>}
       </div>
+      {sub && (
+        <div className="text-[13px] font-semibold tabular-nums" style={{ color: toon === 'op' ? OP : toon === 'neer' ? NEER : 'var(--text-secondary)' }}>
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
 
-      <div className="flex-shrink-0 px-4 flex gap-3 mb-1">
-        <div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          total <span style={{ color: '#d4fc34' }}>{currency}{total.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
-        </div>
-        <div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          peak <span style={{ color: '#a5f3fc' }}>{peak.label} · {peak.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
-        </div>
-        <div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          n <span style={{ color: 'rgba(255,255,255,0.7)' }}>{series.length}</span>
-        </div>
-      </div>
-
-      <div className="flex-1 min-h-0 flex items-center justify-center px-3">
-        <svg width="100%" viewBox={`0 0 ${w} ${h}`} className="max-w-lg">
-          <defs>
-            <linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(212,252,52,0.75)" />
-              <stop offset="100%" stopColor="rgba(34,211,238,0.25)" />
-            </linearGradient>
-          </defs>
-          {[0.25, 0.5, 0.75, 1].map(t => (
-            <line
-              key={t}
-              x1={padL}
-              x2={padL + innerW}
-              y1={padT + innerH * (1 - t)}
-              y2={padT + innerH * (1 - t)}
-              stroke="rgba(255,255,255,0.06)"
-              strokeWidth={1}
-            />
+function Candles({ candles, symbool }: { candles: Candle[]; symbool: string }) {
+  const v = verandering(candles)!;
+  const as = prijsAs(v.laag, v.hoog, 4);
+  const w = 720, h = 300, padL = 64, padR = 16, padT = 10, padB = 28;
+  const iw = w - padL - padR, ih = h - padT - padB;
+  const y = (p: number) => padT + ih - ((p - as.min) / (as.max - as.min)) * ih;
+  const stap = iw / candles.length;
+  const breed = Math.max(2, Math.min(14, stap * 0.62));
+  const elke = Math.max(1, Math.round(candles.length / 6));
+  const op = v.pct >= 0;
+  return (
+    <div className="h-full flex flex-col min-h-0" data-axe-grafiek="candles">
+      <Kop titel={`${symbool} · 1h candles · 24h`} waarde={prijsTekst(v.laatste)}
+        sub={`${op ? '+' : ''}${v.pct.toFixed(2)}%`} toon={op ? 'op' : 'neer'} />
+      <div className="flex-1 min-h-0 px-3 pb-2">
+        <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="w-full h-full" role="img"
+          aria-label={`${symbool} last 24 hours, ${prijsTekst(v.laatste)}, ${v.pct.toFixed(2)}%`}>
+          {as.ticks.map((t) => (
+            <g key={t}>
+              <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke={LIJN} />
+              <text x={padL - 8} y={y(t) + 4} textAnchor="end" fontSize={11} fill={LABEL} style={{ fontVariantNumeric: 'tabular-nums' }}>{prijsTekst(t)}</text>
+            </g>
           ))}
-          {series.map((s, i) => {
-            const x = padL + i * (barW + gap);
-            const bh = (s.value / max) * innerH;
-            const y = padT + innerH - bh;
+          {candles.map((c, i) => {
+            const x = padL + i * stap + stap / 2;
+            const kleur = c.c >= c.o ? OP : NEER;
+            const top = y(Math.max(c.o, c.c));
+            const bodem = y(Math.min(c.o, c.c));
             return (
-              <g key={i}>
-                <rect
-                  x={x}
-                  y={y}
-                  width={barW}
-                  height={Math.max(bh, 1)}
-                  rx={3}
-                  fill="url(#barFill)"
-                  opacity={0.85}
-                />
-                <text
-                  x={x + barW / 2}
-                  y={h - 8}
-                  textAnchor="middle"
-                  fill="rgba(255,255,255,0.35)"
-                  fontSize={9}
-                >
-                  {s.label.length > 6 ? `${s.label.slice(0, 5)}…` : s.label}
-                </text>
+              <g key={c.t}>
+                <line x1={x} x2={x} y1={y(c.h)} y2={y(c.l)} stroke={kleur} strokeWidth={1.2} />
+                <rect x={x - breed / 2} y={top} width={breed} height={Math.max(1, bodem - top)} fill={kleur} rx={1} />
+                {i % elke === 0 && (
+                  <text x={x} y={h - 8} textAnchor="middle" fontSize={11} fill={LABEL}>{uurLabel(c.t)}</text>
+                )}
               </g>
             );
           })}
-          <polyline
-            points={linePts}
-            fill="none"
-            stroke="rgba(165,243,252,0.85)"
-            strokeWidth={1.5}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-          {series.map((s, i) => {
-            const x = padL + i * (barW + gap) + barW / 2;
-            const y = padT + innerH - (s.value / max) * innerH;
-            return <circle key={`c${i}`} cx={x} cy={y} r={2.5} fill="#0a0a0a" stroke="#a5f3fc" strokeWidth={1.2} />;
-          })}
+          {/* Laatste koers als stippellijn met label rechts. */}
+          <line x1={padL} x2={w - padR} y1={y(v.laatste)} y2={y(v.laatste)} stroke={op ? OP : NEER} strokeDasharray="3 4" strokeWidth={1} opacity={0.7} />
         </svg>
       </div>
-      {payload.text && (
-        <div className="px-4 pb-3 text-[10px] truncate" style={{ color: 'rgba(255,255,255,0.3)' }}>
-          {payload.text}
-        </div>
-      )}
+      <div className="flex-shrink-0 px-5 pb-3 flex gap-5 text-[11px] tabular-nums" style={{ color: LABEL }}>
+        <span>High <b style={{ color: 'var(--text-primary)' }}>{prijsTekst(v.hoog)}</b></span>
+        <span>Low <b style={{ color: 'var(--text-primary)' }}>{prijsTekst(v.laag)}</b></span>
+        <span className="ml-auto">Source: Binance, live</span>
+      </div>
+    </div>
+  );
+}
+
+function Verdeling({ payload }: { payload: ProjectionPayload }) {
+  const raw = Array.isArray(payload.data?.series) ? (payload.data!.series as Record<string, unknown>[]) : [];
+  const rijen = raw.map((r) => ({ label: String(r.label ?? ''), value: Number(r.value ?? 0) })).filter((r) => Number.isFinite(r.value));
+  const max = Math.max(...rijen.map((r) => r.value), 0) || 1;
+  const valuta = payload.data?.currency != null ? `${String(payload.data.currency)} ` : '';
+  return (
+    <div className="h-full flex flex-col min-h-0" data-axe-grafiek="verdeling">
+      <Kop titel={payload.title} sub={payload.subtitle} />
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-4 flex flex-col gap-2.5">
+        {rijen.map((r) => (
+          <div key={r.label} className="flex items-center gap-3 text-[12px]">
+            <span className="w-28 flex-shrink-0 truncate" style={{ color: 'var(--text-secondary)' }}>{r.label}</span>
+            <span className="flex-1 h-2.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+              <span className="block h-full rounded-full" style={{ width: `${Math.max(1, (r.value / max) * 100)}%`, background: 'var(--accent-cyan, #22d3ee)' }} />
+            </span>
+            <span className="w-24 flex-shrink-0 text-right tabular-nums" style={{ color: 'var(--text-primary)' }}>
+              {valuta}{r.value.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function ChartProjection({ payload }: { payload: ProjectionPayload }) {
+  const candles = leesCandles(payload.data?.series);
+  if (candles.length >= 2) {
+    return <Candles candles={candles} symbool={String(payload.data?.symbol ?? payload.title).replace('USDT', '/USDT')} />;
+  }
+  const heeftReeks = Array.isArray(payload.data?.series) && (payload.data!.series as unknown[]).length > 0;
+  if (heeftReeks) return <Verdeling payload={payload} />;
+  return (
+    <div className="h-full flex items-center justify-center text-[12px] px-6" style={{ color: 'var(--text-muted)' }}>
+      No live data for this question.
     </div>
   );
 }

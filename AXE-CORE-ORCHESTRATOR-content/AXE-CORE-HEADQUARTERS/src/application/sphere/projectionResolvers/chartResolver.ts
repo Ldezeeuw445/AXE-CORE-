@@ -13,7 +13,7 @@ import {
   INCOME_SOURCES,
 } from '@/infrastructure/persistence/incomeLedgerService';
 
-export type ChartPoint = { label: string; value: number };
+export type ChartPoint = { label: string; value: number; t?: number; o?: number; h?: number; l?: number; c?: number };
 
 function id(): string {
   return `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -46,7 +46,12 @@ const SYMBOL_MAP: Record<string, string> = {
   sui: 'SUIUSDT',
 };
 
-function detectSymbol(query?: string): string {
+/**
+ * 26 nov (Luka: "het moet 100% kloppen"): GEEN BTC als standaard meer. Elke zin
+ * met "trading" of "chart" kreeg een BTC-grafiek, ook als het over iets anders
+ * ging. Nu alleen een koers als het symbool echt genoemd wordt.
+ */
+export function detectSymbol(query?: string): string | null {
   const t = (query || '').toLowerCase();
   for (const [key, sym] of Object.entries(SYMBOL_MAP)) {
     if (new RegExp(`\\b${key}\\b`, 'i').test(t)) return sym;
@@ -54,7 +59,7 @@ function detectSymbol(query?: string): string {
   // bare ticker like BTCUSDT / ETH
   const bare = t.match(/\b([a-z]{2,6})usdt\b/i);
   if (bare) return bare[1].toUpperCase() + 'USDT';
-  return 'BTCUSDT';
+  return null;
 }
 
 function wantsIncome(query?: string): boolean {
@@ -68,14 +73,15 @@ async function fetchBinanceKlines(symbol: string, limit = 24): Promise<ChartPoin
     if (!res.ok) return null;
     const rows = (await res.json()) as unknown;
     if (!Array.isArray(rows) || rows.length < 2) return null;
+    // Volledige candles (open/hoog/laag/slot), zodat het vak een echte koersgrafiek tekent.
     return rows.map((r: unknown) => {
       const row = r as (string | number)[];
       const openTime = Number(row[0]);
-      const close = Number(row[4]);
+      const [o, h, l, c] = [row[1], row[2], row[3], row[4]].map((x) => Number(x));
       const d = new Date(openTime);
       const label = `${String(d.getHours()).padStart(2, '0')}:00`;
-      return { label, value: Math.round(close * 100) / 100 };
-    });
+      return { label, value: Math.round(c * 100) / 100, t: openTime, o, h, l, c };
+    }).filter((p) => [p.o, p.h, p.l, p.c].every((x) => Number.isFinite(x)));
   } catch {
     return null;
   }
@@ -83,6 +89,7 @@ async function fetchBinanceKlines(symbol: string, limit = 24): Promise<ChartPoin
 
 async function resolveTradingChart(query?: string): Promise<ProjectionPayload | null> {
   const symbol = detectSymbol(query);
+  if (!symbol) return null;
   const series = await fetchBinanceKlines(symbol, 24);
   if (!series?.length) return null;
 
@@ -133,33 +140,16 @@ async function resolveIncomeChart(query?: string): Promise<ProjectionPayload | n
   }
 }
 
-function emptyChart(query?: string): ProjectionPayload {
-  return pack({
-    mode: 'chart',
-    title: 'Chart',
-    subtitle: 'No live series',
-    text: query?.trim() || 'No live feed answered, so there is nothing to plot.',
-    data: { series: [], source: 'empty' },
-    source: 'director',
-  });
-}
 
-export async function resolveChart(query?: string): Promise<ProjectionPayload> {
-  // Explicit income/finance → ledger first
-  if (wantsIncome(query)) {
-    const income = await resolveIncomeChart(query);
-    if (income) return income;
-  }
-
-  // Default: trading / market chart
-  const trading = await resolveTradingChart(query);
-  if (trading) return trading;
-
-  // Secondary: income if any
-  const income = await resolveIncomeChart(query);
-  if (income) return income;
-
-  return emptyChart(query);
+/**
+ * Een grafiek alleen met echte data die bij de vraag hoort: een genoemd symbool
+ * (Binance, 24 uur) of het inkomensgrootboek als je daarom vraagt. Anders null:
+ * dan zet de bol niets neer en antwoordt AXE gewoon in woorden. Nooit meer een
+ * willekeurige BTC-grafiek of een lege "No live series"-kaart.
+ */
+export async function resolveChart(query?: string): Promise<ProjectionPayload | null> {
+  if (wantsIncome(query)) return resolveIncomeChart(query);
+  return resolveTradingChart(query);
 }
 
 export function resolveChartFromSeries(

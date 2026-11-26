@@ -45,6 +45,8 @@ export async function presentAssistantReplyOnSphere(
     }
     if (/\[OPEN_WINDOW:[^\]]*trading/i.test(r) || /opening\s+(the\s+)?trading/i.test(r)) {
       const p = await resolveChart(lastUserText || r);
+      // Geen echte reeks bij deze vraag: niets neerzetten in plaats van een gok-grafiek.
+      if (!p) return false;
       forceProject(p);
       console.info('[sphere] projected chart from OPEN_WINDOW', p.title);
       return true;
