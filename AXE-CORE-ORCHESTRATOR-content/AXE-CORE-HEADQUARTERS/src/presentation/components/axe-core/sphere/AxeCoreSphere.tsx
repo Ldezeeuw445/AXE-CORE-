@@ -98,13 +98,21 @@ function maakBol(n = N, stappen = 0): Punt[] {
  * bij uitzoomen kwam hij anders te dicht bij de composer. 0.36 tilt hem nog
  * ~4% van de hoogte op (op een scherm van 812 ruim 30px) zonder hem tegen de
  * bovenrand te duwen.
+ *
+ * 25 nov: op Home staat de bol in het command-center-gat, dat al boven de
+ * composer en de onderste kaarten stopt. Daar hoort hij in het echte midden
+ * (`midden`), anders hangt hij te hoog in een vak dat al is vrijgehouden.
+ * Zwevende bol, telefoon en device-preview blijven op 0.36.
  */
 const BOL_HOOGTE = 0.36;
+const BOL_MIDDEN = 0.5;
 
-export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number; telefoon?: boolean }) {
+export function AxeCoreSphere({ boost = 0, telefoon = false, midden = false }: { boost?: number; telefoon?: boolean; midden?: boolean }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const boostRef = useRef(boost);
+  const hoogteRef = useRef(telefoon ? BOL_HOOGTE : midden ? BOL_MIDDEN : BOL_HOOGTE);
   useEffect(() => { boostRef.current = boost; }, [boost]);
+  useEffect(() => { hoogteRef.current = telefoon ? BOL_HOOGTE : midden ? BOL_MIDDEN : BOL_HOOGTE; }, [telefoon, midden]);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -265,7 +273,7 @@ export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number;
       const doel = spreekt ? getGlobalTtsLevel() : 0;
       // Snel omhoog, rustiger omlaag: lettergrepen zie je, geen flikkering.
       stem += (doel - stem) * (doel > stem ? 0.5 : 0.18);
-      const cx = w / 2, cy = h * BOL_HOOGTE;
+      const cx = w / 2, cy = h * hoogteRef.current;
       // Desktop: 0.34 was te groot toen de live-kaarten ~5 regels kregen
       // (17 okt). 0.28 laat lucht tussen bol en de band. Telefoon blijft 0.34
       // in tekenFijn — die layout mag niet meeschuiven.
@@ -341,7 +349,7 @@ export function AxeCoreSphere({ boost = 0, telefoon = false }: { boost?: number;
       const spreekt = useVoiceStore.getState().voiceStatus === 'speaking';
       const doel = spreekt ? getGlobalTtsLevel() : 0;
       stem += (doel - stem) * (doel > stem ? 0.5 : 0.18);
-      const cx = w / 2, cy = h * BOL_HOOGTE;
+      const cx = w / 2, cy = h * hoogteRef.current;
       const R = Math.min(w, h) * 0.34 * zoom;
       const puls = 1 + Math.sin(t * 1.6) * 0.03 + b * 0.08;
       const groei = 0.9 + b * 0.4;

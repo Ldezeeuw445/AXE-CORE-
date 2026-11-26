@@ -13,19 +13,18 @@ function readSeries(payload: ProjectionPayload): Point[] {
       };
     });
   }
-  return [
-    { label: 'Mon', value: 42 },
-    { label: 'Tue', value: 55 },
-    { label: 'Wed', value: 48 },
-    { label: 'Thu', value: 70 },
-    { label: 'Fri', value: 63 },
-    { label: 'Sat', value: 80 },
-    { label: 'Sun', value: 74 },
-  ];
+  return [];
 }
 
 export function ChartProjection({ payload }: { payload: ProjectionPayload }) {
   const series = readSeries(payload);
+  if (!series.length) {
+    return (
+      <div className="h-full flex items-center justify-center text-[12px] px-6" style={{ color: 'var(--text-muted)' }}>
+        No series in this projection.
+      </div>
+    );
+  }
   const max = Math.max(...series.map(s => s.value), 1);
   const total = series.reduce((a, s) => a + s.value, 0);
   const peak = series.reduce((best, s) => (s.value > best.value ? s : best), series[0]);

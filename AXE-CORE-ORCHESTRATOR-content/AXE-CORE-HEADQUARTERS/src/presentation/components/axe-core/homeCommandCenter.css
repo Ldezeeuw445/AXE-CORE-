@@ -364,7 +364,10 @@
 .axe-hcc-provider-regel { font-size: 9.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .axe-hcc-provider[data-toon='uit'] { opacity: 0.55; }
 
-/* ── De core in het middenvak ── */
+/* ── De core in het middenvak ──
+   Het vak ís het kern-gat: gelijke afstand tot de kolommen links/rechts,
+   en tot de KPI-rij boven en de onderste kaarten. De bol zelf hangt in
+   het geometrische midden van dit vak (AxeCoreSphere midden), niet op 36%. */
 @media (min-width: 768px) {
   .axe-home-v3[data-axe-home-view='axe'] .axe-home-bolvak {
     position: fixed !important;

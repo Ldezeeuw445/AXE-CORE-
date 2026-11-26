@@ -3,7 +3,8 @@
  * Priority:
  *  1. Trading / market price series (public Binance klines — no API key)
  *  2. Income ledger (manual finance log)
- *  3. Sample series
+ *  3. Honest empty — never a fake BTC week. The stage shows "No series"
+ *     rather than a plot that looks live.
  */
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 import {
@@ -132,22 +133,13 @@ async function resolveIncomeChart(query?: string): Promise<ProjectionPayload | n
   }
 }
 
-function sampleChart(query?: string): ProjectionPayload {
-  const series: ChartPoint[] = [
-    { label: '00:00', value: 64200 },
-    { label: '04:00', value: 63850 },
-    { label: '08:00', value: 65120 },
-    { label: '12:00', value: 64890 },
-    { label: '16:00', value: 66100 },
-    { label: '20:00', value: 65740 },
-    { label: 'now', value: 65980 },
-  ];
+function emptyChart(query?: string): ProjectionPayload {
   return pack({
     mode: 'chart',
-    title: 'BTC/USDT',
-    subtitle: 'Sample · live feed unavailable',
-    text: query?.trim() || undefined,
-    data: { series, source: 'sample' },
+    title: 'Chart',
+    subtitle: 'No live series',
+    text: query?.trim() || 'No live feed answered, so there is nothing to plot.',
+    data: { series: [], source: 'empty' },
     source: 'director',
   });
 }
@@ -167,7 +159,7 @@ export async function resolveChart(query?: string): Promise<ProjectionPayload> {
   const income = await resolveIncomeChart(query);
   if (income) return income;
 
-  return sampleChart(query);
+  return emptyChart(query);
 }
 
 export function resolveChartFromSeries(

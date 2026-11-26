@@ -1,0 +1,253 @@
+/* ═══ Home podium (Luka 25 nov: de core als toneel) ═══════════════════════
+   Eén vak, in het midden van de command-center-kern. Perspective + een
+   vloergrid geven diepte; de kaarten zijn hetzelfde matzwarte materiaal als
+   de rest van Home. Geen neon-vulling: cyaan zit in letters en in de dunne
+   rasterlijnen, niet in vlakken. */
+
+.axe-podium {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  perspective: 1480px;
+  perspective-origin: 50% 42%;
+  container-type: size;
+}
+
+.axe-podium-ruimte {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  display: grid;
+  place-items: center;
+}
+
+.axe-podium-toneel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  display: grid;
+  place-items: center;
+}
+
+/* Vloer: een perspectiefvlak onder de bol. Masker houdt hem in het midden,
+   zodat de randen van de kern niet een tweede raster worden. */
+.axe-podium-vloer {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 54%;
+  width: min(160cqmin, 140%);
+  height: min(120cqmin, 95%);
+  transform: translate(-50%, 0) rotateX(68deg) translateZ(-28px);
+  transform-origin: 50% 0%;
+  pointer-events: none;
+  background-image:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse 52% 46% at 50% 0%, #000 10%, transparent 72%);
+  mask-image: radial-gradient(ellipse 52% 46% at 50% 0%, #000 10%, transparent 72%);
+}
+
+.axe-podium-horizon {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 54%;
+  width: min(90cqmin, 78%);
+  height: 1px;
+  transform: translate(-50%, 0);
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.08);
+}
+
+.axe-podium-gloed {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  width: min(52cqmin, 46%);
+  height: min(52cqmin, 46%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.07) 0%, transparent 68%);
+}
+
+.axe-podium-bol {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.axe-podium-kaarten {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  transform-style: preserve-3d;
+}
+
+.axe-podium-kaart {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 18px;
+  background: var(--axe-kaart-vlak, rgba(12, 12, 15, 0.92));
+  border: 1px solid var(--axe-kaart-lijn, rgba(255, 255, 255, 0.08));
+  border-top-color: var(--axe-kaart-lijn-boven, rgba(255, 255, 255, 0.14));
+  box-shadow: var(--axe-kaart-schaduw, 0 18px 40px rgba(0, 0, 0, 0.45));
+  transform: translateZ(36px) rotateX(5deg);
+  transform-origin: 50% 100%;
+}
+
+.axe-podium-kaart-beweging {
+  /* Vult het toneel. Medium/vol kaarten gebruiken height: min(88%, …);
+     zonder een ouder met hoogte zakt DocumentProjection in tot een rand. */
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  transform-style: preserve-3d;
+}
+
+.axe-podium-kaart--compact {
+  width: min(420px, 78%);
+  max-height: 48%;
+  /* DocumentProjection is absolute inset-0; zonder hoogte is de kaart een lege rand. */
+  min-height: 9.5rem;
+}
+.axe-podium-kaart--compact .axe-podium-kaart-lijf {
+  min-height: 8.5rem;
+}
+
+.axe-podium-kaart--medium {
+  width: min(640px, 86%);
+  height: min(62%, 520px);
+}
+
+.axe-podium-kaart--vol {
+  width: min(920px, 94%);
+  height: min(88%, 720px);
+}
+
+.axe-podium-kaart-lijf {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.axe-podium-agenten {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  z-index: 3;
+  transform: translate(-50%, 0) translateZ(48px);
+  pointer-events: none;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--axe-kaart-vlak, rgba(12, 12, 15, 0.92));
+  border: 1px solid var(--axe-kaart-lijn, rgba(255, 255, 255, 0.08));
+  border-top-color: var(--axe-kaart-lijn-boven, rgba(255, 255, 255, 0.14));
+  color: var(--text-primary, #f4f4f5);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.axe-podium-onderschrift {
+  position: absolute;
+  left: 50%;
+  bottom: 40px;
+  z-index: 3;
+  transform: translate(-50%, 0);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: 94%;
+  pointer-events: none;
+}
+
+.axe-podium-onderschrift > * { pointer-events: auto; }
+
+.axe-podium-chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #a1a1aa);
+  background: var(--axe-kaart-vlak, rgba(12, 12, 15, 0.88));
+  border: 1px solid var(--axe-kaart-lijn, rgba(255, 255, 255, 0.08));
+}
+
+.axe-podium-chip b { color: var(--accent-cyan, #22d3ee); font-weight: 600; }
+
+/* Licht: perspectief blijft, de vloer staat stil, geen extra Z. */
+.axe-podium[data-kracht='licht'] {
+  perspective: 1800px;
+}
+.axe-podium[data-kracht='licht'] .axe-podium-vloer {
+  transform: translate(-50%, 0) rotateX(62deg);
+}
+.axe-podium[data-kracht='licht'] .axe-podium-kaart {
+  transform: rotateX(3deg);
+}
+
+/* Plat: reduced-motion of geen WebGL. Kaarten blijven kaarten. */
+.axe-podium[data-kracht='plat'] {
+  perspective: none;
+}
+.axe-podium[data-kracht='plat'] .axe-podium-ruimte,
+.axe-podium[data-kracht='plat'] .axe-podium-toneel,
+.axe-podium[data-kracht='plat'] .axe-podium-kaarten {
+  transform-style: flat;
+}
+.axe-podium[data-kracht='plat'] .axe-podium-vloer,
+.axe-podium[data-kracht='plat'] .axe-podium-horizon,
+.axe-podium[data-kracht='plat'] .axe-podium-gloed {
+  display: none;
+}
+.axe-podium[data-kracht='plat'] .axe-podium-kaart,
+.axe-podium[data-kracht='plat'] .axe-podium-agenten {
+  transform: none;
+}
+
+.axe-podium-kaart .markdown-message table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.axe-podium-kaart .markdown-message th,
+.axe-podium-kaart .markdown-message td {
+  border: 1px solid var(--axe-kaart-lijn, rgba(255, 255, 255, 0.08));
+  padding: 6px 8px;
+  text-align: left;
+}
+.axe-podium-kaart .markdown-message th { color: var(--text-primary, #f4f4f5); }
+.axe-podium-kaart .markdown-message a { color: var(--accent-cyan, #22d3ee); }
+
+@media (prefers-reduced-motion: reduce) {
+  .axe-podium,
+  .axe-podium-kaart,
+  .axe-podium-vloer,
+  .axe-podium-bol {
+    transition: none !important;
+    animation: none !important;
+  }
+}

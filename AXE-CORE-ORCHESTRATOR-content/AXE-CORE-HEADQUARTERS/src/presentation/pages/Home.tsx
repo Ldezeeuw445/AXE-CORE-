@@ -237,7 +237,12 @@ export default function Home() {
               {/* Altijd het podium, zodat alles wat AXE laat zien (kaart, web,
                   bestand, grafiek) ook op de plaat verschijnt; alleen de bol
                   eronder verschilt. */}
-              <SphereStage status={coreStatus} bol={opPlaat ? <AxeCoreSphere /> : undefined} />
+              <SphereStage
+                status={coreStatus}
+                bol={opPlaat ? <AxeCoreSphere midden /> : undefined}
+                agenten={live.werkend}
+                goedkeuringen={live.goedkeuringen.length}
+              />
               {/* Telefoon: wie AXE aan het werk heeft, rond de core. Op desktop
                   staan de agents als 3×2-tegels in het command center (25 nov v2). */}
               {isMobile && <AgentVensters />}
