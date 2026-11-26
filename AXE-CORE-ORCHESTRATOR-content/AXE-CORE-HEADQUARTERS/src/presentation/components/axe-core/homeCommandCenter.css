@@ -513,7 +513,7 @@
 
 /* 26 nov: alle machines (Macs + drie VPS'en) zonder scrollen. Boven twee machines
    twee kolommen; de ringen schalen mee met de hoogte per rij (--rijen). */
-.axe-hcc-monitor { container-type: size; }
+.axe-hcc-monitor-vak { container-type: size; height: 100%; min-height: 0; }
 .axe-hcc-monitor[data-kolommen='2'] {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -530,3 +530,11 @@
   height: var(--ring);
 }
 .axe-hcc-monitor .axe-hcc-ring-getal { width: auto; }
+
+/* Smalle kaart (bijv. 257 px): geen twee kolommen, alle machines onder elkaar, kleinere ringen. */
+@container (max-width: 520px) {
+  .axe-hcc-monitor[data-kolommen='2'] { grid-template-columns: minmax(0, 1fr); }
+  .axe-hcc-monitor .axe-hcc-ring svg,
+  .axe-hcc-monitor .axe-hcc-ring-getal { --ring: clamp(20px, calc(100cqh / var(--rijen-smal, 2) - 14px), 48px); }
+  .axe-hcc-monitor[data-kolommen='2'] .axe-hcc-ring-label { display: none; }
+}

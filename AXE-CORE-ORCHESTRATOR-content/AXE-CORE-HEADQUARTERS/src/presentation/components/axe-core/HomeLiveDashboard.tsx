@@ -921,8 +921,9 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
           </div>
         </DashKaart>
         <DashKaart titel={<Kop tekst="System monitor" onKlik={() => navigate('/status')} />} className="axe-hcc-kaart" vrij>
+          <div className="axe-hcc-monitor-vak">
           <div className="axe-hcc-monitor" data-axe-hcc-monitor data-kolommen={machines.length > 2 ? 2 : 1}
-            style={{ ['--rijen' as string]: monitorRijen(machines.length) }}>
+            style={{ ['--rijen' as string]: monitorRijen(machines.length), ['--rijen-smal' as string]: Math.max(1, machines.length) }}>
             {machines.length === 0 && (
               <DashLeeg>{snapshot.fout ? 'No live metrics: the VPS snapshot did not answer.' : 'Waiting for the first measurement…'}</DashLeeg>
             )}
@@ -936,6 +937,7 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
                 </div>
               </div>
             ))}
+          </div>
           </div>
         </DashKaart>
       </div>
