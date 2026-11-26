@@ -3332,7 +3332,8 @@ async def _check_vps_services() -> dict:
         results["claude_code"] = {"configured": False, "reachable": False, "error": str(e)[:150]}
 
     # MT5-bridge-server (Strato, 24 nov): verbonden = de machine antwoordt; werkt =
-    # alleen met MT5_BRIDGE_HEALTH_URL. Zie mt5_bridge_status.py.
+    # het health-adres van de bridge (standaard via de Cloudflare-tunnel, 26 nov)
+    # zegt ok. Zie mt5_bridge_status.py.
     try:
         import mt5_bridge_status
         async with httpx.AsyncClient(timeout=5) as client:
