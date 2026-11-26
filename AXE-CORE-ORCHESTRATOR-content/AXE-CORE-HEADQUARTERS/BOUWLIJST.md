@@ -1,7 +1,7 @@
 # AXE CORE — bouwlijst
 
 <!-- stand:begin -->
-**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 79 klaar, 94 gebouwd maar nog niet bewezen, 38 open (van 211).
+**Stand: 37% klaar** `███████░░░░░░░░░░░░░` -- 79 klaar, 95 gebouwd maar nog niet bewezen, 37 open (van 211).
 
 Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datum en bewijs erbij. Code die er staat met groene tests is `[~]` gebouwd, niet klaar. Geteld door `python3 scripts/bouwlijst_stand.py`; zet nooit zelf een getal.
 
@@ -18,7 +18,7 @@ Klaar = live én in het echt bewezen (gemeten, of Luka zag het werken), met datu
 | 4 — Computer use, browser, code-editor | 1 (33%) | 0 | 2 |
 | 5 — Luka kan het zelf | 3 (38%) | 4 | 1 |
 | 6 — AXE als baas (Jarvis-route, niet letterlijk Jarvis) | 23 (92%) | 1 | 1 |
-| 7 — axe-commandolaag (CLI + hek, geen tweede agent) | 6 (55%) | 4 | 1 |
+| 7 — axe-commandolaag (CLI + hek, geen tweede agent) | 6 (55%) | 5 | 0 |
 <!-- stand:end -->
 
 Bijgewerkt 19 november 2026. Alles hieronder is **gemeten**, niet aangenomen.
@@ -1213,10 +1213,11 @@ extra executor via dezelfde `cli/axe`.
       weer gestart (17:05, /health ok). Nu: stoppen/herstarten/killen van axe-task-worker of
       axe-core-api wordt altijd geweigerd, ook met een ok, en al vóór de ok-vraag (Luka krijgt
       zo'n kaart niet meer). Bewezen als er na deploy geen kaart meer voor komt.
-- [ ] **7.7** AXON-read in chat — **niet** een vierde store. Write-bridge
+- [~] **7.7** AXON-read in chat — **niet** een vierde store. Write-bridge
       bestaat (`axonMemoryBridge.ts`); CLI-label `axon` is een stub op RAG.
       Alleen doen als je de bestaande `axonContextPack` in
       `buildDurableMemoryContext` hangt.
+  *(26 nov: lezen hing al sinds 15 nov aan `buildGlobalMemoryContext`, maar die gebruikt alleen de trage voiceStore-route. De snelle routes (installStableChat en tier 2) lazen AXON nooit. Nu: bij een herinneringsvraag ("weet je nog", "wat zei ik over", "what do you know about") vragen beide AXON's context-pack, met hoogstens 1,5 s wachten; andere beurten wachten nergens op. In de preview GEMETEN: context-pack gaat uit op tier 2 en de terugvalroute. MAAR: AXON wijst de huidige sleutel af (401 Unauthorized) -- lezen én schrijven naar AXON falen dus stil; op de server staat geen eigen sleutel. Stap voor Luka staat op de lijst: nieuwe AXON-sleutel in Settings. Daarbij GEVONDEN en gerepareerd: tier 2 (veel gewone vragen) kreeg "Wie Luka is", het sessiegeheugen, de stem, De Raad en het bureau niet mee; nu leest elke chatroute één `persoonlijkeContext`, met een test die dat vasthoudt. Bewezen als AXON met een nieuwe sleutel iets teruggeeft dat in een antwoord landt.)*
 
 ---
 

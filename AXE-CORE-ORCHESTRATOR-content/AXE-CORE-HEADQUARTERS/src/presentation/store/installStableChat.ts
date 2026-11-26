@@ -11,11 +11,11 @@
  * 6. Living Display owned by installSpherePresent (no double project).
  */
 import { terugkomstContext } from '@/application/axe/terugkomst';
-import { haalSessieNotities, noteerAfgerondeSessies, sessieGeheugenContext } from '@/application/axe/sessieGeheugen';
-import { haalProfiel, profielContext } from '@/application/axe/profiel';
-import { haalStem, stemContext } from '@/application/axe/stem';
-import { raadBlok } from '@/domain/chat/raad';
-import { bureauContext, haalBureau } from '@/application/axe/bureau';
+import { haalSessieNotities, noteerAfgerondeSessies } from '@/application/axe/sessieGeheugen';
+import { haalProfiel } from '@/application/axe/profiel';
+import { haalStem } from '@/application/axe/stem';
+import { haalBureau } from '@/application/axe/bureau';
+import { persoonlijkeContext } from '@/application/axe/persoonlijkeContext';
 import { callWithFallback } from '@/infrastructure/gateways/llmGateway';
 import { rijActie, rijAntwoord } from '@/domain/chat/rijOpdracht';
 import { rijActieApi, rijStand } from '@/infrastructure/gateways/axeCoreApiService';
@@ -29,7 +29,8 @@ import {
 } from '@/domain/providers';
 import { AXE_SYSTEM_PROMPT, CONVERSATION_FIRST_RULE } from '@/domain/prompts';
 import { streamProvider } from '@/infrastructure/gateways/llmStream';
-import { voorwerkVoorFirstToken } from '@/domain/chatLatency';
+import { AXON_HERINNERING_BUDGET_MS, raceFirstToken, voorwerkVoorFirstToken, vraagOmHerinnering } from '@/domain/chatLatency';
+import { axonContext } from '@/infrastructure/persistence/globalMemoryService';
 import { volgendeAxeBericht } from '@/application/chat/chatStreamBeurt';
 import { noteRetrieval, noteOwnerOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
 import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gateways/onDeviceModel';
@@ -351,6 +352,11 @@ async function stableSimpleSend(text: string): Promise<boolean> {
   // Leerlus #172: open de beurt nu, synchroon, zonder embeddings. RAG
   // en skills lopen mee maar houden first-token niet meer tegen (budget 0).
   noteRetrieval(text, [], [], 'chat');
+  // 7.7: bij "weet je nog ..." kort AXON teruglezen (Luka's geheugen over al
+  // zijn AI's); elke andere beurt wacht hier op niets.
+  const axonBlok = vraagOmHerinnering(text)
+    ? await raceFirstToken(axonContext(text, 900), '', AXON_HERINNERING_BUDGET_MS)
+    : '';
   const { memoryBlock, skillsBlock } = await voorwerkVoorFirstToken({
     rag: buildRagContext(text, 600).catch(() => ''),
     skills: getSkillsPromptForAgent('axe core').catch(() => ''),
@@ -360,12 +366,9 @@ async function stableSimpleSend(text: string): Promise<boolean> {
     AXE_SYSTEM_PROMPT +
     (skillsBlock ? `\n\n${skillsBlock}` : '') +
     (memoryBlock ? `\n\n${memoryBlock}` : '') +
+    (axonBlok ? `\n\n${axonBlok}` : '') +
     terugkomstContext() +
-    sessieGeheugenContext() +
-    profielContext() +
-    stemContext(text) +
-    raadBlok(text) +
-    bureauContext(text) +
+    persoonlijkeContext(text) +
     replyLanguageInstruction() +
     `\n\n${CONVERSATION_FIRST_RULE}` +
     (isSocialChatTurn(text)

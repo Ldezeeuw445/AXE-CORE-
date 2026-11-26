@@ -107,7 +107,8 @@ export async function loadMemoriesByCategory(userId: string, category: string): 
  */
 const AXON_TIJD_MS = 2500;
 
-async function axonContext(query: string, max: number): Promise<string> {
+/** Ook los te gebruiken (7.7): de snelle chatroute vraagt AXON alleen bij herinneringsvragen. */
+export async function axonContext(query: string, max: number): Promise<string> {
   if (max < 120 || !query.trim()) return '';
   try {
     const { leesProviderOpslag } = await import('@/domain/providers');

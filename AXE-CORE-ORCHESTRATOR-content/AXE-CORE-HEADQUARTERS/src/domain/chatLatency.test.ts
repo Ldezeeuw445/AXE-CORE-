@@ -73,3 +73,15 @@ describe('first-token wacht niet op zwaar voorwerk', () => {
     expect(later).toBe('laat');
   });
 });
+
+describe('7.7: AXON alleen bij herinneringsvragen', () => {
+  it('herkent terugleesvragen, niet gewone chat', async () => {
+    const { vraagOmHerinnering } = await import('./chatLatency');
+    expect(vraagOmHerinnering('Weet je nog wat ik over de Copper Cathode deal zei?')).toBe(true);
+    expect(vraagOmHerinnering('wat zei ik gisteren over NorthSea')).toBe(true);
+    expect(vraagOmHerinnering('what do you know about my trading rules')).toBe(true);
+    expect(vraagOmHerinnering('do you remember the dock notes')).toBe(true);
+    expect(vraagOmHerinnering('hoe laat is het')).toBe(false);
+    expect(vraagOmHerinnering('schrijf een mail aan Jan')).toBe(false);
+  });
+});

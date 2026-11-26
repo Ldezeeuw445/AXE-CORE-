@@ -6,6 +6,9 @@
  * NorthSea auto-send blijft hier buiten.
  */
 import { raadVraag } from '@/domain/chat/raad';
+import { AXON_HERINNERING_BUDGET_MS, raceFirstToken, vraagOmHerinnering } from '@/domain/chatLatency';
+import { axonContext } from '@/infrastructure/persistence/globalMemoryService';
+import { persoonlijkeContext } from '@/application/axe/persoonlijkeContext';
 import { inFocus, telVastgehouden } from '@/infrastructure/persistence/focusOpslag';
 import { wilStem } from '@/domain/chat/stem';
 import { isKorteOpenOpdracht } from '@/domain/tierRouter/navigatieZin';
@@ -389,13 +392,21 @@ async function voerTier2Uit(text: string, keuze: AxeRouteKeuze, extra = ''): Pro
     role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
     content: m.text,
   }));
-  const geheugen = await geheugenVoorBeurt(text, 400);
+  // 7.7: bij "weet je nog ..." ook AXON (kort budget), naast het eigen geheugen.
+  const [geheugen, axonBlok] = await Promise.all([
+    geheugenVoorBeurt(text, 400),
+    vraagOmHerinnering(text) ? raceFirstToken(axonContext(text, 900), '', AXON_HERINNERING_BUDGET_MS) : Promise.resolve(''),
+  ]);
   const messages = [
     {
       role: 'system' as const,
       content:
         `${AXE_SYSTEM_PROMPT}\n\n${CONVERSATION_FIRST_RULE}\n${replyLanguageInstruction()}\n\n` +
         (geheugen ? `${geheugen}\n\n` : '') +
+        (axonBlok ? `${axonBlok}\n\n` : '') +
+        // 26 nov: wie Luka is, waar we waren, zijn stem, De Raad, het bureau --
+        // deze route kreeg ze tot nu toe niet.
+        (persoonlijkeContext(text).trim() ? `${persoonlijkeContext(text).trim()}\n\n` : '') +
         'Answer quickly. No tools. No markers. Light context only.' + (extra ? `\n${extra}` : ''),
     },
     ...history.slice(0, -1),

@@ -74,3 +74,17 @@ export async function voorwerkVoorFirstToken(opts: {
   ]);
   return { memoryBlock, skillsBlock };
 }
+
+/**
+ * 7.7 (26 nov): een vraag waarvoor AXE iets moet teruglezen ("weet je nog",
+ * "wat zei ik over", "what do you know about"). Alleen dan mag de snelle
+ * chatroute kort op AXON wachten; elke andere beurt wacht nergens op.
+ */
+const HERINNERING = /\b(?:weet je (?:nog|wat)|wat (?:weet je|zei ik|heb ik (?:gezegd|verteld)|hebben we (?:besproken|afgesproken))|herinner je|ken je (?:mijn|de)|wat was (?:het|dat)\b.*\b(?:ook alweer|weer)|do you (?:remember|recall|know (?:about|what))|what did (?:i|we) (?:say|decide|discuss)|what do you know about)\b/i;
+
+export function vraagOmHerinnering(tekst: string): boolean {
+  return HERINNERING.test(tekst ?? '');
+}
+
+/** Zolang mag AXON de eerste token ophouden bij een herinneringsvraag. */
+export const AXON_HERINNERING_BUDGET_MS = 1500;
