@@ -18,7 +18,9 @@ export type ProjectionMode =
   | 'code'
   | 'media'
   /** Een live voorbeeld dat AXE zelf maakt: HTML/SVG in een afgeschermd frame. */
-  | 'html';
+  | 'html'
+  /** Een gepubliceerde Spline-scène (26 nov): echte 3D in het vak, mediaUrl = Spline-adres. */
+  | 'scene3d';
 
 export type ProjectionSource = 'chat' | 'drop' | 'tool' | 'user' | 'director';
 

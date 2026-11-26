@@ -4,6 +4,7 @@
  * soort er niet in de ene wel en in de andere niet in komt (de telefoon rendeerde tot 9 okt helemaal
  * geen projecties: "laat het op Home zien" deed daar niets).
  */
+import { Scene3dProjection } from '@/presentation/components/axe-core/sphere/projections/Scene3dProjection';
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 import { DocumentProjection } from '@/presentation/components/axe-core/sphere/projections/DocumentProjection';
 import { ImageProjection } from '@/presentation/components/axe-core/sphere/projections/ImageProjection';
@@ -21,6 +22,7 @@ export function ProjectionBody({ payload }: { payload: ProjectionPayload }) {
     case 'chart': return <ChartProjection payload={payload} />;
     case 'map': return <InteractiveMapProjection payload={payload} />;
     case 'html': return <HtmlProjection payload={payload} />;
+    case 'scene3d': return <Scene3dProjection payload={payload} />;
     default:
       return (
         <div className="h-full flex items-center justify-center text-[12px]" style={{ color: '#a5f3fc' }}>

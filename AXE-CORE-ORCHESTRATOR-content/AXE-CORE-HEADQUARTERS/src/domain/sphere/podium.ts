@@ -65,7 +65,7 @@ export function podiumMaatVoor(soort: PodiumKaartSoort, tekstLengte = 0): Podium
 }
 
 export function soortVanMode(mode: ProjectionMode, tekst?: string): PodiumKaartSoort {
-  if (mode === 'map') return 'kaart';
+  if (mode === 'map' || mode === 'scene3d') return 'kaart';
   if (mode === 'image') return 'beeld';
   if (mode === 'chart') return 'grafiek';
   if (mode === 'html') return 'html';

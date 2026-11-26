@@ -2,6 +2,7 @@
  * sphereDirector — application router for Living Display.
  * Flow: Memory → Router (this) → Workspace → Projection → Sphere
  */
+import { isSplineUrl } from '@/domain/sphere/scene3d';
 import type { NormalizedAttachment } from '@/application/attachments/attachmentService';
 import type { ProjectionPayload, ProjectionMode, ProjectionSource } from '@/domain/sphere/projectionTypes';
 import { resolveChart } from '@/application/sphere/projectionResolvers/chartResolver';
@@ -100,8 +101,10 @@ export function parseProjectMarker(text: string): ProjectionPayload | null {
   try {
     const raw = JSON.parse(m[1]) as Record<string, unknown>;
     const mode = String(raw.mode || 'document') as ProjectionMode;
-    const allowed: ProjectionMode[] = ['document', 'image', 'chart', 'map', 'code', 'media', 'html'];
+    const allowed: ProjectionMode[] = ['document', 'image', 'chart', 'map', 'code', 'media', 'html', 'scene3d'];
     if (!allowed.includes(mode)) return null;
+    // 26 nov: een 3D-scène alleen met een echt Spline-adres (url of mediaUrl).
+    if (mode === 'scene3d' && !isSplineUrl(raw.url ?? raw.mediaUrl)) return null;
     // Een voorbeeld zonder eigen tekst: de eerste ```html-blok in hetzelfde antwoord.
     const tekst = raw.text != null
       ? String(raw.text)
@@ -111,7 +114,7 @@ export function parseProjectMarker(text: string): ProjectionPayload | null {
       title: String(raw.title || 'Projection'),
       subtitle: raw.subtitle != null ? String(raw.subtitle) : undefined,
       text: tekst,
-      mediaUrl: raw.mediaUrl != null ? String(raw.mediaUrl) : undefined,
+      mediaUrl: raw.mediaUrl != null ? String(raw.mediaUrl) : mode === 'scene3d' && raw.url != null ? String(raw.url) : undefined,
       mime: raw.mime != null ? String(raw.mime) : undefined,
       data: typeof raw.data === 'object' && raw.data ? (raw.data as Record<string, unknown>) : undefined,
       source: 'tool',
