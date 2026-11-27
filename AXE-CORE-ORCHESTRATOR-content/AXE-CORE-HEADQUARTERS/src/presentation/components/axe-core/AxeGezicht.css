@@ -1,11 +1,25 @@
 /* Levende gezichten (notch). Luka 20 nov: knipperen en rondkijken. Luka 27
-   nov: "levend, luxe, premium" -- ademen, rondkijken, per stemming een eigen
-   beweging, en nooit druk. Alleen transform en opacity (compositor, geen
-   layout of paint per frame). Geen beweging als het systeem minder beweging
-   vraagt. --axe-fase (negatief) schuift elk gezicht in zijn ritme op. */
-.axe-gezicht {
-  --axe-zacht: cubic-bezier(0.37, 0, 0.63, 1);   /* sinus in-out */
-  --axe-veer: cubic-bezier(0.34, 1.56, 0.64, 1); /* zachte overshoot */
+   nov: "levend, luxe, premium". Luka 27 nov t78u: "realistischer, echt
+   premium" -- daarom v5:
+   - veren (spring) in plaats van bezier-curves: --axe-veer en --axe-glij,
+     als CSS linear() uitgerekend uit een gedempte veer;
+   - knipperen en kijken met spreiding uit gezichtLeven.ts (attribuut
+     data-knip, variabelen --axe-oog-x/-y), geen vaste loop;
+   - de held schuift een fractie mee met de muis (parallax), de ogen meer;
+   - een nieuwe stemming vloeit over (ogen en badge faden in), geen sprong.
+   Alleen transform en opacity (compositor). Minder beweging: alles stil. */
+:root {
+  --axe-zacht: cubic-bezier(0.37, 0, 0.63, 1);      /* sinus in-out (ademen) */
+  --axe-veer: cubic-bezier(0.34, 1.56, 0.64, 1);    /* terugval zonder linear() */
+  --axe-glij: cubic-bezier(0.22, 1, 0.36, 1);
+}
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    /* Gedempte veer ζ 0,72 / ω 12,5: ~4% doorschieten, rustig uitdempen. */
+    --axe-veer: linear(0, 0.0509, 0.1709, 0.3216, 0.4767, 0.6199, 0.7425, 0.841, 0.9157, 0.9689, 1.0041, 1.0251, 1.0355, 1.0384, 1.0366, 1.032, 1.0263, 1.0203, 1.0148, 1.0101, 1.0062, 1.0033, 1.0013, 0.9999, 0.9991, 0.9986, 0.9985, 0.9986, 0.9988, 0.999, 0.9992, 0.9994, 0.9996, 0.9998, 0.9999, 0.9999, 1);
+    /* Bijna kritisch gedempt (ζ 0,9): glijdt erin, nauwelijks na-veren. */
+    --axe-glij: linear(0, 0.0799, 0.2443, 0.4226, 0.5819, 0.7105, 0.8075, 0.8771, 0.9249, 0.9564, 0.9763, 0.9884, 0.9953, 0.999, 1.0008, 1.0014, 1.0015, 1.0013, 1.0011, 1.0008, 1.0006, 1.0004, 1.0003, 1.0002, 1);
+  }
 }
 .axe-gezicht[data-levend] .axe-gezicht__lijf,
 .axe-gezicht[data-levend] .axe-gezicht__knipper,
@@ -15,97 +29,118 @@
   transform-origin: 50% 100%;
   will-change: transform;
 }
-.axe-gezicht[data-levend] .axe-gezicht__knipper { transform-origin: center; }
+.axe-gezicht[data-levend] .axe-gezicht__knipper { transform-origin: 50% 55%; }
+.axe-gezicht__vorm { transition: fill 0.6s var(--axe-zacht); }
 
-/* Rust: ademen (1,8%), knipperen, af en toe opzij kijken. */
+/* Ademen: 1,8%, traag, per gezicht verschoven. */
 .axe-gezicht[data-levend] .axe-gezicht__lijf {
   animation: axe-adem 5.6s var(--axe-zacht) var(--axe-fase, 0s) infinite;
 }
+
+/* Knipperen: dicht is snel (ooglid valt), open iets trager (ooglid trekt op).
+   Het moment komt uit gezichtLeven.ts, met spreiding en soms dubbel. */
 .axe-gezicht[data-levend] .axe-gezicht__knipper {
-  animation: axe-knipper 5.2s linear var(--axe-fase, 0s) infinite;
+  transform: scaleY(1);
+  transition: transform 150ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }
-.axe-gezicht[data-levend][data-stemming='rust'] .axe-gezicht__kijk {
-  animation: axe-rondkijk 11s var(--axe-zacht) var(--axe-fase, 0s) infinite;
+.axe-gezicht[data-levend][data-knip] .axe-gezicht__knipper {
+  transform: scaleY(0.08);
+  transition: transform 65ms cubic-bezier(0.55, 0, 0.9, 0.45);
 }
 
-/* Werkt: ogen snel heen en weer, het lijf knikt licht mee. */
-.axe-gezicht[data-levend][data-stemming='werkt'] .axe-gezicht__kijk {
-  animation: axe-kijk 1.9s var(--axe-zacht) var(--axe-fase, 0s) infinite;
+/* Kijken: een saccade -- kort springen, dan stilstaan op het nieuwe punt. */
+.axe-gezicht[data-levend] .axe-gezicht__kijk {
+  transform: translate(calc(var(--axe-oog-x, 0) * 1px), calc(var(--axe-oog-y, 0) * 1px));
+  transition: transform var(--axe-sprong, 180ms) cubic-bezier(0.25, 0.9, 0.3, 1);
 }
+
+/* Werkt: het lijf knikt licht mee (de ogen lezen via gezichtLeven). */
 .axe-gezicht[data-levend][data-stemming='werkt'] .axe-gezicht__lijf {
-  animation: axe-dobber 1.25s var(--axe-zacht) var(--axe-fase, 0s) infinite;
+  animation: axe-dobber 1.35s var(--axe-zacht) var(--axe-fase, 0s) infinite;
 }
-
 /* Wacht: een klein duwtje om de paar seconden ("jouw beurt"). */
 .axe-gezicht[data-levend][data-stemming='wacht'] .axe-gezicht__lijf {
-  animation: axe-duwtje 3.4s var(--axe-zacht) var(--axe-fase, 0s) infinite;
+  animation: axe-duwtje 3.6s var(--axe-zacht) var(--axe-fase, 0s) infinite;
 }
-.axe-gezicht[data-levend][data-stemming='wacht'] .axe-gezicht__knipper { animation-duration: 3.1s; }
-
-/* Fout: ogen dicht en omlaag, het lijf zakt traag; geen knipperen. */
-.axe-gezicht[data-levend][data-stemming='fout'] .axe-gezicht__knipper { animation: none; }
-.axe-gezicht[data-levend][data-stemming='fout'] .axe-gezicht__kijk { transform: translateY(1.5px); }
+/* Fout: ogen omlaag, lijf zakt traag; geen knipperen of kijken. */
+.axe-gezicht[data-levend][data-stemming='fout'] .axe-gezicht__kijk { transform: translateY(1.6px); }
 .axe-gezicht[data-levend][data-stemming='fout'] .axe-gezicht__lijf {
   animation: axe-zak 6.5s var(--axe-zacht) var(--axe-fase, 0s) infinite;
 }
-
-/* Klaar / groet: één hallo-sprongetje, daarna gewoon ademen. */
+/* Klaar / groet: één hallo-sprongetje op een veer, daarna ademen. */
 .axe-gezicht[data-levend][data-stemming='klaar'] .axe-gezicht__lijf {
-  animation: axe-hallo 1.1s var(--axe-veer) 0.15s 1 both, axe-adem 5.6s var(--axe-zacht) 1.3s infinite;
+  animation: axe-hallo 1.2s var(--axe-zacht) 0.15s 1 both, axe-adem 5.6s var(--axe-zacht) 1.4s infinite;
 }
 
-/* De held volgt de muis (CSS-variabelen van de notch, max ±2,4px). */
+/* Overvloeien bij een nieuwe stemming: ogen en badge komen zacht op. */
+.axe-gezicht[data-levend] .axe-gezicht__ogen {
+  transform-box: fill-box; transform-origin: 50% 50%;
+  animation: axe-ogen-in 0.42s var(--axe-glij) both;
+}
+.axe-gezicht[data-levend] .axe-gezicht__badge {
+  transform-box: fill-box; transform-origin: 50% 50%;
+  animation: axe-badge-in 0.5s var(--axe-veer) both;
+}
+
+/* Parallax: de held schuift mee met de muis (lijf ±1,6px), de ogen verder
+   (±2,4px) -- zo voelt hij als iets met diepte, niet als een plaatje. */
+.axe-gezicht[data-levend][data-volg] {
+  transform: translate(calc(var(--axe-kijk-x, 0) * 1.6px), calc(var(--axe-kijk-y, 0) * 1.1px))
+    rotate(calc(var(--axe-kijk-x, 0) * 1.4deg));
+  transition: transform 0.9s var(--axe-glij);
+  will-change: transform;
+}
 .axe-gezicht[data-levend][data-volg] .axe-gezicht__volg {
   transform: translate(calc(var(--axe-kijk-x, 0) * 2.4px), calc(var(--axe-kijk-y, 0) * 1.6px));
-  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.55s var(--axe-glij);
 }
 
 @keyframes axe-adem {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.018) translateY(-0.4px); }
 }
-@keyframes axe-knipper {
-  0%, 93%, 100% { transform: scaleY(1); }
-  95% { transform: scaleY(0.1); }
-  97% { transform: scaleY(1); }
-}
-@keyframes axe-rondkijk {
-  0%, 30%, 100% { transform: translateX(0); }
-  36%, 46% { transform: translateX(-2.2px); }
-  52%, 60% { transform: translateX(0); }
-  66%, 76% { transform: translate(2px, -0.6px); }
-  82% { transform: translateX(0); }
-}
-@keyframes axe-kijk {
-  0%, 100% { transform: translateX(0); }
-  20%, 38% { transform: translateX(-2.6px); }
-  58%, 78% { transform: translateX(2.6px); }
-}
 @keyframes axe-dobber {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-1.2px); }
+  50% { transform: translateY(-1px); }
 }
 @keyframes axe-duwtje {
   0%, 70%, 100% { transform: rotate(0); }
-  76% { transform: rotate(-4deg); }
-  82% { transform: rotate(3deg); }
-  88% { transform: rotate(-1.5deg); }
-  94% { transform: rotate(0); }
+  76% { transform: rotate(-3.5deg); }
+  83% { transform: rotate(2.5deg); }
+  90% { transform: rotate(-1deg); }
+  96% { transform: rotate(0); }
 }
 @keyframes axe-zak {
   0%, 100% { transform: translateY(0) scale(1); }
   50% { transform: translateY(0.8px) scale(0.99, 0.985); }
 }
+/* Squash & stretch zoals een veer: aanzetten, omhoog, landen, nadeinen. */
 @keyframes axe-hallo {
   0% { transform: translateY(0) scale(1); }
-  30% { transform: translateY(-5px) scale(1.04, 0.98); }
-  55% { transform: translateY(0) scale(0.98, 1.03); }
-  75% { transform: translateY(-1.5px) scale(1); }
+  12% { transform: translateY(0.6px) scale(1.04, 0.95); }
+  34% { transform: translateY(-5.5px) scale(0.97, 1.04); }
+  56% { transform: translateY(0) scale(1.03, 0.97); }
+  72% { transform: translateY(-1.4px) scale(0.995, 1.005); }
+  86% { transform: translateY(0) scale(1.005, 0.995); }
   100% { transform: translateY(0) scale(1); }
 }
+@keyframes axe-ogen-in {
+  from { opacity: 0; transform: scaleY(0.4); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes axe-badge-in {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: none; }
+}
 @media (prefers-reduced-motion: reduce) {
+  .axe-gezicht[data-levend],
   .axe-gezicht[data-levend] .axe-gezicht__lijf,
   .axe-gezicht[data-levend] .axe-gezicht__knipper,
   .axe-gezicht[data-levend] .axe-gezicht__kijk,
-  .axe-gezicht[data-levend] .axe-gezicht__volg { animation: none !important; transition: none !important; }
+  .axe-gezicht[data-levend] .axe-gezicht__volg,
+  .axe-gezicht[data-levend] .axe-gezicht__ogen,
+  .axe-gezicht[data-levend] .axe-gezicht__badge,
+  .axe-gezicht__vorm { animation: none !important; transition: none !important; }
+  .axe-gezicht[data-levend][data-volg],
+  .axe-gezicht[data-levend][data-volg] .axe-gezicht__volg { transform: none !important; }
 }

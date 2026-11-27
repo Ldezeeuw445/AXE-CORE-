@@ -32,6 +32,7 @@ import { projectieUitVraag } from '@/application/sphere/vraagRouter';
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 import { NotchResultaat } from './NotchResultaat';
 import { NotchWidgets } from './NotchWidgets';
+import { NotchStof } from './NotchStof';
 import { AXE_CYAAN, AxeGezicht, CLAUDE_KORAAL, type Stemming } from '@/presentation/components/axe-core/AxeGezicht';
 import { AXE_AGENTS, type AxeAgentId } from '@/domain/agents/roster';
 import { bewaarManagerChat, laadManagerChat, nieuwMsg } from '@/domain/agents/managerChatOpslag';
@@ -1207,6 +1208,7 @@ export function AxeOverlayNotch({
           {leven.woord !== '' && (
             <button
               type="button"
+              key={leven.toestand}
               className={`axe-ov__leven axe-ov__leven--${leven.toestand}`}
               title={leven.uitleg}
               onClick={() => {
@@ -1391,14 +1393,9 @@ export function AxeOverlayNotch({
                 </div>
               );
             })() : (
-              <div className={`axe-ov__vlak axe-ov__c-kaart axe-ov__c-${stand}`}>
-                {stand === 'groet' && (
-                  <div className="axe-ov__glinster" aria-hidden="true">
-                    {[0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} />)}
-                  </div>
-                )}
-                <div className="axe-ov__stof axe-ov__stof--l" aria-hidden="true" />
-                <div className="axe-ov__stof axe-ov__stof--r" aria-hidden="true" />
+              <div key={stand} className={`axe-ov__vlak axe-ov__c-kaart axe-ov__c-${stand}`}>
+                {/* v5: fijn stof op canvas (groet en rust), geen CSS-rasters meer. */}
+                <NotchStof />
                 <div className="axe-ov__gloed" data-toestand={leven.toestand} aria-hidden="true" />
                 <button type="button" className="axe-ov__held-gezicht" onClick={() => naarGroot('chat')} title="Ask AXE">
                   <AxeGezicht kleur={AXE_CYAAN} stemming={stand === 'groet' ? 'klaar' : stemming} size={52} label="AXE" levend volg />
@@ -1523,8 +1520,7 @@ export function AxeOverlayNotch({
                 /* Ronde 5 (foto 2): niets te doen → AXE in het midden, sterrenstof
                    eromheen. Rust ziet er anders uit dan werk. */
                 <div className="axe-ov__vlak axe-ov__rust">
-                  <div className="axe-ov__stof axe-ov__stof--l" aria-hidden="true" />
-                  <div className="axe-ov__stof axe-ov__stof--r" aria-hidden="true" />
+                  <NotchStof bron={0.5} />
                   <div className="axe-ov__gloed axe-ov__gloed--midden" data-toestand={leven.toestand} aria-hidden="true" />
                   <button type="button" className="axe-ov__held-gezicht" onClick={() => setTab(leven.toestand === 'wacht' ? 'approvals' : 'chat')} title={leven.uitleg}>
                     <AxeGezicht kleur={AXE_CYAAN} stemming={AXE_STEMMING[leven.toestand] ?? 'rust'} size={72} label="AXE" levend volg />
