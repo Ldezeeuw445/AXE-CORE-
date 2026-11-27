@@ -95,6 +95,8 @@ async function zetFocusbaar(aan: boolean) {
 /** Een peek (18 nov): de dichte notch zakt zoveel uit voor één regel. */
 const PEEK_EXTRA_H = 58;
 let peekAan = false;
+/** Open: compact (standaard) of groot. AxeOverlayNotch beslist, dit volgt. */
+let groot = false;
 
 async function dockTop(open: boolean) {
   if (!isTauriRuntime()) return;
@@ -104,7 +106,7 @@ async function dockTop(open: boolean) {
     const { invoke } = await import('@tauri-apps/api/core');
     const m = await readMetrics();
     const w = getCurrentWindow();
-    const height = handvat ? HANDVAT_HOOGTE : open ? m.uitklapH : m.inklapH + (peekAan ? PEEK_EXTRA_H : 0);
+    const height = handvat ? HANDVAT_HOOGTE : open ? (groot ? m.uitklapH : m.compactH) : m.inklapH + (peekAan ? PEEK_EXTRA_H : 0);
     const width = handvat ? HANDVAT_BREEDTE : m.b;
     const mon = await huidigeMonitor();
     if (!mon) {
@@ -275,6 +277,7 @@ export default function FloatAxe() {
       <AxeOverlayNotch
         onHome={() => { openRef.current = false; void dockTop(false); }}
         onOpenChange={(open) => { openRef.current = open; void dockTop(open); void zetFocusbaar(open); }}
+        onGrootteChange={(g) => { groot = g === 'groot'; if (openRef.current) void dockTop(true); }}
         onPeekChange={(aan) => { peekAan = aan; if (!openRef.current) void dockTop(false); }}
         onInklappen={() => kiesHandvat(true)}
       />

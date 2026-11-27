@@ -97,7 +97,10 @@ export function useKeyboardShortcuts({
       // Typen gaat voor bij alles hieronder.
       if (inVeld) return;
 
-      // Cmd/Ctrl + letter = tab navigation
+      // Cmd/Ctrl + letter = tab navigation. Niet in een zwevend venster (de
+      // notch, #/float/axe): daar haalde ⌘E de notch weg en zette hij de
+      // code-editor in het notch-venster (27 nov). De notch heeft eigen toetsen.
+      if (location.pathname.startsWith('/float/')) return;
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
         const key = e.key.toLowerCase();
         const path = TAB_SHORTCUTS[key];
@@ -107,7 +110,7 @@ export function useKeyboardShortcuts({
         }
       }
     },
-    [navigate, isHome, onSpacebar]
+    [navigate, isHome, onSpacebar, location.pathname]
   );
 
   useEffect(() => {
