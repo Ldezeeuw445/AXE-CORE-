@@ -7,6 +7,12 @@
  *   * Mac (Tauri): een eigen OS-venster per app (`axe-app-<id>`) op de gekozen
  *     monitor, Companion op telefoon- of iPad-maat. Bestaat het venster al, dan
  *     gaat hetzelfde venster naar dat scherm, in plaats van een tweede.
+ *     Remote sites openen op een fail-closed HTTPS-allowlist (eigenAppSessie),
+ *     met Safari-UA en een vaste WKWebView-store. Geen tokens in de URL:
+ *     Companion is PKCE, AXON's recovery-hash is wachtwoord-reset, en
+ *     registered_apps.prod_url is geen allowlist. Companion landde eerder op
+ *     de www-homepagina. Een al open shell wordt niet herladen (er kan werk
+ *     in staan); sluit hem dan zelf en open opnieuw.
  *   * Web (iPad-PWA, telefoon): een eigen site in een nieuwe tab, een
  *     AXE-pagina door ernaartoe te gaan. Een tweede OS-venster kan daar niet.
  *   * Een andere Mac: een `core_tasks`-rij (`axe_shell`, `pending`) met dat
@@ -15,7 +21,6 @@
  *     computerRelay: niets luistert op een poort.
  */
 import { sessieClient } from '@/infrastructure/supabase/supabaseClient';
-import { sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
 import { ditToestel } from '@/infrastructure/gateways/axeDeviceService';
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { routeVanPagina } from '@/domain/navRegistry';
@@ -31,29 +36,25 @@ import {
   type ShellVorm,
   type ToestelRij,
 } from '@/domain/eigenApps';
+import {
+  shellFoutTekst,
+  shellUrl,
+  shellWebviewOpties,
+} from '@/domain/eigenAppSessie';
 
 const OPDRACHT_POLL_MS = 3_000;
 /** Een opdracht die zo lang niemand oppakte is van een Mac die uit stond: niet alsnog openen. */
 const OPDRACHT_TE_OUD_MS = 10 * 60_000;
 
-interface RegisterRij { name: string; prod_url: string | null; enabled: boolean | null }
-
-/** De live URL uit registered_apps als die er staat, anders de vaste. Hoofdletters tellen niet ("Axon Memory"). */
-async function urlVoor(app: EigenApp): Promise<string | null> {
-  if (!app.url) return null;
-  if (!app.registerNaam) return app.url;
-  try {
-    const rijen = await sbGetRows<RegisterRij>('registered_apps', { limit: 50 });
-    const rij = rijen.find(r => r.enabled !== false && r.name?.toLowerCase() === app.registerNaam!.toLowerCase());
-    return rij?.prod_url?.trim() || app.url;
-  } catch {
-    return app.url;
-  }
+function doelUrl(app: EigenApp): string | null {
+  if (app.pagina) return null;
+  return shellUrl(app);
 }
 
 async function openHier(app: EigenApp, plek: Plek): Promise<string> {
   const vorm: ShellVorm = plek.vorm ?? app.vorm;
-  const url = app.pagina ? null : await urlVoor(app);
+  const url = doelUrl(app);
+  if (!app.pagina && !url) throw new Error(`No trusted origin for ${app.id}.`);
   if (!isTauriRuntime()) {
     if (app.pagina) {
       window.location.hash = `#${routeVanPagina(app.pagina)}`;
@@ -95,10 +96,11 @@ async function openHier(app: EigenApp, plek: Plek): Promise<string> {
     title: app.naam,
     x: r.x, y: r.y, width: r.breedte, height: r.hoogte,
     theme: 'dark', decorations: true, resizable: true, center: false,
+    ...shellWebviewOpties(app),
   });
   await new Promise<void>((resolve, reject) => {
     venster.once('tauri://created', () => resolve());
-    venster.once('tauri://error', e => reject(new Error(String(e.payload))));
+    venster.once('tauri://error', e => reject(new Error(shellFoutTekst(app.id, e.payload))));
   });
   return `${app.naam} opened on ${scherm}${vorm === 'bureaublad' ? '' : vorm === 'telefoon' ? ' (phone size)' : ' (iPad size)'}`;
 }
