@@ -94,6 +94,14 @@ function gezichtVoor(wie: string | null | undefined): { kleur: string; naam: str
   return { kleur: a.accent, naam: a.kort || a.name };
 }
 
+/** Vaste, per naam verschillende voorsprong in het ritme (0–4,6 s), zodat
+ *  een rij gezichten niet tegelijk knippert of ademt (Luka 27 nov). */
+function fase(sleutel: string): number {
+  let h = 0;
+  for (let i = 0; i < sleutel.length; i++) h = (h * 31 + sleutel.charCodeAt(i)) >>> 0;
+  return (h % 47) / 10;
+}
+
 const CLAUDE_STEMMING: Record<'bezig' | 'wacht' | 'klaar', Stemming> = { bezig: 'werkt', wacht: 'wacht', klaar: 'klaar' };
 /** De bol-toestanden (notchLeven) als ogen van het AXE-driehoekje. */
 const AXE_STEMMING: Record<string, Stemming> = { rust: 'rust', werkt: 'werkt', denkt: 'werkt', luistert: 'rust', wacht: 'wacht', onbereikbaar: 'fout' };
@@ -725,6 +733,27 @@ export function AxeOverlayNotch({
   const openRef = useRef(open);
   openRef.current = open;
 
+  /* Ogen volgen de muis (27 nov). Eén listener op de notch, hooguit één
+     schrijfactie per frame, alleen twee CSS-variabelen: de held-gezichten
+     (`volg`) verschuiven hun ogen daarmee met een CSS-transition. */
+  const wortelRef = useRef<HTMLDivElement>(null);
+  const muisFrame = useRef(0);
+  const volgMuis = (e: { clientX: number; clientY: number }) => {
+    if (!openRef.current || muisFrame.current) return;
+    const { clientX, clientY } = e;
+    muisFrame.current = requestAnimationFrame(() => {
+      muisFrame.current = 0;
+      const el = wortelRef.current;
+      const held = el?.querySelector('.axe-gezicht[data-volg]');
+      if (!el || !held) return;
+      const r = held.getBoundingClientRect();
+      const klem = (v: number) => Math.max(-1, Math.min(1, v));
+      el.style.setProperty('--axe-kijk-x', klem((clientX - (r.left + r.width / 2)) / 260).toFixed(2));
+      el.style.setProperty('--axe-kijk-y', klem((clientY - (r.top + r.height / 2)) / 160).toFixed(2));
+    });
+  };
+  useEffect(() => () => cancelAnimationFrame(muisFrame.current), []);
+
   /* ── Compact of groot (Luka 27 nov) ─────────────────────────────────────
      Wat je ziet: de onthouden keuze op Home/widgets, groot op de rest. */
   const zichtbaar: NotchGrootte = zichtbareGrootte(tab, onthouden);
@@ -1087,6 +1116,9 @@ export function AxeOverlayNotch({
     <div
       className={`axe-ov ${open ? 'axe-ov--open' : 'axe-ov--notch'} ${compact ? 'axe-ov--compact' : ''} ${dragging ? 'axe-ov--drag' : ''}`}
       data-axe-overlay
+      ref={wortelRef}
+      onMouseMove={volgMuis}
+      onMouseLeave={() => { wortelRef.current?.style.setProperty('--axe-kijk-x', '0'); wortelRef.current?.style.setProperty('--axe-kijk-y', '0'); }}
       onDragEnter={(e: DragEvent) => {
         e.preventDefault();
         dragDepth.current += 1;
@@ -1126,7 +1158,7 @@ export function AxeOverlayNotch({
           {/* Ronde 5, naar Luka's foto: de managers als rail ernaast. */}
           <div className="axe-ov__drop-rail">
             {AXE_AGENTS.filter((a) => a.id !== 'axe').slice(0, 5).map((a) => (
-              <AxeGezicht key={a.id} kleur={a.accent} stemming="rust" size={24} label={a.kort || a.name} />
+              <AxeGezicht key={a.id} kleur={a.accent} stemming="rust" size={24} label={a.kort || a.name} levend fase={fase(a.id)} />
             ))}
           </div>
         </div>
@@ -1141,8 +1173,10 @@ export function AxeOverlayNotch({
         {/* De bol ademt, en zodra er iets is staat het woord ernaast. De kleur
             zit in dat woord; de bol krijgt alleen een ring (wet 10). */}
         <div className="axe-ov__hart">
+          {/* 27 nov (Luka): geen ring meer om AXE -- "nooit om gevraagd, niet
+              luxe". De toestand zit nu in het gezicht zelf (ademen, ogen) en
+              in het woord ernaast. */}
           <span className="axe-ov__bol" data-toestand={leven.toestand}>
-            <span className="axe-ov__ring" aria-hidden="true" />
             <button
               type="button"
               className="axe-ov__blob"
@@ -1155,7 +1189,7 @@ export function AxeOverlayNotch({
               title={`${manager.label} — ${leven.uitleg}`}
             >
               {/* 19 nov: het AXE-driehoekje uit het Managers-tabblad, niet meer de ronde bol. */}
-              <AxeGezicht kleur={AXE_CYAAN} stemming={AXE_STEMMING[leven.toestand] ?? 'rust'} size={34} label="AXE" />
+              <AxeGezicht kleur={AXE_CYAAN} stemming={AXE_STEMMING[leven.toestand] ?? 'rust'} size={34} label="AXE" levend />
             </button>
           </span>
           {claude && (
@@ -1165,7 +1199,7 @@ export function AxeOverlayNotch({
               title={`Claude · ${claude.project}${claude.vraag ? ` — ${claude.vraag}` : ''}`}
               onClick={() => { set(true); setTab('claude'); }}
             >
-              <AxeGezicht kleur={CLAUDE_KORAAL} stemming={CLAUDE_STEMMING[claude.toestand]} size={22} label="Claude" />
+              <AxeGezicht kleur={CLAUDE_KORAAL} stemming={CLAUDE_STEMMING[claude.toestand]} size={22} label="Claude" levend fase={1.7} />
               <span className="axe-ov__claude-tekst">{claude.nu}</span>
               <span className="axe-ov__claude-tijd">{klok(claude.seconden)}</span>
             </button>
@@ -1328,7 +1362,7 @@ export function AxeOverlayNotch({
                   <div className="axe-ov__vlak axe-ov__c-kaart axe-ov__c-held">
                     <div className="axe-ov__gloed" data-toestand={leven.toestand} aria-hidden="true" />
                     <button type="button" className="axe-ov__held-gezicht" onClick={() => naarGroot(leven.toestand === 'wacht' ? 'approvals' : 'chat')} title={leven.uitleg}>
-                      <AxeGezicht kleur={AXE_CYAAN} stemming={stemming} size={52} label="AXE" levend />
+                      <AxeGezicht kleur={AXE_CYAAN} stemming={stemming} size={52} label="AXE" levend volg />
                     </button>
                     <div className="axe-ov__c-tekst">
                       <b>{hoofd ? hoofd.titel : claude ? claude.nu : leven.uitleg}</b>
@@ -1349,7 +1383,7 @@ export function AxeOverlayNotch({
                   <div className="axe-ov__c-pillen" data-aantal={pillen.length}>
                     {pillen.map((p) => (
                       <button key={p.sleutel} type="button" className="axe-ov__vlak axe-ov__c-pil" style={{ ['--chip' as string]: p.kleur }} onClick={() => naarGroot(p.tab)} title={`${p.naam} · ${p.tekst}`}>
-                        <AxeGezicht kleur={p.kleur} stemming={p.stemming} size={24} label={p.naam} />
+                        <AxeGezicht kleur={p.kleur} stemming={p.stemming} size={24} label={p.naam} levend fase={fase(p.sleutel)} />
                         <span className="axe-ov__c-pil-tekst"><b>{p.naam}</b><span>{p.tekst}</span></span>
                       </button>
                     ))}
@@ -1358,11 +1392,16 @@ export function AxeOverlayNotch({
               );
             })() : (
               <div className={`axe-ov__vlak axe-ov__c-kaart axe-ov__c-${stand}`}>
+                {stand === 'groet' && (
+                  <div className="axe-ov__glinster" aria-hidden="true">
+                    {[0, 1, 2, 3, 4, 5, 6].map((i) => <i key={i} />)}
+                  </div>
+                )}
                 <div className="axe-ov__stof axe-ov__stof--l" aria-hidden="true" />
                 <div className="axe-ov__stof axe-ov__stof--r" aria-hidden="true" />
                 <div className="axe-ov__gloed" data-toestand={leven.toestand} aria-hidden="true" />
                 <button type="button" className="axe-ov__held-gezicht" onClick={() => naarGroot('chat')} title="Ask AXE">
-                  <AxeGezicht kleur={AXE_CYAAN} stemming={stand === 'groet' ? 'klaar' : stemming} size={52} label="AXE" levend />
+                  <AxeGezicht kleur={AXE_CYAAN} stemming={stand === 'groet' ? 'klaar' : stemming} size={52} label="AXE" levend volg />
                 </button>
                 <div className="axe-ov__c-tekst">
                   <b>{stand === 'groet' ? groet(new Date(nuTik).getHours()) : 'All quiet'}</b>
@@ -1377,7 +1416,7 @@ export function AxeOverlayNotch({
                   <div className="axe-ov__c-rail" aria-label="Managers">
                     {MANAGERS.filter((m) => m.agent !== 'axe').slice(0, 5).map((m) => {
                       const g = gezichtVoor(m.agent);
-                      return <AxeGezicht key={m.id} kleur={g.kleur} stemming="rust" size={20} label={g.naam} />;
+                      return <AxeGezicht key={m.id} kleur={g.kleur} stemming="rust" size={20} label={g.naam} levend fase={fase(m.id)} />;
                     })}
                   </div>
                 </div>
@@ -1420,7 +1459,7 @@ export function AxeOverlayNotch({
                 const g = gezichtVoor(activityWie[i]);
                 return (
                   <div key={i} className="axe-ov__act-chip axe-ov__act-chip--gezicht" style={{ ['--chip' as string]: g.kleur }} title={`${g.naam} · ${line}`}>
-                    <AxeGezicht kleur={g.kleur} stemming={/waiting/i.test(line) ? 'wacht' : 'werkt'} size={22} label={g.naam} />
+                    <AxeGezicht kleur={g.kleur} stemming={/waiting/i.test(line) ? 'wacht' : 'werkt'} size={22} label={g.naam} levend fase={fase(`r${i}`)} />
                     <span className="axe-ov__act-tekst">{line.replace(/\s·\s[^·]*$/, '')}</span>
                   </div>
                 );
@@ -1488,7 +1527,7 @@ export function AxeOverlayNotch({
                   <div className="axe-ov__stof axe-ov__stof--r" aria-hidden="true" />
                   <div className="axe-ov__gloed axe-ov__gloed--midden" data-toestand={leven.toestand} aria-hidden="true" />
                   <button type="button" className="axe-ov__held-gezicht" onClick={() => setTab(leven.toestand === 'wacht' ? 'approvals' : 'chat')} title={leven.uitleg}>
-                    <AxeGezicht kleur={AXE_CYAAN} stemming={AXE_STEMMING[leven.toestand] ?? 'rust'} size={72} label="AXE" levend />
+                    <AxeGezicht kleur={AXE_CYAAN} stemming={AXE_STEMMING[leven.toestand] ?? 'rust'} size={72} label="AXE" levend volg />
                   </button>
                   <span className="axe-ov__rust-tekst">{eenDing.tekst ? `Next · ${eenDing.tekst}` : 'Managers are quiet. Ask AXE anything.'}</span>
                 </div>
@@ -1497,7 +1536,7 @@ export function AxeOverlayNotch({
                   <div className="axe-ov__vlak axe-ov__held">
                     <div className="axe-ov__gloed" data-toestand={leven.toestand} aria-hidden="true" />
                     <button type="button" className="axe-ov__held-gezicht" onClick={() => setTab(leven.toestand === 'wacht' ? 'approvals' : 'chat')} title={leven.uitleg}>
-                      <AxeGezicht kleur={AXE_CYAAN} stemming={AXE_STEMMING[leven.toestand] ?? 'rust'} size={84} label="AXE" levend />
+                      <AxeGezicht kleur={AXE_CYAAN} stemming={AXE_STEMMING[leven.toestand] ?? 'rust'} size={84} label="AXE" levend volg />
                     </button>
                     <ul className="axe-ov__stappen" aria-label="What AXE is doing">
                       {activity[1] && <li className="is-vorig"><History size={14} strokeWidth={1.7} /><span>{activity[1].replace(/\s·\s[^·]*$/, '')}</span></li>}
@@ -1508,7 +1547,7 @@ export function AxeOverlayNotch({
                   <div className="axe-ov__vlak axe-ov__pillen">
                     {claude && (
                       <button type="button" className="axe-ov__pil" style={{ ['--chip' as string]: CLAUDE_KORAAL }} onClick={() => setTab('claude')} title={`Claude · ${claude.nu}`}>
-                        <AxeGezicht kleur={CLAUDE_KORAAL} stemming={CLAUDE_STEMMING[claude.toestand]} size={28} label="Claude" />
+                        <AxeGezicht kleur={CLAUDE_KORAAL} stemming={CLAUDE_STEMMING[claude.toestand]} size={28} label="Claude" levend fase={1.7} />
                         <span>{claude.nu}</span>
                       </button>
                     )}
@@ -1516,7 +1555,7 @@ export function AxeOverlayNotch({
                       const g = gezichtVoor(activityWie[i]);
                       return (
                         <div key={i} className="axe-ov__pil" style={{ ['--chip' as string]: g.kleur }} title={`${g.naam} · ${line}`}>
-                          <AxeGezicht kleur={g.kleur} stemming={/waiting/i.test(line) ? 'wacht' : 'werkt'} size={28} label={g.naam} />
+                          <AxeGezicht kleur={g.kleur} stemming={/waiting/i.test(line) ? 'wacht' : 'werkt'} size={28} label={g.naam} levend fase={fase(`p${i}`)} />
                           <span>{line.replace(/\s·\s[^·]*$/, '')}</span>
                         </div>
                       );

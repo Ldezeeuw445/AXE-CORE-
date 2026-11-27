@@ -159,49 +159,28 @@ html[data-axe-notch] {
   justify-self: center;
 }
 .axe-ov__bol { position: relative; display: inline-grid; place-items: center; }
-.axe-ov__ring {
-  position: absolute; inset: calc(-7px * var(--axe-notch-scale));
-  border-radius: 999px; border: 1px solid transparent;
-  pointer-events: none; opacity: 0;
-}
-/* 18 nov (beide Macs traag): de notch staat 24/7 boven alles, met blur
-   erachter. Elk animatieframe laat macOS die blur opnieuw rekenen --
-   WindowServer en WebKit-GPU zaten elk op ~67% CPU. Rust en "werkt" (dat is
-   bijna altijd: managers zijn bezig) ademen daarom in grove stappen: ~1-2
-   frames per seconde i.p.v. 60. Stilstand leest als dood, dit niet. */
-.axe-ov__bol[data-toestand='rust'] .axe-ov__ring {
-  border-color: rgba(255, 255, 255, 0.22);
-  animation: axe-ov-adem 7s steps(8, jump-none) infinite;
-}
-.axe-ov__bol[data-toestand='werkt'] .axe-ov__ring {
-  border-color: var(--axe-notch-accent);
-  animation: axe-ov-adem 2.4s steps(5, jump-none) infinite;
-}
-.axe-ov__bol[data-toestand='denkt'] .axe-ov__ring {
-  border-color: var(--axe-notch-accent);
-  animation: axe-ov-adem 1s ease-in-out infinite;
-}
-/* Luisteren gaat naar buiten, als een microfoon die oppikt — niet hetzelfde
+.axe-ov__blob { transform-origin: 50% 70%; will-change: transform; }
+/* 27 nov (Luka): de ring om AXE is weg -- "nooit om gevraagd, niet luxe".
+   De toestand zit nu in het gezicht: het hele driehoekje ademt, in een eigen
+   tempo per toestand (alleen transform, dus de compositor; de blur die op
+   18 nov per frame CPU kostte, is sinds v3 weg). De ogen erin doen de rest
+   (AxeGezicht.css), en de kleur staat in het woord ernaast (wet 10). */
+.axe-ov__bol[data-toestand='rust'] .axe-ov__blob { animation: axe-ov-adem 6.4s cubic-bezier(0.37, 0, 0.63, 1) infinite; }
+.axe-ov__bol[data-toestand='werkt'] .axe-ov__blob { animation: axe-ov-adem 2.6s cubic-bezier(0.37, 0, 0.63, 1) infinite; }
+.axe-ov__bol[data-toestand='denkt'] .axe-ov__blob { animation: axe-ov-adem 1.3s cubic-bezier(0.37, 0, 0.63, 1) infinite; }
+/* Luisteren gaat naar buiten, als een microfoon die oppikt -- niet hetzelfde
    ritme als denken, want dan zijn het voor Luka twee keer "bezig". */
-.axe-ov__bol[data-toestand='luistert'] .axe-ov__ring {
-  border-color: var(--axe-notch-accent);
-  animation: axe-ov-uit 1.5s ease-out infinite;
-}
-.axe-ov__bol[data-toestand='wacht'] .axe-ov__ring {
-  border-color: #fbbf24;
-  animation: axe-ov-adem 3s ease-in-out infinite;
-}
-/* Geen beweging: stilstand hoort hier juist, en de ring blijft staan. */
-.axe-ov__bol[data-toestand='onbereikbaar'] .axe-ov__ring {
-  border-color: rgba(248, 113, 113, 0.7); opacity: 1;
-}
+.axe-ov__bol[data-toestand='luistert'] .axe-ov__blob { animation: axe-ov-uit 1.5s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+.axe-ov__bol[data-toestand='wacht'] .axe-ov__blob { animation: axe-ov-adem 3.2s cubic-bezier(0.37, 0, 0.63, 1) infinite; }
+/* Geen beweging: stilstand hoort hier juist. Iets gedimd, het woord is rood. */
+.axe-ov__bol[data-toestand='onbereikbaar'] .axe-ov__blob { opacity: 0.78; }
 @keyframes axe-ov-adem {
-  0%, 100% { opacity: .25; transform: scale(.94); }
-  50% { opacity: 1; transform: scale(1.05); }
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.035) translateY(-0.5px); }
 }
 @keyframes axe-ov-uit {
-  0% { opacity: .9; transform: scale(.9); }
-  100% { opacity: 0; transform: scale(1.55); }
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(1.08); }
 }
 .axe-ov__leven {
   position: absolute; left: calc(100% + 10px); white-space: nowrap;
@@ -221,7 +200,7 @@ html[data-axe-notch] {
 /* Wie beweging uit heeft gezet, moet de toestand nog steeds kunnen lezen.
    Dat kan ook: het woord zegt hetzelfde als het ritme. */
 @media (prefers-reduced-motion: reduce) {
-  .axe-ov__bol .axe-ov__ring { animation: none; opacity: 1; }
+  .axe-ov__bol .axe-ov__blob { animation: none; opacity: 1; }
   .axe-ov__dots span { animation: none; opacity: .7; }
 }
 .axe-ov__body {
@@ -764,20 +743,21 @@ html[data-axe-notch] .axe-ov { border-left-color: transparent; border-right-colo
   transform: translateY(-50%);
   border-radius: 50%;
   pointer-events: none;
-  --gloed: rgba(34, 211, 238, 0.32);
+  /* 27 nov: veel zachter (Luka: "die sterke cyaan gloed"). */
+  --gloed: rgba(34, 211, 238, 0.10);
   background: radial-gradient(circle, var(--gloed) 0%, transparent 65%);
   transition: background 0.4s ease;
 }
 .axe-ov__gloed[data-toestand='werkt'],
-.axe-ov__gloed[data-toestand='denkt'] { --gloed: rgba(59, 130, 246, 0.5); animation: axe-gloed 2.6s ease-in-out infinite; }
-.axe-ov__gloed[data-toestand='luistert'] { --gloed: rgba(34, 211, 238, 0.4); animation: axe-gloed 1.4s ease-in-out infinite; }
-.axe-ov__gloed[data-toestand='wacht'] { --gloed: rgba(251, 191, 36, 0.42); }
+.axe-ov__gloed[data-toestand='denkt'] { --gloed: rgba(59, 130, 246, 0.16); animation: axe-gloed 6s cubic-bezier(0.37, 0, 0.63, 1) infinite; }
+.axe-ov__gloed[data-toestand='luistert'] { --gloed: rgba(34, 211, 238, 0.16); animation: axe-gloed 3s cubic-bezier(0.37, 0, 0.63, 1) infinite; }
+.axe-ov__gloed[data-toestand='wacht'] { --gloed: rgba(251, 191, 36, 0.14); }
 .axe-ov__gloed[data-toestand='fout'] {
   --gloed: rgba(239, 68, 68, 0.28);
   left: 0; right: 0; top: auto; bottom: -120px; width: auto; height: 240px; transform: none; border-radius: 0;
-  background: radial-gradient(ellipse at 50% 100%, rgba(234, 88, 12, 0.45) 0%, rgba(239, 68, 68, 0.12) 45%, transparent 75%);
+  background: radial-gradient(ellipse at 50% 100%, rgba(234, 88, 12, 0.22) 0%, rgba(239, 68, 68, 0.06) 45%, transparent 75%);
 }
-@keyframes axe-gloed { 0%, 100% { opacity: 0.75; } 50% { opacity: 1; } }
+@keyframes axe-gloed { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
 
 .axe-ov__held {
   display: flex;
@@ -788,7 +768,7 @@ html[data-axe-notch] .axe-ov { border-left-color: transparent; border-right-colo
 .axe-ov__held-gezicht {
   position: relative;
   background: none; border: 0; padding: 0; cursor: pointer;
-  filter: drop-shadow(0 0 18px rgba(34, 211, 238, 0.25));
+  filter: none;
 }
 .axe-ov__stappen {
   position: relative;
@@ -1005,7 +985,7 @@ button.axe-ov__pil { cursor: pointer; }
 .axe-ov__held .axe-ov__gloed {
   left: -10px; width: 230px; height: 230px;
 }
-.axe-ov__held-gezicht { filter: drop-shadow(0 0 22px rgba(34, 211, 238, 0.35)); }
+.axe-ov__held-gezicht { filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45)); }
 .axe-ov__stappen { gap: 8px; }
 .axe-ov__stappen li { display: flex; align-items: center; gap: 9px; font-size: 13px; color: rgba(255, 255, 255, 0.36); }
 .axe-ov__stappen li > svg { flex: none; opacity: 0.8; }
@@ -1100,9 +1080,10 @@ button.axe-ov__pil { cursor: pointer; }
 .axe-ov__held-gezicht, .axe-ov__rust .axe-ov__held-gezicht { isolation: isolate; }
 .axe-ov__held-gezicht::before {
   content: ''; position: absolute; inset: -30px; border-radius: 50%; z-index: -1;
-  background: radial-gradient(circle, rgba(34, 211, 238, 0.5) 30%, rgba(59, 130, 246, 0.24) 52%, transparent 72%);
-  filter: blur(6px);
-  animation: axe-gloed 3.2s ease-in-out infinite;
+  /* 27 nov: een zweem licht achter AXE in plaats van een cyaan halo. */
+  inset: -14px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.12) 0%, rgba(34, 211, 238, 0.04) 45%, transparent 70%);
+  animation: axe-gloed 7s cubic-bezier(0.37, 0, 0.63, 1) infinite;
 }
 .axe-ov__widgets .axe-ov__focus { justify-content: flex-start; gap: 10px; }
 .axe-ov__widgets .axe-ov__focus .axe-ov__focus-tijd { margin-top: auto; }
@@ -1271,3 +1252,103 @@ button.axe-ov__pil { cursor: pointer; }
 }
 .axe-ov__dag-wacht:disabled { color: rgba(255, 255, 255, 0.45); cursor: default; }
 @media (prefers-reduced-motion: reduce) { .axe-ov__compact { animation: none; } }
+
+/* ── v4 (Luka 27 nov): "super luxe, premium, donker, levend" ────────────────
+ * Mat zwart blijft. Wat erbij komt is fijn: 1px lichtranden voor diepte,
+ * één trage glans die over de kaarten trekt (transform, geen paint), zachte
+ * easing en kleine hover-reacties. Geen zware gloed. */
+.axe-ov {
+  --axe-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv11', 'ss01', 'tnum';
+  /* Bovenrand: een haarlijn licht, zoals bij een geslepen kaart. */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+}
+.axe-ov__compact .axe-ov__vlak,
+.axe-ov__body .axe-ov__vlak {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    0 10px 24px -12px rgba(0, 0, 0, 0.7);
+  transition: transform 0.5s var(--axe-ease), box-shadow 0.5s var(--axe-ease), background 0.5s var(--axe-ease);
+}
+.axe-ov__compact .axe-ov__vlak:hover,
+.axe-ov__body .axe-ov__vlak:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.024));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 14px 28px -12px rgba(0, 0, 0, 0.8);
+}
+/* Levend licht: één smalle glans die elke ~11 s traag over een kaart trekt. */
+.axe-ov__compact .axe-ov__c-kaart::after,
+.axe-ov__compact .axe-ov__c-pil::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.045) 50%, transparent 62%);
+  transform: translateX(-120%);
+  animation: axe-glans 11s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+.axe-ov__compact .axe-ov__c-pil:nth-child(2)::after { animation-delay: 1.4s; }
+.axe-ov__compact .axe-ov__c-pil:nth-child(3)::after { animation-delay: 2.8s; }
+.axe-ov__compact .axe-ov__c-pil:nth-child(4)::after { animation-delay: 4.2s; }
+@keyframes axe-glans {
+  0%, 62% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+/* Pillen: mat, met een haarlijn in de eigen kleur; bij hover licht omhoog. */
+.axe-ov__c-pil {
+  position: relative; overflow: hidden;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--chip) 7%, rgba(255, 255, 255, 0.035)), rgba(255, 255, 255, 0.015));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 0 0 1px color-mix(in srgb, var(--chip) 22%, transparent);
+  transition: transform 0.45s var(--axe-ease), box-shadow 0.45s var(--axe-ease);
+}
+.axe-ov__c-pil:hover {
+  transform: translateY(-1.5px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px color-mix(in srgb, var(--chip) 40%, transparent),
+    0 8px 18px -10px color-mix(in srgb, var(--chip) 35%, transparent);
+}
+/* Knoppen en iconen: zachte overgang, kleine druk bij klikken. */
+.axe-ov__ico, .axe-ov__c-knop, .axe-ov__home-open, .axe-ov__blob {
+  transition: transform 0.35s var(--axe-ease), background 0.35s var(--axe-ease), color 0.35s var(--axe-ease), box-shadow 0.35s var(--axe-ease);
+}
+.axe-ov__ico:active, .axe-ov__c-knop:active:not(:disabled) { transform: scale(0.94); }
+.axe-ov__c-knop {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.08);
+  letter-spacing: 0.01em;
+}
+.axe-ov__blob:hover { transform: scale(1.06); }
+/* Typografie: strak en rustig. */
+.axe-ov__c-tekst > b { letter-spacing: -0.012em; font-weight: 600; color: rgba(255, 255, 255, 0.95); }
+.axe-ov__c-tekst > span { letter-spacing: 0.002em; }
+.axe-ov__c-pil-tekst > b { letter-spacing: 0.02em; text-transform: uppercase; font-size: 9.5px; font-weight: 600; }
+.axe-ov__w-label { letter-spacing: 0.01em; }
+/* Glinster bij de groet: zeven stipjes die om de beurt zacht oplichten. */
+.axe-ov__glinster { position: absolute; left: 10px; top: 0; bottom: 0; width: 120px; pointer-events: none; z-index: 0; }
+.axe-ov__glinster i {
+  position: absolute; width: 2px; height: 2px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9); box-shadow: 0 0 4px rgba(165, 243, 252, 0.6);
+  opacity: 0; animation: axe-glinster 3.6s cubic-bezier(0.37, 0, 0.63, 1) infinite;
+}
+.axe-ov__glinster i:nth-child(1) { left: 18%; top: 22%; animation-delay: 0.2s; }
+.axe-ov__glinster i:nth-child(2) { left: 74%; top: 18%; animation-delay: 0.9s; }
+.axe-ov__glinster i:nth-child(3) { left: 86%; top: 58%; animation-delay: 1.6s; }
+.axe-ov__glinster i:nth-child(4) { left: 10%; top: 70%; animation-delay: 2.1s; }
+.axe-ov__glinster i:nth-child(5) { left: 52%; top: 84%; animation-delay: 2.7s; width: 1.5px; height: 1.5px; }
+.axe-ov__glinster i:nth-child(6) { left: 40%; top: 10%; animation-delay: 3.1s; width: 1.5px; height: 1.5px; }
+.axe-ov__glinster i:nth-child(7) { left: 64%; top: 40%; animation-delay: 1.2s; width: 1.5px; height: 1.5px; }
+@keyframes axe-glinster {
+  0%, 100% { opacity: 0; transform: scale(0.4); }
+  45% { opacity: 0.85; transform: scale(1); }
+  70% { opacity: 0; transform: scale(0.6); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .axe-ov__compact .axe-ov__c-kaart::after, .axe-ov__compact .axe-ov__c-pil::after,
+  .axe-ov__glinster i, .axe-ov__blob { animation: none !important; }
+  .axe-ov__compact .axe-ov__vlak, .axe-ov__c-pil, .axe-ov__ico, .axe-ov__c-knop { transition: none !important; }
+}

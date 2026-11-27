@@ -51,7 +51,7 @@ describe('de notch toont zijn toestand', () => {
     expect(hart).toBeLessThan(body);
   });
 
-  it('elke toestand heeft een eigen ring in de CSS', () => {
+  it('elke toestand heeft een eigen regel in de CSS (het ademende gezicht)', () => {
     const missend = NOTCH_TOESTANDEN.filter(
       (t) => !css.includes(`[data-toestand='${t}']`),
     );
@@ -74,8 +74,9 @@ describe('de notch toont zijn toestand', () => {
     expect(css).toContain('@media (prefers-reduced-motion: reduce)');
     const blok = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
     expect(blok).toContain('animation: none');
-    // De ring moet dan blijven staan in plaats van op opacity 0 te bevriezen.
-    expect(blok).toMatch(/\.axe-ov__ring\s*\{[^}]*opacity:\s*1/s);
+    // Het gezicht blijft dan volledig zichtbaar, alleen stil (27 nov: de ring
+    // is weg, de toestand zit in het ademende gezicht en het woord).
+    expect(blok).toMatch(/\.axe-ov__bol \.axe-ov__blob\s*\{[^}]*animation:\s*none;[^}]*opacity:\s*1/s);
   });
 
   it('de kleur zit in het woord, niet in een vlak (wet 10)', () => {
@@ -86,5 +87,15 @@ describe('de notch toont zijn toestand', () => {
       .filter((r) => r.includes('.axe-ov__leven'))
       .join('\n');
     expect(levenRegels).not.toMatch(/background(-color)?:\s*(#|rgba?\()/);
+  });
+});
+
+describe('geen ring om AXE (Luka 27 nov: "nooit om gevraagd, niet luxe")', () => {
+  it('de strook tekent geen ring meer', () => {
+    expect(tsx).not.toContain('axe-ov__ring');
+    expect(css).not.toMatch(/\.axe-ov__ring\s*\{/);
+  });
+  it('het AXE-gezicht in de strook leeft', () => {
+    expect(tsx).toMatch(/size=\{34\} label="AXE" levend/);
   });
 });
