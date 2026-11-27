@@ -6099,14 +6099,20 @@ async def places_geocode(q: str):
 # ── Slotscherm van de telefoon ──────────────────────────────────────────────────────
 # Zie lockscreen.py voor wat hier echt is en wat bewust ontbreekt.
 import lockscreen as _lockscreen
+import mt5_host_metrics as _mt5_hm
 
 _LS_CACHE = _lockscreen.TTLCache()
 _LS_LAST_QUOTES = _lockscreen.LastGoodQuotes()
+_MT5_LAST_GOOD = _mt5_hm.LastGood()
 IMAC_SSH = os.environ.get("AXE_IMAC_SSH", "lukadezeeuw@100.65.216.90")
 # De modelbox (Strato, ollama.axecompanion.com): de Mac mini meet hem via SSH met de axe-core-vps-sleutel.
 MODELBOX_SSH = os.environ.get("AXE_MODELBOX_SSH", "root@217.160.135.111")
 MODELBOX_KEY = os.environ.get("AXE_MODELBOX_KEY", os.path.expanduser("~/.ssh/axe-core-vps"))
 MODELBOX_URL = os.environ.get("AXE_MODELBOX_URL", "https://ollama.axecompanion.com/api/tags")
+# De MT5-bridge VPS (Strato). SSH is alleen-lezen, hetzelfde LINUX_PROBE als de modelbox.
+# De gebruiker bestaat pas na Luka's ja (docs/MT5-VPS-METRICS-SETUP.md).
+MT5BRIDGE_SSH = os.environ.get("AXE_MT5BRIDGE_SSH", "mt5metrics@31.70.196.19")
+MT5BRIDGE_KEY = os.environ.get("AXE_MT5BRIDGE_KEY", MODELBOX_KEY)
 
 
 @app.get("/host/metrics", dependencies=[AUTH])
@@ -6119,14 +6125,17 @@ async def host_metrics(target: str = "self"):
             metrics = await _lockscreen.run_blocking(_lockscreen.imac_metrics, IMAC_SSH)
         elif target == "modelbox":
             metrics = await _lockscreen.run_blocking(_lockscreen.linux_ssh_metrics, MODELBOX_SSH, MODELBOX_KEY)
+        elif target == "mt5bridge":
+            metrics = await _lockscreen.run_blocking(_lockscreen.linux_ssh_metrics, MT5BRIDGE_SSH, MT5BRIDGE_KEY)
         else:
-            raise HTTPException(400, "target must be 'self', 'imac' or 'modelbox'")
+            raise HTTPException(400, "target must be 'self', 'imac', 'modelbox' or 'mt5bridge'")
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001 - ssh uit, time-out, parse: allemaal "niet bereikt"
         raise HTTPException(502, f"{target} niet bereikt: {str(exc)[:120]}") from exc
-    return {"host": "main-imac-luka" if target == "imac" else "modelbox" if target == "modelbox" else _platform.node(),
-            "os": "Darwin" if target == "imac" else "Linux" if target == "modelbox" else _platform.system(), **metrics}
+    naam = {"imac": "main-imac-luka", "modelbox": "modelbox", "mt5bridge": "mt5bridge"}.get(target, _platform.node())
+    systeem = "Darwin" if target == "imac" else "Linux" if target in ("modelbox", "mt5bridge") else _platform.system()
+    return {"host": naam, "os": systeem, **metrics}
 
 
 async def _ls_markets() -> list[dict]:
@@ -6185,9 +6194,41 @@ async def _ls_systems() -> list[dict]:
         data = await AGENT_TUNNEL.get_json("/host/metrics", params, timeout=25.0) if AGENT_TUNNEL else None
         return _lockscreen.machine_row(machine_id, name, data)
 
+    async def _mt5_endpoint() -> dict | None:
+        token = _mt5_hm.metrics_token()
+        if not token:
+            return None
+        try:
+            async with httpx.AsyncClient(timeout=6.0) as c:
+                r = await c.get(
+                    _mt5_hm.metrics_url(),
+                    headers={"auth-token": token, "Authorization": f"Bearer {token}"},
+                )
+            if r.status_code != 200:
+                return None
+            body = r.json()
+            return body if isinstance(body, dict) else None
+        except (httpx.HTTPError, ValueError):
+            return None
+
+    async def _mt5_ssh() -> dict | None:
+        if not AGENT_TUNNEL:
+            return None
+        try:
+            data = await AGENT_TUNNEL.get_json("/host/metrics", {"target": "mt5bridge"}, timeout=25.0)
+        except Exception:  # noqa: BLE001
+            return None
+        if not isinstance(data, dict):
+            return None
+        # SSH just ran; stamp it now so freshness is honest.
+        data = {**data, "source": "ssh", "measured_at": data.get("measured_at") or _mt5_hm.to_iso(_mt5_hm.now_utc())}
+        return data
+
     async def mt5bridge() -> dict:
-        """De derde VPS (Strato, MT5-bridge). Online = SSH-poort antwoordt, gemeten vanaf hier. Cijfers
-        hebben we niet (geen leestoegang); die blijven leeg in plaats van te verzinnen (26 nov)."""
+        """De derde VPS (Strato, MT5-bridge). Online = de SSH-poort of de metrics-endpoint
+        antwoordt. Cijfers: eerst GET /host/metrics, anders SSH (LINUX_PROBE, zoals de
+        modelbox). Een korte storing toont de laatste goede waarde als stale, nooit een
+        verzonnen getal."""
         host = (os.environ.get("MT5_BRIDGE_HOST") or "31.70.196.19").strip()
         poort = int(os.environ.get("MT5_BRIDGE_PORT") or 22)
         try:
@@ -6196,7 +6237,15 @@ async def _ls_systems() -> list[dict]:
             up = True
         except (OSError, asyncio.TimeoutError):
             up = False
-        return _lockscreen.machine_row("mt5bridge", "VPS MT5 bridge", {"cpu": None, "mem": None, "disk": None} if up else None)
+        endpoint = await _mt5_endpoint()
+        ssh = None
+        if not _mt5_hm.is_fresh(endpoint):
+            ssh = await _mt5_ssh()
+        if _mt5_hm.has_numbers(endpoint) or _mt5_hm.has_numbers(ssh):
+            up = True
+        picked = _mt5_hm.choose(endpoint, ssh, _MT5_LAST_GOOD.get())
+        _MT5_LAST_GOOD.put(picked)
+        return _mt5_hm.snapshot_row(up, picked)
 
     rows = await asyncio.gather(
         remote("macmini", "Mac mini", None), remote("imac", "iMac", {"target": "imac"}), vps(), modelbox(), mt5bridge(),

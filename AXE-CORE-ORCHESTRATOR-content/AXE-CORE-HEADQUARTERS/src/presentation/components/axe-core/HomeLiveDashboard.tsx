@@ -36,7 +36,7 @@ import {
   accountGroepen, accountRegels, connectorRegels, mailStand, sleutelTelling, type Breaker, type ConnectorTest, type StatusRegel,
 } from '@/domain/homeStatusCards';
 import {
-  feedRegels, geledenTekst, kiesMachines, limietRegels, monitorRijen, llmTelling, perUur, pnlLijn, providerTegels, recenteToestellen, ringToon, ringWaarde,
+  feedRegels, geledenTekst, kiesMachines, machineBronRegel, limietRegels, monitorRijen, llmTelling, perUur, pnlLijn, providerTegels, recenteToestellen, ringToon, ringWaarde,
   tijdlijnVandaag, type FeedRegel, type Machine, type ProviderSleutel, type TijdJob, type Toon,
 } from '@/domain/homeCommandCenter';
 import {
@@ -929,16 +929,22 @@ export function HomeLiveDashboard({ kern, bouw }: { kern?: HomeKern; bouw?: Home
             {machines.length === 0 && (
               <DashLeeg>{snapshot.fout ? 'No live metrics: the VPS snapshot did not answer.' : 'Waiting for the first measurement…'}</DashLeeg>
             )}
-            {machines.map((m) => (
-              <div key={m.id} className="axe-hcc-machine">
-                <span className="axe-hcc-machine-naam"><Stip toon={m.online ? 'ok' : 'uit'} />{m.name}</span>
+            {machines.map((m) => {
+              const bron = machineBronRegel(m);
+              return (
+              <div key={m.id} className="axe-hcc-machine" data-stale={m.stale || (bron || '').includes('stale') || undefined} title={bron || undefined}>
+                <span className="axe-hcc-machine-meta">
+                  <span className="axe-hcc-machine-naam"><Stip toon={m.online ? 'ok' : 'uit'} />{m.name}</span>
+                  {bron && <span className="axe-hcc-machine-bron">{bron}</span>}
+                </span>
                 <div className="axe-hcc-ringen">
                   <Ring pct={ringWaarde(m.cpu)} label="CPU" />
                   <Ring pct={ringWaarde(m.mem)} label="RAM" />
                   <Ring pct={ringWaarde(m.disk)} label="Disk" />
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
           </div>
         </DashKaart>
