@@ -11,8 +11,11 @@
  *  fout   platte streepjes, rode stip
  *  klaar  blije boogjes
  *
- * Bewust zonder animatie: de notch staat 24/7 boven alles, met blur erachter,
- * en elk animatieframe kostte beide Macs CPU (18 nov).
+ * Zonder `levend` staat hij stil (lijsten, tabbladen). Met `levend` leeft hij
+ * (Luka 27 nov: "levend, zoals op de foto's"): ademen, knipperen, rondkijken,
+ * per stemming anders. Alleen transform/opacity, dus de compositor doet het
+ * werk; de blur achter de notch die op 18 nov CPU kostte, is sinds v3 weg.
+ * `fase` schuift het ritme op, zodat een rij gezichten niet in koor knippert.
  */
 import './AxeGezicht.css';
 
@@ -66,6 +69,8 @@ export function AxeGezicht({
   size = 28,
   label,
   levend = false,
+  fase = 0,
+  volg = false,
 }: {
   kleur?: string;
   stemming?: Stemming;
@@ -74,6 +79,10 @@ export function AxeGezicht({
   /** Knipperen, en rondkijken als hij werkt. Alleen waar hij groot staat
    *  (de notch); in lijsten met tien gezichten wordt het onrustig. */
   levend?: boolean;
+  /** Seconden voorsprong in het ritme (knipperen, ademen); per gezicht anders. */
+  fase?: number;
+  /** Ogen volgen de muis via --axe-kijk-x/-y op een ouder (alleen de held). */
+  volg?: boolean;
 }) {
   return (
     <svg
@@ -84,8 +93,10 @@ export function AxeGezicht({
       aria-label={label ? `${label} · ${stemming}` : stemming}
       data-stemming={stemming}
       data-levend={levend ? '' : undefined}
+      data-volg={volg ? '' : undefined}
       className="axe-gezicht"
       style={{
+        ['--axe-fase' as string]: `${-Math.abs(fase)}s`,
         flexShrink: 0,
         display: 'block',
         overflow: 'visible',
@@ -93,10 +104,16 @@ export function AxeGezicht({
         filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.55))',
       }}
     >
-      <path d={DRIEHOEK} fill={kleur} />
-      <g className="axe-gezicht__kijk">
-        <g className="axe-gezicht__knipper">
-          <Ogen stemming={stemming} />
+      <g className="axe-gezicht__lijf">
+        <path d={DRIEHOEK} fill={kleur} />
+        {/* Fijne lichtrand bovenop: diepte zonder gloed. */}
+        <path d={DRIEHOEK} fill="none" stroke="#fff" strokeOpacity={levend ? 0.18 : 0} strokeWidth="1" className="axe-gezicht__rand" />
+        <g className="axe-gezicht__volg">
+          <g className="axe-gezicht__kijk">
+            <g className="axe-gezicht__knipper">
+              <Ogen stemming={stemming} />
+            </g>
+          </g>
         </g>
       </g>
       {stemming === 'werkt' && (
