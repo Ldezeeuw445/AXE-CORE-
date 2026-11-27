@@ -178,7 +178,7 @@ export function CapabilityRouterSection() {
       ) : capabilities.length === 0 ? (
         <div className="text-xs py-4 text-center" style={{ color: 'var(--text-muted)' }}>No capabilities found in Supabase</div>
       ) : (
-        <div className="space-y-2">
+        <div className="axe-cap-raster">
           {capabilities.map(cap => <CapabilityCard key={cap.id} cap={cap} />)}
         </div>
       )}
