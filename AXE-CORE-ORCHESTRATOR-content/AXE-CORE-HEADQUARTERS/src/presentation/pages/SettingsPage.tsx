@@ -39,10 +39,10 @@ import { WAKE_SLEUTEL, wakeAanVan } from '@/domain/voice/luisterBeleid';
 import { meldWakeKeuze } from '@/presentation/hooks/useWakeWord';
 import { getDefaultOllamaModelNames } from '@/domain/catalogs/ollamaModelCatalog';
 import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/infrastructure/persistence/llmModelRegistryService';
-import { checkAllServices, getSystemState, vpsAgentStatus, checkGeminiReal, type ServiceState } from '@/application/system/systemService';
+import { vpsAgentStatus, checkGeminiReal } from '@/application/system/systemService';
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadCustomProviders, saveCustomProviders, CUSTOM_PROVIDERS_KEY, type CustomProvider } from '@/domain/customProviders';
-import { Activity, AlertTriangle, Bot, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Key,  Mic, Play, Plug, Plus, RefreshCw, Router, Save, Server, Settings, Sparkles, Trash2, Volume2, X, Zap } from 'lucide-react';
+import { AlertTriangle, Bot, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Key,  Mic, Play, Plug, Plus, RefreshCw, Router, Save, Server, Settings, Sparkles, Trash2, Volume2, X, Zap } from 'lucide-react';
 import {
   getSelectedVoiceId,
   setSelectedVoiceId,
@@ -57,6 +57,9 @@ import { AgentMotorenSection } from '@/presentation/components/settings/AgentMot
 import { CodingSeatsSection } from '@/presentation/components/settings/CodingSeatsSection';
 import { UsageCreditsSection } from '@/presentation/components/settings/UsageCreditsSection';
 import { KeysPerAppSection, ServerProviderSlots } from '@/presentation/components/settings/KeysPerAppSection';
+import { SettingsKaartKpis } from '@/presentation/components/settings/SettingsKaartKpis';
+import { SystemSectie } from '@/presentation/components/settings/SystemSectie';
+import { useSettingsKpis } from '@/presentation/components/settings/useSettingsKpis';
 import { ollamaHeaders, ollamaUrl } from '@/infrastructure/config/ollamaSleutel';
 import {
   readAllProviderUsage,
@@ -1334,161 +1337,8 @@ function OllamaModelsSection() {
   );
 }
 
-function ServiceHealthSection() {
-  const [services, setServices] = useState<ServiceState[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const load = async () => {
-    const next = await getSystemState();
-    setServices(next);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    void refresh();
-    return () => { /* no-op */ };
-  }, []);
-
-  const refresh = async () => {
-    setRefreshing(true);
-    try {
-      await checkAllServices();
-      await load();
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const focusOrder = ['supabase', 'github', 'n8n', 'langgraph', 'terminal', 'ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'claude_code', 'hermes'];
-  const ordered = focusOrder
-    .map(name => services.find(service => service.service === name))
-    .filter((service): service is ServiceState => !!service)
-    .concat(services.filter(service => !focusOrder.includes(service.service)));
-
-  return (
-    <WidgetCard title="LIVE SERVICES">
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>A green pulse means online, not just configured.</p>
-            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>This follows the health registry AXE Core uses.</p>
-          </div>
-          <button onClick={refresh} disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px]"
-            style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }}>
-            <Activity size={11} className={refreshing ? 'animate-spin' : ''} />
-            Refresh
-          </button>
-        </div>
-        {loading ? (
-          <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading service health…</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {ordered.map(service => {
-              const online = service.status === 'online';
-              const degraded = service.status === 'degraded';
-              const label = service.service === 'n8n' ? 'n8n' : service.display || service.service;
-              const isVps = ['openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'claude_code', 'hermes', 'ollama'].includes(service.service);
-              return (
-                <div key={service.service} className="rounded-xl p-3 flex items-center gap-3"
-                  style={{ background: 'var(--bg-surface)', border: `1px solid ${online ? 'rgba(16,185,129,0.28)' : degraded ? 'rgba(245,158,11,0.28)' : 'var(--border-subtle)'}` }}>
-                  <span className={`h-2.5 w-2.5 rounded-full ${online ? 'animate-pulse' : ''}`} style={{ background: online ? 'var(--success)' : degraded ? 'var(--warning)' : 'var(--error)' }} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs-custom font-medium" style={{ color: 'var(--text-primary)' }}>{label}</span>
-                      {isVps && <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>(VPS)</span>}
-                    </div>
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                      {service.status}{service.latency_ms ? ` · ${service.latency_ms}ms` : ''}{service.version ? ` · ${service.version}` : ''}
-                    </p>
-                  </div>
-                  <Server size={12} style={{ color: online ? 'var(--success)' : 'var(--text-muted)' }} />
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </WidgetCard>
-  );
-}
-
-function RemoteTerminalSection() {
-  const [service, setService] = useState<ServiceState | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const load = async () => {
-    const next = (await getSystemState()).find(item => item.service === 'terminal') ?? null;
-    setService(next);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    void refresh();
-    return () => { /* no-op */ };
-  }, []);
-
-  const refresh = async () => {
-    setRefreshing(true);
-    try {
-      await checkAllServices();
-      await load();
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const online = service?.status === 'online';
-  const degraded = service?.status === 'degraded';
-
-  return (
-    <WidgetCard title="REMOTE TERMINAL">
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>Beveiligde shell via `wss://api.axecompanion.com/terminal`.</p>
-            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Status comes from the same registry as the rest of AXE Core.</p>
-          </div>
-          <button onClick={refresh} disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px]"
-            style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }}>
-            <Activity size={11} className={refreshing ? 'animate-spin' : ''} />
-            Refresh
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading terminal status…</div>
-        ) : (
-          <div className="rounded-xl p-3 flex items-center gap-3"
-            style={{ background: 'var(--bg-surface)', border: `1px solid ${online ? 'rgba(16,185,129,0.28)' : degraded ? 'rgba(245,158,11,0.28)' : 'var(--border-subtle)'}` }}>
-            <span className={`h-2.5 w-2.5 rounded-full ${online ? 'animate-pulse' : ''}`} style={{ background: online ? 'var(--success)' : degraded ? 'var(--warning)' : 'var(--error)' }} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-xs-custom font-medium" style={{ color: 'var(--text-primary)' }}>AXE Terminal</span>
-                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>(VPS)</span>
-              </div>
-              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                {service?.status === 'unknown' ? 'Unverified' : (service?.status ?? 'Unverified')}{service?.latency_ms ? ` · ${service.latency_ms}ms` : ''}{service?.version ? ` · ${service.version}` : ''}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <a
-                href="/terminal"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-medium"
-                style={{ border: '1px solid var(--border-subtle)', color: 'var(--accent-cyan)' }}>
-                Open
-              </a>
-              <Server size={12} style={{ color: online ? 'var(--success)' : 'var(--text-muted)' }} />
-            </div>
-          </div>
-        )}
-      </div>
-    </WidgetCard>
-  );
-}
+// ServiceHealthSection en RemoteTerminalSection zitten sinds 27 nov in
+// components/settings/SystemSectie.tsx (één dashboard, geen losse kolommen).
 
 /* ─── Quick-fill presets ──────────────────────────────────────────── */
 const QUICK_PRESETS = [
@@ -1735,7 +1585,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
 // re-exported here because agents/pages historically imported it from this page.
 export { loadRepoConfigs, type RepoConfig } from '@/infrastructure/persistence/repoConfigService';
 
-function GitHubReposSection() {
+function GitHubReposSection({ alleenId }: { alleenId?: string } = {}) {
   const [repos, setRepos] = useState<RepoConfigT[]>(() => {
     try { return loadRepoConfigsImpl(); } catch { return DEFAULT_REPOS.map(r => ({ ...r })); }
   });
@@ -1798,12 +1648,12 @@ function GitHubReposSection() {
 
   return (
     <div>
-      <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
+      {!alleenId && <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
         Configure the 3 repos AXE CORE can commit to. When you say "change X", AXE CORE picks the right repo automatically.
         Use one <strong style={{ color: 'var(--text-secondary)' }}>GitHub PAT</strong> (with <code style={{ fontSize: 10 }}>repo</code> scope) for all repos.
-      </p>
+      </p>}
       <div className="space-y-3">
-        {repos.map(r => (
+        {repos.filter(r => !alleenId || r.id === alleenId).map(r => (
           <div key={r.id} className="rounded-xl p-3 space-y-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
             <div className="flex items-center gap-2">
               <Github size={13} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
@@ -1949,7 +1799,7 @@ function TrustLevelsSection() {
       <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
         Per category: how often approved/rejected, and whether AXE may run it on its own without asking. Off by default — you turn this on based on the track record below, never AXE itself. Every automatic run stays visible through a notification.
       </p>
-      <div className="space-y-2">
+      <div className="axe-trust-raster">
         {TRUST_CATEGORIES.map(({ id, label }) => {
           const lvl = levels.find(l => l.category === id);
           const autoApprove = lvl?.auto_approve ?? false;
@@ -2096,6 +1946,13 @@ export default function SettingsPage() {
     { id: 'system', label: 'System', wat: 'Remote terminal, service health and GitHub repos.', inhoud: ['Remote terminal', 'Service health', 'GitHub repos'] },
   ];
   const huidig = SETTINGS_NAV.find((n) => n.id === sectie) ?? SETTINGS_NAV[0];
+  // 27 nov (Luka t80u): elke kaart toont echte cijfers, geen leeg keuzemenu.
+  const { kpis } = useSettingsKpis({
+    mic: String(voice.micPermission),
+    wake: wakeEnabled,
+    clap: clapEnabled,
+    herkenning: !!voice.recognitionSupported,
+  });
   const micToon: 'ok' | 'warn' | 'fout' = voice.micPermission === 'granted' ? 'ok' : voice.micPermission === 'denied' ? 'fout' : 'warn';
 
   return (
@@ -2126,12 +1983,8 @@ export default function SettingsPage() {
         <nav className="axe-settings-v3-raster axe-dash-raster" aria-label="Settings sections" style={{ '--dash-kolommen': 3, '--dash-rijen': 3 } as CSSProperties} data-axe-dash-raster="">
           {SETTINGS_NAV.map((item) => (
             <DashKaart key={item.id} titel={item.label} onKlik={() => kiesSectie(item.id)} className={sectie === item.id && vensterOpen ? 'on' : undefined}>
-              <p className="text-[12px] leading-snug" style={{ color: 'var(--text-secondary)' }}>{item.wat}</p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {item.inhoud.map((x) => (
-                  <span key={x} className="rounded-md px-2 py-0.5 text-[10.5px]" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}>{x}</span>
-                ))}
-              </div>
+              <p className="axe-settings-v3-wat" title={`${item.wat} · ${item.inhoud.join(' · ')}`}>{item.wat}</p>
+              <SettingsKaartKpis kpis={kpis[item.id as keyof typeof kpis] ?? []} />
             </DashKaart>
           ))}
         </nav>
@@ -2236,7 +2089,7 @@ export default function SettingsPage() {
 
         {sectie === 'routing' && (
         <SectieBlok id="routing" titel="ROUTING">
-          <div className="axe-agent-raster axe-agent-raster--sectie">
+          <div className="axe-routing-raster">
           <Kaart titel="AXE ROUTES">
             <RouteSection />
           </Kaart>
@@ -2249,13 +2102,8 @@ export default function SettingsPage() {
 
         {sectie === 'system' && (
         <SectieBlok id="system" titel="SYSTEM">
-          <div className="axe-agent-raster axe-agent-raster--sectie">
-          <RemoteTerminalSection />
-          <ServiceHealthSection />
-          <Kaart titel="DEVELOPER — GITHUB REPOS">
-            <GitHubReposSection />
-          </Kaart>
-          </div>
+          {/* 27 nov (Luka t81u): één dashboard i.p.v. drie losse scrollkolommen. */}
+          <SystemSectie repoFormulier={(id) => <GitHubReposSection alleenId={id} />} />
         </SectieBlok>
         )}
 
