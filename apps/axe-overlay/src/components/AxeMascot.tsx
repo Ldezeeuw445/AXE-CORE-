@@ -1,15 +1,20 @@
 /** AXE Core own notch mascot — animated in code (not Mochi artwork).
  * Soft glossy charcoal blob with cyan→violet AXE branding (TriangleLogo palette).
  */
-export type MascotState = "idle" | "thinking" | "working" | "done" | "offline";
+export type MascotState = "idle" | "thinking" | "working" | "done" | "offline" | "error";
+
+/** Small status badge on the mascot (bottom-right), like the reference avatar. */
+export type MascotBadge = "live" | "warn" | "error" | null;
 
 type Props = {
   state?: MascotState;
   size?: number;
   showBubble?: boolean;
+  badge?: MascotBadge;
 };
 
-export function AxeMascot({ state = "idle", size = 36, showBubble = true }: Props) {
+export function AxeMascot({ state = "idle", size = 36, showBubble = true, badge = null }: Props) {
+  const eyesClosed = state === "error" || state === "offline";
   const gid = "axe-blob-g";
   const glow = "axe-blob-glow";
   return (
@@ -69,15 +74,23 @@ export function AxeMascot({ state = "idle", size = 36, showBubble = true }: Prop
             strokeWidth="1.2"
             strokeLinejoin="round"
           />
-          {/* eyes */}
+          {/* eyes: closed (soft arcs) when something failed or AXE is offline */}
+          {eyesClosed ? (
+            <g className="eyes closed" stroke="#0B1220" strokeWidth="2.4" strokeLinecap="round" fill="none">
+              <path d="M22.5 31 Q26 33.6 29.5 31" />
+              <path d="M34.5 31 Q38 33.6 41.5 31" />
+            </g>
+          ) : (
           <g className="eyes">
             <ellipse className="eye left" cx="26" cy="30" rx="3.2" ry="4.2" fill="#0B1220" />
             <ellipse className="eye right" cx="38" cy="30" rx="3.2" ry="4.2" fill="#0B1220" />
             <circle cx="27.2" cy="28.6" r="1.1" fill="rgba(255,255,255,0.75)" />
             <circle cx="39.2" cy="28.6" r="1.1" fill="rgba(255,255,255,0.75)" />
           </g>
+          )}
         </g>
       </svg>
+      {badge && <span className={`mascot-badge ${badge}`} />}
     </span>
   );
 }

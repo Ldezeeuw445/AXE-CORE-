@@ -79,8 +79,31 @@ fn get_launch_at_login(app: AppHandle) -> Result<bool, String> {
 /// Collapsed topbar hoogte (logical). Moet matchen met frontend TOPBAR_HEIGHT.
 const COLLAPSED_H: f64 = 44.0;
 
+/// Notch v2 compact strip height (logical). Must match frontend COMPACT_HEIGHT.
+const COMPACT_H: f64 = 216.0;
+/// Notch v2 compact strip minimum width (reference: ~900–1000px wide, low).
+const COMPACT_MIN_W: f64 = 960.0;
+
 /// Laatste expanded-state voor display-watcher her-pin (bg thread-safe).
 pub(crate) static OVERLAY_EXPANDED: AtomicBool = AtomicBool::new(false);
+/// Open size when expanded: false = compact strip (default), true = large panel.
+/// Only changes when the frontend passes `size` (Luka's explicit choice / chat).
+pub(crate) static OVERLAY_LARGE: AtomicBool = AtomicBool::new(false);
+
+/// Pure frame size for the notch window: (w, h) in logical px.
+/// collapsed = topbar; compact = low wide strip; large = the old big panel.
+pub(crate) fn overlay_size(screen_w: f64, screen_h: f64, expanded: bool, large: bool) -> (f64, f64) {
+    let base_w = (screen_w * 0.34).max(720.0).round();
+    if !expanded {
+        return (base_w, COLLAPSED_H);
+    }
+    if large {
+        let h = (base_w * 0.7).max(screen_h * 0.42).max(720.0).round();
+        return (base_w, h);
+    }
+    let w = base_w.max(COMPACT_MIN_W).min((screen_w - 48.0).max(base_w)).round();
+    (w, COMPACT_H)
+}
 
 fn overlay_metrics<R: Runtime>(app: &AppHandle<R>) -> (f64, f64, f64, f64, f64) {
     // Fallback voor non-macOS; macOS pin gebruikt NSScreen.main rechtstreeks.
@@ -183,12 +206,12 @@ fn cocoa_center_frame(expanded: bool) -> Result<(f64, f64, f64, f64, f64), Strin
         let visible: NSRect = msg_send![screen, visibleFrame];
         let screen_w = frame.size.width;
         let screen_h = frame.size.height;
-        let w = (screen_w * 0.34).max(720.0).round();
-        let h = if expanded {
-            (w * 0.7).max(screen_h * 0.42).max(720.0).round()
-        } else {
-            COLLAPSED_H
-        };
+        let (w, h) = overlay_size(
+            screen_w,
+            screen_h,
+            expanded,
+            OVERLAY_LARGE.load(Ordering::Relaxed),
+        );
         let top_y = visible.origin.y + visible.size.height;
         let cocoa_y = top_y - h;
         let x = frame.origin.x + ((screen_w - w) / 2.0).max(0.0);
@@ -233,12 +256,12 @@ fn pin_overlay_frame_inner<R: Runtime>(app: &AppHandle<R>, expanded: bool) -> Re
     #[cfg(not(target_os = "macos"))]
     {
         let (sx, screen_w, screen_h, _, _) = overlay_metrics(app);
-        let w = (screen_w * 0.34).max(720.0).round();
-        let h = if expanded {
-            (w * 0.7).max(screen_h * 0.42).max(720.0).round()
-        } else {
-            COLLAPSED_H
-        };
+        let (w, h) = overlay_size(
+            screen_w,
+            screen_h,
+            expanded,
+            OVERLAY_LARGE.load(Ordering::Relaxed),
+        );
         let x = (sx + ((screen_w - w) / 2.0)).max(0.0);
         win.set_size(Size::Logical(LogicalSize::new(w, h)))
             .map_err(|e| e.to_string())?;
@@ -249,8 +272,14 @@ fn pin_overlay_frame_inner<R: Runtime>(app: &AppHandle<R>, expanded: bool) -> Re
 }
 
 
+/// `size`: "compact" | "large" (optional; absent keeps the last size).
 #[tauri::command]
-fn resize_overlay(app: AppHandle, expanded: bool) -> Result<(), String> {
+fn resize_overlay(app: AppHandle, expanded: bool, size: Option<String>) -> Result<(), String> {
+    match size.as_deref() {
+        Some("large") => OVERLAY_LARGE.store(true, Ordering::Relaxed),
+        Some("compact") => OVERLAY_LARGE.store(false, Ordering::Relaxed),
+        _ => {}
+    }
     pin_overlay_frame(&app, expanded)
 }
 
@@ -359,4 +388,21 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running AXE Overlay");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::overlay_size;
+
+    #[test]
+    fn compact_is_low_and_wide_large_is_big() {
+        // 1512×982 MacBook Pro 14"
+        assert_eq!(overlay_size(1512.0, 982.0, false, false), (720.0, 44.0));
+        assert_eq!(overlay_size(1512.0, 982.0, true, false), (960.0, 216.0));
+        assert_eq!(overlay_size(1512.0, 982.0, true, true), (720.0, 720.0));
+        // 2560×1440: compact never narrower than the collapsed bar
+        assert_eq!(overlay_size(2560.0, 1440.0, true, false), (960.0, 216.0));
+        // tiny screen: compact fits inside the screen with a margin
+        assert_eq!(overlay_size(900.0, 700.0, true, false).0, 852.0);
+    }
 }

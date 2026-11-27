@@ -11,10 +11,17 @@ import {
 import {
   classifyActivity,
   fetchApprovals,
-  fetchLiveTasks,
+  fetchTaskBoard,
+  fetchTaskSteps,
+  retryTask,
   type ApprovalItem,
   type LiveTask,
+  type TaskStep,
 } from "./status";
+import { CompactNotch, type CompactTab } from "./components/CompactNotch";
+import { compactState } from "./compact";
+import { loadSize, saveSize, sizeFromCmd, sizeKeyAction, toggleSize, type NotchSize } from "./notchSize";
+import { designData, designState } from "./design";
 import { NOTCH_TABS, tabActie, tabBadge, type NotchTab } from "./tabs";
 import {
   TOPBAR_BUTTONS,
@@ -63,8 +70,36 @@ function fileKind(name: string): string {
   return "file";
 }
 
+function browserStore(): Storage | null {
+  try {
+    return typeof window !== "undefined" ? window.localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+const DESIGN = designState({
+  dev: import.meta.env.DEV,
+  tauri: typeof window !== "undefined" && !!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__,
+  search: typeof window !== "undefined" ? window.location.search : "",
+});
+
 export default function App() {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(DESIGN !== null);
+  /** Remembered open size (default compact). */
+  const [pref, setPref] = useState<NotchSize>(() => (DESIGN === "large" ? "large" : loadSize(browserStore())));
+  /** Size actually shown while open (chat may open large without changing pref). */
+  const [view, setView] = useState<NotchSize>(() => (DESIGN === "large" ? "large" : loadSize(browserStore())));
+  const [compactTab, setCompactTab] = useState<CompactTab>(DESIGN === "widgets" ? "widgets" : "live");
+  const [connected, setConnected] = useState(true);
+  const [failed, setFailed] = useState<LiveTask[]>([]);
+  const [doneToday, setDoneToday] = useState(0);
+  const [steps, setSteps] = useState<TaskStep[]>([]);
+  const [openedAt, setOpenedAt] = useState(() => Date.now());
+  const [now, setNow] = useState(() => new Date());
+  const [retryBusy, setRetryBusy] = useState(false);
+  const [retryMsg, setRetryMsg] = useState<string | null>(null);
+  const [pollNonce, setPollNonce] = useState(0);
   const [busy, setBusy] = useState(false);
   const [online, setOnline] = useState(true);
   const [input, setInput] = useState("");
@@ -88,6 +123,8 @@ export default function App() {
   const activity = classifyActivity(tasks);
   const mascotState: MascotState = !online
     ? "offline"
+    : failed.length > 0
+      ? "error"
     : flashDone
       ? "done"
       : busy
@@ -96,30 +133,71 @@ export default function App() {
           ? "working"
           : "idle";
 
-  const resize = useCallback(async (open: boolean) => {
+  /** Rust pin_overlay_frame: centred, flush under the menu bar; `size` picks compact vs large. */
+  const resize = useCallback(async (open: boolean, size?: NotchSize) => {
     try {
-      // Rust pin_overlay_frame: exact midden, flush onder menu bar, niet versleepbaar.
-      await invoke("resize_overlay", { expanded: open });
+      await invoke("resize_overlay", { expanded: open, size: size ?? null });
     } catch {
       /* browser preview */
     }
   }, []);
 
-  const toggle = useCallback(async () => {
-    const next = !expanded;
-    setExpanded(next);
-    await resize(next);
-    if (next) setTimeout(() => inputRef.current?.focus(), 80);
-  }, [expanded, resize]);
+  /** Open the notch at a size. `remember` = Luka chose this size explicitly. */
+  const openAt = useCallback(
+    (size: NotchSize, remember = false) => {
+      if (remember) {
+        setPref(size);
+        saveSize(browserStore(), size);
+      }
+      if (!expanded) setOpenedAt(Date.now());
+      setView(size);
+      setExpanded(true);
+      void resize(true, size);
+      if (size === "large") setTimeout(() => inputRef.current?.focus(), 80);
+    },
+    [expanded, resize],
+  );
 
-  // Always-on live status poll
+  const close = useCallback(() => {
+    setExpanded(false);
+    void resize(false);
+  }, [resize]);
+
+  /** Right-click / pill: open at the remembered size (compact by default), or close. */
+  const toggle = useCallback(async () => {
+    if (expanded) close();
+    else openAt(pref);
+  }, [expanded, close, openAt, pref]);
+
+  // Always-on live status poll (design mode: fixed layout data, no network)
   useEffect(() => {
+    if (DESIGN) {
+      const d = designData(DESIGN);
+      setOnline(d.online);
+      setTasks(d.live);
+      setFailed(d.failed);
+      setDoneToday(d.doneToday);
+      setApprovals(d.approvals);
+      setSteps(d.steps);
+      if (DESIGN === "drop") {
+        setDragging(true);
+        setPendingFiles([
+          { name: "freight-q4.pdf", size: 182_000, kind: "doc", note: "design sample" },
+          { name: "rates.xlsx", size: 40_000, kind: "sheet", note: "design sample" },
+        ]);
+      }
+      if (DESIGN === "idle") setOpenedAt(Date.now() - 60_000);
+      return;
+    }
     let cancelled = false;
     const tick = async () => {
       try {
-        const [t, a] = await Promise.all([fetchLiveTasks(), fetchApprovals()]);
+        const [b, a] = await Promise.all([fetchTaskBoard(), fetchApprovals()]);
         if (cancelled) return;
-        setTasks(t);
+        setConnected(b.connected);
+        setTasks(b.live);
+        setFailed(b.failed);
+        setDoneToday(b.doneToday);
         setApprovals(a);
         setOnline(true);
       } catch {
@@ -132,7 +210,74 @@ export default function App() {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [pollNonce]);
+
+  // Steps of the focused live task, only while the compact strip is open.
+  const focusId = tasks[0]?.id;
+  useEffect(() => {
+    if (DESIGN || !expanded || view !== "compact" || !focusId) {
+      if (!DESIGN) setSteps([]);
+      return;
+    }
+    let cancelled = false;
+    const tick = async () => {
+      const s = await fetchTaskSteps(focusId);
+      if (!cancelled) setSteps(s);
+    };
+    void tick();
+    const id = window.setInterval(tick, 8000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [expanded, view, focusId]);
+
+  // Clock + greeting → idle hand-off.
+  useEffect(() => {
+    if (!expanded) return;
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, [expanded]);
+
+  // Keyboard inside the notch: ⌘E toggles compact ↔ large (remembered), Esc steps down.
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      const a = sizeKeyAction(e);
+      if (!a) return;
+      if (a === "toggle") {
+        e.preventDefault();
+        openAt(toggleSize(view), true);
+      } else if (a === "step-down") {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT") && (t as HTMLTextAreaElement).value) return;
+        e.preventDefault();
+        if (view === "large") openAt("compact", true);
+        else close();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded, view, openAt, close]);
+
+  const onRetry = async () => {
+    setRetryMsg(null);
+    if (!online || failed.length === 0) {
+      setPollNonce((n) => n + 1);
+      setRetryMsg("Checking again…");
+      window.setTimeout(() => setRetryMsg(null), 2500);
+      return;
+    }
+    if (DESIGN) {
+      setRetryMsg("Design mode: nothing sent.");
+      return;
+    }
+    setRetryBusy(true);
+    const r = await retryTask(failed[0]);
+    setRetryBusy(false);
+    setRetryMsg(r.message);
+    if (r.ok) setPollNonce((n) => n + 1);
+  };
 
   // Shell presence → notch emerge / retract ("AXE always on your side")
   useEffect(() => {
@@ -145,14 +290,19 @@ export default function App() {
         window.clearTimeout(animTimer.current);
         animTimer.current = null;
       }
-      const win = getCurrentWindow();
+      let win: ReturnType<typeof getCurrentWindow> | null = null;
+      try {
+        win = getCurrentWindow();
+      } catch {
+        /* browser preview: no Tauri window */
+      }
       const phase = notchPhaseRef.current;
 
       if (show) {
         if (phase === "visible" || phase === "emerging") return;
         try {
-          await win.show();
-          await win.setAlwaysOnTop(true);
+          await win?.show();
+          await win?.setAlwaysOnTop(true);
           // Re-pin after show — otherwise frame drifts off top-center.
           await invoke("resize_overlay", { expanded: false });
         } catch { /* preview */ }
@@ -176,7 +326,7 @@ export default function App() {
           notchPhaseRef.current = "hidden";
           setNotchPhase("hidden");
           try {
-            await win.hide();
+            await win?.hide();
           } catch { /* preview */ }
           animTimer.current = null;
         }, RETRACT_MS);
@@ -210,6 +360,12 @@ export default function App() {
     };
   }, []);
 
+  // Refs so the long-lived overlay-cmd listener always sees the latest size logic.
+  const prefRef = useRef(pref);
+  prefRef.current = pref;
+  const openAtRef = useRef(openAt);
+  openAtRef.current = openAt;
+
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, expanded]);
@@ -226,18 +382,22 @@ export default function App() {
           void resize(false);
           return;
         }
-        if (cmd === "expand" || cmd.startsWith("ask:")) {
-          setExpanded(true);
-          void resize(true);
-          if (cmd.startsWith("ask:")) {
-            const q = cmd.slice(4).trim();
-            if (q) setInput(q);
-          }
+        const sized = sizeFromCmd(cmd, prefRef.current);
+        if (sized) {
+          // expand-large / expand-compact / toggle-size are explicit choices → remember.
+          openAtRef.current(sized, cmd !== "expand");
+          return;
+        }
+        if (cmd.startsWith("ask:")) {
+          setActiveTab("chat");
+          openAtRef.current("large");
+          const q = cmd.slice(4).trim();
+          if (q) setInput(q);
           return;
         }
         if (cmd === "ptt-start") {
-          setExpanded(true);
-          void resize(true);
+          setActiveTab("chat");
+          openAtRef.current("large");
           setListening(true);
           return;
         }
@@ -245,11 +405,18 @@ export default function App() {
           setListening(false);
           return;
         }
-        if (cmd === "approvals" || cmd === "approve-top" || cmd === "northsea-brief" || cmd === "daily-brief" || cmd === "focus-on" || cmd === "focus-off" || cmd.startsWith("manager-")) {
-          setExpanded(true);
-          void resize(true);
+        if (cmd === "daily-brief" || cmd === "northsea-brief") {
+          setActiveTab("chat");
+          openAtRef.current("large");
           if (cmd === "daily-brief") setInput("Give a short daily brief: approvals, NorthSea, app status.");
           if (cmd === "northsea-brief") setInput("Give a short NorthSea brief: deal replies and next actions.");
+          return;
+        }
+        if (cmd === "approvals" || cmd === "approve-top" || cmd === "focus-on" || cmd === "focus-off" || cmd.startsWith("manager-")) {
+          // Status-type commands: the remembered size (compact shows waiting + agents).
+          if (cmd === "approvals" || cmd === "approve-top") setActiveTab("meldingen");
+          setCompactTab("live");
+          openAtRef.current(prefRef.current);
         }
       });
     })();
@@ -260,7 +427,7 @@ export default function App() {
   const send = async (raw?: string) => {
     const text = (raw ?? input).trim();
     if ((!text && pendingFiles.length === 0) || busy) return;
-    const payload = text || "(bestanden ontvangen — zie context)";
+    const payload = text || "(files received, see context)";
     const files = [...pendingFiles];
     setInput("");
     setPendingFiles([]);
@@ -293,7 +460,8 @@ export default function App() {
       });
     }
     setPendingFiles((p) => [...p, ...next].slice(0, 12));
-    if (!expanded) void toggle();
+    // Drop opens the compact strip (files wait as chips); the large chat only when asked.
+    if (!expanded) openAt(pref);
   };
 
   const onDragEnter = (e: DragEvent) => {
@@ -356,7 +524,7 @@ export default function App() {
     recRef.current = rec;
     rec.start();
     setListening(true);
-    if (!expanded) void toggle();
+    if (!expanded || view !== "large") openAt("large");
   };
 
   const openShell = async (route?: string) => {
@@ -389,27 +557,21 @@ export default function App() {
         setActiveTab("chat");
         setMessages([]);
         setInput("");
-        setExpanded(true);
-        void resize(true);
-        setTimeout(() => inputRef.current?.focus(), 80);
+        openAt("large");
         return;
       case "ptt":
         setActiveTab("chat");
-        if (!expanded) {
-          setExpanded(true);
-          void resize(true);
-        }
         togglePtt();
         return;
       case "approvals":
         setActiveTab("meldingen");
-        setExpanded(true);
-        void resize(true);
+        setCompactTab("live");
+        openAt(pref);
         return;
       case "agents":
         setActiveTab("agents");
-        setExpanded(true);
-        void resize(true);
+        setCompactTab("live");
+        openAt(pref);
         return;
       case "settings":
         void openShell("settings");
@@ -418,10 +580,27 @@ export default function App() {
   };
 
   const showTopbar = notchPhase !== "hidden" && !expanded;
+  const cState = compactState({
+    online,
+    dragging: dragging || (DESIGN === "drop"),
+    hasFiles: pendingFiles.length > 0,
+    live: tasks,
+    failed,
+    openForMs: DESIGN === "greeting" ? 0 : now.getTime() - openedAt,
+  });
+  const showCompact = expanded && view === "compact";
+  const openChatLarge = () => {
+    setActiveTab("chat");
+    openAt("large");
+  };
+  const openAlertsLarge = () => {
+    setActiveTab("meldingen");
+    openAt("large");
+  };
 
   return (
     <div
-      className={`overlay-root ${expanded ? "expanded" : "collapsed"} ${dragging ? "dragging" : ""} state-${mascotState} phase-${notchPhase}`}
+      className={`overlay-root ${expanded ? `expanded size-${view}` : "collapsed"} ${dragging ? "dragging" : ""} state-${mascotState} phase-${notchPhase}`}
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
       onDragOver={onDragOver}
@@ -443,7 +622,7 @@ export default function App() {
               e.preventDefault();
               void toggle();
             }}
-            aria-label={shellRunning ? "Open AXE CORE HQ" : "AXE CORE starten"}
+            aria-label={shellRunning ? "Open AXE CORE HQ" : "Start AXE Core"}
             title="Click → HQ · right-click → chat"
           >
             <AxeMascot state={mascotState} size={30} />
@@ -472,6 +651,32 @@ export default function App() {
             })}
           </div>
         </div>
+      ) : showCompact ? (
+        <CompactNotch
+          state={cState}
+          tab={compactTab}
+          onTab={setCompactTab}
+          online={online}
+          connected={connected}
+          live={tasks}
+          failed={failed}
+          doneToday={doneToday}
+          approvals={approvals}
+          steps={steps}
+          mascotState={mascotState}
+          pendingFiles={pendingFiles}
+          onRemoveFile={(i) => setPendingFiles((p) => p.filter((_, j) => j !== i))}
+          onAskFiles={openChatLarge}
+          onExpand={() => openAt("large", true)}
+          onClose={close}
+          onOpenChat={openChatLarge}
+          onOpenAlerts={openAlertsLarge}
+          onOpenShell={(r) => void openShell(r)}
+          onRetry={() => void onRetry()}
+          retryBusy={retryBusy}
+          retryMsg={retryMsg}
+          now={now}
+        />
       ) : (
         <button
           type="button"
@@ -482,7 +687,7 @@ export default function App() {
             e.preventDefault();
             void toggle();
           }}
-          aria-label={expanded ? "AXE inklappen" : shellRunning ? "Open AXE CORE shell" : "AXE CORE starten"}
+          aria-label={expanded ? "Collapse AXE" : shellRunning ? "Open AXE CORE shell" : "Start AXE Core"}
           title={expanded ? "Collapse" : "Click → shell · right-click → chat"}
         >
           <AxeMascot state={mascotState} size={expanded ? 40 : 32} />
@@ -500,7 +705,7 @@ export default function App() {
         </button>
       )}
 
-      {expanded && (
+      {expanded && view === "large" && (
         <section className="panel" role="dialog" aria-label="AXE Core notch">
           <header className="panel-head">
             <div className="head-left">
@@ -513,10 +718,13 @@ export default function App() {
               </div>
             </div>
             <div className="head-actions">
-              <button type="button" className="ghost" onClick={() => void openShell()} title="Open Tauri / HQ shell">
-                Open shell
+              <button type="button" className="ghost" onClick={() => void openShell()} title="Open AXE Core HQ">
+                Open HQ
               </button>
-              <button type="button" className="ghost" onClick={() => void toggle()} aria-label="Close">
+              <button type="button" className="ghost" onClick={() => openAt("compact", true)} title="Compact (⌘E)" aria-label="Back to the compact strip">
+                ⤡ Compact
+              </button>
+              <button type="button" className="ghost" onClick={close} aria-label="Close" title="Close">
                 ✕
               </button>
             </div>
@@ -657,7 +865,7 @@ export default function App() {
                 onClick={togglePtt}
                 title="Push-to-talk"
               >
-                {listening ? "● Luisteren" : "🎙 PTT"}
+                {listening ? "● Listening" : "🎙 PTT"}
               </button>
               <label className="file-btn" title="Files">
                 📎
@@ -677,7 +885,7 @@ export default function App() {
                 disabled={busy || (!input.trim() && pendingFiles.length === 0)}
                 onClick={() => void send()}
               >
-                Stuur
+                Send
               </button>
             </div>
           </div>

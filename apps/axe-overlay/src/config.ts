@@ -53,7 +53,7 @@ export async function getLaunchAtLogin(): Promise<boolean> {
   return invoke<boolean>("get_launch_at_login");
 }
 
-export async function resizeOverlay(expanded: boolean): Promise<void> {
+export async function resizeOverlay(expanded: boolean, size?: "compact" | "large"): Promise<void> {
   if (!isTauri()) return;
-  await invoke("resize_overlay", { expanded });
+  await invoke("resize_overlay", { expanded, size: size ?? null });
 }

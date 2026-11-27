@@ -59,9 +59,22 @@ pub fn start_watcher<R: Runtime + 'static>(app: AppHandle<R>) {
                     continue;
                 }
                 // Ensure window is visible for interactive cmds
+                // Notch v2 size commands: set the size before the re-pin below.
+                match cmd {
+                    "expand-large" => super::OVERLAY_LARGE.store(true, std::sync::atomic::Ordering::Relaxed),
+                    "expand-compact" => super::OVERLAY_LARGE.store(false, std::sync::atomic::Ordering::Relaxed),
+                    "toggle-size" => {
+                        let cur = super::OVERLAY_LARGE.load(std::sync::atomic::Ordering::Relaxed);
+                        super::OVERLAY_LARGE.store(!cur, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    _ => {}
+                }
                 if matches!(
                     cmd,
                     "expand"
+                        | "expand-large"
+                        | "expand-compact"
+                        | "toggle-size"
                         | "ptt-start"
                         | "ptt-stop"
                         | "approvals"
@@ -84,6 +97,9 @@ pub fn start_watcher<R: Runtime + 'static>(app: AppHandle<R>) {
                         let expand_now = matches!(
                             cmd,
                             "expand"
+                                | "expand-large"
+                                | "expand-compact"
+                                | "toggle-size"
                                 | "ptt-start"
                                 | "approvals"
                                 | "approve-top"

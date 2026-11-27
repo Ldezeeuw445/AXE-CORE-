@@ -1,21 +1,24 @@
 import { DEFAULT_API_ORIGIN, authHeaders, loadLocalConfig } from "./config";
+import {
+  isDangerousApproval,
+  isRiskyTask,
+  splitTasks,
+  type ApprovalItem,
+  type LiveTask,
+  type TaskBoard,
+  type TaskStep,
+} from "./taskLogic";
 
-export type LiveTask = {
-  id: string;
-  title?: string;
-  status?: string;
-  capability?: string;
-  goal?: string;
-};
-
-export type ApprovalItem = {
-  id: string;
-  title?: string;
-  detail?: string;
-  kind?: string;
-  status?: string;
-  task_id?: string;
-};
+export {
+  FAILED_WINDOW_MS,
+  isDangerousApproval,
+  isRiskyTask,
+  splitTasks,
+  type ApprovalItem,
+  type LiveTask,
+  type TaskBoard,
+  type TaskStep,
+} from "./taskLogic";
 
 async function originAndKey() {
   const c = await loadLocalConfig();
@@ -25,22 +28,61 @@ async function originAndKey() {
   };
 }
 
+/**
+ * One /tasks call for the whole notch. Throws on network/HTTP errors so the
+ * caller can show the honest "can't reach AXE Core" state.
+ */
+export async function fetchTaskBoard(now = Date.now()): Promise<TaskBoard> {
+  const { origin, key } = await originAndKey();
+  if (!key) return { connected: false, live: [], failed: [], doneToday: 0 };
+  const r = await fetch(`${origin}/tasks?limit=50`, { headers: authHeaders(key) });
+  if (!r.ok) throw new Error(`tasks ${r.status}`);
+  const data = (await r.json()) as { tasks?: LiveTask[] };
+  return { connected: true, ...splitTasks(data.tasks || [], now) };
+}
+
 export async function fetchLiveTasks(): Promise<LiveTask[]> {
+  try {
+    return (await fetchTaskBoard()).live;
+  } catch {
+    return [];
+  }
+}
+
+/** Steps of one task (read-only, GET /tasks/{id}). */
+export async function fetchTaskSteps(taskId: string): Promise<TaskStep[]> {
   const { origin, key } = await originAndKey();
   if (!key) return [];
   try {
-    const r = await fetch(`${origin}/tasks?limit=30`, {
-      headers: authHeaders(key),
-    });
+    const r = await fetch(`${origin}/tasks/${encodeURIComponent(taskId)}`, { headers: authHeaders(key) });
     if (!r.ok) return [];
-    const data = (await r.json()) as { tasks?: LiveTask[] };
-    const tasks = data.tasks || [];
-    return tasks.filter((t) => {
-      const s = String(t.status || "").toLowerCase();
-      return ["running", "in_progress", "claimed", "active", "queued", "waiting_approval"].includes(s);
-    });
+    const d = (await r.json()) as { steps?: TaskStep[] };
+    return d.steps || [];
   } catch {
     return [];
+  }
+}
+
+/**
+ * Notch retry = the existing safe POST /tasks/{id}/retry (new queued copy of a
+ * failed task; the server dedupes double clicks; no send, no order).
+ */
+export async function retryTask(t: LiveTask): Promise<{ ok: boolean; message: string }> {
+  if (isRiskyTask(t)) {
+    return { ok: false, message: "Not retried from the notch: open it in AXE Core." };
+  }
+  const { origin, key } = await originAndKey();
+  if (!key) return { ok: false, message: "No API key" };
+  try {
+    const r = await fetch(`${origin}/tasks/${encodeURIComponent(t.id)}/retry`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(key) },
+      body: JSON.stringify({ by: "luka-notch" }),
+    });
+    if (!r.ok) return { ok: false, message: `Retry ${r.status}` };
+    return { ok: true, message: "Queued again" };
+  } catch (e) {
+    return { ok: false, message: (e as Error).message };
   }
 }
 
@@ -57,14 +99,6 @@ export async function fetchApprovals(): Promise<ApprovalItem[]> {
   } catch {
     return [];
   }
-}
-
-/** Never approve real trades or payments from the notch. */
-export function isDangerousApproval(a: ApprovalItem): boolean {
-  const blob = `${a.kind || ""} ${a.title || ""} ${a.detail || ""}`.toLowerCase();
-  return /trade|trading|order|payment|pay|transfer|wire|sepa|iban|invoice.?pay|purchase|buy\b|sell\b/.test(
-    blob,
-  );
 }
 
 export async function decideApproval(

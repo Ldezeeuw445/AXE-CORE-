@@ -41,3 +41,10 @@ npm run tauri build
 ```
 
 Never put secrets, trades, payments, or mailbox credentials in the overlay UI.
+
+## Notch v2: compact by default (27-11)
+
+- Right-click / topbar opens the **compact strip** (~216px high, ≥960px wide): Live (greeting, idle, working with steps + 2×2 agent pills, error with one safe Retry, drop zone) and a **Widgets** tab (Tasks, Focus timer, Note, Today).
+- **Large view only when you ask:** the ⤢ button, **⌘E** (toggle), or `expand-large` / `expand-compact` / `toggle-size` in `~/.axe/overlay.cmd`. Esc steps down (large → compact → closed). The last explicit choice is remembered (`localStorage axe.notch.size`); default is compact. Chat / PTT open large without changing that choice.
+- Matte-black AXE card material, no glass. Real data only (`/tasks`, `/tasks/{id}` steps, `/approvals`). Retry = existing `POST /tasks/{id}/retry`, never for trade/pay/send/deploy-like tasks; approvals are never decided from the strip.
+- Design screenshots: `npm run dev`, then `http://localhost:1421/?ontwerp=1&state=working|greeting|idle|error|offline|drop|widgets|large`. Design mode is off inside Tauri and in production builds.
