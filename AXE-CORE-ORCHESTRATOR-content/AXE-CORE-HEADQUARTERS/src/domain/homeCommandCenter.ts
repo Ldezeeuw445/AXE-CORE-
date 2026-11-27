@@ -160,7 +160,39 @@ export function geledenTekst(at: number | null, nu = Date.now()): string {
 
 /* ── Systeemmonitor ────────────────────────────────────────────────────── */
 
-export type Machine = { id: string; name: string; online: boolean; cpu: number | null; mem: number | null; disk: number | null };
+export type MachineBron = 'endpoint' | 'ssh';
+export const METRICS_STALE_S = 120;
+export type Machine = {
+  id: string;
+  name: string;
+  online: boolean;
+  cpu: number | null;
+  mem: number | null;
+  disk: number | null;
+  source?: MachineBron | string | null;
+  measured_at?: string | null;
+  age_seconds?: number | null;
+  stale?: boolean;
+};
+
+/** Caption under a machine: source, age, and 'stale' when older than ~2 minutes. Null when there is nothing to say. */
+export function machineBronRegel(m: Machine, nu = Date.now()): string | null {
+  const gemeten = m.cpu != null || m.mem != null || m.disk != null;
+  const age = m.age_seconds != null && Number.isFinite(m.age_seconds)
+    ? Math.max(0, Math.round(m.age_seconds))
+    : m.measured_at && Number.isFinite(Date.parse(m.measured_at))
+      ? Math.max(0, Math.round((nu - Date.parse(m.measured_at)) / 1000))
+      : null;
+  const stale = m.stale ?? (age != null && age > METRICS_STALE_S);
+  if (!gemeten && !m.source && age == null) {
+    return m.online ? 'not measured' : null;
+  }
+  const bron = m.source === 'ssh' ? 'SSH' : m.source === 'endpoint' ? 'endpoint' : m.source || null;
+  const leeftijd = age == null ? null : age < 60 ? `${age}s` : age < 3600 ? `${Math.floor(age / 60)}m` : `${Math.floor(age / 3600)}h`;
+  const parts = [bron, leeftijd, stale && gemeten ? 'stale' : null].filter(Boolean);
+  if (parts.length) return parts.join(' · ');
+  return gemeten ? null : (m.online ? 'not measured' : null);
+}
 
 /** Hooguit twee machines voor de ringen: de Mac mini en de VPS als die er zijn, anders de eerste twee. */
 /**

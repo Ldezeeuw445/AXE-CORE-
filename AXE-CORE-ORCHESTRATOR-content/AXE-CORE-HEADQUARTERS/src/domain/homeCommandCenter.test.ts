@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  feedRegels, geledenTekst, kiesMachines, limietRegels, monitorRijen, llmTelling, perUur, pnlLijn, providerTegels, recenteToestellen, ringToon, ringWaarde,
+  feedRegels, geledenTekst, kiesMachines, machineBronRegel, limietRegels, monitorRijen, llmTelling, perUur, pnlLijn, providerTegels, recenteToestellen, ringToon, ringWaarde,
   tijdlijnVandaag,
 } from './homeCommandCenter';
 
@@ -87,8 +87,19 @@ describe('home command center', () => {
       { id: 'macmini', name: 'Mac mini', online: true, cpu: 1, mem: 1, disk: 1 },
     ]);
     expect(alle.map((x) => x.name)).toEqual(['Mac mini', 'iMac', 'VPS', 'VPS Models', 'VPS MT5']);
+    expect(alle[4].cpu).toBeNull();
     expect([monitorRijen(1), monitorRijen(2), monitorRijen(5), monitorRijen(6)]).toEqual([1, 2, 3, 3]);
     expect(kiesMachines(null)).toEqual([]);
+    const metBron = kiesMachines([
+      { id: 'mt5bridge', name: 'VPS MT5 bridge', online: true, cpu: 10, mem: 20, disk: 30, source: 'endpoint', measured_at: '2026-11-27T11:59:50Z', age_seconds: 10, stale: false },
+    ])[0];
+    expect(metBron.name).toBe('VPS MT5');
+    expect(metBron.source).toBe('endpoint');
+    const klok = Date.parse('2026-11-27T12:00:00Z');
+    expect(machineBronRegel(metBron, klok)).toBe('endpoint · 10s');
+    expect(machineBronRegel({ ...metBron, source: 'ssh', age_seconds: 150, stale: true }, klok)).toBe('SSH · 2m · stale');
+    expect(machineBronRegel({ id: 'mt5bridge', name: 'VPS MT5', online: true, cpu: null, mem: null, disk: null }, klok)).toBe('not measured');
+    expect(machineBronRegel({ id: 'vps', name: 'VPS', online: true, cpu: 1, mem: 1, disk: 1 }, klok)).toBeNull();
   });
 
   it('tijdlijn: herhalende crons één regel in het Engels, eenmalige op tijd', () => {

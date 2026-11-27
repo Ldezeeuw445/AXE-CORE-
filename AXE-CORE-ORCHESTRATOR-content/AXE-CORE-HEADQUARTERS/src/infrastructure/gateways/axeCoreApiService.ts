@@ -1624,7 +1624,7 @@ export function placesGeocode(q: string): Promise<Array<{ lat: string; lon: stri
 export type { LockscreenMarket } from '@/domain/lockMarkets';
 export interface LockscreenSnapshot {
   markets: LockscreenMarket[];
-  systems: { id: string; name: string; online: boolean; cpu: number | null; mem: number | null; disk: number | null }[];
+  systems: { id: string; name: string; online: boolean; cpu: number | null; mem: number | null; disk: number | null; source?: string | null; measured_at?: string | null; age_seconds?: number | null; stale?: boolean }[];
   services: { id: string; name: string; ok: boolean | null; detail?: string }[];
   attention: { severity: string; title: string; count: number; ago_s: number | null; route: string }[];
   attention_total: number;
