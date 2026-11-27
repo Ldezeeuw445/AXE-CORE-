@@ -29,6 +29,11 @@ class _Q:
         self.f[k] = None
         return self
 
+    def in_(self, k, v):
+        # 27 nov: een manager leest ook zijn oude namen (manager_identiteit.namen_van).
+        self.f[k] = ("_in", tuple(v))
+        return self
+
     def or_(self, *_a):
         self.f["_luka"] = True
         return self
@@ -50,7 +55,8 @@ class _Q:
             self.db.rijen.append(rij)
             return type("R", (), {"data": [rij]})()
         hits = [r for r in self.db.rijen if all(
-            (k == "_luka" and md.LUKA in (r["from_agent"], r["to_agent"])) or r.get(k) == v
+            (k == "_luka" and md.LUKA in (r["from_agent"], r["to_agent"]))
+            or (isinstance(v, tuple) and v[:1] == ("_in",) and r.get(k) in v[1]) or r.get(k) == v
             for k, v in self.f.items())]
         if self.op == "update":
             for r in hits:

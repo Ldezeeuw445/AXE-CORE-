@@ -30,13 +30,17 @@ import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
+import manager_identiteit as _mi
+
 log = logging.getLogger("axe_manager_werk")
 
-MANAGERS: tuple[str, ...] = ("axemanager", "projectsmgr", "companionmgr", "axon", "tradingos", "northseamgr")
-# 22 nov (Luka): DAX-bots zijn managers. Ze krijgen hetzelfde gesprek (ook met de app
-# dicht); hun eigen werk blijft hun DAX-routine, dus geen extra initiatief-ronde.
-DAX_BOTS: tuple[str, ...] = ("northsea", "trading", "developer", "thinktank", "browser")
-IN_GESPREK: tuple[str, ...] = MANAGERS + DAX_BOTS
+# 27 nov (Issue #355, ADR-2026-11-26-managers-zijn-dax): managers en DAX-bots zijn één.
+# Eén canonieke lijst uit manager_identiteit; de oude DAX-botnamen (northsea, trading,
+# developer, thinktank) zijn aliassen van hun manager en worden overal genormaliseerd,
+# zodat hun gesprek, taken en lessen bij die ene manager blijven. Browser is geen agent
+# meer maar een gedeelde computer (tot 27 nov stond hij hier als eigen DAX-bot).
+MANAGERS: tuple[str, ...] = _mi.alle_managers()
+IN_GESPREK: tuple[str, ...] = MANAGERS
 LUKA = "luka"
 ANTWOORD_NA = timedelta(minutes=3)       # zo lang krijgt de app de kans
 NIET_OUDER_DAN = timedelta(hours=24)     # oudere opdrachten niet alsnog oprakelen
@@ -60,12 +64,8 @@ MANAGER_SLEUTELS: dict[str, tuple[tuple[str, str], tuple[str, str]]] = {
     "projectsmgr": (("OPENROUTER4_API_KEY", "OPENROUTER3_API_KEY"), ("GROQ_RESERVE_API_KEY", "GROQ_LIGHT_API_KEY")),
     "tradingos": (("OPENROUTER5_API_KEY", "OPENROUTER3_API_KEY"), ("GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY")),
     "companionmgr": (("OPENROUTER5_API_KEY", "OPENROUTER4_API_KEY"), ("GROQ_RESERVE_API_KEY", "GROQ_LIGHT_API_KEY")),
-    # DAX-bots (22 nov): dezelfde drie OpenRouter-accounts, verspreid, nooit de chat-Groq.
-    "northsea": (("OPENROUTER4_API_KEY", "OPENROUTER3_API_KEY"), ("GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY")),
-    "trading": (("OPENROUTER5_API_KEY", "OPENROUTER4_API_KEY"), ("GROQ_RESERVE_API_KEY", "GROQ_LIGHT_API_KEY")),
-    "developer": (("OPENROUTER3_API_KEY", "OPENROUTER5_API_KEY"), ("GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY")),
-    "thinktank": (("OPENROUTER4_API_KEY", "OPENROUTER5_API_KEY"), ("GROQ_RESERVE_API_KEY", "GROQ_LIGHT_API_KEY")),
-    "browser": (("OPENROUTER5_API_KEY", "OPENROUTER3_API_KEY"), ("GROQ_LIGHT_API_KEY", "GROQ_RESERVE_API_KEY")),
+    # De DAX-bots (22 nov) hadden hier eigen rijen. Sinds de fusie (27 nov) gebruikt een
+    # oude botnaam de sleutels van zijn manager: sleutel_volgorde normaliseert eerst.
 }
 
 
@@ -75,7 +75,7 @@ def _kort_env(env: str) -> str:
 
 def sleutel_volgorde(agent: str) -> list[tuple[str, str]]:
     """(aanbieder, omgevingsnaam) in de volgorde waarin deze manager ze probeert. Alleen namen, nooit waarden."""
-    (or1, or2), (gq1, gq2) = MANAGER_SLEUTELS.get(agent, MANAGER_SLEUTELS["axemanager"])
+    (or1, or2), (gq1, gq2) = MANAGER_SLEUTELS.get(_mi.normaliseer_manager(agent), MANAGER_SLEUTELS["axemanager"])
     return [("openrouter", or1), ("openrouter", or2), ("groq", gq1), ("groq", gq2), ("ollama", "OLLAMA_PROXY_KEY")]
 
 
@@ -96,13 +96,36 @@ def manager_keten(agent: str) -> list[Any]:
 OPEN = ("pending", "queued", "retrying", "waiting_approval", "planning", "running", "in_progress", "verifying")
 KLAAR = ("completed", "failed", "cancelled", "blocked")
 
-NAAM = {
-    "axemanager": "AXE CORE Manager (de baas)", "projectsmgr": "Projects Manager",
-    "companionmgr": "AXE Companion Manager", "axon": "AXON Memory Manager",
-    "tradingos": "Trading OS Manager", "northseamgr": "NorthSea Desk Manager",
-    "northsea": "NorthSea DAX-bot", "trading": "Trading DAX-bot", "developer": "Developer DAX-bot",
-    "thinktank": "ThinkTank DAX-bot", "browser": "Browser DAX-bot",
+# Eén naam per manager; een oude DAX-botnaam geeft de naam van zijn manager.
+NAAM: dict[str, str] = {
+    **{m: _mi.manager_naam(m) + (" (de baas)" if m == "axemanager" else "") for m in MANAGERS},
+    **{alias: _mi.manager_naam(m) + (" (de baas)" if m == "axemanager" else "")
+       for alias, m in _mi.ALIAS_NAAR_CANONIEK.items()},
 }
+
+
+def _norm(agent: Any) -> str:
+    """Canonieke manager-id; elke naam die de lus binnenkrijgt gaat hier eerst doorheen."""
+    return _mi.normaliseer_manager(agent)
+
+
+def _canoniek_meta(rijen: list[dict[str, Any]], agent: str) -> list[dict[str, Any]]:
+    """Taken onder een oude naam hebben idem/vinger met dat voorvoegsel ("northsea:...").
+    Voor de dubbel- en pogingen-check tellen ze als dezelfde manager."""
+    uit = []
+    for t in rijen:
+        meta = t.get("metadata")
+        if isinstance(meta, dict):
+            nieuw = dict(meta)
+            for k in ("idem", "vinger"):
+                v = nieuw.get(k)
+                if isinstance(v, str) and ":" in v:
+                    kop, rest = v.split(":", 1)
+                    if kop != agent and _norm(kop) == agent:
+                        nieuw[k] = f"{agent}:{rest}"
+            t = {**t, "metadata": nieuw}
+        uit.append(t)
+    return uit
 
 
 def _tijd(s: Any) -> datetime | None:
@@ -118,16 +141,18 @@ def _tijd(s: Any) -> datetime | None:
 def onbeantwoord(berichten: list[dict[str, Any]], agent: str, nu: datetime) -> list[dict[str, Any]]:
     """Opdrachten van Luka aan `agent` zonder antwoord van `agent` erna.
 
-    Puur: krijgt de draad (alle richtingen, willekeurige volgorde)."""
+    Puur: krijgt de draad (alle richtingen, willekeurige volgorde). Berichten aan of van
+    een oude naam (northsea) horen bij hetzelfde gesprek als de manager (northseamgr)."""
+    agent = _norm(agent)
     eigen = sorted(
         (b for b in berichten
-         if (b.get("from_agent") == LUKA and b.get("to_agent") == agent and b.get("kind") == "directive")
-         or (b.get("from_agent") == agent and b.get("to_agent") == LUKA)),
+         if (b.get("from_agent") == LUKA and _norm(b.get("to_agent")) == agent and b.get("kind") == "directive")
+         or (_norm(b.get("from_agent")) == agent and b.get("to_agent") == LUKA)),
         key=lambda b: _tijd(b.get("created_at")) or nu,
     )
     wacht: list[dict[str, Any]] = []
     for b in eigen:
-        if b.get("from_agent") == agent:
+        if _norm(b.get("from_agent")) == agent:
             wacht = []                      # alles daarvoor is beantwoord
         else:
             wacht.append(b)
@@ -235,8 +260,8 @@ def lees_overleg(tekst: str, van: str) -> list[tuple[str, str]]:
     for o in d.get("overleg") or []:
         if not isinstance(o, dict):
             continue
-        met, vraag = str(o.get("met") or "").strip().lower(), str(o.get("vraag") or "").strip()
-        if met in MANAGERS and met != van and vraag:
+        met, vraag = _norm(o.get("met")), str(o.get("vraag") or "").strip()
+        if met in MANAGERS and met != _norm(van) and vraag:
             uit.append((met, vraag[:1200]))
     return uit[:1]
 
@@ -305,6 +330,7 @@ def _http_status(url: str, timeout: float = 8.0) -> str:
 def metingen(db: Any, agent: str, nu: datetime, http: Callable[[str], str] | None = None) -> list[str]:
     """Wat er NU waar is in het terrein van deze manager. Elke meting los: één
     die faalt houdt de rest niet tegen."""
+    agent = _norm(agent)
     http = http or _http_status
     regels: list[str] = []
 
@@ -413,6 +439,7 @@ def metingen(db: Any, agent: str, nu: datetime, http: Callable[[str], str] | Non
 def denk(db: Any, agent: str, opdrachten: list[dict[str, Any]], geschiedenis: list[dict[str, Any]],
          chat: Callable[..., Any] | None = None) -> tuple[str, list[str], str, list[tuple[str, str]]]:
     """Het model vragen. Geeft (antwoord, taken, welk model, overleg)."""
+    agent = _norm(agent)
     berichten: list[dict[str, str]] = [
         {"role": "system", "content": SYSTEEM.format(
             naam=NAAM.get(agent, agent), context=_context(db, agent),
@@ -456,7 +483,7 @@ def denk(db: Any, agent: str, opdrachten: list[dict[str, Any]], geschiedenis: li
 
 def _taken_vandaag(db: Any, agent: str, nu: datetime) -> int:
     try:
-        rijen = (db.table("core_tasks").select("id").eq("requested_by", agent)
+        rijen = (db.table("core_tasks").select("id").in_("requested_by", list(_mi.namen_van(agent)))
                  .gte("created_at", (nu - timedelta(hours=24)).isoformat()).limit(50).execute().data) or []
         return len(rijen)
     except Exception:  # noqa: BLE001
@@ -466,6 +493,7 @@ def _taken_vandaag(db: Any, agent: str, nu: datetime) -> int:
 def _rem(db: Any, agent: str, wat: str, detail: str = "") -> None:
     """Tel een rem of fout, in dit proces én in de database (voor GET /managers/gezondheid)."""
     import manager_betrouwbaar as _mb
+    agent = _norm(agent)
     _mb.tel(agent, wat)
     try:
         db.table("core_manager_messages").insert(_mb.rem_rij(agent, wat, detail)).execute()
@@ -475,14 +503,17 @@ def _rem(db: Any, agent: str, wat: str, detail: str = "") -> None:
 
 def _recente_taken(db: Any, agent: str, nu: datetime) -> list[dict[str, Any]]:
     import manager_betrouwbaar as _mb
-    return (db.table("core_tasks").select("id,title,goal,capability,status,metadata,result,created_at,completed_at")
-            .eq("requested_by", agent).gte("created_at", (nu - _mb.TERUGKIJKEN).isoformat())
-            .order("created_at", desc=True).limit(200).execute().data) or []
+    agent = _norm(agent)
+    rijen = (db.table("core_tasks").select("id,title,goal,capability,status,metadata,result,created_at,completed_at")
+             .in_("requested_by", list(_mi.namen_van(agent))).gte("created_at", (nu - _mb.TERUGKIJKEN).isoformat())
+             .order("created_at", desc=True).limit(200).execute().data) or []
+    return _canoniek_meta(rijen, agent)
 
 
 def _escaleer(db: Any, agent: str, opdracht: str, vinger: str) -> None:
     """Twee keer mislukt: niet nog eens proberen, maar een stap voor Luka (Your turn). Eén keer."""
     import gedeeld_log as _gl
+    agent = _norm(agent)
     titel = f"{NAAM.get(agent, agent).split(' (')[0]} loopt vast: {opdracht[:110]}"
     try:
         al = (db.table("core_tasks").select("id").eq("capability", _gl.STAP).eq("title", titel[:200])
@@ -501,8 +532,12 @@ def _escaleer(db: Any, agent: str, opdracht: str, vinger: str) -> None:
 
 
 def maak_taak(db: Any, agent: str, opdracht: str, nu: datetime, bron_id: Any = None) -> dict[str, Any] | None:
-    """Een managertaak -- maar nooit dubbel, nooit een derde poging, niet net na een oplossing."""
+    """Een managertaak -- maar nooit dubbel, nooit een derde poging, niet net na een oplossing.
+
+    Altijd op de canonieke naam: requested_by, assignee, idem en vinger zijn van de
+    manager, ook als hij met een oude DAX-botnaam binnenkwam (één takenstroom)."""
     import manager_betrouwbaar as _mb
+    agent = _norm(agent)
     idem = _mb.idem_sleutel(agent, bron_id, opdracht)
     vinger = _mb.vingerafdruk(agent, opdracht)
     try:
@@ -550,7 +585,7 @@ def maak_taak(db: Any, agent: str, opdracht: str, nu: datetime, bron_id: Any = N
 
 def _zeg(db: Any, agent: str, tekst: str) -> None:
     db.table("core_manager_messages").insert({
-        "from_agent": agent, "to_agent": LUKA, "kind": "report", "body": tekst[:4000]}).execute()
+        "from_agent": _norm(agent), "to_agent": LUKA, "kind": "report", "body": tekst[:4000]}).execute()
 
 
 # ── 3. terugmelden als een taak klaar is ───────────────────────────────────
@@ -588,7 +623,7 @@ def meld_tekst(t: dict[str, Any]) -> str:
 def meld_klaar(db: Any, nu: datetime) -> int:
     try:
         rijen = (db.table("core_tasks").select("id,title,status,result,error,metadata,requested_by,completed_at")
-                 .in_("requested_by", list(IN_GESPREK)).in_("status", list(KLAAR))
+                 .in_("requested_by", list(_mi.alle_namen())).in_("status", list(KLAAR))
                  .gte("completed_at", (nu - NIET_OUDER_DAN).isoformat()).limit(50).execute().data) or []
     except Exception:  # noqa: BLE001
         return 0
@@ -640,13 +675,19 @@ def gezondheid(db: Any, nu: datetime) -> dict[str, Any]:
     sinds = (nu - timedelta(hours=24)).isoformat()
     try:
         taken = (db.table("core_tasks").select("requested_by,status,metadata,created_at")
-                 .in_("requested_by", list(MANAGERS)).gte("created_at", sinds).limit(500).execute().data) or []
+                 .in_("requested_by", list(_mi.alle_namen())).gte("created_at", sinds).limit(500).execute().data) or []
+        # Eén status per manager: taken onder een oude naam tellen bij de manager.
+        taken = [{**t, "requested_by": _norm(t.get("requested_by"))} for t in taken]
     except Exception:  # noqa: BLE001
         taken = []
     try:
         events = (db.table("core_manager_messages").select("body,created_at").eq("from_agent", _mb.REM_AGENT)
                   .eq("to_agent", _mb.REM).gte("created_at", sinds).limit(1000).execute().data) or []
-        rems: dict[str, dict[str, Any]] | None = _mb.tel_rems(events)
+        rems: dict[str, dict[str, Any]] | None = {}
+        for naam, tel_ in _mb.tel_rems(events).items():
+            doel = rems.setdefault(_norm(naam), {})
+            for k, v in tel_.items():
+                doel[k] = (int(doel.get(k) or 0) + v) if isinstance(v, int) else v
     except Exception:  # noqa: BLE001
         rems = None
     # Laatste ronde uit de cron-rij zelf: de ronde kan in de andere worker gedraaid hebben.
@@ -676,8 +717,8 @@ def _run(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[
             continue
         rondes += 1
         geschiedenis = sorted(
-            (b for b in berichten if (b.get("from_agent") == LUKA and b.get("to_agent") == agent)
-             or (b.get("from_agent") == agent and b.get("to_agent") == LUKA)),
+            (b for b in berichten if (b.get("from_agent") == LUKA and _norm(b.get("to_agent")) == agent)
+             or (_norm(b.get("from_agent")) == agent and b.get("to_agent") == LUKA)),
             key=lambda b: str(b.get("created_at")))
         geschiedenis = [b for b in geschiedenis if b not in wacht]
         try:
@@ -737,7 +778,7 @@ RONDE_VRAAG = ("Je eigen ronde (Luka vroeg niets): kijk naar je metingen. Is er 
 
 def _laatste_ronde(db: Any, agent: str) -> datetime | None:
     try:
-        rijen = (db.table("core_tasks").select("created_at,status,metadata").eq("requested_by", agent)
+        rijen = (db.table("core_tasks").select("created_at,status,metadata").in_("requested_by", list(_mi.namen_van(agent)))
                  .order("created_at", desc=True).limit(20).execute().data) or []
     except Exception:  # noqa: BLE001
         return datetime.now(timezone.utc)  # niet kunnen lezen = deze ronde overslaan
@@ -749,7 +790,7 @@ def _laatste_ronde(db: Any, agent: str) -> datetime | None:
 
 def _heeft_open_taak(db: Any, agent: str) -> bool:
     try:
-        return bool((db.table("core_tasks").select("id").eq("requested_by", agent)
+        return bool((db.table("core_tasks").select("id").in_("requested_by", list(_mi.namen_van(agent)))
                      .in_("status", list(OPEN)).limit(1).execute().data) or [])
     except Exception:  # noqa: BLE001
         return True
@@ -757,6 +798,7 @@ def _heeft_open_taak(db: Any, agent: str) -> bool:
 
 def eigen_ronde(db: Any, agent: str, nu: datetime, chat: Callable[..., Any] | None = None) -> str | None:
     """Eén initiatief-ronde. Geeft de gestarte taak, of None."""
+    agent = _norm(agent)
     laatst = max([t for t in (_laatste_ronde(db, agent), _RUSTIG.get(agent)) if t], default=None)
     if laatst and nu - laatst < RONDE_ELKE:
         return None
@@ -785,7 +827,7 @@ def eigen_ronde(db: Any, agent: str, nu: datetime, chat: Callable[..., Any] | No
 
 def _markeer_ronde(db: Any, agent: str, nu: datetime) -> None:
     """Een rustige ronde vastleggen zonder een taak te maken: in de agent-events."""
-    _RUSTIG[agent] = nu
+    _RUSTIG[_norm(agent)] = nu
 
 
 _RUSTIG: dict[str, datetime] = {}
@@ -803,8 +845,9 @@ MAX_OVERLEG_PER_DAG = 4  # per vrager
 
 
 def stel_vraag(db: Any, van: str, met: str, vraag: str, nu: datetime) -> bool:
+    van, met = _norm(van), _norm(met)
     try:
-        al = (db.table("core_manager_messages").select("id").eq("from_agent", van).eq("kind", "ask")
+        al = (db.table("core_manager_messages").select("id").in_("from_agent", list(_mi.namen_van(van))).eq("kind", "ask")
               .gte("created_at", (nu - timedelta(hours=24)).isoformat()).limit(20).execute().data) or []
         if len(al) >= MAX_OVERLEG_PER_DAG:
             return False
@@ -822,7 +865,7 @@ def open_overleg(berichten: list[dict[str, Any]], nu: datetime) -> list[dict[str
     beantwoord = {b.get("in_reply_to") for b in berichten if b.get("kind") == "report" and b.get("in_reply_to")}
     return sorted(
         (b for b in berichten
-         if b.get("kind") == "ask" and b.get("from_agent") in MANAGERS and b.get("to_agent") in MANAGERS
+         if b.get("kind") == "ask" and _norm(b.get("from_agent")) in MANAGERS and _norm(b.get("to_agent")) in MANAGERS
          and b.get("id") not in beantwoord
          and (t := _tijd(b.get("created_at"))) and nu - t <= NIET_OUDER_DAN),
         key=lambda b: str(b.get("created_at")))
@@ -837,7 +880,7 @@ def beantwoord_overleg(db: Any, nu: datetime, chat: Callable[..., Any] | None = 
     if not wacht:
         return None
     v = wacht[0]
-    van, met = v["from_agent"], v["to_agent"]
+    van, met = _norm(v["from_agent"]), _norm(v["to_agent"])
     vraag = (f"Je collega {NAAM.get(van, van)} vraagt je: {v.get('body')}\n\n"
              "Antwoord kort en feitelijk vanuit je metingen en context. Moet er in jouw terrein iets "
              "gebeuren dat je zelf kunt, zet het dan in taken. Geen overleg terug.")
