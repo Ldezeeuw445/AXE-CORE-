@@ -32,6 +32,13 @@ export const NOTCH_HOOGTE = 80;
 export const HANDVAT_BREEDTE = 180;
 export const HANDVAT_HOOGTE = 16;
 
+/**
+ * Compact open (Luka, 27 nov): "niet altijd zo groot als hij uitvouwt maar
+ * net als op deze foto's". De strook (80) plus één kaart eronder. Groot
+ * (`uitklapH`) gaat alleen open als hij erom vraagt; zie notchGrootte.ts.
+ */
+export const NOTCH_COMPACT_HOOGTE = 216;
+
 /** Smaller dan dit lopen de knoppen links en rechts op elkaar. */
 export const NOTCH_MIN_BREEDTE = 900;
 
@@ -50,7 +57,9 @@ export interface NotchMaten {
   b: number;
   /** Hoogte ingeklapt — altijd `NOTCH_HOOGTE`. */
   inklapH: number;
-  /** Hoogte uitgeklapt: het paneel valt naar beneden uit. */
+  /** Hoogte compact open: de strook plus één kaart. De standaard. */
+  compactH: number;
+  /** Hoogte groot open: het hele paneel. Alleen als Luka erom vraagt. */
   uitklapH: number;
 }
 
@@ -59,6 +68,7 @@ export function notchMaten(schermB: number, schermH: number): NotchMaten {
   return {
     b,
     inklapH: NOTCH_HOOGTE,
+    compactH: NOTCH_COMPACT_HOOGTE,
     uitklapH: Math.max(Math.round(b * 0.7), Math.round(schermH * 0.42), 720),
   };
 }

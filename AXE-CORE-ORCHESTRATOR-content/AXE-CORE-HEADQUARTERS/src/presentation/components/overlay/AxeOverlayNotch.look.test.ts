@@ -19,12 +19,12 @@ const surface = readFileSync(
 
 describe('AxeOverlayNotch vaste HQ-schil', () => {
   it('notch houdt de kleur van de app en volgt de look-wissel niet', () => {
-    // Eén vaste stand, in de kleur van --axe-surface (#0A0A0A = 10,10,10).
-    // Sinds 5 nov mét dekking, want Luka wil hem doorzichtig zoals de
-    // Tauri-schil. Dat is iets anders dan meeschakelen met data-look: die
-    // regels mogen er nog steeds niet zijn, en dat is wat hieronder staat.
-    expect(surface).toMatch(/--axe-surface:\s*#0A0A0A/);
-    expect(css).toMatch(/--axe-notch-shell:\s*rgba\(10,\s*10,\s*10,\s*0?\.\d+\)/);
+    // Eén vaste stand. 5 nov: doorzichtig glas. 27 nov (Luka): "geowoon de
+    // stijl van de cards van axe core inplaats van doorzichtig" -- dus het
+    // mat-zwarte kaartmateriaal van --axe-card-bg (#171717 → #0C0C0C), dicht.
+    // Meeschakelen met data-look mag nog steeds niet; dat staat hieronder.
+    expect(surface).toMatch(/--axe-card-bg:\s*linear-gradient\(180deg,\s*rgba\(23,\s*23,\s*23/);
+    expect(css).toMatch(/--axe-notch-shell:\s*linear-gradient\(180deg,\s*#171717[^;]*#0C0C0C/);
     expect(css).toContain('background: var(--axe-notch-shell)');
     expect(css).toContain('NOTCH_SHELL_FIXED');
     expect(css).not.toContain(":root[data-look='glass'] .axe-ov");
@@ -32,12 +32,13 @@ describe('AxeOverlayNotch vaste HQ-schil', () => {
     expect(css).not.toContain('rgba(248, 250, 253');
   });
 
-  it('doorzichtig betekent ook wazig glas erachter, niet alleen minder dekking', () => {
-    // Zonder blur kijk je door de notch heen naar scherpe vensters en is tekst
-    // erin niet te lezen. De -webkit-variant hoort erbij: de WebKit in de
-    // Tauri-webview heeft de losse eigenschap nog nodig.
-    expect(css).toMatch(/\.axe-ov \{[^}]*backdrop-filter:\s*blur\(/s);
-    expect(css).toMatch(/-webkit-backdrop-filter:\s*blur\(/);
+  it('mat en dicht: geen doorzichtige schil en geen glas erachter (Luka 27 nov)', () => {
+    // Geen rgba-dekking op de schil en geen backdrop-filter op .axe-ov of het
+    // handvat: dan schemert het bureaublad niet door en rekent macOS geen
+    // blur per frame (18 nov: ~67% CPU voor WindowServer en WebKit-GPU).
+    expect(css).not.toMatch(/--axe-notch-shell:\s*rgba\(/);
+    expect(css).not.toMatch(/\.axe-ov \{[^}]*backdrop-filter/s);
+    expect(css).not.toMatch(/\.axe-ov__handvat \{[^}]*backdrop-filter/s);
   });
 
   it('knoppen hebben vaste vulling en cyaan-accent bij hover/pressed', () => {

@@ -5,14 +5,25 @@
  * Icons are wired; body always fills the window when open (no empty glass).
  */
 import { berichtTijd, balkTijd } from '@/domain/overlay/notchWidgets';
-import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
-import { ArrowRight, Bot, Check, CalendarDays, CheckCircle2, ChevronUp, History, Home, LayoutGrid, MessageSquare, Mic, Plus, Settings, SquareTerminal, Users, Paperclip, X } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent } from 'react';
+import { ArrowRight, Bot, Check, CalendarDays, CheckCircle2, ChevronUp, History, Home, LayoutGrid, Maximize2, MessageSquare, Mic, Minimize2, Plus, RotateCcw, Settings, SquareTerminal, Users, Paperclip, X } from 'lucide-react';
 import { claudeLive, klok, leesStand, type ClaudeLive } from '@/domain/overlay/claudeLive';
 import { vpsAuthHeaders, isTauriRuntime, VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 import {
+  getDurableTask,
   listPendingApprovals,
+  retryDurableTask,
   type DurableTaskApproval,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import {
+  bewaarGrootte, grootteUitCmd, heeftCompact, leesGrootte, stapTerug, toetsActie, wisselGrootte, zichtbareGrootte,
+  type NotchGrootte,
+} from '@/domain/overlay/notchGrootte';
+import {
+  compacteStand, foutZin, groet, magOpnieuw, stapRijen, verdeelTaken, wachtZin,
+  type NotchStap, type NotchTaak,
+} from '@/domain/overlay/notchCompact';
+import { notchOntwerp } from './notchOntwerp';
 import { beslisApproval } from '@/application/approvals/beslisAgentOk';
 import './AxeOverlayNotch.css';
 import { groepeerSleep, sorteerSleep, type GesleeptItem, type SleepInvoer } from '@/domain/overlay/gesleepteItems';
@@ -38,6 +49,13 @@ import { EEN_DING_SLEUTEL, datumSleutel, kiesEenDing, type EigenDing } from '@/d
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
 type Tab = 'chat' | 'approvals' | 'settings' | 'claude' | 'home' | 'widgets';
+
+/** Voorbeelddata in ontwerpmodus; in een gebouwde app altijd null. */
+const ONTWERP = notchOntwerp();
+
+function opslag(): Storage | null {
+  try { return window.localStorage; } catch { return null; }
+}
 
 /**
  * Claude Code live (18 nov): leest ~/.axe/claude-live.json via de Tauri-
@@ -148,12 +166,16 @@ function Teller({ n }: { n: number }) {
  * doen". Dat is de ene fout die een altijd-aanwezige balk niet mag maken: je
  * vertrouwt dan op iets dat al een uur dood kan zijn. Daarom twee velden.
  */
-async function fetchActivity(): Promise<{ ok: boolean; regels: string[]; wie?: string[] }> {
+async function fetchActivity(): Promise<{ ok: boolean; regels: string[]; wie?: string[]; ruw?: Parameters<typeof verdeelTaken>[0] }> {
+  if (ONTWERP) {
+    const open = ONTWERP.taken.filter((t) => /running|queued|active|in_progress|waiting/i.test(t.status)).slice(0, 4);
+    return { ok: ONTWERP.bereikbaar, regels: open.map((t) => `${t.title} · ${t.status}`), wie: open.map((t) => t.assignee), ruw: ONTWERP.taken };
+  }
   try {
     const url = `${VPS_API_ORIGIN}/tasks?limit=12`;
     const r = await fetch(url, { headers: { ...vpsAuthHeaders(url) } });
     if (!r.ok) return { ok: false, regels: [] };
-    const data = (await r.json()) as { tasks?: Array<{ title?: string; status?: string; capability?: string; assignee?: string | null }> };
+    const data = (await r.json()) as { tasks?: Array<{ id?: string; title?: string; goal?: string; status?: string; capability?: string; assignee?: string | null; error?: unknown; updated_at?: string }> };
     const open = (data.tasks || [])
       .filter((t) => /running|queued|active|in_progress|waiting/i.test(String(t.status || '')))
       .slice(0, 4);
@@ -161,6 +183,7 @@ async function fetchActivity(): Promise<{ ok: boolean; regels: string[]; wie?: s
       ok: true,
       regels: open.map((t) => `${t.title || t.capability || 'task'} · ${t.status}`),
       wie: open.map((t) => String(t.assignee || '')),
+      ruw: data.tasks || [],
     };
   } catch {
     return { ok: false, regels: [] };
@@ -173,6 +196,7 @@ export function AxeOverlayNotch({
   onOpenChange,
   onInklappen,
   onPeekChange,
+  onGrootteChange,
 }: {
   onHome?: () => void;
   onSend?: (text: string) => void;
@@ -181,9 +205,24 @@ export function AxeOverlayNotch({
   onInklappen?: () => void;
   /** Een peek gaat open/dicht: het venster zakt even een regel uit (18 nov). */
   onPeekChange?: (aan: boolean) => void;
+  /** Compact of groot open (27 nov): FloatAxe zet het venster op die hoogte. */
+  onGrootteChange?: (g: NotchGrootte) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<Tab>('chat');
+  /* 27 nov: openvouwen = Home, compact. Hier stond 'chat', en dan opende de
+     bol altijd het grote paneel. */
+  const [tab, setTab] = useState<Tab>('home');
+  /* De onthouden keuze compact/groot (notchGrootte.ts). Alleen de knop, ⌘E
+     en overlay.cmd veranderen hem; een tab die groot moet niet. */
+  const [onthouden, setOnthouden] = useState<NotchGrootte>(() => (ONTWERP?.groot ? 'groot' : leesGrootte(opslag())));
+  const kiesGrootte = (g: NotchGrootte) => {
+    setOnthouden(g);
+    if (!ONTWERP) bewaarGrootte(opslag(), g);
+  };
+  const onthoudenRef = useRef(onthouden);
+  onthoudenRef.current = onthouden;
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
   const claude = useClaudeLive();
   // Vraagt Claude toestemming, dan gaat de notch zelf open (één keer per vraag).
   const gezienVraag = useRef<string | null>(null);
@@ -214,7 +253,7 @@ export function AxeOverlayNotch({
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [files, setFiles] = useState<GesleeptItem[]>([]);
-  const [dragging, setDragging] = useState(false);
+  const [dragging, setDragging] = useState(() => ONTWERP?.stand === 'gesleept');
   /* Ronde 2 (20 nov): gesleepte bestanden met hun echte pad, om om te zetten.
      De HTML-drop geeft alleen een naam; Tauri's eigen drag-drop het pad. */
   const [omzet, setOmzet] = useState<{ pad: string; naam: string; doelen: string[]; bezig?: string; klaar?: string; fout?: string }[]>([]);
@@ -270,6 +309,10 @@ export function AxeOverlayNotch({
   const [approvals, setApprovals] = useState<DurableTaskApproval[]>([]);
   const [activity, setActivity] = useState<string[]>([]);
   const [activityWie, setActivityWie] = useState<string[]>([]);
+  /* De taken zelf (27 nov), voor de compacte kaart: echte stappen, wie, en
+     wat er in de laatste 2 uur misging. */
+  const [actiefTaken, setActiefTaken] = useState<NotchTaak[]>([]);
+  const [misluktTaken, setMisluktTaken] = useState<NotchTaak[]>([]);
   // Begint op true: anders roept de notch "geen verbinding" in de seconde
   // vóór de eerste ronde, en dat is een vals alarm bij elke start.
   const [bereikbaar, setBereikbaar] = useState(true);
@@ -359,7 +402,8 @@ export function AxeOverlayNotch({
       let approvalsOk = false;
       let takenOk = false;
       try {
-        const a = await listPendingApprovals(12);
+        const a = ONTWERP ? ONTWERP.approvals : await listPendingApprovals(12);
+        if (ONTWERP && !ONTWERP.bereikbaar) throw new Error('ontwerp: offline');
         if (!cancelled) setApprovals(a.filter((x) => x.status === 'pending'));
         approvalsOk = true;
       } catch {
@@ -368,7 +412,13 @@ export function AxeOverlayNotch({
       try {
         const act = await fetchActivity();
         if (act.ok) {
-          if (!cancelled) { setActivity(act.regels); setActivityWie(act.wie ?? []); }
+          if (!cancelled) {
+            setActivity(act.regels);
+            setActivityWie(act.wie ?? []);
+            const v = verdeelTaken(act.ruw ?? [], Date.now());
+            setActiefTaken(v.actief);
+            setMisluktTaken(v.mislukt);
+          }
           takenOk = true;
         }
       } catch {
@@ -396,6 +446,13 @@ export function AxeOverlayNotch({
   }, [approvals, manager.label]);
 
   const handleCmd = async (cmd: string) => {
+    const g = grootteUitCmd(cmd, onthoudenRef.current);
+    if (g) {
+      kiesGrootte(g);
+      set(true);
+      if (!heeftCompact(tabRef.current)) setTab('home');
+      return;
+    }
     if (cmd === 'expand' || cmd === 'chat') {
       set(true);
       setTab('chat');
@@ -668,6 +725,99 @@ export function AxeOverlayNotch({
   const openRef = useRef(open);
   openRef.current = open;
 
+  /* ── Compact of groot (Luka 27 nov) ─────────────────────────────────────
+     Wat je ziet: de onthouden keuze op Home/widgets, groot op de rest. */
+  const zichtbaar: NotchGrootte = zichtbareGrootte(tab, onthouden);
+  const compact = open && zichtbaar === 'compact';
+  // Layout-effect: FloatAxe leest `groot` pas na een paar awaits in dockTop,
+  // dus dit staat er al als het venster zijn hoogte kiest.
+  useLayoutEffect(() => {
+    onGrootteChange?.(open ? zichtbaar : 'compact');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, zichtbaar]);
+
+  /* ⌘E wisselt en onthoudt; Esc: groot → compact → dicht. Alleen als hij
+     open is: dicht krijgt de notch nooit het toetsenbord (18 nov). */
+  useEffect(() => {
+    if (!open) return;
+    const op = (e: KeyboardEvent) => {
+      const actie = toetsActie(e);
+      if (!actie) return;
+      // Esc in "Eén ding kiezen" is van dat veld: dat sluit zichzelf.
+      const doel = e.target as HTMLElement | null;
+      if (actie === 'stap-terug' && doel?.closest?.('.axe-ov__eending-kies')) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (actie === 'wissel') {
+        kiesGrootte(wisselGrootte(zichtbaar));
+        if (!heeftCompact(tabRef.current)) setTab('home');
+        return;
+      }
+      const stap = stapTerug({ open: true, zichtbaar });
+      if (!stap.open) { set(false); return; }
+      kiesGrootte('compact');
+      if (!heeftCompact(tabRef.current)) setTab('home');
+    };
+    // Capture: vóór de app-brede ⌘-letter-sneltoetsen (useKeyboardShortcuts).
+    window.addEventListener('keydown', op, true);
+    return () => window.removeEventListener('keydown', op, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, zichtbaar]);
+
+  /* De groet staat er de eerste seconden na het openvouwen. */
+  const [openSinds, setOpenSinds] = useState(() => Date.now());
+  const [nuTik, setNuTik] = useState(() => Date.now());
+  useEffect(() => {
+    if (!open) return;
+    const start = Date.now();
+    setOpenSinds(ONTWERP?.stand === 'rust' ? start - 60_000 : start);
+    setNuTik(start);
+    const id = window.setInterval(() => setNuTik(Date.now()), 1000);
+    const stop = window.setTimeout(() => window.clearInterval(id), 8000);
+    return () => { window.clearInterval(id); window.clearTimeout(stop); };
+  }, [open]);
+
+  /* Echte stappen van de taak in beeld: /tasks/{id}, elke 5 s, alleen als
+     de compacte kaart open is en er iets loopt. */
+  const focusTaak = misluktTaken[0] ?? actiefTaken[0] ?? null;
+  const [stappen, setStappen] = useState<NotchStap[]>([]);
+  useEffect(() => {
+    if (!(compact && tab === 'home' && focusTaak?.id)) { setStappen([]); return; }
+    let weg = false;
+    const laad = async () => {
+      if (ONTWERP) { setStappen(ONTWERP.stappen); return; }
+      try {
+        const snap = await getDurableTask(focusTaak.id);
+        if (!weg) setStappen((snap.steps ?? []).map((x) => ({ id: x.id, volgorde: x.step_order, titel: x.title, status: x.status })));
+      } catch { /* stappen vallen weg; de titel blijft */ }
+    };
+    void laad();
+    const id = window.setInterval(() => void laad(), 5000);
+    return () => { weg = true; window.clearInterval(id); };
+  }, [compact, tab, focusTaak?.id]);
+
+  /* Eén veilige Opnieuw. retryDurableTask zet dezelfde taak terug in de rij
+     (de server ontdubbelt). Alleen als magOpnieuw zegt dat er geen trade,
+     betaling, verzending, deploy of merge in zit; anders alleen openen. */
+  const [opnieuwBezig, setOpnieuwBezig] = useState(false);
+  const opnieuw = async () => {
+    if (opnieuwBezig) return;
+    if (!bereikbaar) { window.location.reload(); return; }
+    const t = misluktTaken[0];
+    if (!t || !magOpnieuw(t)) return;
+    if (ONTWERP) { setStatusNote('Design mode: retry not sent'); return; }
+    setOpnieuwBezig(true);
+    try {
+      await retryDurableTask(t.id, 'luka');
+      setMisluktTaken((r) => r.filter((x) => x.id !== t.id));
+      setStatusNote(`Retrying: ${t.titel}`);
+    } catch (e) {
+      setStatusNote(`Retry failed: ${(e as Error).message}`);
+    } finally {
+      setOpnieuwBezig(false);
+    }
+  };
+
   const peek = !open ? peekRij[0] ?? null : null;
   useEffect(() => {
     if (open && peekRij.length) setPeekRij([]);
@@ -823,11 +973,30 @@ export function AxeOverlayNotch({
       >
         <Plus size={15} strokeWidth={1.7} />
       </button>
+      {/* 27 nov: groot alleen als Luka het wil. Ook ⌘E; Esc stapt terug. */}
+      {open && (
+        <button
+          type="button"
+          className="axe-ov__ico axe-ov__ico--maat"
+          aria-label={zichtbaar === 'groot' ? 'Compact view' : 'Large view'}
+          title={zichtbaar === 'groot' ? 'Compact (⌘E)' : 'Large (⌘E)'}
+          onClick={() => {
+            const naar = zichtbaar === 'groot' ? 'compact' : 'groot';
+            kiesGrootte(naar);
+            if (!heeftCompact(tab)) setTab('home');
+          }}
+        >
+          {zichtbaar === 'groot' ? <Minimize2 size={15} strokeWidth={1.7} /> : <Maximize2 size={15} strokeWidth={1.7} />}
+        </button>
+      )}
     </>
   );
   const iconsRight = (
     <>
-      {open && <span className="axe-ov__balktijd" aria-label="Date and time">{balkTijd(balkNu)}</span>}
+      {/* De klok alleen als het statuswoord naast de bol er niet staat: op
+          900px breed liepen die twee over elkaar heen (27 nov). Compact toont
+          de tijd in de Today-kaart. */}
+      {open && !compact && leven.woord === '' && !claude && <span className="axe-ov__balktijd" aria-label="Date and time">{balkTijd(balkNu)}</span>}
       {/* Uit AXE Overlay (9 nov): goedkeuringen en agents horen in deze ene notch. */}
       <button
         type="button"
@@ -916,7 +1085,7 @@ export function AxeOverlayNotch({
 
   return (
     <div
-      className={`axe-ov ${open ? 'axe-ov--open' : 'axe-ov--notch'} ${dragging ? 'axe-ov--drag' : ''}`}
+      className={`axe-ov ${open ? 'axe-ov--open' : 'axe-ov--notch'} ${compact ? 'axe-ov--compact' : ''} ${dragging ? 'axe-ov--drag' : ''}`}
       data-axe-overlay
       onDragEnter={(e: DragEvent) => {
         e.preventDefault();
@@ -978,7 +1147,11 @@ export function AxeOverlayNotch({
               type="button"
               className="axe-ov__blob"
               aria-label={`${open ? 'Collapse' : 'Expand'} AXE — ${leven.uitleg}`}
-              onClick={() => set((v) => !v)}
+              onClick={() => {
+                // Openvouwen = Home, in de onthouden stand (compact tenzij Luka groot koos).
+                if (!open) setTab('home');
+                set((v) => !v);
+              }}
               title={`${manager.label} — ${leven.uitleg}`}
             >
               {/* 19 nov: het AXE-driehoekje uit het Managers-tabblad, niet meer de ronde bol. */}
@@ -1061,7 +1234,166 @@ export function AxeOverlayNotch({
         </div>
       )}
 
-      {open && (
+      {compact && (() => {
+        const stand = compacteStand({
+          gesleept: dragging || omzet.length > 0,
+          bereikbaar,
+          mislukt: misluktTaken.length,
+          actief: activity.length + (claude ? 1 : 0),
+          openSindsMs: nuTik - openSinds,
+        });
+        const stemming = AXE_STEMMING[leven.toestand] ?? 'rust';
+        const naarGroot = (t: Tab) => { setTab(t); };
+        const vandaagKaart = (
+          <div className="axe-ov__vlak axe-ov__w axe-ov__dag axe-ov__dag--compact">
+            <div className="axe-ov__w-kop">
+              <span className="axe-ov__w-label"><CalendarDays size={13} strokeWidth={1.8} />Today</span>
+              <span className="axe-ov__w-meta">{balkTijd(balkNu)}</span>
+            </div>
+            <b className="axe-ov__dag-groet">{groet(new Date(nuTik).getHours())}</b>
+            <button type="button" className="axe-ov__dag-wacht" disabled={approvals.length === 0} onClick={() => naarGroot('approvals')}>
+              {wachtZin(approvals.length)}
+            </button>
+          </div>
+        );
+        return (
+          <div className={`axe-ov__compact axe-ov__compact--${tab === 'widgets' ? 'widgets' : stand}`} data-stand={tab === 'widgets' ? 'widgets' : stand}>
+            {tab === 'widgets' ? (
+              <NotchWidgets open={compact && tab === 'widgets'} pagina="werk" vandaag={vandaagKaart} />
+            ) : stand === 'gesleept' && omzet.length > 0 ? (
+              <div className="axe-ov__vlak axe-ov__omzet axe-ov__omzet--compact">
+                <div className="axe-ov__omzet-kop">
+                  <b>{omzet.length === 1 ? 'Dropped file' : `${omzet.length} dropped files`}</b>
+                  <button type="button" onClick={() => setOmzet([])} aria-label="Close">×</button>
+                </div>
+                {omzet.slice(0, 2).map((x) => (
+                  <div key={x.pad} className="axe-ov__omzet-rij">
+                    <span className="axe-ov__omzet-naam" title={x.pad}>{x.naam}</span>
+                    <div className="axe-ov__omzet-knoppen">
+                      <button type="button" className="is-axe" onClick={() => naarAxe(x)}>Ask AXE</button>
+                      {x.doelen.slice(0, 3).map((d) => (
+                        <button key={d} type="button" disabled={Boolean(x.bezig)} onClick={() => void zetOm(x.pad, d)}>{x.bezig === d ? '…' : d}</button>
+                      ))}
+                    </div>
+                    {x.klaar && <span className="axe-ov__omzet-klaar">Saved as {x.klaar.split('/').pop()}</span>}
+                    {x.fout && <span className="axe-ov__omzet-fout">{x.fout}</span>}
+                  </div>
+                ))}
+                {omzet.length > 2 && <button type="button" className="axe-ov__c-link" onClick={() => kiesGrootte('groot')}>+{omzet.length - 2} more · Large view</button>}
+              </div>
+            ) : stand === 'gesleept' ? (
+              <div className="axe-ov__vlak axe-ov__c-kaart axe-ov__c-drop">
+                <AxeGezicht kleur={AXE_CYAAN} stemming="werkt" size={48} label="AXE" levend />
+                <div className="axe-ov__c-tekst">
+                  <b>Drop it on AXE</b>
+                  <span>Ask about it, or convert it to another format.</span>
+                </div>
+              </div>
+            ) : stand === 'fout' ? (() => {
+              const z = foutZin(bereikbaar, misluktTaken);
+              const t = misluktTaken[0];
+              const veilig = !bereikbaar || (t ? magOpnieuw(t) : false);
+              return (
+                <div className="axe-ov__vlak axe-ov__c-kaart axe-ov__c-fout">
+                  <div className="axe-ov__gloed" data-toestand="fout" aria-hidden="true" />
+                  <AxeGezicht kleur={t ? gezichtVoor(t.wie).kleur : AXE_CYAAN} stemming="fout" size={48} label={t ? gezichtVoor(t.wie).naam : 'AXE'} levend />
+                  <div className="axe-ov__c-tekst">
+                    <b>{z.titel}</b>
+                    <span>{z.reden}</span>
+                  </div>
+                  {veilig ? (
+                    <button type="button" className="axe-ov__c-knop" disabled={opnieuwBezig} onClick={() => void opnieuw()}>
+                      <RotateCcw size={13} strokeWidth={2} aria-hidden /> {bereikbaar ? 'Retry' : 'Try again'}
+                    </button>
+                  ) : (
+                    <button type="button" className="axe-ov__c-knop" onClick={() => { set(false); onHome?.(); void focusMainShell(); }} title="This task touches money, sends or deploys: check it in AXE CORE">
+                      Open in AXE CORE
+                    </button>
+                  )}
+                </div>
+              );
+            })() : stand === 'werkt' ? (() => {
+              const rijen = stapRijen(stappen);
+              const pillen = [
+                ...(claude ? [{ sleutel: 'claude', kleur: CLAUDE_KORAAL, naam: 'Claude', tekst: claude.nu, stemming: CLAUDE_STEMMING[claude.toestand], tab: 'claude' as Tab }] : []),
+                ...activity.map((line, i) => {
+                  const g = gezichtVoor(activityWie[i]);
+                  return { sleutel: `a${i}`, kleur: g.kleur, naam: g.naam, tekst: line.replace(/\s·\s[^·]*$/, ''),
+                    stemming: (/waiting/i.test(line) ? 'wacht' : 'werkt') as Stemming, tab: (/waiting/i.test(line) ? 'approvals' : 'chat') as Tab };
+                }),
+              ].slice(0, 4);
+              const hoofd = actiefTaken[0];
+              return (
+                <div className="axe-ov__c-werk">
+                  <div className="axe-ov__vlak axe-ov__c-kaart axe-ov__c-held">
+                    <div className="axe-ov__gloed" data-toestand={leven.toestand} aria-hidden="true" />
+                    <button type="button" className="axe-ov__held-gezicht" onClick={() => naarGroot(leven.toestand === 'wacht' ? 'approvals' : 'chat')} title={leven.uitleg}>
+                      <AxeGezicht kleur={AXE_CYAAN} stemming={stemming} size={52} label="AXE" levend />
+                    </button>
+                    <div className="axe-ov__c-tekst">
+                      <b>{hoofd ? hoofd.titel : claude ? claude.nu : leven.uitleg}</b>
+                      {rijen.length > 0 ? (
+                        <ul className="axe-ov__c-stappen" aria-label="Steps">
+                          {rijen.map((r) => (
+                            <li key={r.id} className={`is-${r.merk}`}>
+                              <i aria-hidden="true">{r.merk === 'klaar' ? <Check size={11} strokeWidth={3} /> : r.merk === 'mislukt' ? <X size={11} strokeWidth={3} /> : null}</i>
+                              <span>{r.titel}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <span>{hoofd ? `${gezichtVoor(hoofd.wie).naam} · ${hoofd.status.replace(/_/g, ' ')}` : leven.uitleg}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="axe-ov__c-pillen" data-aantal={pillen.length}>
+                    {pillen.map((p) => (
+                      <button key={p.sleutel} type="button" className="axe-ov__vlak axe-ov__c-pil" style={{ ['--chip' as string]: p.kleur }} onClick={() => naarGroot(p.tab)} title={`${p.naam} · ${p.tekst}`}>
+                        <AxeGezicht kleur={p.kleur} stemming={p.stemming} size={24} label={p.naam} />
+                        <span className="axe-ov__c-pil-tekst"><b>{p.naam}</b><span>{p.tekst}</span></span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })() : (
+              <div className={`axe-ov__vlak axe-ov__c-kaart axe-ov__c-${stand}`}>
+                <div className="axe-ov__stof axe-ov__stof--l" aria-hidden="true" />
+                <div className="axe-ov__stof axe-ov__stof--r" aria-hidden="true" />
+                <div className="axe-ov__gloed" data-toestand={leven.toestand} aria-hidden="true" />
+                <button type="button" className="axe-ov__held-gezicht" onClick={() => naarGroot('chat')} title="Ask AXE">
+                  <AxeGezicht kleur={AXE_CYAAN} stemming={stand === 'groet' ? 'klaar' : stemming} size={52} label="AXE" levend />
+                </button>
+                <div className="axe-ov__c-tekst">
+                  <b>{stand === 'groet' ? groet(new Date(nuTik).getHours()) : 'All quiet'}</b>
+                  {/* Alleen een echt ding (eigen keuze, open stap, goedkeuring); de
+                      lege 'rust'-tekst van eenDing is Nederlands en zegt niets. */}
+                  <span>{eenDing.bron !== 'rust' && eenDing.tekst ? `Next · ${eenDing.tekst}` : 'Managers are quiet. Ask AXE anything.'}</span>
+                </div>
+                <div className="axe-ov__c-rechts">
+                  <button type="button" className="axe-ov__c-knop" disabled={approvals.length === 0} onClick={() => naarGroot('approvals')}>
+                    {wachtZin(approvals.length)}
+                  </button>
+                  <div className="axe-ov__c-rail" aria-label="Managers">
+                    {MANAGERS.filter((m) => m.agent !== 'axe').slice(0, 5).map((m) => {
+                      const g = gezichtVoor(m.agent);
+                      return <AxeGezicht key={m.id} kleur={g.kleur} stemming="rust" size={20} label={g.naam} />;
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+            {statusNote && (
+              <div className="axe-ov__note axe-ov__note--compact">
+                {statusNote}
+                <button type="button" aria-label="Sluit" onClick={() => setStatusNote('')}><X size={12} /></button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {open && !compact && (
         <div className="axe-ov__body">
           {/* Wie je spreekt: alleen in de chat (op Home/widgets was dit een
               tweede balk die de foto's niet hebben). Goedkeuringen hebben hun

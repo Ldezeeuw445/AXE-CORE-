@@ -12,16 +12,18 @@ html[data-axe-notch] {
 }
 
 .axe-ov {
-  /* Vaste HQ-schil, in dezelfde kleur als de app: --axe-surface #0A0A0A.
-     Geen data-look-wissel: de notch volgt de glass/black-stand van de
-     hoofdschil niet, want hij staat op het bureaublad en niet in de app.
+  /* Vaste HQ-schil. Geen data-look-wissel: de notch volgt de glass/black-
+     stand van de hoofdschil niet, want hij staat op het bureaublad en niet in
+     de app.
 
-     Wel doorzichtig, met wazig glas erachter, net als de Tauri-schil (Luka
-     5 nov). Dat is iets anders dan de look-wissel: het is één vaste stand.
-     De dekking is 0,72 en niet lager, want hierin staat tekst die leesbaar
-     moet blijven boven een willekeurig bureaublad — bij 0,5 leest een wit
-     woord niet meer tegen een licht venster erachter. */
-  --axe-notch-shell: rgba(10, 10, 10, 0.72);
+     27 nov: mat zwart, het materiaal van de AXE-kaarten (--axe-card-bg,
+     .axe-kaart: #171717 → #0C0C0C), niet meer doorzichtig. Luka: "geowoon de
+     stijl van de cards van axe core inplaats van doorzichtig, dat is voor de
+     notch net ff beter". Helemaal dicht (geen 0,94): op het bureaublad zou
+     elk restje dekking weer een venster erachter laten doorschemeren. Zonder
+     glasfilter rekent macOS ook geen blur meer per frame (18 nov: het
+     glas kostte WindowServer en WebKit-GPU elk ~67% CPU). */
+  --axe-notch-shell: linear-gradient(180deg, #171717 0%, #0C0C0C 100%);
   --axe-notch-btn: #111111;
   --axe-notch-accent: #22D3EE;
   --axe-notch-ink: #E8EAED;
@@ -36,14 +38,11 @@ html[data-axe-notch] {
   overflow: hidden;
   clip-path: inset(0 round 0 0 var(--axe-notch-radius) var(--axe-notch-radius));
   background: var(--axe-notch-shell);
-  /* Het wazige glas achter de doorzichtige plaat. -webkit- erbij omdat de
-     WebKit in de Tauri-webview de losse eigenschap nog nodig heeft. */
-  -webkit-backdrop-filter: blur(22px) saturate(130%);
-  backdrop-filter: blur(22px) saturate(130%);
-  border: 1px solid rgba(255, 255, 255, 0.055);
+  /* Kaartrand en -glans zoals .axe-kaart (index.css), alleen inset. */
+  border: 1px solid rgba(255, 255, 255, 0.10);
   /* Alleen inset — outer box-shadow + overflow:hidden tekent donkere
      hoek-streepjes op de afronding (zelfde bug als OS-window-shadow). */
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
   border-top: none;
   color: var(--axe-notch-ink);
   font-family: Inter, system-ui, sans-serif;
@@ -465,9 +464,8 @@ html[data-axe-notch] {
   padding: 0;
   border: none;
   border-radius: 0 0 9px 9px;
-  background: rgba(10, 10, 10, 0.72);
-  -webkit-backdrop-filter: blur(22px) saturate(130%);
-  backdrop-filter: blur(22px) saturate(130%);
+  /* Zelfde mat-zwarte plaat als de strook (27 nov). */
+  background: linear-gradient(180deg, #171717 0%, #0C0C0C 100%);
   cursor: pointer;
 }
 .axe-ov__handvat > span {
@@ -1142,3 +1140,134 @@ button.axe-ov__pil { cursor: pointer; }
 .axe-ov__ok-knop--ja:hover { background: #34d671; }
 .axe-ov__ok-knop:disabled { opacity: .5; cursor: wait; }
 .axe-ov__ok-knop:focus-visible, .axe-ov__ok-tekst:focus-visible { outline: 2px solid var(--axe-notch-accent); outline-offset: 2px; }
+
+/* ── Compact (Luka 27 nov) ──────────────────────────────────────────────────
+ * Openvouwen = de strook plus één kaart (NOTCH_COMPACT_HOOGTE, 216). Groot
+ * alleen via de knop of ⌘E. Vijf standen: groet, rust, werkt, fout, gesleept;
+ * en de widgets compact (Today · Tasks/Note · Focus · Weather). */
+.axe-ov--compact { min-height: 100%; height: 100%; }
+.axe-ov__compact {
+  position: relative; z-index: 1;
+  flex: 1 1 auto; min-height: 0;
+  padding: 0 14px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+  animation: axe-ov-compact-in 0.22s ease both;
+}
+@keyframes axe-ov-compact-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.axe-ov__compact > .axe-ov__vlak,
+.axe-ov__c-werk { flex: 1 1 auto; min-height: 0; }
+.axe-ov__c-kaart {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 18px;
+}
+.axe-ov__c-kaart > .axe-ov__held-gezicht { position: relative; z-index: 1; flex: none; }
+.axe-ov__c-tekst {
+  position: relative; z-index: 1;
+  flex: 1 1 auto; min-width: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.axe-ov__c-tekst > b {
+  font-size: 15px; font-weight: 600; color: rgba(255, 255, 255, 0.94);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.axe-ov__c-tekst > span {
+  font-size: 12px; color: rgba(255, 255, 255, 0.5);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.axe-ov__c-fout .axe-ov__c-tekst > span { color: #f87171; }
+.axe-ov__c-knop {
+  position: relative; z-index: 1; flex: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.88);
+  font: 500 12px/1 inherit; cursor: pointer; white-space: nowrap;
+}
+.axe-ov__c-knop:hover:not(:disabled) { background: rgba(255, 255, 255, 0.13); color: #fff; }
+.axe-ov__c-knop:disabled { cursor: default; opacity: 0.55; }
+.axe-ov__c-rechts {
+  position: relative; z-index: 1; flex: none;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+}
+.axe-ov__c-rail { display: flex; gap: 6px; opacity: 0.85; }
+.axe-ov__c-link { background: none; border: 0; padding: 0; color: var(--axe-notch-accent); font: inherit; font-size: 11px; cursor: pointer; align-self: flex-start; }
+
+/* Werkt: links AXE met de echte stappen, rechts 2×2 pillen met gezichten. */
+.axe-ov__c-werk {
+  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 8px;
+}
+.axe-ov__c-held { gap: 14px; padding: 10px 16px; }
+.axe-ov__c-held .axe-ov__gloed { left: -40px; width: 180px; height: 180px; }
+.axe-ov__c-stappen { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.axe-ov__c-stappen li {
+  display: flex; align-items: center; gap: 7px; min-width: 0;
+  font-size: 11.5px; color: rgba(255, 255, 255, 0.4);
+}
+.axe-ov__c-stappen li > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.axe-ov__c-stappen li > i {
+  flex: none; display: grid; place-items: center;
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+}
+.axe-ov__c-stappen li.is-klaar > i { border-color: transparent; background: rgba(34, 211, 238, 0.22); color: var(--axe-notch-accent); }
+.axe-ov__c-stappen li.is-nu { color: rgba(255, 255, 255, 0.92); font-weight: 500; }
+.axe-ov__c-stappen li.is-nu > i { border-color: var(--axe-notch-accent); box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15); }
+.axe-ov__c-stappen li.is-mislukt { color: #f87171; }
+.axe-ov__c-stappen li.is-mislukt > i { border-color: transparent; background: rgba(239, 68, 68, 0.25); color: #f87171; }
+.axe-ov__c-pillen {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 8px;
+  min-height: 0;
+}
+.axe-ov__c-pillen[data-aantal='1'], .axe-ov__c-pillen[data-aantal='2'] { grid-template-columns: minmax(0, 1fr); }
+.axe-ov__c-pil {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  padding: 6px 10px 6px 8px; border-radius: 14px; cursor: pointer; text-align: left;
+  background: color-mix(in srgb, var(--chip) 10%, rgba(255, 255, 255, 0.04));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chip) 32%, transparent);
+  color: inherit; font: inherit;
+}
+.axe-ov__c-pil:hover { background: color-mix(in srgb, var(--chip) 18%, rgba(255, 255, 255, 0.04)); }
+.axe-ov__c-pil > svg { flex: none; }
+.axe-ov__c-pil-tekst { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.axe-ov__c-pil-tekst > b { font-size: 11px; font-weight: 600; color: color-mix(in srgb, var(--chip) 75%, white); }
+.axe-ov__c-pil-tekst > span { font-size: 11px; color: rgba(255, 255, 255, 0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Groet en rust: AXE links, de zin ernaast, rechts wat op je wacht. */
+.axe-ov__c-groet, .axe-ov__c-rust {
+  background: radial-gradient(ellipse at 18% 50%, rgba(34, 211, 238, 0.08), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.032));
+}
+.axe-ov__c-groet .axe-ov__c-tekst > b { font-size: 17px; }
+.axe-ov__c-groet .axe-ov__stof, .axe-ov__c-rust .axe-ov__stof { width: 24%; opacity: 0.35; }
+.axe-ov__c-groet .axe-ov__stof--l, .axe-ov__c-rust .axe-ov__stof--l { left: 0; }
+.axe-ov__c-fout { gap: 14px; }
+.axe-ov__c-fout .axe-ov__gloed[data-toestand='fout'] { bottom: -150px; }
+.axe-ov__c-drop { justify-content: center; box-shadow: inset 0 0 0 1.5px rgba(34, 211, 238, 0.55); }
+.axe-ov__omzet--compact { overflow: auto; padding: 10px 14px; }
+.axe-ov__note--compact { flex: none; }
+
+/* Widgets compact: dezelfde vier kaarten, lager. */
+.axe-ov__compact--widgets .axe-ov__widgets {
+  flex: 1 1 auto; min-height: 0; height: 100%;
+  grid-template-rows: minmax(0, 1fr); grid-auto-rows: minmax(0, 1fr); margin-top: 0; align-items: stretch;
+}
+.axe-ov__compact--widgets .axe-ov__widgets > .axe-ov__vlak { min-height: 0; height: 100%; }
+.axe-ov__compact--widgets .axe-ov__w-kop { min-height: 0; }
+.axe-ov__compact--widgets .axe-ov__focus-start button,
+.axe-ov__compact--widgets .axe-ov__w-knoppen button { height: 24px; min-height: 0; padding-top: 0; padding-bottom: 0; }
+.axe-ov__compact--widgets .axe-ov__focus-start button:not(.is-start) { width: 24px; }
+.axe-ov__compact--widgets form input { height: 30px; }
+.axe-ov__compact--widgets .axe-ov__widgets > .axe-ov__join { display: none; }
+.axe-ov__compact--widgets .axe-ov__w { padding: 10px 12px; gap: 4px; overflow: hidden; }
+.axe-ov__compact--widgets .axe-ov__taken { max-height: 44px; overflow: auto; }
+.axe-ov__compact--widgets .axe-ov__w textarea { min-height: 0; height: 52px; }
+.axe-ov__compact--widgets .axe-ov__focus-tijd { font-size: 26px; line-height: 1.1; }
+.axe-ov__compact--widgets .axe-ov__focus-balk { margin: 2px 0; }
+.axe-ov__dag--compact { margin-top: 0; }
+.axe-ov__dag-groet { font-size: 14px; font-weight: 600; color: rgba(255, 255, 255, 0.92); }
+.axe-ov__dag-wacht {
+  align-self: flex-start; background: none; border: 0; padding: 0;
+  font: inherit; font-size: 11.5px; color: #fbbf24; cursor: pointer; text-align: left;
+}
+.axe-ov__dag-wacht:disabled { color: rgba(255, 255, 255, 0.45); cursor: default; }
+@media (prefers-reduced-motion: reduce) { .axe-ov__compact { animation: none; } }
