@@ -16,11 +16,12 @@ set -euo pipefail
 
 TICK_WRAPPER="${AXE_CRON_WRAPPER:-/usr/local/sbin/axe-core-cron-tick}"
 CRON_ENV="${AXE_CRON_ENV:-/etc/axe/cron.env}"
-TICK_LINE="* * * * * $TICK_WRAPPER"
+TICK_LINE="* * * * * $TICK_WRAPPER >/dev/null 2>&1"
 
 if [ -x "$TICK_WRAPPER" ] && [ -s "$CRON_ENV" ]; then
   echo "→ Installing /cron/tick crontab via $TICK_WRAPPER (every minute)..."
-  # Drop old plaintext curl ticks and any previous wrapper line, keep the rest.
+  # Drop old plaintext curl ticks and any previous wrapper line (with or without
+  # a >/dev/null redirect), then add the quiet wrapper line once. Keep the rest.
   ( crontab -l 2>/dev/null | grep -vF '/cron/tick' | grep -vF "$TICK_WRAPPER" || true
     echo "$TICK_LINE"
   ) | crontab -

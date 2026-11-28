@@ -52,7 +52,17 @@ ln -sf "$INSTALL_DIR/.env" "$INSTALL_DIR/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-
 
 # 4. Systemd service
 echo "→ Installing systemd service..."
-cp axe_api.service /etc/systemd/system/axe-core-api.service
+# The unit file in the repo is axe-core-api.service; older trees may still
+# ship axe_api.service. Copy whichever is present, fail clearly if neither is.
+if [ -f axe-core-api.service ]; then
+  UNIT_SRC=axe-core-api.service
+elif [ -f axe_api.service ]; then
+  UNIT_SRC=axe_api.service
+else
+  echo "✗ Missing systemd unit file: expected axe-core-api.service (or the older axe_api.service) in $INSTALL_DIR"
+  exit 1
+fi
+cp "$UNIT_SRC" /etc/systemd/system/axe-core-api.service
 systemctl daemon-reload
 systemctl enable "$SERVICE"
 systemctl restart "$SERVICE"
