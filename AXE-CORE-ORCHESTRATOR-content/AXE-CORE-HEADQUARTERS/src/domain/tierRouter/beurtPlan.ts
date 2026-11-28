@@ -12,6 +12,7 @@
  * lopend werk moet gebeuren, wat onthouden moet worden, en wat een herinnering
  * is. Geen I/O hier; de aanroep zit in application/.
  */
+import { managerVoor } from '@/domain/tierRouter/agentVenster';
 import type { AxeAgentId } from '@/domain/agents/roster';
 import { AXE_SKILLS, isAxeSkill, type AxeSkillId } from './axeSkills';
 import { agentById } from '@/domain/agents/roster';
@@ -74,8 +75,11 @@ export interface BeurtPlan {
 }
 
 /** Agents die echt werk kunnen doen via de takenkernel. */
+// 28 nov (Luka): de managers ZIJN de DAX-bots. Nieuw werk gaat naar de manager; een
+// oude botnaam (northsea, trading, developer, thinktank) wordt zijn manager (managerVoor).
 const JOB_AGENTS: ReadonlyArray<AxeAgentId> = [
-  'northsea', 'trading', 'developer', 'browser', 'intel', 'apps', 'finance', 'thinktank', 'wingman', 'axe',
+  'axemanager', 'projectsmgr', 'companionmgr', 'axon', 'tradingos', 'northseamgr',
+  'browser', 'intel', 'apps', 'finance', 'wingman', 'axe',
 ];
 
 export const PLAN_MAX_JOBS = 6;
@@ -101,7 +105,7 @@ Read his whole message and decide what he actually wants. Reply with JSON only:
 
 - reply: what you say back, spoken, in the language he used. Talk like a real person who knows him well, not like a help desk: react to what he actually said. If he is telling a story, venting or thinking out loud, engage with it -- react, give your honest take, or ask one follow-up question. Never end with filler like "how can I help you". One to three short sentences. When you start jobs, say in a few words what you set in motion. Answer small questions directly. Never say you cannot do something that a job can do.
 - jobs: ONLY things he asks to be done now. Not ideas ("we should some day..."), not thinking out loud, not stories, feelings or opinions, not questions you can answer in the reply. Most turns have no jobs. Max ${PLAN_MAX_JOBS}.
-  agent: northsea (commodity desk, leads, mailbox - read only), trading (markets, positions, trading desk), developer (code, repos, builds, servers), browser (look something up on the web), intel (news, research briefs), apps (apps and VPS services), finance (money, subscriptions, credits), thinktank (work out an idea), axe (anything else).
+  agent: northseamgr (NorthSea commodity desk, leads, mailbox - read only), tradingos (Trading OS, markets, positions, trading desk), projectsmgr (code, repos, builds, servers), companionmgr (AXE Companion), axon (AXON Memory), axemanager (AXE CORE itself, or work out an idea), browser (look something up on the web), intel (news, research briefs), apps (apps and VPS services), finance (money, subscriptions, credits), axe (anything else).
   request: a complete instruction in English that makes sense without this conversation.
   device: which computer has to do it. Exactly one of "vps" (the always-on server), "mac-mini" or "imac" (his two Macs at home), or null. Set it as soon as he names a machine, and also when the work is clearly about the files, the apps, the screen or the repo checkout of one of the Macs. null when any machine will do, or when you are not sure -- never guess a machine.
   skill: one of ${SKILL_IDS} when he is asking for exactly that named thing, otherwise null. These five have a fixed instruction and a fixed agent, so naming one is better than writing your own request. Never guess: null when unsure.
@@ -194,7 +198,8 @@ export function parseBeurtPlan(raw: string, lopend: readonly string[] = []): Beu
     const r = j as Record<string, unknown>;
     const request = tekst(r.request, 1200);
     if (!request) continue;
-    const agent = JOB_AGENTS.includes(r.agent as AxeAgentId) ? (r.agent as AxeAgentId) : 'axe';
+    const gevraagd = managerVoor(r.agent as AxeAgentId);
+    const agent = JOB_AGENTS.includes(gevraagd) ? gevraagd : 'axe';
     // Strikt: alles wat niet exact een van de drie machines is, is geen machine.
     const device = PLAN_DEVICES.includes(r.device as PlanDevice) ? (r.device as PlanDevice) : null;
     // Zelfde strengheid als agent en device: wat niet exact een van de vijf is,

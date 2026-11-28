@@ -64,3 +64,25 @@ describe('daxOverzichtRijen', () => {
     expect(rij.alwaysOn).toBe(true);
   });
 });
+
+describe('één rij per computer, onder de manager (28 nov)', () => {
+  it('oude botnaam en manager delen een computer: de manager wint, in elke volgorde', () => {
+    const nu = Date.parse('2026-11-28T11:00:00Z');
+    const hart = new Date(nu - 60_000).toISOString();
+    const rij = (agent: string) => basis({ agent, dax_computer: 'dax-northsea-01', dax_status: 'running', dax_heartbeat_at: hart });
+    for (const agents of [
+      { northsea: rij('northsea'), northseamgr: rij('northseamgr') },
+      { northseamgr: rij('northseamgr'), northsea: rij('northsea') },
+    ]) {
+      const rijen = daxOverzichtRijen(agents, nu);
+      expect(rijen).toHaveLength(1);
+      expect(rijen[0].agentId).toBe('northseamgr');
+    }
+  });
+
+  it('elke manager heeft een computer; browser is gedeeld, geen bot', () => {
+    const eigenaren = Object.values(DAX_APP_EIGENAAR).map((m) => m.agentId);
+    expect(eigenaren).toEqual(['axemanager', 'projectsmgr', 'companionmgr', 'axon', 'tradingos', 'northseamgr', 'browser']);
+    expect(DAX_APP_EIGENAAR['dax-browser-01'].app).toMatch(/Shared/);
+  });
+});

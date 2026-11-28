@@ -1086,6 +1086,38 @@ RUNNERS: dict[str, Any] = {
 }
 
 
+# 28 nov (Luka): één manager = één always-on bot met één hartslag, zoals in Grok Bot.
+# De pulse van een manager is zijn hartslag: eerst zijn eigen check (RUNNERS), daarna
+# zijn eigen initiatiefronde (manager_werk.eigen_ronde, zelf begrensd op 1x per 2 uur).
+# Daarnaast bestaan alleen nog de inbox (manager_werk, elke 2 min: antwoorden en
+# terugmelden) en de computerwacht (dax_wacht, geen LLM): geen tweede wekker meer.
+HARTSLAG_RONDE_BUDGET_S = 45.0
+
+
+def hartslag(agent: str, db: Any, nu: datetime) -> dict[str, Any]:
+    """Eén hartslag van één manager."""
+    import time
+
+    begin = time.monotonic()
+    uit = RUNNERS[agent](db, nu)
+    uit = dict(uit) if isinstance(uit, dict) else {"pulse": uit}
+    if time.monotonic() - begin > HARTSLAG_RONDE_BUDGET_S:
+        uit["eigen_ronde"] = "overgeslagen: de check duurde al te lang"
+        return uit
+    try:
+        import manager_werk
+
+        gestart = manager_werk.eigen_ronde(db, agent, nu)
+        uit["eigen_ronde"] = gestart[:120] if gestart else None
+    except Exception as exc:  # noqa: BLE001 — de check is al gedaan; de ronde mag hem niet kielen
+        uit["eigen_ronde_fout"] = str(exc)[:200]
+    return uit
+
+
+def _hartslag_van(agent: str) -> Any:
+    return lambda db, nu: hartslag(agent, db, nu)
+
+
 def diensten() -> tuple[dict[str, Any], ...]:
     namen = {
         "axemanager": "AXE CORE Manager pulse",
@@ -1110,7 +1142,7 @@ def diensten() -> tuple[dict[str, Any], ...]:
             "job_key": f"axe_core:staande-{aid}",
             "cron_expr": PULSE_CRON[aid],
             "wat": wat[aid],
-            "run": RUNNERS[aid],
+            "run": _hartslag_van(aid),
         }
         for aid in GROK_IDS
     )

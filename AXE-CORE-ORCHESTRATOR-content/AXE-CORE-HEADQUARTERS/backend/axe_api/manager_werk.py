@@ -641,6 +641,76 @@ def meld_klaar(db: Any, nu: datetime) -> int:
     return n
 
 
+# ── 3b. het vaste werk op de eigen computer (dax_wacht) in het eigen gesprek ──
+# 28 nov (Luka): de manager ÍS de always-on DAX-bot, zoals in Grok Bot; dan zegt hij
+# ook zelf wat zijn vaste ronde opleverde. Zonder rem werden dat ~16 berichten per
+# dag, dus: mislukt = altijd melden; gelukt = hooguit één keer per ROUTINE_STIL.
+ROUTINE_STIL = timedelta(hours=20)
+ROUTINE_KOP = "Vaste ronde"
+
+
+def _routine_missies(db: Any, ids: list[str]) -> dict[str, dict[str, Any]]:
+    if not ids:
+        return {}
+    rijen = (db.table("core_missions").select("id,title,metadata").in_("id", ids).limit(len(ids))
+             .execute().data) or []
+    return {r["id"]: r for r in rijen if (r.get("metadata") or {}).get("dax_routine")}
+
+
+def _routine_kort_geleden_gemeld(db: Any, agent: str, nu: datetime) -> bool:
+    rijen = (db.table("core_manager_messages").select("from_agent,body,created_at").eq("from_agent", agent)
+             .gte("created_at", (nu - ROUTINE_STIL).isoformat()).limit(200).execute().data) or []
+    for r in rijen:
+        t = _tijd(r.get("created_at"))
+        if str(r.get("body") or "").startswith(f"{ROUTINE_KOP}:") and t and nu - t < ROUTINE_STIL:
+            return True
+    return False
+
+
+def routine_tekst(t: dict[str, Any], missie: dict[str, Any]) -> str:
+    titel = str(missie.get("title") or t.get("title") or "routine").split(" (")[0]
+    wat = _samenvatting(t)
+    if t.get("status") == "completed" and "MILESTONE: blocked" not in wat:
+        wat = wat.replace("MILESTONE: done", "").strip()
+        return f"{ROUTINE_KOP}: {titel} op mijn eigen computer is gedaan." + (f"\n\n{wat}" if wat else "")
+    return (f"{ROUTINE_KOP}: {titel} op mijn eigen computer lukte niet ({t.get('status')})."
+            + (f"\n\n{wat}" if wat else "") + "\n\nDe wacht probeert het na één interval opnieuw.")
+
+
+def meld_routines(db: Any, nu: datetime) -> int:
+    """Meld afgeronde vaste rondes in het gesprek van de manager die ze deed."""
+    try:
+        rijen = (db.table("core_tasks").select("id,title,status,result,error,metadata,assignee,requested_by,completed_at")
+                 .in_("assignee", list(_mi.alle_namen())).in_("status", list(KLAAR))
+                 .in_("requested_by", ["axe-missions", "dax-wacht"])
+                 .gte("completed_at", (nu - NIET_OUDER_DAN).isoformat()).limit(50).execute().data) or []
+        rijen = [t for t in rijen if not (t.get("metadata") or {}).get("gemeld")
+                 and (t.get("metadata") or {}).get("mission_id")]
+        missies = _routine_missies(db, sorted({str(t["metadata"]["mission_id"]) for t in rijen}))
+    except Exception as e:  # noqa: BLE001
+        log.warning("routines lezen mislukte: %s", e)
+        return 0
+    n = 0
+    for t in sorted(rijen, key=lambda x: str(x.get("completed_at") or "")):
+        meta = t.get("metadata") or {}
+        missie = missies.get(str(meta.get("mission_id")))
+        if missie is None:
+            continue
+        agent = _norm(t.get("assignee"))
+        tekst = routine_tekst(t, missie)
+        try:
+            gelukt = tekst.startswith(f"{ROUTINE_KOP}: ") and "lukte niet" not in tekst.split("\n", 1)[0]
+            stil = gelukt and _routine_kort_geleden_gemeld(db, agent, nu)
+            if not stil:
+                _zeg(db, agent, tekst)
+                n += 1
+            db.table("core_tasks").update({"metadata": {**meta, "gemeld": nu.isoformat(), **({"stil": True} if stil else {})}}
+                                          ).eq("id", t["id"]).execute()
+        except Exception as e:  # noqa: BLE001
+            log.warning("routine terugmelden %s mislukte: %s", t.get("id"), e)
+    return n
+
+
 # ── de dienst ──────────────────────────────────────────────────────────────
 
 def _draad(db: Any, nu: datetime) -> list[dict[str, Any]]:
@@ -742,6 +812,10 @@ def _run(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[
         uit["beantwoord"].append({"agent": agent, "model": model, "taken": len(gestart)})
         uit["taken"] += len(gestart)
     uit["gemeld"] = meld_klaar(db, nu)
+    try:
+        uit["routines_gemeld"] = meld_routines(db, nu)
+    except Exception as e:  # noqa: BLE001 — mag de ronde nooit breken
+        uit["fouten"].append(f"routines: {e}"[:200])
     # 'Doe de rij' (rij.py): staat er iets in de rij en draait er niets, start de volgende.
     try:
         import rij as _rij
@@ -755,15 +829,9 @@ def _run(db: Any, nu: datetime, chat: Callable[..., Any] | None = None) -> dict[
                 uit["overleg"] = o
         except Exception as e:  # noqa: BLE001
             uit["fouten"].append(f"overleg: {e}"[:200])
-    # Eén eigen ronde per run (max ~60 s), de managers om de beurt: elke 2 min één.
-    if not uit["beantwoord"] and not uit.get("overleg"):
-        agent = MANAGERS[(nu.hour * 30 + nu.minute // 2) % len(MANAGERS)]
-        try:
-            if (gestart := eigen_ronde(db, agent, nu, chat=chat)):
-                uit["eigen_ronde"] = {"agent": agent, "taak": gestart[:120]}
-                uit["taken"] += 1
-        except Exception as e:  # noqa: BLE001
-            uit["fouten"].append(f"ronde {agent}: {e}"[:200])
+    # 28 nov: de eigen initiatiefronde zit niet meer hier (om de beurt, elke 2 min één
+    # manager) maar in de eigen hartslag van elke manager (grok_managers.hartslag). Deze
+    # lus is alleen nog de inbox: antwoorden, terugmelden, overleg.
     return uit
 
 
@@ -908,5 +976,5 @@ def dienst() -> dict[str, Any]:
     }
 
 
-__all__ = ["run", "gezondheid", "dienst", "onbeantwoord", "lees_antwoord", "lees_overleg", "meld_tekst", "meld_klaar",
+__all__ = ["run", "gezondheid", "dienst", "onbeantwoord", "lees_antwoord", "lees_overleg", "meld_tekst", "meld_klaar", "meld_routines", "routine_tekst",
            "stel_vraag", "open_overleg", "beantwoord_overleg"]

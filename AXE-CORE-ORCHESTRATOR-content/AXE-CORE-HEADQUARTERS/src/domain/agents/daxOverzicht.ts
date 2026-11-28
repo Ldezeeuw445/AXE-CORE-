@@ -10,13 +10,20 @@ import {
 import { amsterdamKlok, amsterdamRelatief, nextTekst } from '@/domain/tijd';
 import { agentById, type AxeAgentId } from '@/domain/agents/roster';
 
-/** Known VPS DAX computers and the app/agent they own. */
+/**
+ * Known VPS DAX computers and the manager that owns each one (28 nov, Luka: the
+ * managers ARE the always-on DAX bots, like Grok Bot). The old bot names
+ * (northsea, trading, developer, thinktank) are aliases; browser is a shared
+ * computer every manager uses, not an agent.
+ */
 export const DAX_APP_EIGENAAR: Record<string, { agentId: AxeAgentId; app: string }> = {
-  'dax-northsea-01': { agentId: 'northsea', app: 'NorthSea Commodity desk' },
-  'dax-trading-01': { agentId: 'trading', app: 'Trading OS' },
-  'dax-developer-01': { agentId: 'developer', app: 'Developer / Code' },
-  'dax-thinktank-01': { agentId: 'thinktank', app: 'ThinkTank growth' },
-  'dax-browser-01': { agentId: 'browser', app: 'AXE Browser' },
+  'dax-thinktank-01': { agentId: 'axemanager', app: 'AXE CORE' },
+  'dax-developer-01': { agentId: 'projectsmgr', app: 'Projects / Code' },
+  'dax-companion-01': { agentId: 'companionmgr', app: 'AXE Companion' },
+  'dax-axon-01': { agentId: 'axon', app: 'AXON Memory' },
+  'dax-trading-01': { agentId: 'tradingos', app: 'Trading OS' },
+  'dax-northsea-01': { agentId: 'northseamgr', app: 'NorthSea Commodity desk' },
+  'dax-browser-01': { agentId: 'browser', app: 'Shared browser · every manager' },
 };
 
 export type DaxStandLabel = 'running' | 'blocked' | 'offline' | 'unknown';
@@ -65,6 +72,11 @@ export function daxOverzichtRijen(
 
   for (const [id, a] of Object.entries(agents)) {
     if (!a?.dax_computer) continue;
+    // Old bot name and its manager share one computer: the manager (owner) wins,
+    // so there is one row per computer under the manager's name.
+    const eigenaar = DAX_APP_EIGENAAR[a.dax_computer]?.agentId;
+    const staand = byComputer.get(a.dax_computer);
+    if (staand && staand.agentId === eigenaar && id !== eigenaar) continue;
     byComputer.set(a.dax_computer, { agentId: id, a });
   }
 

@@ -36,7 +36,7 @@ describe('planBeurt', () => {
       ],
     });
     expect(gevraagd).toEqual(['groq', 'openai']);
-    expect(plan?.jobs[0].agent).toBe('northsea');
+    expect(plan?.jobs[0].agent).toBe('northseamgr'); // 28 nov: oude botnaam -> zijn manager
   });
 
   it('een model dat te lang doet telt als mislukt', async () => {

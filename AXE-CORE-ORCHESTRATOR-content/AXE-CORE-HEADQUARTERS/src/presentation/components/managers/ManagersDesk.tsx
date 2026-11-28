@@ -16,7 +16,6 @@ import { agentById, type AxeAgent, type AxeAgentId } from '@/domain/agents/roste
 import { type GrokManagerId } from '@/domain/agents/grokManagers';
 import {
   BOSS_ID,
-  DAX_BOT_IDS,
   MANAGER_APP_GROEPEN,
   PROJECTS_ORCH_ID,
   bossAgent,
@@ -58,13 +57,14 @@ import {
   nieuwRelayMsg,
 } from '@/domain/agents/managerChatOpslag';
 import { amsterdamKlok } from '@/domain/tijd';
+import { managerVoor } from '@/domain/tierRouter/agentVenster';
 import { daxRegel, daxWerkLabel, type ServerAgent } from '@/domain/agents/serverStatus';
 
 const SUBTITELS: Partial<Record<AxeAgentId, string>> = {
   axe: 'Boss · your main assistant',
   axemanager: 'Owns AXE Core HQ · branch/PR only',
   northseamgr: 'Deal desk · commodities',
-  tradingos: 'Demo only · no live orders',
+  tradingos: 'Trading OS · markets, research, risk',
   projectsmgr: 'Orchestrator · all managers',
   companionmgr: 'Product twin · UX voice',
   axon: 'Memory twin · long-term',
@@ -179,13 +179,17 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
   const projects = useMemo(() => projectsOrchAgent(), []);
   const onderProjects = useMemo(() => managersOnderProjects(), []);
   const alleIds = useMemo(
-    () => [BOSS_ID, PROJECTS_ORCH_ID, ...onderProjects.map((a) => a.id), ...DAX_BOT_IDS] as AxeAgentId[],
+    () => [BOSS_ID, PROJECTS_ORCH_ID, ...onderProjects.map((a) => a.id)] as AxeAgentId[],
     [onderProjects],
   );
   const [searchParams, setSearchParams] = useSearchParams();
   const openParam = searchParams.get('open') as AxeAgentId | null;
   const [gekozen, setGekozen] = useState<AxeAgentId | null>(
-    () => (openParam && alleIds.includes(openParam) ? openParam : BOSS_ID),
+    // ?open=northsea (oude DAX-botnaam) opent het gesprek van zijn manager.
+    () => {
+      const open = openParam ? managerVoor(openParam) : null;
+      return open && alleIds.includes(open) ? open : BOSS_ID;
+    },
   );
   const [zoek, setZoek] = useState('');
   const jobs = useAxeJobStore((s) => s.jobs);
@@ -196,8 +200,9 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
   const stuurRef = useRef<(tekst: string) => void>(() => {});
 
   useEffect(() => {
-    if (openParam && alleIds.includes(openParam) && openParam !== gekozen) {
-      setGekozen(openParam);
+    const open = openParam ? managerVoor(openParam) : null;
+    if (open && alleIds.includes(open) && open !== gekozen) {
+      setGekozen(open);
     }
   }, [openParam, alleIds, gekozen]);
 
@@ -572,18 +577,6 @@ export function ManagersDesk({ weergaveKnoppen }: Props = {}) {
                 );
               })}
 
-              {(() => {
-                const bots = DAX_BOT_IDS.map((id) => agentById(id)).filter(matchZoek);
-                if (!bots.length) return null;
-                return (
-                  <li className="axe-managers-room-groep" aria-label="DAX bots" data-axe-dax-groep="">
-                    <p className="axe-managers-room-sectie-label">DAX bots · always on</p>
-                    <ul className="axe-managers-room-groep-ul" role="list">
-                      {bots.map((a) => renderRij(a))}
-                    </ul>
-                  </li>
-                );
-              })()}
             </ul>
         </>
       </div>
