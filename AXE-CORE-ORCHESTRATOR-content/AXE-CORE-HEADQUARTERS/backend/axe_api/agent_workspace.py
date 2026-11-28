@@ -10,6 +10,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import manager_identiteit as _mi
+
 PROMPTS_DIR = Path(__file__).with_name("prompts")
 GRENZEN_PAD = PROMPTS_DIR / "_grenzen.md"
 
@@ -298,10 +300,9 @@ AGENT_WORKSPACES: dict[str, dict[str, Any]] = {
 # 26 nov (Luka, ADR managers-zijn-dax): één agent per app. De oude DAX-bot-namen
 # zijn aliassen van hun manager; de Browser-bot is geen agent meer maar een gedeelde
 # browsercomputer (dax-browser-01) die elke manager kan gebruiken.
-MANAGER_VAN_DAX_BOT: dict[str, str] = {
-    "thinktank": "axemanager", "developer": "projectsmgr", "northsea": "northseamgr", "trading": "tradingos",
-}
-GEDEELDE_BROWSER_DAX = "dax-browser-01"
+# Eén bron (27 nov, Issue #355): manager_identiteit.DAX_BOT_VAN_MANAGER.
+MANAGER_VAN_DAX_BOT: dict[str, str] = dict(_mi.DAX_BOT_VAN_MANAGER)
+GEDEELDE_BROWSER_DAX = _mi.GEDEELDE_COMPUTERS["browser"]
 
 
 def manager_voor(agent: str | None) -> str | None:

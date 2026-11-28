@@ -24,6 +24,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
+import manager_identiteit as _mi
+
 LUKA = "luka"
 MAX_LENGTE = 4000
 
@@ -62,7 +64,7 @@ RECENT = 4
 
 def _recent_aan_luka(db: Any, agent: str) -> list[str]:
     try:
-        rijen = (db.table("core_manager_messages").select("body").eq("from_agent", agent).eq("to_agent", LUKA)
+        rijen = (db.table("core_manager_messages").select("body").in_("from_agent", list(_namen(agent))).eq("to_agent", LUKA)
                  .order("created_at", desc=True).limit(RECENT).execute().data) or []
     except Exception:  # noqa: BLE001
         return []
@@ -75,6 +77,7 @@ def vertel_luka(db: Any, agent: str, tekst: str) -> bool:
     Tegen zijn laatste paar berichten, niet alleen het laatste: anders stuurt hij
     zijn stand opnieuw zodra er een ander bericht (zoals het dagelijkse
     opruimen) tussen kwam."""
+    agent = _mi.canoniek_of_zelf(agent)
     tekst = (tekst or "").strip()[:MAX_LENGTE]
     if not tekst or tekst in _recent_aan_luka(db, agent):
         return False
@@ -89,8 +92,15 @@ def vertel_luka(db: Any, agent: str, tekst: str) -> bool:
 
 # ── de draad voor de app ───────────────────────────────────────────────────
 
+def _namen(agent: str) -> tuple[str, ...]:
+    """Een manager met al zijn oude namen; een andere agent alleen zichzelf."""
+    return _mi.namen_van(agent) if _mi.is_manager(agent) else (agent,)
+
+
 def _rij_naar_bericht(r: dict[str, Any]) -> dict[str, Any] | None:
-    van, naar = r.get("from_agent"), r.get("to_agent")
+    # 27 nov (Issue #355): berichten aan/van een oude DAX-botnaam (northsea) staan in het
+    # gesprek van zijn manager (northseamgr): één gesprek per manager, niets kwijt.
+    van, naar = _mi.canoniek_of_zelf(r.get("from_agent")), _mi.canoniek_of_zelf(r.get("to_agent"))
     if van == LUKA:
         agent, rol = naar, "user"
     elif naar == LUKA:
@@ -116,7 +126,7 @@ def draad(db: Any, sinds: str | None = None, limiet: int = 500) -> list[dict[str
 def schrijf(db: Any, agent: str, rol: str, tekst: str) -> dict[str, Any]:
     """Een bericht uit de app: van Luka aan de manager, of het antwoord dat de
     app van die manager kreeg (zodat het op elk apparaat terug te lezen is)."""
-    agent = (agent or "").strip()[:60]
+    agent = _mi.canoniek_of_zelf((agent or "").strip()[:60])
     tekst = (tekst or "").strip()[:MAX_LENGTE]
     if not agent or agent == LUKA or not tekst:
         raise ValueError("agent en tekst zijn nodig")
@@ -133,8 +143,9 @@ def schrijf(db: Any, agent: str, rol: str, tekst: str) -> dict[str, Any]:
 
 
 def markeer_gelezen(db: Any, agent: str) -> None:
+    agent = _mi.canoniek_of_zelf(agent)
     db.table("core_manager_messages").update({"read_at": datetime.now(timezone.utc).isoformat()}) \
-        .eq("from_agent", agent).eq("to_agent", LUKA).is_("read_at", "null").execute()
+        .in_("from_agent", list(_namen(agent))).eq("to_agent", LUKA).is_("read_at", "null").execute()
 
 
 __all__ = ["bericht", "vertel_luka", "draad", "schrijf", "markeer_gelezen", "LUKA"]
