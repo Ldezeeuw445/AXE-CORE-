@@ -65,9 +65,10 @@ export const GROK_REPO_SCOPE: Record<GrokManagerId, {
     supabase: 'ktaditgtbubonrahyiig',
     tools: ['run_shell', 'read_file', 'write_file', 'list_devices', 'run_on_device', 'finish'],
   },
+  // 28 nov (Luka): Trading OS Manager kan alles, net als de andere managers.
   tradingos: {
     repos: ['trading-os-app', 'axe-trading-core', 'TRADING-OS'],
-    tools: ['run_shell', 'read_file', 'list_devices', 'run_on_device', 'finish'],
+    tools: ['run_shell', 'read_file', 'write_file', 'list_devices', 'run_on_device', 'run_crew', 'finish'],
   },
   northseamgr: {
     repos: ['AXE-CORE-'],

@@ -37,7 +37,7 @@ REPO_SCOPE: dict[str, dict[str, Any]] = {
     "projectsmgr": {"repos": ["AXE-CORE-"], "tools": "write"},
     "companionmgr": {"repos": ["AXE-COMPANION-OS-"], "tools": "write"},
     "axon": {"repos": ["axon-memory"], "supabase": "ktaditgtbubonrahyiig", "tools": "write"},
-    "tradingos": {"repos": ["trading-os-app", "axe-trading-core", "TRADING-OS"], "tools": "read"},
+    "tradingos": {"repos": ["trading-os-app", "axe-trading-core", "TRADING-OS"], "tools": "write"},
     "northseamgr": {"repos": ["AXE-CORE-"], "tools": "read"},
 }
 

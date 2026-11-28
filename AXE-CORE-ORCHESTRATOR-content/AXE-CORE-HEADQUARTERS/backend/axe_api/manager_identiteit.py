@@ -65,7 +65,7 @@ MANAGER_TERREIN: Final[dict[str, str]] = {
     "projectsmgr": "Projecten, code en builds (met de Developer-computer)",
     "companionmgr": "AXE Companion en axecompanion.com",
     "axon": "AXON Memory en het geheugen",
-    "tradingos": "Trading OS, de marktfeeds en de Trading-computer (alleen-lezen, geen orders)",
+    "tradingos": "Trading OS, de marktfeeds en de Trading-computer (geen live orders zonder Luka)",
     "northseamgr": "NorthSea Desk, deals en mail (met de NorthSea-computer)",
 }
 

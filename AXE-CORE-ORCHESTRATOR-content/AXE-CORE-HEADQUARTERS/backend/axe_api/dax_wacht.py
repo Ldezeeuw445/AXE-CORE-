@@ -122,12 +122,10 @@ ROUTINES: dict[str, Routine] = {
         "open axon-memory.com and app.axon-memory.com in the DAX browser, record HTTP status, page title and a screenshot",
         "which sites are up, their status codes, titles and response times", 6 * 3600,
         eisen=("net", "python3", "chromium", "dax_browser")),
-    # Trading OS Manager is alleen-lezen (_LEES, geen write_file): verslag in de samenvatting.
     "tradingos": Routine(
         "markets", "Market data check",
         "fetch 3 months of daily closes for gold, EUR/USD and the S&P 500 and compute SMA20/SMA50/RSI14",
-        "last close, 1d/5d change, SMA20 vs SMA50 and RSI14 per instrument (facts only, no trade advice)", 6 * 3600,
-        verslag=False),
+        "last close, 1d/5d change, SMA20 vs SMA50 and RSI14 per instrument (facts only, no trade advice)", 6 * 3600),
     "northseamgr": Routine(
         "energy", "Energy market snapshot",
         "fetch daily closes for Brent, WTI, Henry Hub gas and heating oil and compute changes and averages",

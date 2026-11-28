@@ -85,19 +85,19 @@ def test_oude_missie_wordt_geadopteerd_niet_verdubbeld():
     assert len([e for e in db.tabellen["core_mission_events"] if "mission.adopted" in str(e)]) == 1
 
 
-def test_geadopteerde_trading_missie_krijgt_de_alleen_lezen_opdracht():
+def test_geadopteerde_trading_missie_krijgt_de_opdracht_van_de_manager():
     r = dax_wacht.ROUTINES["tradingos"]
     oud = dax_wacht.missie_rij("tradingos", r)
     # Zoals live: de oude opdracht van de trading-bot schreef een verslagbestand.
     oud.update(id=str(uuid.uuid4()), owner_agent="trading", status="monitoring",
                metadata={**oud["metadata"], "dax_routine": "trading"},
-               milestones=[{"key": "markets", "goal": "4. Write a short factual report (markdown) with write_file",
-                            "task_id": "klaar-1"}])
+               milestones=[{"key": "markets", "goal": "old text from the trading bot", "task_id": "klaar-1"}])
     db = NepDB(core_missions=[oud], core_mission_events=[], core_tasks=[{"id": "klaar-1", "status": "completed"}])
     dax_wacht.zorg_voor_missie(db, "trading", r, [], NU)
     m = db.tabellen["core_missions"][0]
     assert m["owner_agent"] == "tradingos"
-    assert "do not write files" in m["milestones"][0]["goal"] and not m["milestones"][0].get("task_id")
+    assert m["milestones"][0]["goal"] == dax_wacht.missie_rij("tradingos", r)["milestones"][0]["goal"]
+    assert not m["milestones"][0].get("task_id")
 
 
 def test_browser_missie_wordt_beeindigd_niet_verwijderd():
