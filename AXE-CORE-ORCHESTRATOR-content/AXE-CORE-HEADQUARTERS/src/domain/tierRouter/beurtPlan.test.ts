@@ -13,7 +13,7 @@ describe('parseBeurtPlan', () => {
     const raw = '{"reply":"Ik ga voor je uitzoeken waarom de autosync op de Mac Mini gisteren faalde.","jobs":[{"agent":"developer","title":"Investigate autosync failure","request":"Investigate and report the cause of the autosync failure on the Mac Mini that occurred yesterday."}],"remember":["We moeten de trading desk een keer opschonen."],"reminders":[]}';
     const plan = parseBeurtPlan(raw);
     expect(plan?.jobs).toHaveLength(1);
-    expect(plan?.jobs[0].agent).toBe('developer');
+    expect(plan?.jobs[0].agent).toBe('projectsmgr'); // 28 nov: oude botnaam -> zijn manager
     expect(plan?.onthoud).toEqual(['We moeten de trading desk een keer opschonen.']);
     expect(plan?.herinneringen).toEqual([]);
   });

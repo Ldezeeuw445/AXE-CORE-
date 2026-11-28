@@ -100,10 +100,11 @@ test('Managers tab is a Grok-style chat room with real manager list', async ({ p
   await expect(page.locator('.axe-managers-room')).toBeVisible({ timeout: 45_000 });
   await expect(page.locator('.axe-managers-room-lijst')).toBeVisible();
   await expect(page.locator('.axe-managers-room-draad')).toBeVisible();
-  await expect(page.locator('.axe-managers-room-rij')).toHaveCount(7);
+  // 28 nov: de managers ZIJN de always-on DAX-bots -- zes managers, geen aparte DAX-groep.
+  await expect(page.locator('.axe-managers-room-rij')).toHaveCount(6);
   await expect(page.locator('[data-axe-boss="ja"]')).toHaveCount(1);
   await expect(page.getByText('Boss', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('DAX', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('[data-axe-dax-groep]')).toHaveCount(0);
   await page.screenshot({ path: join(shots, 'managers-chat.png') });
   saveTwin('managers-chat.png', 'managers-chat.png');
   await page.screenshot({ path: join(shots, 'managers-boss.png') });

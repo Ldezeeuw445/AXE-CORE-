@@ -123,3 +123,96 @@ def test_browser_missie_met_lopende_taak_wacht():
     assert dax_wacht.beeindig_overgenomen(db, "browser", NU) == [
         {"mission": oud["id"], "action": "waiting", "reason": "a task is still running"}]
     assert db.tabellen["core_missions"][0]["status"] == "monitoring"
+
+
+# ── het vaste werk in het eigen gesprek (28 nov) ────────────────────────────
+
+def _routine_db(*taken, berichten=()):
+    from test_manager_werk import DB
+    missie = {"id": "m-axon", "title": "Site watch (AXON Memory Manager)",
+              "metadata": {"dax_routine": "axon", "routine": "sites-axon"}}
+    gewoon = {"id": "m-los", "title": "Iets anders", "metadata": {}}
+    return DB({"core_tasks": list(taken), "core_missions": [missie, gewoon],
+               "core_manager_messages": list(berichten)})
+
+
+def _taak(i, status="completed", summary="Site watch complete. Receipt sites-axon-1. 2/2 up.\nMILESTONE: done",
+          missie="m-axon", assignee="axon"):
+    from datetime import datetime, timezone
+    return {"id": f"t{i}", "title": "Site watch: run dax-routine", "status": status, "assignee": assignee,
+            "requested_by": "axe-missions", "completed_at": datetime(2026, 11, 28, 10, i, tzinfo=timezone.utc).isoformat(),
+            "result": {"summary": summary}, "metadata": {"source": "mission_engine", "mission_id": missie}}
+
+
+def test_vaste_ronde_komt_in_het_gesprek_van_de_manager():
+    import manager_werk as mw
+    from datetime import datetime, timezone
+    nu = datetime(2026, 11, 28, 11, 0, tzinfo=timezone.utc)
+    db = _routine_db(_taak(1), _taak(2, missie="m-los"))
+    assert mw.meld_routines(db, nu) == 1
+    [b] = db.data["core_manager_messages"]
+    assert b["from_agent"] == "axon" and b["to_agent"] == "luka"
+    assert b["body"].startswith("Vaste ronde: Site watch op mijn eigen computer is gedaan.")
+    assert "2/2 up" in b["body"] and "MILESTONE" not in b["body"]
+    assert db.data["core_tasks"][0]["metadata"]["gemeld"]
+    assert "gemeld" not in db.data["core_tasks"][1]["metadata"]      # geen routine: niet hier
+    assert mw.meld_routines(db, nu) == 0                              # niet twee keer
+
+
+def test_gelukte_ronde_hooguit_een_keer_per_dag_mislukte_altijd():
+    import manager_werk as mw
+    from datetime import datetime, timezone
+    nu = datetime(2026, 11, 28, 18, 0, tzinfo=timezone.utc)
+    eerder = {"from_agent": "axon", "to_agent": "luka", "body": "Vaste ronde: Site watch ...",
+              "created_at": datetime(2026, 11, 28, 11, 0, tzinfo=timezone.utc).isoformat()}
+    db = _routine_db(_taak(3), _taak(4, status="failed", summary="sites-axon: no site answered"), berichten=[eerder])
+    assert mw.meld_routines(db, nu) == 1
+    nieuw = db.data["core_manager_messages"][-1]["body"]
+    assert "lukte niet (failed)" in nieuw and "no site answered" in nieuw
+    assert db.data["core_tasks"][0]["metadata"]["stil"] is True       # gezien, niet opnieuw gezegd
+
+
+def test_ronde_die_zichzelf_blokkeert_telt_als_mislukt():
+    import manager_werk as mw
+    t = _taak(5, summary="Ran it.\nMILESTONE: blocked REASON: HTTP 503")
+    assert "lukte niet" in mw.routine_tekst(t, {"title": "Site watch (AXON Memory Manager)"})
+
+
+# ── één hartslag per manager (28 nov) ───────────────────────────────────────
+
+def test_hartslag_is_eigen_check_plus_eigen_ronde(monkeypatch):
+    import grok_managers as gm
+    import manager_werk as mw
+    from datetime import datetime, timezone
+    nu = datetime(2026, 11, 28, 12, 0, tzinfo=timezone.utc)
+    volgorde = []
+    monkeypatch.setitem(gm.RUNNERS, "axon", lambda db, n: volgorde.append("check") or {"job": "axon"})
+    monkeypatch.setattr(mw, "eigen_ronde", lambda db, a, n, chat=None: volgorde.append(f"ronde:{a}") or "Repareer X")
+    uit = gm.hartslag("axon", object(), nu)
+    assert volgorde == ["check", "ronde:axon"]
+    assert uit == {"job": "axon", "eigen_ronde": "Repareer X"}
+    # De pulse-dienst van elke manager IS die hartslag.
+    d = next(d for d in gm.diensten() if d["agent"] == "axon")
+    volgorde.clear()
+    d["run"](object(), nu)
+    assert volgorde == ["check", "ronde:axon"]
+
+
+def test_hartslag_ronde_faalt_zonder_de_check_te_verliezen(monkeypatch):
+    import grok_managers as gm
+    import manager_werk as mw
+    from datetime import datetime, timezone
+    monkeypatch.setitem(gm.RUNNERS, "tradingos", lambda db, n: {"job": "t"})
+    monkeypatch.setattr(mw, "eigen_ronde", lambda *a, **k: 1 / 0)
+    uit = gm.hartslag("tradingos", object(), datetime(2026, 11, 28, tzinfo=timezone.utc))
+    assert uit["job"] == "t" and "division" in uit["eigen_ronde_fout"]
+
+
+def test_inbox_lus_wekt_geen_managers_meer(monkeypatch):
+    import manager_werk as mw
+    from datetime import datetime, timezone
+    from test_manager_werk import DB
+    monkeypatch.setattr(mw, "eigen_ronde", lambda *a, **k: (_ for _ in ()).throw(AssertionError("niet hier")))
+    uit = mw.run(DB({"core_manager_messages": [], "core_tasks": []}), datetime(2026, 11, 28, 12, 0, tzinfo=timezone.utc),
+                 chat=lambda m: ("{}", "groq"))
+    assert "eigen_ronde" not in uit and not uit["fouten"]
