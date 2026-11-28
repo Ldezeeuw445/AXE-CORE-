@@ -16,8 +16,68 @@
  * per stemming anders. Alleen transform/opacity, dus de compositor doet het
  * werk; de blur achter de notch die op 18 nov CPU kostte, is sinds v3 weg.
  * `fase` schuift het ritme op, zodat een rij gezichten niet in koor knippert.
+ *
+ * v5 (Luka 27 nov t78u): knipperen en kijken komen uit gezichtLeven.ts, met
+ * spreiding (geen loop meer); de held schuift een fractie mee met de muis
+ * (parallax), en een nieuwe stemming vloeit over in plaats van te springen.
  */
+import { type RefObject, useEffect, useRef } from 'react';
+import { knippertOoit, volgendeBlik, volgendeKnipper } from '../../../domain/overlay/gezichtLeven';
 import './AxeGezicht.css';
+
+/** Minder beweging gevraagd? Dan geen klokjes, niets. */
+function wilMinderBeweging(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/**
+ * v5 (Luka 27 nov t78u: "realistischer, echt premium"): knipperen en kijken
+ * met spreiding in plaats van een vaste CSS-loop. Zet alleen een attribuut en
+ * twee CSS-variabelen op het eigen <svg> (geen React-render per knipper); de
+ * CSS doet de beweging met transform, dus de compositor.
+ */
+function useLevendeOgen(ref: RefObject<SVGSVGElement | null>, stemming: Stemming, aan: boolean) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!aan || !el || wilMinderBeweging()) return;
+    const klokjes = new Set<ReturnType<typeof setTimeout>>();
+    const na = (ms: number, f: () => void) => {
+      const t = setTimeout(() => { klokjes.delete(t); f(); }, ms);
+      klokjes.add(t);
+    };
+    const knipper = () => {
+      const k = volgendeKnipper(stemming);
+      na(k.over, () => {
+        if (document.hidden) return knipper();
+        el.setAttribute('data-knip', '');
+        na(k.dicht, () => {
+          el.removeAttribute('data-knip');
+          if (k.dubbel) na(150 + k.dicht, () => { el.setAttribute('data-knip', ''); na(k.dicht, () => el.removeAttribute('data-knip')); });
+          knipper();
+        });
+      });
+    };
+    const kijk = () => {
+      const b = volgendeBlik(stemming);
+      if (!b) return;
+      na(b.over, () => {
+        el.style.setProperty('--axe-oog-x', String(b.x));
+        el.style.setProperty('--axe-oog-y', String(b.y));
+        el.style.setProperty('--axe-sprong', `${b.sprong}ms`);
+        kijk();
+      });
+    };
+    if (knippertOoit(stemming)) knipper();
+    kijk();
+    return () => {
+      klokjes.forEach(clearTimeout);
+      el.removeAttribute('data-knip');
+      el.style.removeProperty('--axe-oog-x');
+      el.style.removeProperty('--axe-oog-y');
+    };
+  }, [ref, stemming, aan]);
+}
 
 export type Stemming = 'rust' | 'werkt' | 'wacht' | 'fout' | 'klaar';
 
@@ -84,8 +144,11 @@ export function AxeGezicht({
   /** Ogen volgen de muis via --axe-kijk-x/-y op een ouder (alleen de held). */
   volg?: boolean;
 }) {
+  const ref = useRef<SVGSVGElement>(null);
+  useLevendeOgen(ref, stemming, levend);
   return (
     <svg
+      ref={ref}
       width={size}
       height={size}
       viewBox="0 0 64 64"
@@ -105,27 +168,30 @@ export function AxeGezicht({
       }}
     >
       <g className="axe-gezicht__lijf">
-        <path d={DRIEHOEK} fill={kleur} />
+        <path d={DRIEHOEK} fill={kleur} className="axe-gezicht__vorm" />
         {/* Fijne lichtrand bovenop: diepte zonder gloed. */}
         <path d={DRIEHOEK} fill="none" stroke="#fff" strokeOpacity={levend ? 0.18 : 0} strokeWidth="1" className="axe-gezicht__rand" />
         <g className="axe-gezicht__volg">
           <g className="axe-gezicht__kijk">
             <g className="axe-gezicht__knipper">
-              <Ogen stemming={stemming} />
+              {/* key: bij een nieuwe stemming vloeien de ogen over, geen sprong. */}
+              <g key={stemming} className="axe-gezicht__ogen">
+                <Ogen stemming={stemming} />
+              </g>
             </g>
           </g>
         </g>
       </g>
       {stemming === 'werkt' && (
-        <g>
+        <g className="axe-gezicht__badge">
           <circle cx="12" cy="14" r="9" fill="#3B82F6" stroke="#0B0D12" strokeWidth="2" />
           <circle cx="8.5" cy="14" r="1.6" fill="#fff" />
           <circle cx="12" cy="14" r="1.6" fill="#fff" />
           <circle cx="15.5" cy="14" r="1.6" fill="#fff" />
         </g>
       )}
-      {stemming === 'wacht' && <circle cx="12" cy="14" r="6" fill="#FBBF24" stroke="#0B0D12" strokeWidth="2" />}
-      {stemming === 'fout' && <circle cx="12" cy="14" r="6" fill="#EF4444" stroke="#0B0D12" strokeWidth="2" />}
+      {stemming === 'wacht' && <circle className="axe-gezicht__badge" cx="12" cy="14" r="6" fill="#FBBF24" stroke="#0B0D12" strokeWidth="2" />}
+      {stemming === 'fout' && <circle className="axe-gezicht__badge" cx="12" cy="14" r="6" fill="#EF4444" stroke="#0B0D12" strokeWidth="2" />}
     </svg>
   );
 }
