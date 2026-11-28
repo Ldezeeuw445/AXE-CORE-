@@ -236,10 +236,10 @@ export const AGENT_WORKSPACES: Record<AxeAgentId, AgentWorkspace> = {
   },
   tradingos: {
     agent: 'tradingos',
-    role: 'Owns Trading OS · no live orders',
+    role: 'Owns Trading OS',
     systemPrompt:
       'You are Trading OS Manager. You own Trading OS (trading-os-app / axe-trading-core). Analysis, risk and research are yours. HARD LIMIT: no live orders, no broker/MetaAPI calls, no money movement. Propose trades; Luka executes.',
-    tools: LEES,
+    tools: MET_CREW,
     preferredDevice: null,
     memoryScope: 'agent',
     crew: ['dollar_bill', 'intel'],

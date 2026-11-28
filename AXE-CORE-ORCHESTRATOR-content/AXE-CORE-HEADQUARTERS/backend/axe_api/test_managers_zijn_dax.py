@@ -15,8 +15,9 @@ def test_elke_manager_heeft_een_eigen_dax_computer_en_geen_twee_delen_er_een():
 def test_crew_en_grenzen_gaan_mee():
     assert aw.crew_voor(aw.laad_workspace("axemanager")) == ["nova", "atlas"]
     assert aw.crew_voor(aw.laad_workspace("projectsmgr")) == ["wags", "forge"]
-    # Trading OS blijft alleen-lezen: geen write_file, geen orders.
-    assert "write_file" not in aw.laad_workspace("tradingos")["tools"]
+    # 28 nov: Trading OS Manager kan alles, net als AXE CORE en Projects (crew incl.).
+    assert aw.laad_workspace("tradingos")["tools"] == aw.laad_workspace("axemanager")["tools"]
+    assert "write_file" in aw.laad_workspace("tradingos")["tools"]
 
 
 def test_oude_botnamen_zijn_aliassen_en_browser_is_geen_agent_meer():

@@ -282,9 +282,11 @@ AGENT_WORKSPACES: dict[str, dict[str, Any]] = {
         "dax_computer": "dax-axon-01", "computer_mode": "persistent",
     },
     "tradingos": {
-        "role": "Owns Trading OS · no live orders",
+        "role": "Owns Trading OS",
         "system_prompt": _BRIEVEN["tradingos"],
-        "tools": _LEES, "preferred_device": None, "memory_scope": "agent",
+        # 28 nov (Luka): Trading OS Manager kan alles, net als de andere managers. De
+        # harde grens (geen live orders, geen geld) geldt voor elke manager: grok_managers.toets_actie.
+        "tools": _CREW, "preferred_device": None, "memory_scope": "agent",
         "crew": ["dollar_bill", "intel"],
         "dax_computer": "dax-trading-01", "computer_mode": "persistent",
     },

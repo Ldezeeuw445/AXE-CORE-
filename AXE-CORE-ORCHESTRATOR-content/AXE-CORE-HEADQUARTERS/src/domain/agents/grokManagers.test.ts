@@ -67,7 +67,7 @@ describe('Grok Bot-managers', () => {
     expect(GROK_REPO_SCOPE.tradingos.repos).toEqual(
       expect.arrayContaining(['trading-os-app', 'axe-trading-core']),
     );
-    expect(GROK_REPO_SCOPE.tradingos.tools).not.toContain('write_file');
+    expect(GROK_REPO_SCOPE.tradingos.tools).toContain('write_file');
     expect(GROK_REPO_SCOPE.northseamgr.tools).not.toContain('write_file');
   });
 
