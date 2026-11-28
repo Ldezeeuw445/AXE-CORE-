@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
+import manager_identiteit as _mi
 from dax import DaxComputer, DaxRegister, altijd_aan, runtime_voor
 
 log = logging.getLogger("axe_dax_wacht")
@@ -92,32 +93,59 @@ class Routine:
     notities: tuple[str, ...] = field(default_factory=tuple)
 
 
+# 28 nov (Luka): de managers ZIJN de DAX-bots, always on zoals in Grok Bot. Tot vandaag
+# stond het vaste werk hier onder de oude botnamen, terwijl core_dax_computers sinds
+# 26 nov op naam van de managers staat: ROUTINES.get("projectsmgr") gaf None, dus
+# geen enkele manager kreeg nog vast werk, en Companion en AXON hadden er nooit één.
+# Nu: één routine per manager, op zijn eigen computer. Browser is een gedeelde
+# computer (geen agent): wakker en gemeten, maar zonder eigen werk; zijn sitewacht
+# is verdeeld over de managers van die sites.
 ROUTINES: dict[str, Routine] = {
-    "browser": Routine(
-        "sites", "Site watch",
-        "open Luka's public sites in the persistent DAX browser, record HTTP status, page title and a screenshot",
-        "which sites are up, their status codes, titles and response times", 6 * 3600,
-        eisen=("net", "python3", "chromium", "dax_browser")),
-    "trading": Routine(
-        "markets", "Market data check",
-        "fetch 3 months of daily closes for gold, EUR/USD and the S&P 500 and compute SMA20/SMA50/RSI14",
-        "last close, 1d/5d change, SMA20 vs SMA50 and RSI14 per instrument (facts only, no trade advice)", 6 * 3600),
-    "northsea": Routine(
-        "energy", "Energy market snapshot",
-        "fetch daily closes for Brent, WTI, Henry Hub gas and heating oil and compute changes and averages",
-        "last close and 1d/5d change per contract, read-only context for the desk", 6 * 3600,
-        verslag=False),
-    "thinktank": Routine(
+    "axemanager": Routine(
         "ideas", "Idea scan",
         "read the current Hacker News top 20 (title, url, score)",
         "three concrete ideas for AXE, each citing the HN story id it came from", 12 * 3600),
-    "developer": Routine(
+    "projectsmgr": Routine(
         "ci", "Orchestrator health check",
         "fetch the public orchestrator branch, run compileall on backend/axe_api and the pure backend tests",
         "commit sha, compile result, pytest summary and every failing test by name (no fixes, nothing pushed)", 12 * 3600,
         eisen=("net", "python3", "git", "github"),
         notities=("Code changes need Claude Code or Codex logged in inside this DAX; pushing always needs Luka's OK.",)),
+    "companionmgr": Routine(
+        "sites-companion", "Site watch",
+        "open axecompanion.com, axeheadquarters.com and the Companion API health in the DAX browser, "
+        "record HTTP status, page title and a screenshot",
+        "which sites are up, their status codes, titles and response times", 6 * 3600,
+        eisen=("net", "python3", "chromium", "dax_browser")),
+    "axon": Routine(
+        "sites-axon", "Site watch",
+        "open axon-memory.com and app.axon-memory.com in the DAX browser, record HTTP status, page title and a screenshot",
+        "which sites are up, their status codes, titles and response times", 6 * 3600,
+        eisen=("net", "python3", "chromium", "dax_browser")),
+    # Trading OS Manager is alleen-lezen (_LEES, geen write_file): verslag in de samenvatting.
+    "tradingos": Routine(
+        "markets", "Market data check",
+        "fetch 3 months of daily closes for gold, EUR/USD and the S&P 500 and compute SMA20/SMA50/RSI14",
+        "last close, 1d/5d change, SMA20 vs SMA50 and RSI14 per instrument (facts only, no trade advice)", 6 * 3600,
+        verslag=False),
+    "northseamgr": Routine(
+        "energy", "Energy market snapshot",
+        "fetch daily closes for Brent, WTI, Henry Hub gas and heating oil and compute changes and averages",
+        "last close and 1d/5d change per contract, read-only context for the desk", 6 * 3600,
+        verslag=False),
 }
+
+# Vaste werk van een gedeelde computer dat nu bij de managers hoort. Een missie die
+# nog op deze naam loopt, wordt netjes beëindigd (niet verwijderd) zodra er niets loopt.
+OVERGENOMEN: dict[str, str] = {
+    "browser": "Browser is a shared computer since 26 Nov, not an agent. Its site watch now runs "
+               "per manager: AXE Companion Manager (sites-companion) and AXON Memory Manager (sites-axon).",
+}
+
+
+def routine_voor(agent: str | None) -> Routine | None:
+    """Het vaste werk van een manager; een oude DAX-botnaam geeft dat van zijn manager."""
+    return ROUTINES.get(_mi.normaliseer_manager(agent))
 
 
 def routine_sha() -> str:
@@ -271,9 +299,12 @@ def missie_rij(agent: str, r: Routine) -> dict[str, Any]:
     from missies import normaliseer_mijlpalen
     mijlpalen = normaliseer_mijlpalen([{"key": r.naam, "title": f"{r.titel}: run dax-routine {r.naam} and report",
                                         "goal": opdracht(r)}])
+    agent = _mi.normaliseer_manager(agent) or agent
+    naam = _mi.manager_naam(agent)
     return {
-        "title": f"{r.titel} ({agent})",
-        "goal": f"Always-on routine for the {agent} bot on its own DAX: {r.wat}. Report only what the artifact proves.",
+        "title": f"{r.titel} ({naam})",
+        "goal": f"Always-on routine for the {naam} on its own DAX computer: {r.wat}. "
+                "Report only what the artifact proves.",
         "owner_agent": agent, "supporting_agents": [], "priority": "low",
         "milestones": mijlpalen, "continue_until": "complete",
         "recurring_interval_seconds": r.interval_s, "requested_by": "dax-wacht",
@@ -302,6 +333,8 @@ def _houd_bij(db: Any, m: dict[str, Any], vers: dict[str, Any], nu: datetime) ->
     bij een tekstupdate. Een lopende taak houdt zijn mijlpaal.
     """
     patch: dict[str, Any] = {
+        # Een missie die nog op een oude DAX-botnaam stond, komt op naam van zijn manager.
+        "owner_agent": vers["owner_agent"],
         "title": vers["title"],
         "goal": vers["goal"],
         "recurring_interval_seconds": vers.get("recurring_interval_seconds"),
@@ -309,7 +342,10 @@ def _houd_bij(db: Any, m: dict[str, Any], vers: dict[str, Any], nu: datetime) ->
     }
     if not _taak_loopt(db, m):
         oud = m.get("milestones") or []
-        if not oud or not (oud[0] or {}).get("task_id"):
+        # Nieuwe eigenaar (oude botnaam -> manager): ook de opdracht opnieuw, want
+        # die kan anders zijn (Trading OS Manager mag geen bestand schrijven).
+        nieuwe_eigenaar = m.get("owner_agent") != vers.get("owner_agent")
+        if not oud or not (oud[0] or {}).get("task_id") or nieuwe_eigenaar:
             patch["milestones"] = vers.get("milestones")
     db.table("core_missions").update(patch).eq("id", m["id"]).execute()
     m.update(patch)
@@ -321,9 +357,8 @@ def zorg_voor_missie(db: Any, agent: str, r: Routine, eisen_mis: list[str],
     from missies import MissieRepository
     nu = nu or _nu()
     repo = MissieRepository(lambda: db)
-    rijen = (db.table("core_missions").select("*").eq("metadata->>dax_routine", agent)
-             .order("created_at", desc=True).limit(5).execute().data or [])
-    m = next((x for x in rijen if x.get("status") not in EINDE), None)
+    agent = _mi.normaliseer_manager(agent) or agent
+    m = _open_missie(db, agent)
     reden = "Can't run: " + "; ".join(eisen_mis) if eisen_mis else None
 
     if m is None:
@@ -339,7 +374,12 @@ def zorg_voor_missie(db: Any, agent: str, r: Routine, eisen_mis: list[str],
             repo.event(m["id"], "mission.blocked", reden, agent=agent, data={"cause": "dax_capability"})
         return {"mission": m["id"], "action": "created", "status": m["status"]}
 
+    vorige = m.get("owner_agent")
     _houd_bij(db, m, missie_rij(agent, r), nu)
+    if vorige and vorige != agent:
+        repo.event(m["id"], "mission.adopted",
+                   f"Always-on routine now belongs to {_mi.manager_naam(agent)} (was the {vorige} bot).",
+                   agent=agent, data={"from": vorige, "routine": r.naam})
     status = m.get("status")
     if reden:
         if status in RUNNABLE and not _taak_loopt(db, m):
@@ -368,6 +408,42 @@ def zorg_voor_missie(db: Any, agent: str, r: Routine, eisen_mis: list[str],
         return {"mission": m["id"], "action": "none", "status": status,
                 "retry_at": (sinds + timedelta(seconds=r.interval_s)).isoformat()}
     return {"mission": m["id"], "action": "none", "status": status}
+
+
+def _open_missie(db: Any, agent: str) -> dict[str, Any] | None:
+    """De lopende vaste missie van deze manager, ook als hij nog op een oude naam staat."""
+    rijen: list[dict[str, Any]] = []
+    for naam in _mi.namen_van(agent) or (agent,):
+        rijen += (db.table("core_missions").select("*").eq("metadata->>dax_routine", naam)
+                  .order("created_at", desc=True).limit(5).execute().data or [])
+    rijen.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+    # De canonieke naam wint van een alias als er (ooit) beide open staan.
+    rijen.sort(key=lambda x: (x.get("metadata") or {}).get("dax_routine") != agent)
+    return next((x for x in rijen if x.get("status") not in EINDE), None)
+
+
+def beeindig_overgenomen(db: Any, naam: str, nu: datetime | None = None) -> list[dict[str, Any]]:
+    """Beëindig de vaste missie van een gedeelde computer waarvan het werk naar de managers ging.
+
+    Annuleren, niet verwijderen: de missie en zijn geschiedenis blijven leesbaar. Loopt
+    er nog een taak, dan wacht dit tot die klaar is."""
+    from missies import MissieRepository
+    reden = OVERGENOMEN.get(naam)
+    if not reden:
+        return []
+    repo = MissieRepository(lambda: db)
+    uit = []
+    rijen = (db.table("core_missions").select("*").eq("metadata->>dax_routine", naam)
+             .limit(10).execute().data or [])
+    for m in rijen:
+        if m.get("status") in EINDE:
+            continue
+        if _taak_loopt(db, m):
+            uit.append({"mission": m["id"], "action": "waiting", "reason": "a task is still running"})
+            continue
+        repo.zet_status(m["id"], "cancelled", door="dax-wacht", reden=reden)
+        uit.append({"mission": m["id"], "action": "retired"})
+    return uit
 
 
 def _taak_loopt(db: Any, missie: dict[str, Any]) -> bool:
@@ -401,9 +477,16 @@ def ronde(client_factory: Callable[[], Any], *, runtime_factory: Callable[[DaxCo
 
     for rij in register.rijen():
         c = DaxComputer.uit_rij(rij)
-        agent = c.owner_agent
+        # De eigenaar is een manager (canoniek), of een gedeelde computer zoals browser.
+        agent = _mi.normaliseer_manager(c.owner_agent) or c.owner_agent
         r = ROUTINES.get(agent)
         verslag: dict[str, Any] = {"dax": c.id}
+        if r is None and agent in OVERGENOMEN:
+            verslag["shared"] = True
+            try:
+                verslag["retired"] = beeindig_overgenomen(db, agent, nu)
+            except Exception as exc:  # noqa: BLE001 — mag de ronde nooit breken
+                verslag["retire_error"] = str(exc)[:300]
         rt = runtime_factory(c)
         try:
             if altijd_aan(rij):

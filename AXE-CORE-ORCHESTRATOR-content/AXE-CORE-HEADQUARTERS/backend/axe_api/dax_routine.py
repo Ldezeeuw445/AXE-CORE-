@@ -13,7 +13,8 @@ schrijft er een verslag over; `dax-routine verify` controleert dat het
 artefact vers is en dat het verslag naar dát bonnetje verwijst. Een verzonnen
 verslag zonder echt artefact komt daar niet door.
 
-    dax-routine sites|markets|energy|ideas|ci     doe het werk, print het bonnetje (JSON)
+    dax-routine sites|sites-companion|sites-axon|markets|energy|ideas|ci
+                                                  doe het werk, print het bonnetje (JSON)
     dax-routine verify NAAM [--report PAD]        exit 0 + "VERIFIED <id>" als het klopt
     dax-routine last-error NAAM                   exit 0 + "ERROR ..." als de laatste run faalde (< 2 u)
 
@@ -45,6 +46,13 @@ SITES = [
     "https://app.axon-memory.com",
     "https://api.axecompanion.com/health",
 ]
+# 28 nov: de sitewacht hoort bij de manager van die site (Browser is geen agent meer,
+# maar een gedeelde computer). "sites" blijft bestaan voor een oude missie die nog loopt.
+SITES_PER = {
+    "sites": SITES,
+    "sites-companion": ["https://axecompanion.com", "https://axeheadquarters.com", "https://api.axecompanion.com/health"],
+    "sites-axon": ["https://axon-memory.com", "https://app.axon-memory.com"],
+}
 MARKTEN = {"GC=F": "Gold futures", "EURUSD=X": "EUR/USD", "^GSPC": "S&P 500"}
 ENERGIE = {"BZ=F": "Brent crude", "CL=F": "WTI crude", "NG=F": "Henry Hub natural gas", "HO=F": "Heating oil (ULSD)"}
 REPO = "https://github.com/Ldezeeuw445/AXE-CORE-.git"
@@ -112,11 +120,11 @@ def yahoo(symbool: str) -> dict:
 
 # ── Het werk ─────────────────────────────────────────────────────────────────
 
-def werk_sites() -> dict:
+def werk_sites(naam: str = "sites") -> dict:
     uit = []
-    schermen = os.path.join(map_voor("sites"), "shots")
+    schermen = os.path.join(map_voor(naam), "shots")
     os.makedirs(schermen, exist_ok=True)
-    for url in SITES:
+    for url in SITES_PER[naam]:
         rij: dict = {"url": url}
         t0 = time.monotonic()
         try:
@@ -268,7 +276,10 @@ def werk_ci() -> dict:
     }
 
 
-WERK = {"sites": werk_sites, "markets": werk_markets, "energy": werk_energy, "ideas": werk_ideas, "ci": werk_ci}
+WERK = {"sites": werk_sites,
+        "sites-companion": lambda: werk_sites("sites-companion"),
+        "sites-axon": lambda: werk_sites("sites-axon"),
+        "markets": werk_markets, "energy": werk_energy, "ideas": werk_ideas, "ci": werk_ci}
 
 
 def doe(naam: str) -> int:

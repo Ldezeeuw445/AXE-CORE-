@@ -156,24 +156,24 @@ def test_hartslag_leest_de_laatste_json_regel():
 
 
 def test_gezonde_bot_heeft_geen_blokkades():
-    assert dax_wacht.blokkades(dax_wacht.ROUTINES["browser"], gezond_hart(), None) == []
+    assert dax_wacht.blokkades(dax_wacht.ROUTINES["companionmgr"], gezond_hart(), None) == []
 
 
 def test_ontbrekende_chromium_netwerk_en_geheugen_zijn_eerlijke_blokkades():
     hart = gezond_hart(tools={"python3": True, "chromium": False, "dax_browser": False},
                        net={"github": 0, "public_api": 0}, host_mem_available_mb=600)
-    mist = dax_wacht.blokkades(dax_wacht.ROUTINES["browser"], hart, None)
+    mist = dax_wacht.blokkades(dax_wacht.ROUTINES["companionmgr"], hart, None)
     tekst = " | ".join(mist)
     assert "no internet" in tekst and "Chromium is missing" in tekst and "low on memory" in tekst
 
 
 def test_developer_zonder_github_is_geblokkeerd():
-    mist = dax_wacht.blokkades(dax_wacht.ROUTINES["developer"], gezond_hart(net={"github": 0, "public_api": 200}), None)
+    mist = dax_wacht.blokkades(dax_wacht.ROUTINES["projectsmgr"], gezond_hart(net={"github": 0, "public_api": 200}), None)
     assert any("github.com unreachable" in m for m in mist)
 
 
 def test_geen_model_blokkeert_elke_bot():
-    mist = dax_wacht.blokkades(dax_wacht.ROUTINES["trading"], gezond_hart(), "no model for the agent loop: x")
+    mist = dax_wacht.blokkades(dax_wacht.ROUTINES["tradingos"], gezond_hart(), "no model for the agent loop: x")
     assert mist == ["no model for the agent loop: x"]
 
 
@@ -215,11 +215,11 @@ def test_always_on_wint_van_de_slaapronde(monkeypatch):
 # ── De ronde ─────────────────────────────────────────────────────────────────
 
 def test_ronde_maakt_wakker_meet_installeert_en_geeft_vast_werk():
-    db = NepDB(core_dax_computers=[computer("trading")], core_missions=[], core_mission_events=[], core_dax_slots=[])
+    db = NepDB(core_dax_computers=[computer("tradingos")], core_missions=[], core_mission_events=[], core_dax_slots=[])
     rt = NepRuntime(gezond_hart())
     uit = dax_wacht.ronde(lambda: db, runtime_factory=lambda c: rt, model_check=lambda: None, nu=NU)
 
-    assert rt.gestart == ["dax-trading-01"]
+    assert rt.gestart == ["dax-tradingos-01"]
     rij = db.tabellen["core_dax_computers"][0]
     assert rij["status"] == "running" and rij["last_heartbeat_at"]
     assert rij["stats"]["blockers"] == [] and rij["stats"]["routine"] == "markets"
@@ -228,14 +228,14 @@ def test_ronde_maakt_wakker_meet_installeert_en_geeft_vast_werk():
     assert installatie and hashlib.sha256(installatie[0].encode()).hexdigest() == dax_wacht.routine_sha()
     missie = db.tabellen["core_missions"][0]
     assert missie["status"] == "active" and missie["recurring_interval_seconds"] == 6 * 3600
-    assert missie["metadata"]["dax_routine"] == "trading" and missie["metadata"]["task_payload"] == {"crew": False, "free_models": True}
+    assert missie["metadata"]["dax_routine"] == "tradingos" and missie["metadata"]["task_payload"] == {"crew": False, "free_models": True}
     assert "dax-routine markets" in missie["milestones"][0]["goal"]
-    assert uit["bots"]["trading"]["mission"]["action"] == "created"
+    assert uit["bots"]["tradingos"]["mission"]["action"] == "created"
     assert dax_wacht.ronde_status(uit) == "ok"
 
 
 def test_ronde_tweede_keer_maakt_geen_tweede_missie_maar_zet_wel_de_huidige_routine():
-    db = NepDB(core_dax_computers=[computer("trading")], core_missions=[], core_mission_events=[])
+    db = NepDB(core_dax_computers=[computer("tradingos")], core_missions=[], core_mission_events=[])
     rt = NepRuntime(gezond_hart(routine_sha=dax_wacht.routine_sha()), status="running")
     dax_wacht.ronde(lambda: db, runtime_factory=lambda c: rt, model_check=lambda: None, nu=NU)
     dax_wacht.ronde(lambda: db, runtime_factory=lambda c: rt, model_check=lambda: None, nu=NU)
@@ -245,7 +245,7 @@ def test_ronde_tweede_keer_maakt_geen_tweede_missie_maar_zet_wel_de_huidige_rout
 
 
 def test_onbereikbare_computer_is_error_en_blokkeert_de_missie():
-    db = NepDB(core_dax_computers=[computer("browser")], core_missions=[], core_mission_events=[])
+    db = NepDB(core_dax_computers=[computer("companionmgr")], core_missions=[], core_mission_events=[])
     rt = NepRuntime(gezond_hart(), exec_fout="ssh: connect to host refused")
     uit = dax_wacht.ronde(lambda: db, runtime_factory=lambda c: rt, model_check=lambda: None, nu=NU)
     rij = db.tabellen["core_dax_computers"][0]
@@ -256,7 +256,7 @@ def test_onbereikbare_computer_is_error_en_blokkeert_de_missie():
 
 
 def test_blokkade_weg_dan_hervat_de_missie_vanzelf():
-    db = NepDB(core_dax_computers=[computer("browser")], core_missions=[], core_mission_events=[], core_tasks=[])
+    db = NepDB(core_dax_computers=[computer("companionmgr")], core_missions=[], core_mission_events=[], core_tasks=[])
     kapot = NepRuntime(gezond_hart(tools={"python3": True, "chromium": False, "dax_browser": True}), status="running")
     dax_wacht.ronde(lambda: db, runtime_factory=lambda c: kapot, model_check=lambda: None, nu=NU)
     m = db.tabellen["core_missions"][0]
@@ -265,32 +265,32 @@ def test_blokkade_weg_dan_hervat_de_missie_vanzelf():
     heel = NepRuntime(gezond_hart(), status="running")
     uit = dax_wacht.ronde(lambda: db, runtime_factory=lambda c: heel, model_check=lambda: None, nu=NU)
     assert db.tabellen["core_missions"][0]["status"] == "active"
-    assert uit["bots"]["browser"]["mission"]["action"] == "resumed"
+    assert uit["bots"]["companionmgr"]["mission"]["action"] == "resumed"
 
 
 def test_andere_blokkade_wordt_na_een_interval_opnieuw_geprobeerd():
-    m = dax_wacht.missie_rij("thinktank", dax_wacht.ROUTINES["thinktank"])
+    m = dax_wacht.missie_rij("axemanager", dax_wacht.ROUTINES["axemanager"])
     m.update(id=str(uuid.uuid4()), status="blocked", last_stop_reason="agent_blocked", revision=3,
              blocked_reason="Hacker News HTTP 503", updated_at=(NU - timedelta(hours=1)).isoformat())
     db = NepDB(core_missions=[m], core_mission_events=[], core_tasks=[])
-    r = dax_wacht.ROUTINES["thinktank"]
-    assert dax_wacht.zorg_voor_missie(db, "thinktank", r, [], NU)["action"] == "none"
+    r = dax_wacht.ROUTINES["axemanager"]
+    assert dax_wacht.zorg_voor_missie(db, "axemanager", r, [], NU)["action"] == "none"
     later = NU + timedelta(seconds=r.interval_s)
-    uit = dax_wacht.zorg_voor_missie(db, "thinktank", r, [], later)
+    uit = dax_wacht.zorg_voor_missie(db, "axemanager", r, [], later)
     assert uit["action"] == "retried"
     nieuw = db.tabellen["core_missions"][0]
     assert nieuw["status"] == "active" and "Hacker News HTTP 503" in nieuw["milestones"][0]["next_action"]
 
 
 def test_gepauzeerde_missie_blijft_van_luka():
-    m = dax_wacht.missie_rij("trading", dax_wacht.ROUTINES["trading"])
+    m = dax_wacht.missie_rij("tradingos", dax_wacht.ROUTINES["tradingos"])
     m.update(id=str(uuid.uuid4()), status="paused")
     db = NepDB(core_missions=[m], core_mission_events=[])
-    assert dax_wacht.zorg_voor_missie(db, "trading", dax_wacht.ROUTINES["trading"], [], NU)["status"] == "paused"
+    assert dax_wacht.zorg_voor_missie(db, "tradingos", dax_wacht.ROUTINES["tradingos"], [], NU)["status"] == "paused"
 
 
 def test_northsea_schrijft_geen_bestand_maar_verifieert_wel():
-    tekst = dax_wacht.opdracht(dax_wacht.ROUTINES["northsea"])
+    tekst = dax_wacht.opdracht(dax_wacht.ROUTINES["northseamgr"])
     assert "do not write files" in tekst and "verify energy`" in tekst and "--report" not in tekst
 
 
